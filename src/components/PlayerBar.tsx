@@ -1,4 +1,4 @@
-import { Ban, Heart, ListMusic, Loader2, Maximize2, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Waves } from 'lucide-react';
+import { Ban, Heart, ListMusic, Loader2, Maximize2, Pause, Play, Repeat, Repeat1, Shuffle, SlidersVertical, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Waves } from 'lucide-react';
 import { useRef } from 'react';
 import type { Track } from '../api/types.ts';
 import { trackCover } from '../api/yandex.ts';
@@ -6,6 +6,7 @@ import { useLang, useT } from '../i18n.ts';
 import { cycleRepeat, next, prev, seek, setVolume, sourceTitle, toggle, toggleShuffle, usePlayer } from '../player/player.ts';
 import { dislike, toggleLike, useApp } from '../store.ts';
 import { cx, fmtTime } from '../ui/util.ts';
+import { useEq } from '../player/eq.ts';
 import { ArtistLinks, Cover } from './Common.tsx';
 
 export function SeekBar({ className }: { className?: string }) {
@@ -113,6 +114,7 @@ export function PlayerBar() {
   useLang((s) => s.lang); // the source title is localized
   const source = usePlayer((s) => s.source);
   const openNow = () => useApp.setState({ nowPlayingOpen: true });
+  const eqOn = useEq((s) => s.enabled);
 
   return (
     <footer className="playerbar glass">
@@ -154,6 +156,9 @@ export function PlayerBar() {
         )}
         <button className="icon-btn" onClick={openNow} title={t.player.queue}>
           <ListMusic size={18} />
+        </button>
+        <button className={cx('icon-btn', eqOn && 'on')} onClick={() => useApp.setState((s) => ({ soundOpen: !s.soundOpen }))} title={t.sound.title} data-testid="sound-button">
+          <SlidersVertical size={18} />
         </button>
         <VolumeControl />
         <button className="icon-btn" onClick={openNow} title={t.player.fullscreen}>

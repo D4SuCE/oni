@@ -8,6 +8,8 @@ import { MenuHost } from './components/Menu.tsx';
 import { NowPlaying } from './components/NowPlaying.tsx';
 import { PlayerBar } from './components/PlayerBar.tsx';
 import { Sidebar, useSidebar } from './components/Sidebar.tsx';
+import { SoundPanel } from './components/SoundPanel.tsx';
+import { eqOutputLevel } from './player/eq.ts';
 import { cx } from './ui/util.ts';
 import { TuningPanel } from './components/Wave.tsx';
 import { audio, current, next, playTracks, prev, restoreSession, setVolume, toggle, usePlayer } from './player/player.ts';
@@ -123,6 +125,7 @@ export function App() {
   const auth = useApp((s) => s.auth);
   const nowPlaying = useApp((s) => s.nowPlayingOpen);
   const tuning = useApp((s) => s.tuningOpen);
+  const sound = useApp((s) => s.soundOpen);
   const toastMsg = useApp((s) => s.toast);
   const sidebarOpen = useSidebar((s) => s.open);
   const error = usePlayer((s) => s.error);
@@ -160,6 +163,7 @@ export function App() {
       )}
       {auth === 'ready' && nowPlaying && <NowPlaying />}
       {auth === 'ready' && tuning && <TuningPanel />}
+      {auth === 'ready' && sound && <SoundPanel />}
       <MenuHost />
       <DialogHost />
       {toastMsg && (
@@ -172,4 +176,4 @@ export function App() {
 }
 
 // Handy for debugging and for the automated UI test.
-Object.assign(window, { __wave: { usePlayer, useApp, audio, api, navigate, playTracks } });
+Object.assign(window, { __wave: { usePlayer, useApp, audio, api, navigate, playTracks, eqOutputLevel } });

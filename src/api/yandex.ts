@@ -24,6 +24,14 @@ const FILE_INFO_KEY = 'kzqU4XhfCaY6B6JTHODeq5';
 const LYRICS_KEY = 'p93jhgh689SBReK6ghtw62';
 const DESKTOP_CLIENT = 'YandexMusicDesktopAppWindows/5.13.2';
 
+/** Sound quality as in the official app: superb (lossless when available), balanced, efficient. */
+export type StreamQuality = 'lossless' | 'nq' | 'lq';
+const STREAM_CODECS: Record<StreamQuality, string> = {
+  lossless: 'flac,aac,he-aac,mp3',
+  nq: 'aac,mp3,he-aac',
+  lq: 'he-aac,aac,mp3',
+};
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -328,10 +336,10 @@ export class YandexMusic {
 
   // ---------------------------------------------------------------- playback
 
-  async stream(trackId: string): Promise<StreamInfo> {
+  /** Stream URL in the asked quality; Yandex may give less (it returns what it actually serves). */
+  async stream(trackId: string, quality: StreamQuality = 'lossless'): Promise<StreamInfo> {
     const ts = Math.floor(Date.now() / 1000);
-    const quality = 'lossless';
-    const codecs = 'flac,aac,he-aac,mp3';
+    const codecs = STREAM_CODECS[quality];
     const transports = 'raw';
     const sign = (await hmacBase64(FILE_INFO_KEY, `${ts}${trackId}${quality}${codecs.replace(/,/g, '')}${transports}`)).replace(/=+$/, '');
     const r = await this.call<any>('/get-file-info', {

@@ -35,6 +35,7 @@ interface AppState {
   toast: { id: number; text: string } | null;
   nowPlayingOpen: boolean;
   tuningOpen: boolean;
+  soundOpen: boolean;
   searchQuery: string;
 }
 
@@ -52,6 +53,7 @@ export const useApp = create<AppState>(() => ({
   toast: null,
   nowPlayingOpen: false,
   tuningOpen: false,
+  soundOpen: false,
   searchQuery: '',
 }));
 

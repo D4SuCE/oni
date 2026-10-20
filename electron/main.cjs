@@ -186,6 +186,20 @@ function createWindow() {
   else mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
 }
 
+/**
+ * Yandex's audio CDN sends no CORS headers, and Web Audio (the equalizer) only hears a
+ * cross-origin stream when it is CORS-enabled — otherwise it gets silence. Add the header
+ * to those responses; the page loads audio with crossOrigin="anonymous".
+ */
+function allowAudioAnalysis() {
+  const filter = { urls: ['https://*.strm.yandex.net/*', 'https://*.strm.yandex.ru/*', 'https://*.storage.yandex.net/*'] };
+  session.defaultSession.webRequest.onHeadersReceived(filter, (details, callback) => {
+    const headers = { ...details.responseHeaders };
+    if (!Object.keys(headers).some((k) => k.toLowerCase() === 'access-control-allow-origin')) headers['Access-Control-Allow-Origin'] = ['*'];
+    callback({ responseHeaders: headers });
+  });
+}
+
 ipcMain.handle('ym:request', (_e, req) => request(req));
 ipcMain.handle('ym:token:has', () => Boolean(token));
 ipcMain.on('wave:test-mode', (e) => (e.returnValue = TEST_MODE));
@@ -202,6 +216,7 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   app.on('second-instance', () => desktop.showWindow());
   app.whenReady().then(() => {
+    allowAudioAnalysis();
     loadToken();
     createWindow();
   });

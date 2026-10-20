@@ -5,7 +5,7 @@ import { create } from 'zustand';
 import type { Track } from '../api/types.ts';
 import { api, loadJson, storage, transport } from '../api/client.ts';
 import { tr } from '../i18n.ts';
-import { artistNames, trackCover } from '../api/yandex.ts';
+import { artistNames, trackCover, type StreamQuality } from '../api/yandex.ts';
 import { DEFAULT_TUNING, WaveEngine, waveSeeds, type WaveStats, type WaveTuning } from '../wave/engine.ts';
 import { ListenHistory } from '../wave/history.ts';
 import { RecentPlays } from './recent.ts';
@@ -31,6 +31,7 @@ interface Prefs {
   volume: number;
   repeat: Repeat;
   normalize: boolean;
+  quality: StreamQuality;
 }
 
 export interface PlayerState extends Prefs {
@@ -46,9 +47,11 @@ export interface PlayerState extends Prefs {
   waveStats: WaveStats | null;
   waveBusy: boolean;
   error: string | null;
+  /** What Yandex actually serves for the current track (it can be less than asked). */
+  stream: { codec: string; bitrate: number } | null;
 }
 
-const prefs = loadJson<Prefs>('player.prefs', { volume: 0.8, repeat: 'off', normalize: true });
+const prefs = loadJson<Prefs>('player.prefs', { volume: 0.8, repeat: 'off', normalize: true, quality: 'lossless' });
 
 export const usePlayer = create<PlayerState>(() => ({
   ...prefs,
@@ -64,6 +67,7 @@ export const usePlayer = create<PlayerState>(() => ({
   waveStats: null,
   waveBusy: false,
   error: null,
+  stream: null,
 }));
 
 const set = usePlayer.setState;
@@ -75,6 +79,8 @@ export const recentPlays = new RecentPlays(storage);
 export const useRecent = create<{ version: number }>(() => ({ version: 0 }));
 export const audio = new Audio();
 audio.preload = 'auto';
+// CORS mode so Web Audio (the equalizer) can process the stream; the shell adds the header.
+audio.crossOrigin = 'anonymous';
 
 let engine: WaveEngine | null = null;
 const waveApi = transport.testMode ? { waveStart: api.waveStart.bind(api), waveMore: api.waveMore.bind(api), waveFeedback: async () => {} } : api;
@@ -83,7 +89,7 @@ let loadSeq = 0;
 let listened = 0;
 let lastTime = 0;
 let unshuffled: Track[] | null = null;
-const prefetched = new Map<string, { url: string; at: number }>();
+const prefetched = new Map<string, { url: string; at: number; codec: string; bitrate: number }>();
 const STREAM_TTL = 90_000;
 
 export const current = () => {
@@ -99,10 +105,11 @@ export function setDislikedCheck(fn: (id: string) => boolean) {
 
 async function streamUrl(t: Track) {
   const cached = prefetched.get(t.id);
-  if (cached && Date.now() - cached.at < STREAM_TTL) return cached.url;
-  const s = await api.stream(t.id);
-  prefetched.set(t.id, { url: s.url, at: Date.now() });
-  return s.url;
+  if (cached && Date.now() - cached.at < STREAM_TTL) return cached;
+  const s = await api.stream(t.id, get().quality);
+  const entry = { url: s.url, at: Date.now(), codec: s.codec, bitrate: s.bitrate };
+  prefetched.set(t.id, entry);
+  return entry;
 }
 
 function prefetchNext() {
@@ -129,9 +136,10 @@ async function loadAt(index: number, autoplay = true) {
   lastTime = 0;
   updateMediaSession(t);
   try {
-    const url = await streamUrl(t);
+    const stream = await streamUrl(t);
     if (seq !== loadSeq) return;
-    audio.src = url;
+    audio.src = stream.url;
+    set({ stream: { codec: stream.codec, bitrate: stream.bitrate } });
     applyVolume();
     if (autoplay) await audio.play();
     if (get().source?.kind === 'wave') engine?.feedback('trackStarted', t);
@@ -342,6 +350,19 @@ export function setNormalize(normalize: boolean) {
   savePrefs();
 }
 
+/** Switch the sound quality; the playing track reloads in it, from the same spot. */
+export function setQuality(quality: StreamQuality) {
+  if (get().quality === quality) return;
+  set({ quality });
+  savePrefs();
+  prefetched.clear();
+  const t = current();
+  if (!t || !audio.src) return;
+  const at = audio.currentTime;
+  const wasPlaying = !audio.paused;
+  loadAt(get().index, wasPlaying).then(() => at > 1 && seek(at));
+}
+
 export function cycleRepeat() {
   const order: Repeat[] = ['off', 'all', 'one'];
   set((s) => ({ repeat: order[(order.indexOf(s.repeat) + 1) % order.length] }));
@@ -476,8 +497,8 @@ if ('mediaSession' in navigator) {
 // -------------------------------------------------------------- persistence
 
 function savePrefs() {
-  const { volume, repeat, normalize } = get();
-  storage.setItem('player.prefs', JSON.stringify({ volume, repeat, normalize }));
+  const { volume, repeat, normalize, quality } = get();
+  storage.setItem('player.prefs', JSON.stringify({ volume, repeat, normalize, quality }));
 }
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;

@@ -285,6 +285,21 @@ await step('live cover: Yandex cover video plays with the music', async () => {
   await page.waitForSelector('.nowplaying', { state: 'detached' });
 });
 
+await step('sound settings: equalizer hears the music', async () => {
+  await page.evaluate(() => window.__wave.playTracks(window.__wave.usePlayer.getState().queue.slice(0, 5), 0, 'e2e'));
+  await waitPlaying(1);
+  await page.click('[data-testid="sound-button"]');
+  await page.waitForSelector('[data-testid="sound-panel"]');
+  await page.locator('[data-testid="eq-toggle"]').check();
+  await page.selectOption('[data-testid="eq-preset"]', 'bass');
+  // A CORS-blocked stream would reach Web Audio as silence.
+  await page.waitForFunction(() => (window.__wave.eqOutputLevel() ?? 0) > 0.005, null, { timeout: 10000 });
+  await page.locator('[data-testid="eq-toggle"]').uncheck();
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('[data-testid="sound-panel"]', { state: 'detached' });
+  await page.evaluate(() => window.__wave.audio.pause());
+});
+
 await step('history: this app and all devices', async () => {
   await page.click('[data-testid="nav-history"]');
   // Earlier steps played several tracks for longer than the 5 s that counts as a play.
