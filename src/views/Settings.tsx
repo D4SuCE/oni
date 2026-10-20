@@ -1,4 +1,5 @@
 import { FileText, LogOut } from 'lucide-react';
+import { useState } from 'react';
 import { Segmented } from '../components/Wave.tsx';
 import { LANGS, setLang, useLang, useT } from '../i18n.ts';
 import { setNormalize, usePlayer } from '../player/player.ts';
@@ -8,6 +9,7 @@ export function SettingsView() {
   const account = useApp((s) => s.account);
   const normalize = usePlayer((s) => s.normalize);
   const lang = useLang((s) => s.lang);
+  const [closeToTray, setCloseToTrayState] = useState(() => window.wave?.shellPrefs?.().closeToTray ?? false);
   const t = useT();
   const s = t.settings;
   return (
@@ -47,6 +49,28 @@ export function SettingsView() {
           <input type="checkbox" className="switch" checked={normalize} onChange={(e) => setNormalize(e.target.checked)} />
         </label>
       </div>
+
+      {window.wave?.setCloseToTray && (
+        <div className="panel glass">
+          <h3>{s.window}</h3>
+          <label className="toggle-row">
+            <div>
+              <div>{s.closeToTray}</div>
+              <div className="hint">{s.closeToTrayHint}</div>
+            </div>
+            <input
+              type="checkbox"
+              className="switch"
+              checked={closeToTray}
+              onChange={(e) => {
+                window.wave?.setCloseToTray?.(e.target.checked);
+                setCloseToTrayState(e.target.checked);
+              }}
+              data-testid="close-to-tray"
+            />
+          </label>
+        </div>
+      )}
 
       <div className="panel glass">
         <h3>{s.shortcuts}</h3>

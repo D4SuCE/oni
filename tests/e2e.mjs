@@ -195,16 +195,24 @@ await step('like then unlike a playlist (reverted)', async () => {
   await page.evaluate((p) => window.__wave.navigate({ name: 'playlist', uid: p.uid, kind: p.kind }), target);
   const btn = page.locator('[data-testid="playlist-like"]');
   const onServer = async () => (await page.evaluate(() => window.__wave.api.likedPlaylists())).some((p) => String(p.uid) === String(target.uid) && String(p.kind) === String(target.kind));
+  // Yandex's like list catches up with a write after a moment, so poll instead of reading once.
+  const serverBecomes = async (liked) => {
+    for (let i = 0; i < 16; i++) {
+      if ((await onServer()) === liked) return true;
+      await page.waitForTimeout(500);
+    }
+    return false;
+  };
   try {
     await btn.click();
     await page.waitForSelector('[data-testid="playlist-like"].on');
-    if (!(await onServer())) throw new Error('like did not reach Yandex');
+    if (!(await serverBecomes(true))) throw new Error('like did not reach Yandex');
     await btn.click();
     await page.waitForSelector('[data-testid="playlist-like"]:not(.on)');
-    if (await onServer()) throw new Error('unlike did not reach Yandex');
+    if (!(await serverBecomes(false))) throw new Error('unlike did not reach Yandex');
   } finally {
-    // Never leave the test's like on the real account.
-    if (await onServer()) await page.evaluate((p) => window.__wave.api.setPlaylistLiked(p, false), target);
+    // Never leave the test's like on the real account, even if the like shows up late.
+    if (!(await serverBecomes(false))) await page.evaluate((p) => window.__wave.api.setPlaylistLiked(p, false), target);
   }
 });
 

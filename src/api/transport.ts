@@ -32,6 +32,23 @@ export interface Transport {
   log?(level: 'error' | 'warn' | 'info', source: string, message: string): void;
   /** Opens the log file in the system's default viewer. */
   openLogs?(): Promise<string>;
+
+  // Desktop shell (taskbar buttons, tray); absent on platforms without one.
+  onCommand?(cb: (cmd: ShellCommand) => void): void;
+  setPlayback?(state: ShellPlayback): void;
+  shellPrefs?(): { closeToTray: boolean };
+  setCloseToTray?(enabled: boolean): void;
+}
+
+export type ShellCommand = 'toggle' | 'next' | 'prev';
+
+export interface ShellPlayback {
+  hasTrack: boolean;
+  playing: boolean;
+  title: string;
+  artist: string;
+  /** Localized menu and tooltip labels; the shell has no dictionary of its own. */
+  labels: Record<'play' | 'pause' | 'next' | 'prev' | 'show' | 'quit' | 'nothing', string>;
 }
 
 declare global {

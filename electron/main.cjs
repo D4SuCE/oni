@@ -4,6 +4,7 @@
 const { app, BrowserWindow, ipcMain, safeStorage, shell, nativeTheme } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
+const desktop = require('./desktop.cjs');
 
 if (process.env.WAVE_USER_DATA) app.setPath('userData', process.env.WAVE_USER_DATA);
 // Automated UI test: silent, and the renderer won't send wave feedback to the real account.
@@ -144,8 +145,7 @@ function login() {
 function createWindow() {
   nativeTheme.themeSource = 'dark';
   mainWindow = new BrowserWindow({
-    width: 1320,
-    height: 840,
+    ...desktop.windowBounds({ width: 1320, height: 840 }),
     minWidth: 960,
     minHeight: 620,
     title: 'Wave',
@@ -154,7 +154,7 @@ function createWindow() {
     backgroundMaterial: 'acrylic',
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: '#00000000', symbolColor: '#e8e8f0', height: 44 },
-    icon: path.join(__dirname, '..', 'build', 'icon.png'),
+    icon: desktop.asset('icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -162,6 +162,7 @@ function createWindow() {
       backgroundThrottling: false,
     },
   });
+  desktop.attachWindow(mainWindow);
   mainWindow.once('ready-to-show', () => mainWindow.show());
   // A crashed renderer leaves an empty see-through window: log it and load the page again.
   mainWindow.webContents.on('render-process-gone', (_e, details) => {
@@ -191,11 +192,7 @@ ipcMain.handle('wave:logs:open', () => {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    if (!mainWindow) return;
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.focus();
-  });
+  app.on('second-instance', () => desktop.showWindow());
   app.whenReady().then(() => {
     loadToken();
     createWindow();

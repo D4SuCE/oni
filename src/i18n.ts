@@ -199,6 +199,9 @@ const ru = {
     about: 'О приложении',
     version: (v: string) => `Версия ${v}`,
     logHint: 'Журнал ошибок пригодится, если что-то сломалось',
+    window: 'Окно',
+    closeToTray: 'Сворачивать в трей при закрытии',
+    closeToTrayHint: 'Значок Wave появится в области уведомлений, музыка продолжит играть. Выйти — через меню значка.',
   },
   wave: {
     kicker: (days: number) => `Без повторов · фильтр ${days ? `${days} дн.` : 'выкл.'}`,
@@ -233,6 +236,10 @@ const ru = {
     statsLine: (repeats: number, received: number) => `отсеяно повторов: ${repeats} из ${received}`,
     statsTitle: (s: { received: number; recent: number; overplayed: number; duplicate: number; skipped: number; disliked: number }) =>
       `Получено от Яндекса: ${s.received}. Недавно звучали: ${s.recent}, заиграны: ${s.overplayed}, повторы в сессии: ${s.duplicate}, пропущенные: ${s.skipped}, дизлайки: ${s.disliked}`,
+  },
+  shell: {
+    show: 'Показать Wave',
+    quit: 'Выход',
   },
   errors: {
     noTransport: 'Нет платформенного транспорта: запустите приложение через Electron',
@@ -423,6 +430,9 @@ const en: Dict = {
     about: 'About',
     version: (v) => `Version ${v}`,
     logHint: 'The error log helps when something breaks',
+    window: 'Window',
+    closeToTray: 'Minimize to tray on close',
+    closeToTrayHint: 'The Wave icon appears in the notification area and music keeps playing. Quit from the icon menu.',
   },
   wave: {
     kicker: (days) => `No repeats · filter ${days ? `${days} d` : 'off'}`,
@@ -457,6 +467,10 @@ const en: Dict = {
     statsLine: (repeats, received) => `repeats filtered: ${repeats} of ${received}`,
     statsTitle: (s) =>
       `Received from Yandex: ${s.received}. Played recently: ${s.recent}, overplayed: ${s.overplayed}, repeats this session: ${s.duplicate}, skipped: ${s.skipped}, disliked: ${s.disliked}`,
+  },
+  shell: {
+    show: 'Show Wave',
+    quit: 'Quit',
   },
   errors: {
     noTransport: 'No platform transport: run the app through Electron',
