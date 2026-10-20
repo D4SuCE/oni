@@ -236,6 +236,40 @@ await step('narrow (phone) layout renders', async () => {
   await win.evaluate((w) => w.setSize(1320, 840));
 });
 
+await step('english interface has no Russian left', async () => {
+  // Only the app's own chrome: titles, tabs, buttons, tooltips. Yandex data stays as it is.
+  const CHROME = [
+    '.nav > .nav-item', '.nav-section > span', '.page-title', '.section-head h2', '.tabs .tab', '.kicker',
+    '.wave-hero h1', '.wave-hero .btn', '.panel h3', '.panel .hint', '.empty-hint', '.pb-empty', '.lib-actions .btn',
+  ].join(',');
+  const leftovers = async () =>
+    page.evaluate((sel) => {
+      const texts = [...document.querySelectorAll(sel)].map((el) => el.textContent);
+      const titles = [...document.querySelectorAll('button[title], [aria-label]')]
+        .filter((el) => !el.closest('.nav-playlists, .track-row, .q-row, .card'))
+        .map((el) => el.getAttribute('title') || el.getAttribute('aria-label'));
+      return [...texts, ...titles].filter((t) => /[А-Яа-яЁё]/.test(t || ''));
+    }, CHROME);
+  await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
+  await page.locator('.segmented button', { hasText: 'English' }).click();
+  const found = [];
+  for (const [nav, ready] of [
+    ['settings', '.panel'],
+    ['home', '.wave-hero'],
+    ['search', '[data-testid="search-input"]'],
+    ['library', '[data-testid="liked-card"]'],
+    ['liked', '.track-row, .empty-hint'],
+  ]) {
+    if (nav !== 'settings') await page.click(`[data-testid="nav-${nav}"]`);
+    await page.waitForSelector(ready);
+    await page.waitForTimeout(600);
+    found.push(...(await leftovers()).map((t) => `${nav}: ${t}`));
+  }
+  await page.locator('.sidebar > .nav-item', { hasText: 'Settings' }).click();
+  await page.locator('.segmented button', { hasText: 'Русский' }).click();
+  if (found.length) throw new Error(`untranslated: ${[...new Set(found)].slice(0, 8).join(' | ')}`);
+});
+
 await step('no console errors', async () => {
   const relevant = consoleErrors.filter((e) => !/favicon|Autofill/i.test(e));
   if (relevant.length) throw new Error(relevant.slice(0, 5).join('\n'));
