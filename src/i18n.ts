@@ -189,6 +189,9 @@ const ru = {
     search: 'Поиск',
     collapse: 'Свернуть полноэкранный плеер',
     disclaimer: 'Wave — неофициальный клиент Яндекс Музыки. Не связан с Яндексом.',
+    about: 'О приложении',
+    version: (v: string) => `Версия ${v}`,
+    logHint: 'Журнал ошибок пригодится, если что-то сломалось',
   },
   wave: {
     kicker: (days: number) => `Без повторов · фильтр ${days ? `${days} дн.` : 'выкл.'}`,
@@ -226,6 +229,12 @@ const ru = {
   },
   errors: {
     noTransport: 'Нет платформенного транспорта: запустите приложение через Electron',
+    title: 'Что-то пошло не так',
+    screenHint: 'Интерфейс остановился из-за ошибки. Обычно помогает перезагрузка, подробности записаны в журнал.',
+    viewTitle: 'Эта страница не открылась из-за ошибки',
+    reload: 'Перезагрузить',
+    home: 'На главную',
+    openLog: 'Открыть журнал',
   },
 };
 
@@ -397,6 +406,9 @@ const en: Dict = {
     search: 'Search',
     collapse: 'Collapse the full-screen player',
     disclaimer: 'Wave is an unofficial Yandex Music client. Not affiliated with Yandex.',
+    about: 'About',
+    version: (v) => `Version ${v}`,
+    logHint: 'The error log helps when something breaks',
   },
   wave: {
     kicker: (days) => `No repeats · filter ${days ? `${days} d` : 'off'}`,
@@ -434,6 +446,12 @@ const en: Dict = {
   },
   errors: {
     noTransport: 'No platform transport: run the app through Electron',
+    title: 'Something went wrong',
+    screenHint: 'The interface stopped because of an error. Reloading usually helps; details are saved to the log.',
+    viewTitle: "This page couldn't open because of an error",
+    reload: 'Reload',
+    home: 'Go home',
+    openLog: 'Open log',
   },
 };
 

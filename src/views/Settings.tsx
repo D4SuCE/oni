@@ -1,4 +1,4 @@
-import { LogOut } from 'lucide-react';
+import { FileText, LogOut } from 'lucide-react';
 import { Segmented } from '../components/Wave.tsx';
 import { LANGS, setLang, useLang, useT } from '../i18n.ts';
 import { setNormalize, usePlayer } from '../player/player.ts';
@@ -58,6 +58,21 @@ export function SettingsView() {
           <kbd>Ctrl + L</kbd> <span>{s.like}</span>
           <kbd>Ctrl + F</kbd> <span>{s.search}</span>
           <kbd>Esc</kbd> <span>{s.collapse}</span>
+        </div>
+      </div>
+
+      <div className="panel glass">
+        <h3>{s.about}</h3>
+        <div className="settings-row">
+          <div>
+            <div>{s.version(__APP_VERSION__)}</div>
+            <div className="hint">{s.logHint}</div>
+          </div>
+          {window.wave?.openLogs && (
+            <button className="btn ghost" onClick={() => window.wave?.openLogs?.()}>
+              <FileText size={16} /> {t.errors.openLog}
+            </button>
+          )}
         </div>
       </div>
 

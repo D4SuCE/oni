@@ -7,4 +7,6 @@ contextBridge.exposeInMainWorld('wave', {
   hasToken: () => ipcRenderer.invoke('ym:token:has'),
   setToken: (value) => ipcRenderer.invoke('ym:token:set', value),
   login: () => ipcRenderer.invoke('ym:login'),
+  log: (level, source, message) => ipcRenderer.send('wave:log', { level, source, message }),
+  openLogs: () => ipcRenderer.invoke('wave:logs:open'),
 });

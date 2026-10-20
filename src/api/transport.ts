@@ -28,6 +28,10 @@ export interface Transport {
   hasToken(): Promise<boolean>;
   setToken(value: string | null): Promise<void>;
   login?(): Promise<boolean>;
+  /** Appends a line to the app's log file. */
+  log?(level: 'error' | 'warn' | 'info', source: string, message: string): void;
+  /** Opens the log file in the system's default viewer. */
+  openLogs?(): Promise<string>;
 }
 
 declare global {

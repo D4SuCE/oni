@@ -1608,6 +1608,56 @@ html:not(.acrylic) .backdrop-tint {
   color: var(--text-2);
 }
 
+/* Error boundary: whole-window crash screen and per-page error card. */
+.crash {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(10, 10, 16, 0.55);
+}
+.crash-card {
+  width: min(520px, 100%);
+  padding: 30px 30px 26px;
+  border-radius: 24px;
+  text-align: center;
+}
+.crash-card.inline {
+  margin: 40px auto 0;
+}
+.crash-card h2 {
+  margin: 10px 0 8px;
+  font-size: 20px;
+}
+.crash-card p {
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+.crash-icon {
+  color: #ffb057;
+}
+.crash-details {
+  margin: 0 0 18px;
+  padding: 10px 12px;
+  max-height: 120px;
+  overflow: auto;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--text-2);
+  font: 12px/1.45 Consolas, 'Cascadia Mono', monospace;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+.crash-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .lib-actions {
   display: flex;
   align-items: center;

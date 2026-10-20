@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { trackCover } from './api/yandex.ts';
 import { Spinner } from './components/Common.tsx';
 import { DialogHost } from './components/Dialog.tsx';
+import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { MenuHost } from './components/Menu.tsx';
 import { NowPlaying } from './components/NowPlaying.tsx';
 import { PlayerBar } from './components/PlayerBar.tsx';
@@ -112,7 +113,7 @@ function Main() {
     <main className="main" ref={ref}>
       <div className="main-drag drag" />
       <div key={JSON.stringify(route)} className="view-enter">
-        {view}
+        <ErrorBoundary kind="view">{view}</ErrorBoundary>
       </div>
     </main>
   );

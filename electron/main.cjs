@@ -16,6 +16,27 @@ const DEFAULT_CLIENT = 'YandexMusicAndroid/24023621';
 let mainWindow = null;
 let token = null;
 
+// ------------------------------------------------------------------ error log
+
+const LOG_LIMIT = 1024 * 1024;
+const logDir = () => path.join(app.getPath('userData'), 'logs');
+const logFile = () => path.join(logDir(), 'wave.log');
+
+function writeLog(level, source, message) {
+  try {
+    fs.mkdirSync(logDir(), { recursive: true });
+    const file = logFile();
+    // Keep one previous file so the log never grows without bound.
+    if (fs.existsSync(file) && fs.statSync(file).size > LOG_LIMIT) fs.renameSync(file, path.join(logDir(), 'wave.old.log'));
+    fs.appendFileSync(file, `${new Date().toISOString()} [${level}] ${source}: ${String(message).slice(0, 8000)}\n`);
+  } catch {
+    /* logging must never take the app down */
+  }
+}
+
+process.on('uncaughtException', (e) => writeLog('error', 'main', e?.stack || e));
+process.on('unhandledRejection', (e) => writeLog('error', 'main', e?.stack || e));
+
 // ---------------------------------------------------------------- token store
 
 const tokenFile = () => path.join(app.getPath('userData'), 'token.bin');
@@ -139,6 +160,12 @@ function createWindow() {
     },
   });
   mainWindow.once('ready-to-show', () => mainWindow.show());
+  // A crashed renderer leaves an empty see-through window: log it and load the page again.
+  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    writeLog('error', 'renderer', `process gone: ${details.reason} (exit ${details.exitCode})`);
+    if (details.reason !== 'clean-exit' && !mainWindow.isDestroyed()) mainWindow.webContents.reload();
+  });
+  mainWindow.on('unresponsive', () => writeLog('warn', 'renderer', 'window is not responding'));
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
@@ -152,6 +179,11 @@ ipcMain.handle('ym:token:has', () => Boolean(token));
 ipcMain.on('wave:test-mode', (e) => (e.returnValue = TEST_MODE));
 ipcMain.handle('ym:token:set', (_e, value) => saveToken(value ? String(value).trim() : null));
 ipcMain.handle('ym:login', () => login());
+ipcMain.on('wave:log', (_e, entry) => writeLog(entry?.level || 'error', entry?.source || 'ui', entry?.message));
+ipcMain.handle('wave:logs:open', () => {
+  if (!fs.existsSync(logFile())) writeLog('info', 'main', 'log opened');
+  return shell.openPath(logFile());
+});
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();

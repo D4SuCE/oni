@@ -211,6 +211,25 @@ await step('no console errors', async () => {
   if (relevant.length) throw new Error(relevant.slice(0, 5).join('\n'));
 });
 
+// Runs after the console check on purpose: it produces errors deliberately.
+await step('a crashing page keeps the shell alive', async () => {
+  await page.click('[data-testid="nav-library"]');
+  await page.locator('.tabs.big .tab', { hasText: 'Плейлисты' }).click();
+  await page.waitForSelector('.grid .card');
+  // Someone else's playlist is drawn only on this page (the sidebar lists own ones),
+  // and an object title is a guaranteed render error.
+  await page.evaluate(() => {
+    const s = window.__wave.useApp.getState();
+    window.__playlistsBackup = s.playlists;
+    window.__wave.useApp.setState({ playlists: [...s.playlists, { uid: -1, kind: -1, title: {}, trackCount: 0 }] });
+  });
+  await page.waitForSelector('.crash-card.inline', { timeout: 5000 });
+  if (!(await page.locator('[data-testid="nav-search"]').isVisible())) throw new Error('sidebar is gone');
+  await page.evaluate(() => window.__wave.useApp.setState({ playlists: window.__playlistsBackup }));
+  await page.locator('.crash-card .btn.primary').click();
+  await page.waitForSelector('.grid .card', { timeout: 5000 });
+});
+
 await page.evaluate(() => window.__wave.audio.pause());
 await app.close();
 fs.rmSync(userData, { recursive: true, force: true });
