@@ -91,7 +91,7 @@ export function MixCard({ mix, genres }: { mix: Mix; genres: Record<string, stri
           title={tr().common.play}
           onClick={(e) => {
             e.stopPropagation();
-            playTracks(mix.tracks, 0, title);
+            playTracks(mix.tracks, 0, title, undefined, { origin: mix.kind });
           }}
         >
           <Play size={18} fill="currentColor" />

@@ -2,7 +2,7 @@ import { FileText, LogOut } from 'lucide-react';
 import { useState } from 'react';
 import { Segmented } from '../components/Wave.tsx';
 import { LANGS, setLang, useLang, useT } from '../i18n.ts';
-import { setNormalize, usePlayer } from '../player/player.ts';
+import { setNormalize, stats, usePlayer } from '../player/player.ts';
 import { logout, useApp } from '../store.ts';
 import { setMotion, useMotion } from '../ui/motion.ts';
 import { MAX_SEE_THROUGH, setSeeThrough, useSeeThrough } from '../ui/seeThrough.ts';
@@ -13,6 +13,7 @@ export function SettingsView() {
   const lang = useLang((s) => s.lang);
   const motion = useMotion((s) => s.enabled);
   const seeThrough = useSeeThrough((s) => s.value);
+  const summary = stats.summary(30);
   const [closeToTray, setCloseToTrayState] = useState(() => window.wave?.shellPrefs?.().closeToTray ?? false);
   const t = useT();
   const s = t.settings;
@@ -106,6 +107,38 @@ export function SettingsView() {
           </label>
         </div>
       )}
+
+      <div className="panel glass">
+        <h3>{t.stats.title}</h3>
+        <div className="hint stats-hint">{t.stats.hint}</div>
+        {summary.length ? (
+          <table className="stats-table" data-testid="stats">
+            <thead>
+              <tr>
+                <th>{t.stats.source}</th>
+                <th>{t.stats.plays}</th>
+                <th>{t.stats.finished}</th>
+                <th>{t.stats.skipped}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.map((row) => (
+                <tr key={row.origin}>
+                  <td>{t.stats.origins[row.origin]}</td>
+                  <td>{row.plays}</td>
+                  <td>
+                    <span className="stats-bar" style={{ '--v': `${row.finished * 100}%` } as React.CSSProperties} />
+                    {Math.round(row.finished * 100)}%
+                  </td>
+                  <td>{Math.round(row.skipped * 100)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <div className="hint">{t.stats.empty}</div>
+        )}
+      </div>
 
       <div className="panel glass">
         <h3>{s.shortcuts}</h3>

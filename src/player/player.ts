@@ -9,6 +9,7 @@ import { artistNames, trackCover, type StreamQuality } from '../api/yandex.ts';
 import { DEFAULT_TUNING, WaveEngine, waveSeeds, type WaveStats, type WaveTuning } from '../wave/engine.ts';
 import { ListenHistory } from '../wave/history.ts';
 import { RecentPlays } from './recent.ts';
+import { PlayStats, type Origin } from './stats.ts';
 
 export type Repeat = 'off' | 'all' | 'one';
 /** A wave without a station is My Wave; with one it is a radio seeded by a track, artist, album or playlist. */
@@ -20,8 +21,16 @@ export interface PlayContext {
 }
 export type Source =
   | { kind: 'wave'; station?: { seed: string; title: string } }
-  /** `suggested`: ids Smart Shuffle added to the list (shown with ✦ in the queue). */
-  | { kind: 'list'; title: string; from?: PlayContext; suggested?: string[] };
+  /**
+   * `suggested`: ids Smart Shuffle added to the list (shown with ✦ in the queue);
+   * `origin`: which recommendation it came from, for the stats in Settings.
+   */
+  | { kind: 'list'; title: string; from?: PlayContext; suggested?: string[]; origin?: Origin };
+
+export interface PlayExtra {
+  suggested?: string[];
+  origin?: Origin;
+}
 
 export function sourceTitle(source: Source | null) {
   if (source?.kind === 'list') return source.title;
@@ -78,6 +87,7 @@ const get = usePlayer.getState;
 
 export const history = new ListenHistory(storage);
 export const recentPlays = new RecentPlays(storage);
+export const stats = new PlayStats(storage);
 /** Bumped on every new entry so the History page re-reads the list. */
 export const useRecent = create<{ version: number }>(() => ({ version: 0 }));
 export const audio = new Audio();
@@ -161,6 +171,7 @@ function finishCurrent(ended: boolean) {
   const t = current();
   if (!t || (listened < 1 && !ended)) return;
   history.record(t, listened, ended);
+  stats.record(originOf(t), listened, (t.durationMs || 0) / 1000, ended);
   reportPlay(t, ended);
   if (ended || listened >= 5) {
     const source = get().source;
@@ -172,6 +183,13 @@ function finishCurrent(ended: boolean) {
     set({ waveStats: engine ? { ...engine.stats } : null });
   }
   listened = 0;
+}
+
+function originOf(t: Track): Origin {
+  const s = get().source;
+  if (s?.kind === 'wave') return s.station ? 'radio' : 'wave';
+  if (s?.suggested?.includes(String(t.id))) return 'smart';
+  return s?.origin ?? 'list';
 }
 
 /** Current play for the Yandex listening report. */
@@ -281,20 +299,20 @@ export function waveFeedback(type: 'like' | 'dislike', t: Track) {
 
 // ------------------------------------------------------------------ controls
 
-export async function playTracks(tracks: Track[], start = 0, title = tr().common.list, from?: PlayContext, suggested?: string[]) {
+export async function playTracks(tracks: Track[], start = 0, title = tr().common.list, from?: PlayContext, extra: PlayExtra = {}) {
   finishCurrent(false);
   engine = null;
   const playable = tracks.filter((t) => t.available !== false);
   const startTrack = tracks[start];
   const index = Math.max(0, playable.indexOf(startTrack));
   unshuffled = null;
-  set({ queue: playable, source: { kind: 'list', title, from, suggested }, shuffle: false, waveStats: null });
+  set({ queue: playable, source: { kind: 'list', title, from, ...extra }, shuffle: false, waveStats: null });
   await loadAt(index);
 }
 
-export async function playShuffled(tracks: Track[], title = tr().common.list, from?: PlayContext) {
+export async function playShuffled(tracks: Track[], title = tr().common.list, from?: PlayContext, extra: PlayExtra = {}) {
   const playable = tracks.filter((t) => t.available !== false);
-  await playTracks(shuffleArray(playable), 0, title, from);
+  await playTracks(shuffleArray(playable), 0, title, from, extra);
 }
 
 export function toggle() {

@@ -18,5 +18,5 @@ export async function smartShuffle(tracks: Track[], title: string, from?: PlayCo
     disliked: useApp.getState().disliked,
     daysSinceHeard: (id) => history.daysSince(id),
   }, Math.min(30, Math.floor(shuffled.length / 3)));
-  await playTracks(interleave(shuffled, suggestions), 0, title, from, suggestions.map((t) => String(t.id)));
+  await playTracks(interleave(shuffled, suggestions), 0, title, from, { suggested: suggestions.map((t) => String(t.id)) });
 }

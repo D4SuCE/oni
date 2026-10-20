@@ -2327,6 +2327,40 @@ html.motion .backdrop-img {
   justify-content: space-between;
   gap: 16px;
 }
+.stats-hint {
+  margin-bottom: 12px;
+}
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.stats-table th {
+  padding: 6px 8px;
+  text-align: left;
+  font-weight: 500;
+  color: var(--text-3);
+  border-bottom: 1px solid var(--line);
+}
+.stats-table td {
+  padding: 8px;
+  border-bottom: 1px solid rgba(73, 64, 61, 0.3);
+  white-space: nowrap;
+}
+.stats-table td:first-child {
+  width: 100%;
+  white-space: normal;
+}
+/* a small bar of how much of the source gets finished */
+.stats-bar {
+  display: inline-block;
+  width: 48px;
+  height: 4px;
+  margin-right: 8px;
+  vertical-align: middle;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--accent) var(--v), rgba(242, 238, 232, 0.14) var(--v));
+}
 .keys {
   display: grid;
   grid-template-columns: max-content 1fr;

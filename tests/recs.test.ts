@@ -7,6 +7,7 @@ import { buildProfile, type GenreTree, type TasteInput } from '../src/recs/profi
 import { becauseYouListened, forgottenFavourites, onRepeat, recentArtists } from '../src/recs/personal.ts';
 import { radarArtists, radarTracks, recentReleases } from '../src/recs/radar.ts';
 import { interleave, pickSuggestions } from '../src/recs/suggest.ts';
+import { PlayStats } from '../src/player/stats.ts';
 import { DAY, artistIds, dayKey, seededRandom, weekKey } from '../src/recs/util.ts';
 
 let passed = 0;
@@ -233,6 +234,21 @@ await test('smart shuffle: a suggestion after every three tracks, none already i
   const out = interleave(list, picked);
   assert(out.length === 12, `9 + 3, got ${out.length}`);
   assert([3, 7, 11].every((i) => picked.includes(out[i])), 'suggestions sit after every third track');
+});
+
+await test('play stats: finished at 85%, skipped under 30 s, last 30 days only', () => {
+  const m = new Map<string, string>();
+  const stats = new PlayStats({ getItem: (k) => m.get(k) ?? null, setItem: (k, v) => void m.set(k, v) });
+  stats.record('mix', 200, 220, false, NOW); // 91%: finished
+  stats.record('mix', 12, 220, false, NOW); // skipped
+  stats.record('mix', 100, 220, false, NOW); // neither
+  stats.record('wave', 0, 200, true, NOW); // ended: finished
+  stats.record('wave', 5, 200, false, NOW - 40 * DAY); // too old
+  const s = stats.summary(30, NOW);
+  const mix = s.find((x) => x.origin === 'mix')!;
+  assert(s[0].origin === 'mix' && mix.plays === 3, `mix first with 3 plays: ${JSON.stringify(s)}`);
+  assert(Math.abs(mix.finished - 1 / 3) < 1e-9 && Math.abs(mix.skipped - 1 / 3) < 1e-9, `thirds: ${JSON.stringify(mix)}`);
+  assert(s.find((x) => x.origin === 'wave')!.plays === 1, 'the 40-day-old wave play is out of the window');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
