@@ -13,4 +13,11 @@ contextBridge.exposeInMainWorld('wave', {
   setPlayback: (state) => ipcRenderer.send('wave:playback', state),
   shellPrefs: () => ipcRenderer.sendSync('wave:shell:prefs'),
   setCloseToTray: (enabled) => ipcRenderer.send('wave:shell:close-to-tray', enabled),
+  setProgress: (p) => ipcRenderer.send('wave:progress', p),
+  openMini: () => ipcRenderer.send('wave:mini:open'),
+  // used by the mini player window
+  miniCommand: (cmd) => ipcRenderer.send('wave:mini:command', cmd),
+  miniReady: () => ipcRenderer.send('wave:mini:ready'),
+  onPlayback: (cb) => ipcRenderer.on('wave:playback', (_e, s) => cb(s)),
+  onProgress: (cb) => ipcRenderer.on('wave:progress', (_e, p) => cb(p)),
 });

@@ -1,23 +1,11 @@
-import { createRoot } from 'react-dom/client';
-import { App } from './App.tsx';
-import { ErrorBoundary } from './components/ErrorBoundary.tsx';
-import { useLang } from './i18n.ts';
-import { startBeatPulse } from './player/pulse.ts';
-import { connectDesktopShell } from './player/shell.ts';
-import { installGlobalErrorLogging } from './ui/log.ts';
+// Entry point for both windows: the main app, or (#mini) the small always-on-top player,
+// which is only a remote and must not load the player itself.
+
 import './fonts.css';
 import './styles.css';
 
-installGlobalErrorLogging();
-connectDesktopShell();
-startBeatPulse();
-document.documentElement.lang = useLang.getState().lang;
-
-// Electron window uses Windows acrylic, so the page itself must stay see-through.
+// Electron windows use Windows acrylic, so the page itself must stay see-through.
 if (window.wave?.platform === 'electron') document.documentElement.classList.add('acrylic');
 
-createRoot(document.getElementById('root')!).render(
-  <ErrorBoundary kind="screen">
-    <App />
-  </ErrorBoundary>,
-);
+if (location.hash === '#mini') import('./mini/MiniPlayer.tsx').then((m) => m.mountMini());
+else import('./boot.tsx');

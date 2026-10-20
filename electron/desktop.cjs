@@ -1,6 +1,6 @@
 // Desktop shell around the main window: remembered size and position, taskbar
 // thumbnail buttons, the tray, and playback commands sent back to the page.
-const { app, Menu, Tray, ipcMain, nativeImage, screen } = require('electron');
+const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, screen } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -148,11 +148,82 @@ app.on('before-quit', () => {
   quitting = true;
 });
 
+// ---------------------------------------------------------------- mini player
+// A small always-on-top window that remote-controls the main one: the music keeps playing
+// in the main window (hidden meanwhile); state comes here, commands go back.
+
+let mini = null;
+let progress = null;
+
+const MINI = { width: 380, height: 112 };
+
+function miniBounds() {
+  const area = screen.getPrimaryDisplay().workArea;
+  const b = prefs.miniBounds;
+  if (b && Number.isFinite(b.x)) {
+    const shown = screen.getDisplayMatching({ ...b, ...MINI }).workArea;
+    if (b.x >= shown.x - 40 && b.x + MINI.width <= shown.x + shown.width + 40 && b.y >= shown.y - 20 && b.y + MINI.height <= shown.y + shown.height + 40) return { x: b.x, y: b.y, ...MINI };
+  }
+  return { x: area.x + area.width - MINI.width - 24, y: area.y + area.height - MINI.height - 24, ...MINI };
+}
+
+function openMini() {
+  if (mini && !mini.isDestroyed()) return mini.focus();
+  mini = new BrowserWindow({
+    ...miniBounds(),
+    frame: false,
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
+    fullscreenable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    show: false,
+    title: 'Oni',
+    backgroundColor: '#00000000',
+    backgroundMaterial: 'acrylic',
+    icon: asset('icon.png'),
+    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, backgroundThrottling: false },
+  });
+  if (process.env.VITE_DEV_URL) mini.loadURL(`${process.env.VITE_DEV_URL}#mini`);
+  else mini.loadFile(path.join(__dirname, '..', 'dist', 'index.html'), { hash: 'mini' });
+  mini.once('ready-to-show', () => {
+    mini.showInactive();
+    if (win && !win.isDestroyed()) win.hide();
+  });
+  mini.on('moved', () => {
+    prefs.miniBounds = mini.getBounds();
+    savePrefs();
+  });
+  mini.on('closed', () => {
+    mini = null;
+    showWindow();
+  });
+}
+
+const toMini = (channel, payload) => mini && !mini.isDestroyed() && mini.webContents.send(channel, payload);
+
+ipcMain.on('wave:mini:open', openMini);
+// The mini page asks once its listeners are in place; anything sent before that is lost.
+ipcMain.on('wave:mini:ready', (e) => {
+  e.sender.send('wave:playback', state);
+  if (progress) e.sender.send('wave:progress', progress);
+});
+ipcMain.on('wave:mini:command', (_e, cmd) => {
+  if (cmd === 'expand' || cmd === 'close') mini?.close();
+  else if (['toggle', 'next', 'prev', 'like'].includes(cmd)) command(cmd);
+});
+ipcMain.on('wave:progress', (_e, p) => {
+  progress = p;
+  toMini('wave:progress', p);
+});
+
 ipcMain.on('wave:playback', (_e, s) => {
   state = { ...state, ...s };
   if (win && !win.isDestroyed()) win.setTitle(playing() || 'Oni');
   updateThumbar();
   updateTray();
+  toMini('wave:playback', state);
 });
 ipcMain.on('wave:shell:prefs', (e) => {
   e.returnValue = { closeToTray: Boolean(prefs.closeToTray) };
@@ -163,4 +234,4 @@ ipcMain.on('wave:shell:close-to-tray', (_e, enabled) => {
   setTray(prefs.closeToTray);
 });
 
-module.exports = { windowBounds, attachWindow, showWindow, asset };
+module.exports = { windowBounds, attachWindow, showWindow, openMini, asset };

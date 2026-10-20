@@ -18,9 +18,15 @@ async function launch() {
   return { app, page };
 }
 
-/** Runs fn(window, arg) in the main process against the main window. */
+/** Runs fn(window, arg) in the main process against the main window (not the #mini one). */
 const win = (app, fn, arg) =>
-  app.evaluate(({ BrowserWindow }, [src, a]) => new Function('w', 'a', `return (${src})(w, a)`)(BrowserWindow.getAllWindows()[0], a), [fn.toString(), arg]);
+  app.evaluate(
+    ({ BrowserWindow }, [src, a]) => {
+      const main = BrowserWindow.getAllWindows().find((w) => !w.webContents.getURL().endsWith('#mini'));
+      return new Function('w', 'a', `return (${src})(w, a)`)(main, a);
+    },
+    [fn.toString(), arg],
+  );
 
 async function step(name, fn) {
   try {
@@ -64,6 +70,30 @@ await step('taskbar commands drive the player', async () => {
   await win(app, (w) => w.webContents.send('wave:command', 'next'));
   await page.waitForFunction((i) => window.__wave.usePlayer.getState().index > i, before, { timeout: 20000 });
   await page.evaluate(() => window.__wave.audio.pause());
+});
+
+await step('mini player: remote for the hidden main window', async () => {
+  await page.evaluate(() => window.__wave.audio.play());
+  await page.waitForFunction(() => !window.__wave.audio.paused, null, { timeout: 10000 });
+  const opened = app.waitForEvent('window');
+  await page.click('[data-testid="mini-button"]');
+  const mini = await opened;
+  await mini.waitForSelector('[data-testid="mini"]');
+  const title = await page.evaluate(() => {
+    const s = window.__wave.usePlayer.getState();
+    return s.queue[s.index].title;
+  });
+  await mini.waitForFunction((t) => document.querySelector('[data-testid="mini-title"]')?.textContent === t, title, { timeout: 5000 });
+  await page.waitForTimeout(500);
+  if (await win(app, (w) => w.isVisible())) throw new Error('main window should hide');
+  await mini.click('[data-testid="mini-toggle"]');
+  await page.waitForFunction(() => window.__wave.audio.paused, null, { timeout: 5000 });
+  const closed = new Promise((r) => mini.once('close', r));
+  // the click closes this very window, so don't wait on it afterwards
+  await mini.click('[data-testid="mini-expand"]', { noWaitAfter: true }).catch(() => {});
+  await closed;
+  await page.waitForTimeout(500);
+  if (!(await win(app, (w) => w.isVisible()))) throw new Error('main window should come back');
 });
 
 await step('close-to-tray hides the window, and closing quits without it', async () => {

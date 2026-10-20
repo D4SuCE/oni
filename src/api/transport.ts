@@ -38,15 +38,34 @@ export interface Transport {
   setPlayback?(state: ShellPlayback): void;
   shellPrefs?(): { closeToTray: boolean };
   setCloseToTray?(enabled: boolean): void;
+  setProgress?(p: ShellProgress): void;
+  openMini?(): void;
+  // the mini player window's side
+  miniCommand?(cmd: MiniCommand): void;
+  /** Mini player: listeners are set, send the current state. */
+  miniReady?(): void;
+  onPlayback?(cb: (state: ShellPlayback) => void): void;
+  onProgress?(cb: (p: ShellProgress) => void): void;
 }
 
-export type ShellCommand = 'toggle' | 'next' | 'prev' | 'back' | 'forward';
+export type MiniCommand = 'toggle' | 'next' | 'prev' | 'like' | 'expand' | 'close';
+
+export interface ShellProgress {
+  position: number;
+  duration: number;
+  playing: boolean;
+}
+
+export type ShellCommand = 'toggle' | 'next' | 'prev' | 'like' | 'back' | 'forward';
 
 export interface ShellPlayback {
   hasTrack: boolean;
   playing: boolean;
   title: string;
   artist: string;
+  /** For the mini player. */
+  cover?: string;
+  liked?: boolean;
   /** Localized menu and tooltip labels; the shell has no dictionary of its own. */
   labels: Record<'play' | 'pause' | 'next' | 'prev' | 'show' | 'quit' | 'nothing', string>;
 }

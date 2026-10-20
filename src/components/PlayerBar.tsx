@@ -1,4 +1,4 @@
-import { Ban, Heart, ListMusic, Loader2, Maximize2, Pause, Play, Repeat, Repeat1, Shuffle, SlidersVertical, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Waves } from 'lucide-react';
+import { Ban, Heart, ListMusic, Loader2, Maximize2, Pause, PictureInPicture2, Play, Repeat, Repeat1, Shuffle, SlidersVertical, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Waves } from 'lucide-react';
 import { useRef } from 'react';
 import type { Track } from '../api/types.ts';
 import { trackCover } from '../api/yandex.ts';
@@ -161,6 +161,11 @@ export function PlayerBar() {
           <SlidersVertical size={18} />
         </button>
         <VolumeControl />
+        {window.wave?.openMini && (
+          <button className="icon-btn" onClick={() => window.wave?.openMini?.()} title={t.mini.open} data-testid="mini-button">
+            <PictureInPicture2 size={17} />
+          </button>
+        )}
         <button className="icon-btn" onClick={openNow} title={t.player.fullscreen}>
           <Maximize2 size={16} />
         </button>

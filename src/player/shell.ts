@@ -2,10 +2,10 @@
 // in step with the player, and runs the commands those buttons send back.
 
 import type { ShellPlayback } from '../api/transport.ts';
-import { artistNames } from '../api/yandex.ts';
+import { artistNames, trackCover } from '../api/yandex.ts';
 import { tr, useLang } from '../i18n.ts';
-import { historyStep } from '../store.ts';
-import { next, prev, toggle, usePlayer } from './player.ts';
+import { historyStep, toggleLike, useApp } from '../store.ts';
+import { audio, current, next, prev, toggle, usePlayer } from './player.ts';
 
 function snapshot(): ShellPlayback {
   const s = usePlayer.getState();
@@ -16,6 +16,8 @@ function snapshot(): ShellPlayback {
     playing: s.playing,
     title: t?.title ?? '',
     artist: t ? artistNames(t) : '',
+    cover: trackCover(t, 200),
+    liked: t ? useApp.getState().liked.has(String(t.id)) : false,
     labels: {
       play: l.player.play,
       pause: l.player.pause,
@@ -35,7 +37,10 @@ export function connectDesktopShell() {
     if (cmd === 'toggle') toggle();
     else if (cmd === 'next') next(true);
     else if (cmd === 'prev') prev();
-    else if (cmd === 'back' || cmd === 'forward') historyStep(cmd);
+    else if (cmd === 'like') {
+      const t = current();
+      if (t) toggleLike(t);
+    } else if (cmd === 'back' || cmd === 'forward') historyStep(cmd);
   });
   // The player store changes several times a second (position); send only real changes.
   let last = '';
@@ -48,5 +53,11 @@ export function connectDesktopShell() {
   };
   usePlayer.subscribe(push);
   useLang.subscribe(push);
+  useApp.subscribe(push);
   push();
+
+  // Position for the mini player's progress bar: once a second and on every jump.
+  const progress = () => shell.setProgress?.({ position: audio.currentTime || 0, duration: usePlayer.getState().duration, playing: !audio.paused });
+  setInterval(progress, 1000);
+  for (const ev of ['play', 'pause', 'seeked', 'loadedmetadata']) audio.addEventListener(ev, progress);
 }

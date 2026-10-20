@@ -348,6 +348,11 @@ const ru = {
       jazz: 'Джаз',
     } as Record<'mine' | 'flat' | 'bass' | 'treble' | 'rock' | 'pop' | 'electronic' | 'hiphop' | 'vocal' | 'classical' | 'jazz', string>,
   },
+  mini: {
+    open: 'Мини-плеер',
+    expand: 'Развернуть Oni',
+    close: 'Закрыть мини-плеер',
+  },
   shell: {
     show: 'Показать Oni',
     quit: 'Выход',
@@ -689,6 +694,11 @@ const en: Dict = {
       classical: 'Classical',
       jazz: 'Jazz',
     },
+  },
+  mini: {
+    open: 'Mini player',
+    expand: 'Open Oni',
+    close: 'Close the mini player',
   },
   shell: {
     show: 'Show Oni',
