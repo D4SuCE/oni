@@ -37,11 +37,11 @@ function Backdrop() {
   }, [url]);
   return (
     <div className="backdrop" aria-hidden>
+      <div className="backdrop-art" />
       {layers.map((l) => (
         <div key={l.id} className="backdrop-img" style={{ backgroundImage: `url("${l.url}")` }} />
       ))}
       <div className="backdrop-tint" />
-      <div className="backdrop-art" />
     </div>
   );
 }

@@ -191,20 +191,9 @@ export function WaveHero() {
         <i />
         <i />
       </div>
-      {/* the oni on a red sun over an ink landscape, with 鬼 and "live by music" in brush */}
+      {/* the blood-moon landscape (the window's backdrop art), the oni in front of the moon */}
+      <div className="wave-scene" aria-hidden />
       <div className="wave-art" aria-hidden>
-        <div className="wave-sun" />
-        <svg className="wave-land" viewBox="0 0 600 300" preserveAspectRatio="xMidYMax slice">
-          <path d="M0 250 L60 205 L110 228 L170 168 L230 214 L290 186 L350 230 L420 196 L480 226 L540 200 L600 222 L600 300 L0 300 Z" fill="#160b0a" opacity="0.9" />
-          <path d="M0 270 L80 240 L150 256 L240 226 L330 260 L420 238 L520 262 L600 246 L600 300 L0 300 Z" fill="#0d0706" />
-          <g fill="#0d0706" transform="translate(96 214)">
-            <rect x="-30" y="0" width="60" height="5" rx="1.5" />
-            <path d="M-36 -10 Q0 -16 36 -10 L36 -5 Q0 -11 -36 -5 Z" />
-            <rect x="-20" y="-5" width="4.5" height="44" />
-            <rect x="15.5" y="-5" width="4.5" height="44" />
-            <rect x="-24" y="10" width="48" height="3.5" />
-          </g>
-        </svg>
         <div className="wave-mask" />
         <div className="wave-seal">
           <span className="wave-kanji">鬼</span>
