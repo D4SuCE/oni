@@ -1,29 +1,24 @@
-// Beat pulse: watches the bass (≈45–190 Hz) of the playing music and sets --beat on the
-// page (0…1, a quick rise on each kick, then a smooth fall) for the covers to throb to.
+// Beat pulse: follows the beat of the playing music (src/player/beat.ts) and sets --beat on
+// the page (0…1, a quick rise on each beat, then a smooth fall) for the covers to throb to.
 // Runs only while music plays, the window is visible and the pulse is switched on.
 
 import { usePulse } from '../ui/motion.ts';
+import { BeatTracker } from './beat.ts';
 import { tapAnalyser } from './eq.ts';
-import { usePlayer } from './player.ts';
+import { audio, usePlayer } from './player.ts';
 
 let analyser: AnalyserNode | null = null;
 let bins: Uint8Array<ArrayBuffer> | null = null;
 let prev: Uint8Array<ArrayBuffer> | null = null;
 let raf = 0;
 let beat = 0;
-let lastHit = 0;
-/** Ignore hits closer than this: a bass line under the kick would otherwise double the beat. */
-const REFRACTORY_MS = 230;
-/** Recent flux values (~0.7 s at 60 fps) for the adaptive threshold. */
-const window_: number[] = [];
-const WINDOW = 42;
+const tracker = new BeatTracker();
 
 const root = () => document.documentElement.style;
 
 /**
- * Onsets, not loudness: the rise of low-band energy from one frame to the next (spectral
- * flux), against an adaptive threshold (mean + 1.4 σ of the last moment). A sustained 808
- * bass keeps the energy high but its flux low, so only the hits count.
+ * Low-band spectral flux per frame (the rise of 45–190 Hz energy), fed to the beat tracker,
+ * which pulses on the song's beats only — not on every bump of the bass line or hi-hats.
  */
 function frame(now: number) {
   analyser!.getByteFrequencyData(bins!);
@@ -32,14 +27,8 @@ function frame(now: number) {
   for (let i = 1; i <= 4; i++) flux += Math.max(0, bins![i] - prev![i]);
   flux /= 4 * 255;
   prev!.set(bins!);
-  window_.push(flux);
-  if (window_.length > WINDOW) window_.shift();
-  const mean = window_.reduce((a, b) => a + b, 0) / window_.length;
-  const sd = Math.sqrt(window_.reduce((a, b) => a + (b - mean) * (b - mean), 0) / window_.length);
-  if (flux > 0.012 && flux > mean + 1.4 * sd && now - lastHit > REFRACTORY_MS) {
-    beat = Math.max(beat, Math.min(1, 0.4 + (flux - mean) / (4 * sd + 0.01)));
-    lastHit = now;
-  }
+  const hit = tracker.push(now, flux);
+  if (hit) beat = Math.max(beat, hit.strength);
   beat *= 0.86;
   root().setProperty('--beat', beat.toFixed(3));
   raf = requestAnimationFrame(frame);
@@ -60,10 +49,20 @@ function update() {
   }
 }
 
-/** Current pulse 0…1 (for tests). */
+/** Current pulse 0…1 and the tracked tempo (for tests). */
 export const pulseLevel = () => beat;
+export const pulseTempo = () => tracker.bpm;
 
 export function startBeatPulse() {
+  // a new track or a jump: the old tempo and grid no longer apply
+  let index = usePlayer.getState().index;
+  usePlayer.subscribe((s) => {
+    if (s.index !== index) {
+      index = s.index;
+      tracker.reset();
+    }
+  });
+  audio.addEventListener('seeked', () => tracker.reset());
   usePlayer.subscribe(update);
   usePulse.subscribe(update);
   document.addEventListener('visibilitychange', update);

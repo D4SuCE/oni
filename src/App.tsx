@@ -10,7 +10,7 @@ import { PlayerBar } from './components/PlayerBar.tsx';
 import { Sidebar, useSidebar } from './components/Sidebar.tsx';
 import { SoundPanel } from './components/SoundPanel.tsx';
 import { eqOutputLevel } from './player/eq.ts';
-import { pulseLevel } from './player/pulse.ts';
+import { pulseLevel, pulseTempo } from './player/pulse.ts';
 import { cx } from './ui/util.ts';
 import { TuningPanel } from './components/Wave.tsx';
 import { audio, current, next, playTracks, prev, restoreSession, setVolume, toggle, usePlayer } from './player/player.ts';
@@ -194,4 +194,4 @@ export function App() {
 }
 
 // Handy for debugging and for the automated UI test.
-Object.assign(window, { __wave: { usePlayer, useApp, audio, api, navigate, playTracks, eqOutputLevel, pulseLevel } });
+Object.assign(window, { __wave: { usePlayer, useApp, audio, api, navigate, playTracks, eqOutputLevel, pulseLevel, pulseTempo } });
