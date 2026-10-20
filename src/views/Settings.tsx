@@ -4,7 +4,7 @@ import { Segmented } from '../components/Wave.tsx';
 import { LANGS, setLang, useLang, useT } from '../i18n.ts';
 import { setNormalize, stats, usePlayer } from '../player/player.ts';
 import { logout, useApp } from '../store.ts';
-import { setMotion, useMotion } from '../ui/motion.ts';
+import { setMotion, setPulse, useMotion, usePulse } from '../ui/motion.ts';
 import { MAX_SEE_THROUGH, setSeeThrough, useSeeThrough } from '../ui/seeThrough.ts';
 
 export function SettingsView() {
@@ -12,6 +12,7 @@ export function SettingsView() {
   const normalize = usePlayer((s) => s.normalize);
   const lang = useLang((s) => s.lang);
   const motion = useMotion((s) => s.enabled);
+  const pulse = usePulse((s) => s.enabled);
   const seeThrough = useSeeThrough((s) => s.value);
   const summary = stats.summary(30);
   const [closeToTray, setCloseToTrayState] = useState(() => window.wave?.shellPrefs?.().closeToTray ?? false);
@@ -52,6 +53,13 @@ export function SettingsView() {
             <div className="hint">{s.liveCoversHint}</div>
           </div>
           <input type="checkbox" className="switch" checked={motion} onChange={(e) => setMotion(e.target.checked)} data-testid="live-covers" />
+        </label>
+        <label className="toggle-row">
+          <div>
+            <div>{s.pulse}</div>
+            <div className="hint">{s.pulseHint}</div>
+          </div>
+          <input type="checkbox" className="switch" checked={pulse} onChange={(e) => setPulse(e.target.checked)} data-testid="pulse" />
         </label>
         {window.wave?.platform === 'electron' && (
           <div className="slider-row">

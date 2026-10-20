@@ -31,3 +31,27 @@ export function setMotion(enabled: boolean) {
     /* storage unavailable */
   }
 }
+
+// Beat pulse: covers and the hero mask throb on the bass. Same default as live covers.
+const PULSE_KEY = 'ui.pulse';
+
+function initialPulse() {
+  try {
+    const v = localStorage.getItem(PULSE_KEY);
+    if (v === '1' || v === '0') return v === '1';
+  } catch {
+    /* storage unavailable */
+  }
+  return useMotion.getState().enabled;
+}
+
+export const usePulse = create<{ enabled: boolean }>(() => ({ enabled: initialPulse() }));
+
+export function setPulse(enabled: boolean) {
+  usePulse.setState({ enabled });
+  try {
+    localStorage.setItem(PULSE_KEY, enabled ? '1' : '0');
+  } catch {
+    /* storage unavailable */
+  }
+}

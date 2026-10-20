@@ -1836,6 +1836,19 @@ html.acrylic .backdrop {
   box-shadow: 0 40px 100px rgba(0, 0, 0, 0.55);
 }
 
+/* Beat pulse (Settings > Appearance): --beat (0…1) rises on each kick, src/player/pulse.ts */
+.np-cover,
+.pb-cover .cover,
+.wave-hero.active .wave-mask {
+  transform: scale(calc(1 + var(--beat, 0) * 0.04));
+  will-change: transform;
+}
+.np-cover {
+  box-shadow:
+    0 40px 100px rgba(0, 0, 0, 0.55),
+    0 0 calc(var(--beat, 0) * 70px) rgba(217, 39, 46, calc(var(--beat, 0) * 0.55));
+}
+
 /* Live covers (Settings > Appearance): Yandex's cover videos and slow drift of stills. */
 /* the cover video fills Now Playing under a dark ink gradient that keeps text readable */
 .np-video {

@@ -332,6 +332,22 @@ await step('smart shuffle mixes suggestions into liked songs', async () => {
   await page.evaluate(() => window.__wave.audio.pause());
 });
 
+await step('beat pulse follows the music', async () => {
+  await page.evaluate(() => window.__wave.audio.play());
+  await waitPlaying(0.5);
+  const max = await page.evaluate(
+    () =>
+      new Promise((r) => {
+        let m = 0;
+        const t = setInterval(() => (m = Math.max(m, window.__wave.pulseLevel())), 40);
+        setTimeout(() => (clearInterval(t), r(m)), 4000);
+      }),
+  );
+  if (max < 0.2) throw new Error(`no beats detected (max ${max})`);
+  await page.evaluate(() => window.__wave.audio.pause());
+  await page.waitForFunction(() => document.documentElement.style.getPropertyValue('--beat') === '0', null, { timeout: 3000 });
+});
+
 await step('sound settings: equalizer hears the music', async () => {
   await page.evaluate(() => window.__wave.playTracks(window.__wave.usePlayer.getState().queue.slice(0, 5), 0, 'e2e'));
   await waitPlaying(1);

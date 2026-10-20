@@ -40,13 +40,14 @@ const KEY = 'player.eq';
 export const useEq = create<EqState>(() => loadJson<EqState>(KEY, { enabled: false, preamp: 0, gains: [...EQ_PRESETS.mine], preset: 'mine' }));
 
 let ctx: AudioContext | null = null;
+let source: MediaElementAudioSourceNode | null = null;
 let preamp: GainNode | null = null;
 let filters: BiquadFilterNode[] = [];
 
 function build() {
   if (ctx) return;
   ctx = new AudioContext();
-  const source = ctx.createMediaElementSource(audio);
+  source = ctx.createMediaElementSource(audio);
   preamp = ctx.createGain();
   filters = EQ_BANDS.map((frequency, i) => {
     const f = ctx!.createBiquadFilter();
@@ -68,6 +69,20 @@ function apply() {
   preamp!.gain.value = s.enabled ? Math.pow(10, s.preamp / 20) : 1;
   filters.forEach((f, i) => (f.gain.value = s.enabled ? (s.gains[i] ?? 0) : 0));
   if (ctx!.state === 'suspended') ctx!.resume().catch(() => {});
+}
+
+/**
+ * An analyser on the raw music, before the equalizer (for the beat pulse). Builds the
+ * audio graph if the equalizer never did; with the equalizer off the bands stay flat.
+ */
+export function tapAnalyser(): AnalyserNode {
+  build();
+  apply();
+  const a = ctx!.createAnalyser();
+  a.fftSize = 1024;
+  a.smoothingTimeConstant = 0.5;
+  source!.connect(a);
+  return a;
 }
 
 function save() {
