@@ -126,6 +126,12 @@ function attachWindow(w) {
   w.on('show', updateThumbar);
   w.once('ready-to-show', updateThumbar);
 
+  // Mouse side buttons on Windows also arrive as app commands.
+  w.on('app-command', (_e, cmd) => {
+    if (cmd === 'browser-backward') command('back');
+    else if (cmd === 'browser-forward') command('forward');
+  });
+
   w.on('close', (e) => {
     if (prefs.closeToTray && tray && !quitting) {
       e.preventDefault();

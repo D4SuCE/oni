@@ -170,6 +170,34 @@ await step('back navigation', async () => {
   await page.waitForSelector('.page-header .page-cover:not(.round)');
 });
 
+await step('back and forward: mouse 4/5, Alt+arrows, the shell command, the button', async () => {
+  const at = () => page.evaluate(() => window.__wave.useApp.getState().route.name);
+  const wait = async (name) => page.waitForFunction((n) => window.__wave.useApp.getState().route.name === n, name, { timeout: 5000 });
+  const side = (button) =>
+    page.evaluate((b) => {
+      window.dispatchEvent(new MouseEvent('mousedown', { button: b }));
+      window.dispatchEvent(new MouseEvent('mouseup', { button: b }));
+    }, button);
+  await page.click('[data-testid="nav-home"]');
+  await page.click('[data-testid="nav-search"]');
+  await page.click('[data-testid="nav-history"]');
+  await side(3);
+  await wait('search');
+  await page.waitForTimeout(350);
+  await side(4);
+  await wait('history');
+  await page.waitForTimeout(350);
+  await page.keyboard.press('Alt+ArrowLeft');
+  await wait('search');
+  await page.waitForTimeout(350);
+  const win = await app.browserWindow(page);
+  await win.evaluate((w) => w.webContents.send('wave:command', 'back'));
+  await wait('home');
+  await page.click('[data-testid="forward"]');
+  await wait('search');
+  if ((await at()) !== 'search') throw new Error('forward button');
+});
+
 await step('like then unlike (reverted)', async () => {
   const row = page.locator('.track-row').first();
   const id = await row.getAttribute('data-track-id');

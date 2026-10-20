@@ -40,7 +40,7 @@ export interface Transport {
   setCloseToTray?(enabled: boolean): void;
 }
 
-export type ShellCommand = 'toggle' | 'next' | 'prev';
+export type ShellCommand = 'toggle' | 'next' | 'prev' | 'back' | 'forward';
 
 export interface ShellPlayback {
   hasTrack: boolean;

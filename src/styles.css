@@ -645,7 +645,8 @@ html.acrylic .backdrop {
 
 /* ------------------------------------------------------------ playerbar */
 
-/* red and gold brush streaks across the player, as in the mockup */
+/* the bottom strip of the blood-moon painting (red and gold brush strokes, the lake),
+   darkened so the controls stay readable */
 .playerbar::before {
   content: '';
   position: absolute;
@@ -653,11 +654,7 @@ html.acrylic .backdrop {
   z-index: -1;
   border-radius: inherit;
   pointer-events: none;
-  background:
-    linear-gradient(112deg, transparent 18%, rgba(179, 23, 27, 0.32) 19%, rgba(179, 23, 27, 0.08) 30%, transparent 31%),
-    linear-gradient(112deg, transparent 44%, rgba(201, 151, 62, 0.22) 44.6%, transparent 46%),
-    linear-gradient(112deg, transparent 63%, rgba(179, 23, 27, 0.28) 64%, rgba(179, 23, 27, 0.06) 74%, transparent 75%),
-    linear-gradient(112deg, transparent 81%, rgba(201, 151, 62, 0.18) 81.5%, transparent 82.6%);
+  background: linear-gradient(90deg, rgba(9, 9, 9, 0.62), rgba(9, 9, 9, 0.42) 50%, rgba(9, 9, 9, 0.62)), url('./assets/bg-misty.jpg') 50% 100% / 100% auto no-repeat;
 }
 .playerbar {
   position: relative;

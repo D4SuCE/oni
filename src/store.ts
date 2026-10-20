@@ -25,6 +25,8 @@ interface AppState {
   account: Account | null;
   route: Route;
   backStack: Route[];
+  /** Pages left with Back, for Forward (cleared by any new navigation, as in a browser). */
+  forwardStack: Route[];
   liked: Set<string>;
   likedKeys: string[];
   disliked: Set<string>;
@@ -44,6 +46,7 @@ export const useApp = create<AppState>(() => ({
   account: null,
   route: { name: 'home' },
   backStack: [],
+  forwardStack: [],
   liked: new Set(),
   likedKeys: [],
   disliked: new Set(),
@@ -65,13 +68,33 @@ setDislikedCheck((id) => get().disliked.has(id));
 export function navigate(route: Route) {
   const s = get();
   if (JSON.stringify(s.route) === JSON.stringify(route)) return;
-  set({ route, backStack: [...s.backStack.slice(-30), s.route], nowPlayingOpen: false });
+  set({ route, backStack: [...s.backStack.slice(-30), s.route], forwardStack: [], nowPlayingOpen: false });
 }
 
 export function back() {
   const s = get();
   const prev = s.backStack[s.backStack.length - 1];
-  if (prev) set({ route: prev, backStack: s.backStack.slice(0, -1) });
+  if (prev) set({ route: prev, backStack: s.backStack.slice(0, -1), forwardStack: [...s.forwardStack, s.route], nowPlayingOpen: false });
+}
+
+export function forward() {
+  const s = get();
+  const next = s.forwardStack[s.forwardStack.length - 1];
+  if (next) set({ route: next, forwardStack: s.forwardStack.slice(0, -1), backStack: [...s.backStack.slice(-30), s.route], nowPlayingOpen: false });
+}
+
+let lastStep = 0;
+/**
+ * Back / forward from the keyboard, the mouse side buttons or the shell. On Windows a side
+ * button can arrive both as a mouse event and as an app command; a repeat within 300 ms is
+ * the same press.
+ */
+export function historyStep(dir: 'back' | 'forward') {
+  const now = Date.now();
+  if (now - lastStep < 300) return;
+  lastStep = now;
+  if (dir === 'back') back();
+  else forward();
 }
 
 let toastSeq = 0;

@@ -13,7 +13,7 @@ import { eqOutputLevel } from './player/eq.ts';
 import { cx } from './ui/util.ts';
 import { TuningPanel } from './components/Wave.tsx';
 import { audio, current, next, playTracks, prev, restoreSession, setVolume, toggle, usePlayer } from './player/player.ts';
-import { init, navigate, toggleLike, useApp } from './store.ts';
+import { historyStep, init, navigate, toggleLike, useApp } from './store.ts';
 import { AlbumView } from './views/Album.tsx';
 import { ArtistView } from './views/Artist.tsx';
 import { HistoryView } from './views/History.tsx';
@@ -51,6 +51,11 @@ function Backdrop() {
 function useShortcuts() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Alt+← / Alt+→: back and forward, as in a browser
+      if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        e.preventDefault();
+        return historyStep(e.key === 'ArrowLeft' ? 'back' : 'forward');
+      }
       const el = e.target as HTMLElement;
       if (el.closest('input, textarea, [contenteditable]') && !(e.ctrlKey && e.key.toLowerCase() === 'f')) return;
       const ctrl = e.ctrlKey || e.metaKey;
@@ -69,8 +74,20 @@ function useShortcuts() {
         navigate({ name: 'search' });
       }
     };
+    // Mouse buttons 4 and 5 (the side "back" / "forward" buttons)
+    const onMouse = (e: MouseEvent) => {
+      if (e.button !== 3 && e.button !== 4) return;
+      e.preventDefault();
+      if (e.type === 'mouseup') historyStep(e.button === 3 ? 'back' : 'forward');
+    };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('mousedown', onMouse);
+    window.addEventListener('mouseup', onMouse);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('mousedown', onMouse);
+      window.removeEventListener('mouseup', onMouse);
+    };
   }, []);
 }
 

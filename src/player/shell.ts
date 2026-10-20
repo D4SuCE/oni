@@ -4,6 +4,7 @@
 import type { ShellPlayback } from '../api/transport.ts';
 import { artistNames } from '../api/yandex.ts';
 import { tr, useLang } from '../i18n.ts';
+import { historyStep } from '../store.ts';
 import { next, prev, toggle, usePlayer } from './player.ts';
 
 function snapshot(): ShellPlayback {
@@ -34,6 +35,7 @@ export function connectDesktopShell() {
     if (cmd === 'toggle') toggle();
     else if (cmd === 'next') next(true);
     else if (cmd === 'prev') prev();
+    else if (cmd === 'back' || cmd === 'forward') historyStep(cmd);
   });
   // The player store changes several times a second (position); send only real changes.
   let last = '';
