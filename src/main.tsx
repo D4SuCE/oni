@@ -4,6 +4,7 @@ import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { useLang } from './i18n.ts';
 import { connectDesktopShell } from './player/shell.ts';
 import { installGlobalErrorLogging } from './ui/log.ts';
+import './fonts.css';
 import './styles.css';
 
 installGlobalErrorLogging();

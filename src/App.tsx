@@ -21,8 +21,6 @@ import { PlaylistView } from './views/Playlist.tsx';
 import { Search } from './views/Search.tsx';
 import { SettingsView } from './views/Settings.tsx';
 
-const DEFAULT_ACCENT = '#8b7cff';
-
 /** Blurred cover of the current track behind everything, cross-faded between tracks. */
 function Backdrop() {
   const track = usePlayer((s) => s.queue[s.index]);
@@ -43,15 +41,6 @@ function Backdrop() {
       <div className="backdrop-tint" />
     </div>
   );
-}
-
-function useAccent() {
-  const colors = usePlayer((s) => s.queue[s.index]?.derivedColors);
-  useEffect(() => {
-    const root = document.documentElement.style;
-    root.setProperty('--accent', colors?.accent || DEFAULT_ACCENT);
-    root.setProperty('--accent-soft', colors?.average || '#2a2350');
-  }, [colors]);
 }
 
 function useShortcuts() {
@@ -130,7 +119,6 @@ export function App() {
   const tuning = useApp((s) => s.tuningOpen);
   const toastMsg = useApp((s) => s.toast);
   const error = usePlayer((s) => s.error);
-  useAccent();
   useShortcuts();
 
   useEffect(() => {
