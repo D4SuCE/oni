@@ -4,7 +4,7 @@ import { api } from '../api/client.ts';
 import { artistCover } from '../api/yandex.ts';
 import { AlbumCard, ArtistCard, ErrorBox, PageHeader, Section, Shelf, Spinner } from '../components/Common.tsx';
 import { TrackList } from '../components/TrackList.tsx';
-import { useT } from '../i18n.ts';
+import { useLang, useT } from '../i18n.ts';
 import { playShuffled, playTracks } from '../player/player.ts';
 import { useAsync } from '../ui/util.ts';
 
@@ -12,6 +12,8 @@ export function ArtistView({ id }: { id: number | string }) {
   const { data, loading, error, reload } = useAsync(() => api.artist(id), [id]);
   const [showAll, setShowAll] = useState(false);
   const t = useT();
+  const lang = useLang((s) => s.lang);
+  const genres = useAsync(() => api.genreTitles(), [lang]);
   if (loading) return <Spinner />;
   if (error || !data) return <ErrorBox error={error} onRetry={reload} />;
   const { artist, popularTracks, albums, alsoAlbums, similarArtists } = data;
@@ -28,7 +30,7 @@ export function ArtistView({ id }: { id: number | string }) {
         icon="user"
         kicker={t.common.artist}
         title={artist.name}
-        meta={artist.genres?.length ? artist.genres.join(', ') : undefined}
+        meta={artist.genres?.length ? artist.genres.map((g) => genres.data?.[g] || g).join(', ') : undefined}
         actions={
           <>
             <button className="btn primary" onClick={() => playAll(false)}>

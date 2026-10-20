@@ -81,14 +81,19 @@ const chunk = <T,>(arr: T[], size: number) =>
 export class YandexMusic {
   private me?: Account;
   private transport: Transport;
+  /** Sent as Accept-Language: Yandex localizes station, context and genre names by it. */
+  language = 'ru';
+  private genreCache = new Map<string, Promise<Record<string, string>>>();
 
   constructor(transport: Transport) {
     this.transport = transport;
   }
 
   private async call<T = any>(path: string, req: Omit<HttpRequest, 'url'> = {}): Promise<T> {
-    const url = path.startsWith('http') ? path : API + path;
-    const resp = await this.transport.request({ ...req, url });
+    const external = path.startsWith('http');
+    const url = external ? path : API + path;
+    const headers = external ? req.headers : { 'Accept-Language': this.language, ...req.headers };
+    const resp = await this.transport.request({ ...req, url, headers });
     if (!resp.ok) {
       const err = resp.data?.error;
       const msg = (typeof err === 'object' ? err?.message || err?.name : err) || `HTTP ${resp.status}`;
@@ -279,6 +284,27 @@ export class YandexMusic {
   }
 
   // -------------------------------------------------------------------- wave
+
+  /** Genre id → title in the current language (artist pages list genres by id). */
+  genreTitles(): Promise<Record<string, string>> {
+    let cached = this.genreCache.get(this.language);
+    if (!cached) {
+      cached = this.call<any[]>('/genres').then((list) => {
+        const titles: Record<string, string> = {};
+        const walk = (gs: any[]) => {
+          for (const g of gs || []) {
+            if (g.id && g.title) titles[g.id] = g.title;
+            walk(g.subGenres);
+          }
+        };
+        walk(list);
+        return titles;
+      });
+      cached.catch(() => this.genreCache.delete(this.language));
+      this.genreCache.set(this.language, cached);
+    }
+    return cached;
+  }
 
   async waveContexts(): Promise<WaveContext[]> {
     const r = await this.call<any>('/rotor/wave/settings');
