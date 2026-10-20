@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "react", "unicorn", "oxc"],
+  "jsPlugins": ["./lint/wave-plugin.js"],
+  "categories": { "correctness": "error" },
+  "env": { "browser": true, "es2024": true },
+  "rules": {
+    "wave/effect-block-body": "error",
+    "react-hooks/rules-of-hooks": "error",
+    "react-hooks/exhaustive-deps": "warn",
+    "react/react-in-jsx-scope": "off",
+    "react/set-state-in-effect": "warn",
+    "react/purity": "off",
+    "no-unused-expressions": "off"
+  },
+  "overrides": [
+    {
+      "files": ["electron/**", "tests/**", "lint/**", "*.config.ts"],
+      "env": { "node": true, "browser": false }
+    }
+  ],
+  "ignorePatterns": ["dist/**", "release/**", "node_modules/**"]
+}

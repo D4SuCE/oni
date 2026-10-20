@@ -39,7 +39,9 @@ Electron. Чтобы открыть dev-сервер в Electron, задайте
 ## Проверки
 
 ```sh
+npm run check      # всё быстрое разом: typecheck + lint + test:wave
 npm run typecheck  # TypeScript
+npm run lint       # oxlint, в том числе правило lint/wave-plugin.js
 npm run test:wave  # офлайн-тесты движка волны
 npm run test:api   # интеграция с API (нужен YANDEX_MUSIC_TOKEN)
 npm run test:e2e   # UI-тест реального приложения (нужен YANDEX_MUSIC_TOKEN)

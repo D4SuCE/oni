@@ -75,7 +75,7 @@ async function request(req) {
   for (const [k, v] of Object.entries(req.query || {})) {
     if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
   }
-  const headers = { ...(req.headers || {}) };
+  const headers = { ...req.headers };
   if (needsAuth(url.href)) {
     if (token) headers.Authorization = `OAuth ${token}`;
     headers['X-Yandex-Music-Client'] ??= DEFAULT_CLIENT;

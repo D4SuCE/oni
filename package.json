@@ -15,7 +15,9 @@
     "test:api": "node --experimental-strip-types tests/api.test.ts",
     "test:e2e": "vite build && node tests/e2e.mjs",
     "dist": "vite build && electron-builder --win",
-    "test:wave": "node --experimental-strip-types tests/wave.test.ts"
+    "test:wave": "node --experimental-strip-types tests/wave.test.ts",
+    "lint": "oxlint",
+    "check": "npm run typecheck && npm run lint && npm run test:wave"
   },
   "build": {
     "appId": "local.wave.player",
@@ -65,6 +67,7 @@
     "electron": "^44.9.1",
     "electron-builder": "^26.15.3",
     "lucide-react": "^1.60.0",
+    "oxlint": "^1.89.0",
     "playwright-core": "^1.64.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

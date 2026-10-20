@@ -13,7 +13,7 @@ const nodeTransport: Transport = {
   async request(req: HttpRequest) {
     const url = new URL(req.url);
     for (const [k, v] of Object.entries(req.query || {})) if (v !== undefined) url.searchParams.set(k, String(v));
-    const headers: Record<string, string> = { ...(req.headers || {}) };
+    const headers: Record<string, string> = { ...req.headers };
     if (url.hostname.endsWith('music.yandex.net')) {
       headers.Authorization = `OAuth ${token}`;
       headers['X-Yandex-Music-Client'] ??= 'YandexMusicAndroid/24023621';
