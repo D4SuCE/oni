@@ -6,6 +6,7 @@ import { assembleMix, mixSeeds, planMixes } from '../src/recs/mixes.ts';
 import { buildProfile, type GenreTree, type TasteInput } from '../src/recs/profile.ts';
 import { becauseYouListened, forgottenFavourites, onRepeat, recentArtists } from '../src/recs/personal.ts';
 import { radarArtists, radarTracks, recentReleases } from '../src/recs/radar.ts';
+import { interleave, pickSuggestions } from '../src/recs/suggest.ts';
 import { DAY, artistIds, dayKey, seededRandom, weekKey } from '../src/recs/util.ts';
 
 let passed = 0;
@@ -219,6 +220,19 @@ await test('because you listened: the artists of the last week, new tracks by si
   assert(out.length === 3, `two of sim1 and one of sim2, got ${out.length}`);
   assert(!out.some((t) => artistIds(t).includes('fav')), 'the seed artist itself is left out');
   assert(!out.some((t) => t.id === heard.id), 'heard tracks are left out');
+});
+
+await test('smart shuffle: a suggestion after every three tracks, none already in the list', () => {
+  const list = Array.from({ length: 9 }, (_, i) => mk('rock', 600 + i));
+  const fresh = Array.from({ length: 5 }, (_, i) => mk('rock', 700 + i));
+  const sameArtist = mk('rock', 700);
+  const recent = mk('rock', 790);
+  const picked = pickSuggestions([list[0], ...fresh, sameArtist, recent], list, { disliked: new Set(), daysSinceHeard: (id) => (id === recent.id ? 2 : Infinity) }, 3);
+  assert(picked.length === 3, `3 asked, got ${picked.length}`);
+  assert(!picked.some((t) => t.id === list[0].id || t.id === recent.id || t.id === sameArtist.id), 'no list tracks, no recent plays, one per artist');
+  const out = interleave(list, picked);
+  assert(out.length === 12, `9 + 3, got ${out.length}`);
+  assert([3, 7, 11].every((i) => picked.includes(out[i])), 'suggestions sit after every third track');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -5,6 +5,7 @@ import type { Playlist } from '../api/types.ts';
 import { playlistCover } from '../api/yandex.ts';
 import { ErrorBox, PageHeader, Spinner } from '../components/Common.tsx';
 import { askText, confirmDialog } from '../components/Dialog.tsx';
+import { SmartShuffleButton } from '../components/SmartShuffle.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { useT } from '../i18n.ts';
 import { playRadio, playShuffled, playTracks } from '../player/player.ts';
@@ -104,6 +105,7 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
             <button className="btn glass-btn" onClick={() => playShuffled(tracks, pl.title, from)} disabled={!tracks.length}>
               <Shuffle size={16} /> {t.common.shuffle}
             </button>
+            <SmartShuffleButton tracks={tracks} title={pl.title} from={from} />
             <button className="btn glass-btn" onClick={() => playRadio(`playlist:${pl.uid}:${pl.kind}`, pl.title)} disabled={!tracks.length} data-testid="radio">
               <Radio size={16} /> {t.common.radio}
             </button>

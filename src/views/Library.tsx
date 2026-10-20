@@ -4,6 +4,7 @@ import { api } from '../api/client.ts';
 import type { Track } from '../api/types.ts';
 import { AlbumCard, ArtistCard, ErrorBox, PlaylistCard, Section, Spinner } from '../components/Common.tsx';
 import { askText } from '../components/Dialog.tsx';
+import { SmartShuffleButton } from '../components/SmartShuffle.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { useT } from '../i18n.ts';
 import { playShuffled, playTracks } from '../player/player.ts';
@@ -55,6 +56,7 @@ function LikedTracks() {
         <button className="btn glass-btn" onClick={() => playShuffled(tracks, t.common.liked, from)} disabled={!tracks.length}>
           <Shuffle size={16} /> {t.common.shuffle}
         </button>
+        <SmartShuffleButton tracks={tracks} title={t.common.liked} from={from} />
         <span className="muted">{t.count.tracks(keys.length)}</span>
       </div>
       {tracks.length ? <TrackList tracks={tracks} onPlay={(i) => playTracks(tracks, i, t.common.liked, from)} /> : <div className="empty-hint">{t.library.likedEmpty}</div>}

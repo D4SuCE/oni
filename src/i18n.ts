@@ -27,6 +27,8 @@ const ru = {
   common: {
     play: 'Слушать',
     shuffle: 'Вперемешку',
+    smartShuffle: 'Умное перемешивание',
+    smartShuffleHint: 'Вперемешку, и после каждых трёх треков — похожая рекомендация (✦)',
     retry: 'Повторить',
     cancel: 'Отмена',
     done: 'Готово',
@@ -144,6 +146,7 @@ const ru = {
     collapse: 'Свернуть (Esc)',
     lyrics: 'Текст',
     lyricsMissing: 'Текста нет',
+    suggested: 'Рекомендация умного перемешивания',
     similar: 'Похожие',
     noSimilar: 'Похожих треков не нашлось',
     similarTo: (title: string) => `Похожие на «${title}»`,
@@ -341,6 +344,8 @@ const en: Dict = {
   common: {
     play: 'Play',
     shuffle: 'Shuffle',
+    smartShuffle: 'Smart Shuffle',
+    smartShuffleHint: 'Shuffle with a similar recommendation after every three tracks (✦)',
     retry: 'Retry',
     cancel: 'Cancel',
     done: 'Done',
@@ -458,6 +463,7 @@ const en: Dict = {
     collapse: 'Collapse (Esc)',
     lyrics: 'Lyrics',
     lyricsMissing: 'No lyrics',
+    suggested: 'Smart Shuffle recommendation',
     similar: 'Similar',
     noSimilar: 'No similar tracks found',
     similarTo: (title) => `Similar to “${title}”`,

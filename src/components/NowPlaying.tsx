@@ -88,13 +88,21 @@ function Queue() {
 
 function QueueRow({ i, current }: { i: number; current?: boolean }) {
   const t = usePlayer((s) => s.queue[i]);
+  const suggested = usePlayer((s) => s.source?.kind === 'list' && !!t && !!s.source.suggested?.includes(String(t.id)));
   const tx = useT();
   if (!t) return null;
   return (
     <div className={cx('q-row', current && 'current')} onDoubleClick={() => playAt(i)}>
       <Cover src={trackCover(t, 100)} size={40} />
       <div className="tr-main" onClick={() => playAt(i)}>
-        <div className="tr-title">{t.title}</div>
+        <div className="tr-title">
+          {suggested && (
+            <span className="suggested" title={tx.nowPlaying.suggested} data-testid="suggested">
+              ✦
+            </span>
+          )}
+          {t.title}
+        </div>
         <div className="tr-artists">{t.artists?.map((a) => a.name).join(', ')}</div>
       </div>
       {!current && (

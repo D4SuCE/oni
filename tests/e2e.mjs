@@ -285,6 +285,24 @@ await step('live cover: Yandex cover video plays with the music', async () => {
   await page.waitForSelector('.nowplaying', { state: 'detached' });
 });
 
+await step('smart shuffle mixes suggestions into liked songs', async () => {
+  await page.click('[data-testid="nav-liked"]');
+  await page.waitForSelector('[data-testid="smart-shuffle"]:not([disabled])', { timeout: 20000 });
+  await page.click('[data-testid="smart-shuffle"]');
+  await waitPlaying(0.5, 40000);
+  const n = await page.evaluate(() => {
+    const s = window.__wave.usePlayer.getState();
+    return s.source?.kind === 'list' ? (s.source.suggested?.length ?? 0) : -1;
+  });
+  if (n <= 0) throw new Error(`no suggestions (${n})`);
+  await page.click('.pb-cover');
+  await page.waitForSelector('[data-testid="suggested"]', { timeout: 5000 });
+  console.log(`       ${n} suggestions in the queue`);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.nowplaying', { state: 'detached' });
+  await page.evaluate(() => window.__wave.audio.pause());
+});
+
 await step('sound settings: equalizer hears the music', async () => {
   await page.evaluate(() => window.__wave.playTracks(window.__wave.usePlayer.getState().queue.slice(0, 5), 0, 'e2e'));
   await waitPlaying(1);

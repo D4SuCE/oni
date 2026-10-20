@@ -18,7 +18,10 @@ export interface PlayContext {
   playlist?: string;
   album?: number | string;
 }
-export type Source = { kind: 'wave'; station?: { seed: string; title: string } } | { kind: 'list'; title: string; from?: PlayContext };
+export type Source =
+  | { kind: 'wave'; station?: { seed: string; title: string } }
+  /** `suggested`: ids Smart Shuffle added to the list (shown with ✦ in the queue). */
+  | { kind: 'list'; title: string; from?: PlayContext; suggested?: string[] };
 
 export function sourceTitle(source: Source | null) {
   if (source?.kind === 'list') return source.title;
@@ -278,14 +281,14 @@ export function waveFeedback(type: 'like' | 'dislike', t: Track) {
 
 // ------------------------------------------------------------------ controls
 
-export async function playTracks(tracks: Track[], start = 0, title = tr().common.list, from?: PlayContext) {
+export async function playTracks(tracks: Track[], start = 0, title = tr().common.list, from?: PlayContext, suggested?: string[]) {
   finishCurrent(false);
   engine = null;
   const playable = tracks.filter((t) => t.available !== false);
   const startTrack = tracks[start];
   const index = Math.max(0, playable.indexOf(startTrack));
   unshuffled = null;
-  set({ queue: playable, source: { kind: 'list', title, from }, shuffle: false, waveStats: null });
+  set({ queue: playable, source: { kind: 'list', title, from, suggested }, shuffle: false, waveStats: null });
   await loadAt(index);
 }
 
