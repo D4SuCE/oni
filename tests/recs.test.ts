@@ -4,6 +4,7 @@ import type { Album, Track } from '../src/api/types.ts';
 import { discoverSeeds, rankDiscoveries } from '../src/recs/discover.ts';
 import { assembleMix, mixSeeds, planMixes } from '../src/recs/mixes.ts';
 import { buildProfile, type GenreTree, type TasteInput } from '../src/recs/profile.ts';
+import { becauseYouListened, forgottenFavourites, onRepeat, recentArtists } from '../src/recs/personal.ts';
 import { radarArtists, radarTracks, recentReleases } from '../src/recs/radar.ts';
 import { DAY, artistIds, dayKey, seededRandom, weekKey } from '../src/recs/util.ts';
 
@@ -176,6 +177,48 @@ await test('calendar keys: weeks start on the given weekday', () => {
   assert(weekKey(wed, 1) === dayKey(new Date(2026, 9, 19).getTime()), 'Monday week of Wed 21 Oct starts on the 19th');
   assert(weekKey(wed, 5) === dayKey(new Date(2026, 9, 16).getTime()), 'Friday week of Wed 21 Oct starts on the 16th');
   assert(weekKey(new Date(2026, 9, 19, 0, 5).getTime(), 1) === dayKey(new Date(2026, 9, 19).getTime()), 'Monday itself starts its week');
+});
+
+await test('on repeat: most played lately, two plays minimum, old plays left out', () => {
+  const [a, b, c, d] = [mk('rock', 1), mk('rock', 2), mk('rock', 3), mk('rock', 4)];
+  const out = onRepeat(
+    [
+      { track: a, plays: 3, last: NOW - DAY },
+      { track: b, plays: 9, last: NOW - 2 * DAY },
+      { track: c, plays: 1, last: NOW },
+      { track: d, plays: 20, last: NOW - 60 * DAY },
+    ],
+    new Set(),
+    NOW,
+  );
+  assert(out.map((t) => t.id).join() === [b.id, a.id].join(), `got ${out.map((t) => t.title)}`);
+});
+
+await test('forgotten favourites: only what has been quiet for 45+ days', () => {
+  const liked = library().slice(0, 20);
+  const recent = new Set(liked.slice(0, 10).map((t) => t.id));
+  const out = forgottenFavourites(liked, [], (id) => (recent.has(id) ? 3 : 90), new Set(), seededRandom('w'));
+  assert(out.length === 10, `10 quiet tracks expected, got ${out.length}`);
+  assert(!out.some((t) => recent.has(t.id)), 'a track heard 3 days ago is not forgotten');
+});
+
+await test('because you listened: the artists of the last week, new tracks by similar artists only', () => {
+  const fav = mk('rock', 'fav');
+  const artists = recentArtists(
+    [
+      { track: fav, plays: 5, last: NOW - DAY },
+      { track: mk('rock', 'old'), plays: 50, last: NOW - 30 * DAY },
+    ],
+    NOW,
+    3,
+  );
+  assert(artists.length === 1 && artists[0].id === 'fav', `only this week's artist, got ${JSON.stringify(artists)}`);
+  const heard = mk('rock', 'sim1');
+  const cands = [mk('rock', 'sim1'), mk('rock', 'sim1'), mk('rock', 'sim1'), heard, mk('rock', 'fav'), mk('rock', 'sim2')];
+  const out = becauseYouListened(cands, { liked: new Set(), disliked: new Set(), heard: (id) => id === heard.id, exclude: new Set(['fav']) });
+  assert(out.length === 3, `two of sim1 and one of sim2, got ${out.length}`);
+  assert(!out.some((t) => artistIds(t).includes('fav')), 'the seed artist itself is left out');
+  assert(!out.some((t) => t.id === heard.id), 'heard tracks are left out');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

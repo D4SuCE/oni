@@ -1,5 +1,6 @@
-// Builds the "For you" shelf: taste mixes (daily), weekly discoveries (Mondays)
-// and the release radar (Fridays), plus Yandex's own personal playlists.
+// Builds the "For you" shelf: taste mixes, "on repeat" and "because you listened to"
+// (daily), weekly discoveries and forgotten favourites (Mondays), the release radar
+// (Fridays), plus Yandex's own personal playlists.
 // Results are cached per account so the shelf opens instantly and stays stable
 // for the period it belongs to, like Spotify's.
 
@@ -13,10 +14,11 @@ import { useApp } from '../store.ts';
 import { discoverSeeds, rankDiscoveries } from './discover.ts';
 import { assembleMix, mixSeeds, planMixes } from './mixes.ts';
 import { buildProfile, type Profile, type TasteInput } from './profile.ts';
+import { becauseYouListened, forgottenFavourites, onRepeat, recentArtists } from './personal.ts';
 import { radarArtists, radarTracks, recentReleases } from './radar.ts';
 import { DAY, dayKey, mapLimit, seededRandom, weekKey } from './util.ts';
 
-export type MixKind = 'mix' | 'discover' | 'radar';
+export type MixKind = 'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because';
 
 export interface Mix {
   id: string;
@@ -25,6 +27,8 @@ export interface Mix {
   genre?: string;
   /** Leading artists, for the subtitle. */
   artists: string[];
+  /** "Because you listened to": the artist the mix starts from. */
+  seedArtist?: string;
   covers: string[];
   tracks: Track[];
   builtAt: number;
@@ -50,6 +54,10 @@ interface Cache {
   discover?: Mix;
   radarWeek?: string;
   radar?: Mix;
+  /** Daily: on repeat and because-you-listened-to. */
+  personal?: Mix[];
+  rewindWeek?: string;
+  rewind?: Mix;
 }
 
 function readCache(uid: string): Cache | null {
@@ -110,7 +118,16 @@ async function gather() {
   };
 
   const input: TasteInput = { liked, heard: [...heard.values()], disliked: app.disliked, now };
-  return { tree, liked: new Set(liked.map((t) => String(t.id))), disliked: app.disliked, profile: buildProfile(input, tree), daysSinceHeard };
+  return {
+    tree,
+    likedTracks: liked,
+    heard: [...heard.values()],
+    liked: new Set(liked.map((t) => String(t.id))),
+    disliked: app.disliked,
+    profile: buildProfile(input, tree),
+    daysSinceHeard,
+    now,
+  };
 }
 
 type Gathered = Awaited<ReturnType<typeof gather>>;
@@ -153,7 +170,43 @@ async function buildRadar(g: Gathered): Promise<Mix | undefined> {
   return makeMix('radar', 'radar', tracks, [...new Set(recent.flatMap((a) => (a.artists || []).map((x) => x.name)))]);
 }
 
-const ordered = (c: Cache) => [c.discover, c.radar, ...c.mixes].filter(Boolean) as Mix[];
+/** "On repeat" and one "because you listened to" mix per artist the user is into right now. */
+async function buildPersonal(g: Gathered): Promise<Mix[]> {
+  const out: Mix[] = [];
+  const repeat = onRepeat(g.heard, g.disliked, g.now);
+  if (repeat.length >= 10) out.push(makeMix('repeat', 'repeat', repeat, [...new Set(repeat.flatMap((t) => t.artists.map((a) => a.name)))]));
+
+  for (const seed of recentArtists(g.heard, g.now, 3)) {
+    const info = await api.artist(seed.id).catch(() => null);
+    const similar = (info?.similarArtists || []).slice(0, 6);
+    if (!similar.length) continue;
+    const tracks = (await mapLimit(similar, CONCURRENCY, (a) => api.artistTracks(a.id, 0, 6))).flat().filter(Boolean) as Track[];
+    const picked = becauseYouListened(tracks, {
+      liked: g.liked,
+      disliked: g.disliked,
+      heard: (id) => g.daysSinceHeard(id) < 30,
+      exclude: new Set([seed.id]),
+    });
+    if (picked.length < 8) continue;
+    const mix = makeMix(`because-${seed.id}`, 'because', picked, similar.map((a) => a.name));
+    mix.seedArtist = seed.name;
+    out.push(mix);
+  }
+  return out;
+}
+
+function buildRewind(g: Gathered, week: string): Mix | undefined {
+  const tracks = forgottenFavourites(g.likedTracks, g.heard, g.daysSinceHeard, g.disliked, seededRandom(`rewind:${week}`));
+  if (tracks.length < 10) return undefined;
+  return makeMix('rewind', 'rewind', tracks, [...new Set(tracks.flatMap((t) => t.artists.map((a) => a.name)))]);
+}
+
+const ordered = (c: Cache) => {
+  const personal = c.personal ?? [];
+  const repeat = personal.filter((m) => m.kind === 'repeat');
+  const because = personal.filter((m) => m.kind === 'because');
+  return [c.discover, c.radar, ...repeat, ...c.mixes, ...because, c.rewind].filter(Boolean) as Mix[];
+};
 
 let running: Promise<void> | null = null;
 
@@ -175,13 +228,19 @@ export function loadRecs(force = false): Promise<void> {
       .then((personal) => useRecs.setState({ personal }))
       .catch(() => {});
 
-    const due = force || !cache || cache.day !== day || cache.discoverWeek !== discoverWeek || cache.radarWeek !== radarWeek;
+    const due =
+      force || !cache || cache.day !== day || cache.discoverWeek !== discoverWeek || cache.radarWeek !== radarWeek || cache.rewindWeek !== discoverWeek || !cache.personal;
     if (!due) return;
     if (!cache) useRecs.setState({ status: 'loading' });
     try {
       const g = await gather();
-      const next: Cache = { uid, day, mixes: cache?.mixes ?? [], discoverWeek: cache?.discoverWeek, discover: cache?.discover, radarWeek: cache?.radarWeek, radar: cache?.radar };
+      const next: Cache = { ...cache, uid, day, mixes: cache?.mixes ?? [] };
       if (force || cache?.day !== day) next.mixes = await buildMixes(g, day);
+      if (force || cache?.day !== day || !cache?.personal) next.personal = await buildPersonal(g);
+      if (force || cache?.rewindWeek !== discoverWeek) {
+        next.rewind = buildRewind(g, discoverWeek);
+        next.rewindWeek = discoverWeek;
+      }
       if (force || cache?.discoverWeek !== discoverWeek) {
         next.discover = await buildDiscover(g, discoverWeek);
         next.discoverWeek = discoverWeek;
