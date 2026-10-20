@@ -1,18 +1,21 @@
-/* Japanese theme: sumi ink, washi paper, vermilion (shu) and gold. */
+/* Oni palette (from the design mockup): ink #090909, panel #171514, glass #211816,
+   accent red #D9272E, deep red #8E171B, gold #C79A54, text #F2EEE8 / #A7A3A0, lines #49403D. */
 :root {
-  --accent: #e2392f;
-  --accent-hi: #f04a3e;
-  --gold: #e3b55a;
-  --gold-soft: rgba(227, 181, 90, 0.4);
-  --ink: #0e0a09;
-  --text: #f6efe2;
-  --text-2: rgba(246, 239, 226, 0.64);
-  --text-3: rgba(246, 239, 226, 0.4);
-  --line: rgba(246, 225, 200, 0.09);
-  --line-strong: rgba(246, 225, 200, 0.18);
-  --glass: rgba(24, 14, 12, 0.56);
-  --glass-hi: rgba(255, 240, 220, 0.07);
-  --hover: rgba(255, 240, 220, 0.06);
+  --accent: #d9272e;
+  --accent-hi: #e8353b;
+  --accent-deep: #8e171b;
+  --gold: #c79a54;
+  --gold-soft: rgba(199, 154, 84, 0.4);
+  --ink: #090909;
+  --panel: #171514;
+  --text: #f2eee8;
+  --text-2: #a7a3a0;
+  --text-3: rgba(167, 163, 160, 0.62);
+  --line: rgba(73, 64, 61, 0.55);
+  --line-strong: #49403d;
+  --glass: rgba(33, 24, 22, 0.56);
+  --glass-hi: rgba(242, 238, 232, 0.07);
+  --hover: rgba(242, 238, 232, 0.06);
   --radius: 12px;
   --sidebar: 248px;
   --titlebar: 44px;
@@ -66,13 +69,13 @@ img {
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(246, 225, 200, 0.14);
+  background: rgba(242, 238, 232, 0.14);
   border-radius: 10px;
   border: 3px solid transparent;
   background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(246, 225, 200, 0.26);
+  background-color: rgba(242, 238, 232, 0.26);
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -143,6 +146,12 @@ img {
     opacity: 0.55;
   }
 }
+/* Window transparency (Settings > Appearance): fade the app's own background so the
+   Windows acrylic behind the window — the blurred desktop, like the taskbar — shows through. */
+html.acrylic .backdrop {
+  opacity: calc(1 - var(--see-through, 0));
+}
+
 /* sakura, ink splashes and gold streaks over the whole window (scripts/backdrop.py) */
 .backdrop-art {
   position: absolute;
@@ -153,12 +162,12 @@ img {
 .backdrop-tint {
   position: absolute;
   inset: 0;
-  background: radial-gradient(40% 50% at 92% 4%, rgba(226, 57, 47, 0.16), transparent 70%), radial-gradient(120% 90% at 0% 0%, rgba(16, 9, 8, 0.3), rgba(16, 9, 8, 0.74)),
-    linear-gradient(180deg, rgba(16, 9, 8, 0.38), rgba(16, 9, 8, 0.8));
+  background: radial-gradient(40% 50% at 92% 4%, rgba(217, 39, 46, 0.16), transparent 70%), radial-gradient(120% 90% at 0% 0%, rgba(9, 9, 9, 0.3), rgba(9, 9, 9, 0.74)),
+    linear-gradient(180deg, rgba(9, 9, 9, 0.38), rgba(9, 9, 9, 0.8));
 }
 html:not(.acrylic) .backdrop-tint {
-  background: radial-gradient(40% 50% at 92% 4%, rgba(226, 57, 47, 0.16), transparent 70%), radial-gradient(120% 90% at 0% 0%, rgba(16, 9, 8, 0.45), rgba(16, 9, 8, 0.88)),
-    linear-gradient(180deg, rgba(16, 9, 8, 0.55), rgba(16, 9, 8, 0.92));
+  background: radial-gradient(40% 50% at 92% 4%, rgba(217, 39, 46, 0.16), transparent 70%), radial-gradient(120% 90% at 0% 0%, rgba(9, 9, 9, 0.45), rgba(9, 9, 9, 0.88)),
+    linear-gradient(180deg, rgba(9, 9, 9, 0.55), rgba(9, 9, 9, 0.92));
 }
 
 /* ---------------------------------------------------------------- shell */
@@ -238,7 +247,7 @@ html:not(.acrylic) .backdrop-tint {
   min-height: 0;
   border-right: 1px solid var(--line);
   /* dark glass: the sakura backdrop shows through */
-  background: rgba(10, 6, 5, 0.55);
+  background: rgba(23, 21, 20, 0.55);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
 }
@@ -280,7 +289,7 @@ html:not(.acrylic) .backdrop-tint {
   flex-shrink: 0;
   border-radius: 9px;
   background: url('./assets/oni-mark.png') center / cover no-repeat;
-  box-shadow: 0 2px 10px rgba(226, 57, 47, 0.35);
+  box-shadow: 0 2px 10px rgba(217, 39, 46, 0.35);
 }
 .logo-mark.big {
   width: 84px;
@@ -288,7 +297,7 @@ html:not(.acrylic) .backdrop-tint {
   border-radius: 20px;
   display: block;
   margin: 0 auto 10px;
-  box-shadow: 0 10px 34px rgba(226, 57, 47, 0.35);
+  box-shadow: 0 10px 34px rgba(217, 39, 46, 0.35);
 }
 
 .sidebar-tools {
@@ -362,7 +371,7 @@ html:not(.acrylic) .backdrop-tint {
   color: var(--text);
 }
 .nav-item.active {
-  background: linear-gradient(90deg, rgba(226, 57, 47, 0.2), rgba(226, 57, 47, 0.04));
+  background: linear-gradient(90deg, rgba(217, 39, 46, 0.2), rgba(217, 39, 46, 0.04));
   color: var(--text);
 }
 .nav-item.active svg {
@@ -423,7 +432,7 @@ html:not(.acrylic) .backdrop-tint {
   padding: 0 18px;
   border: none;
   border-radius: 10px;
-  background: rgba(255, 240, 220, 0.08);
+  background: rgba(242, 238, 232, 0.08);
   color: var(--text);
   font-weight: 620;
   cursor: pointer;
@@ -431,7 +440,7 @@ html:not(.acrylic) .backdrop-tint {
   transition: transform 0.12s, background 0.15s, opacity 0.15s;
 }
 .btn:hover {
-  background: rgba(255, 240, 220, 0.14);
+  background: rgba(242, 238, 232, 0.14);
 }
 .btn:active {
   transform: scale(0.97);
@@ -443,14 +452,14 @@ html:not(.acrylic) .backdrop-tint {
 }
 .btn.primary {
   background: linear-gradient(180deg, var(--accent-hi), var(--accent));
-  color: #fff8ee;
-  box-shadow: 0 6px 18px rgba(226, 57, 47, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  color: #f2eee8;
+  box-shadow: 0 6px 18px rgba(217, 39, 46, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 .btn.primary:hover {
-  background: linear-gradient(180deg, #ff5a4c, var(--accent-hi));
+  background: linear-gradient(180deg, #ef3d43, var(--accent-hi));
 }
 .btn.glass-btn {
-  background: rgba(255, 240, 220, 0.08);
+  background: rgba(242, 238, 232, 0.08);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   border: 1px solid var(--line);
@@ -524,8 +533,8 @@ html:not(.acrylic) .backdrop-tint {
   border: none;
   border-radius: 50%;
   background: linear-gradient(180deg, var(--accent-hi), var(--accent));
-  color: #fff8ee;
-  box-shadow: 0 0 0 1.5px var(--gold-soft), 0 6px 18px rgba(226, 57, 47, 0.35);
+  color: #f2eee8;
+  box-shadow: 0 0 0 1.5px var(--gold-soft), 0 6px 18px rgba(217, 39, 46, 0.35);
   cursor: pointer;
   transition: transform 0.12s;
 }
@@ -608,10 +617,10 @@ html:not(.acrylic) .backdrop-tint {
 .range::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 4px;
-  background: linear-gradient(to right, var(--text) var(--p), rgba(246, 225, 200, 0.16) var(--p));
+  background: linear-gradient(to right, var(--text) var(--p), rgba(242, 238, 232, 0.16) var(--p));
 }
 .range:hover::-webkit-slider-runnable-track {
-  background: linear-gradient(to right, var(--accent) var(--p), rgba(246, 225, 200, 0.2) var(--p));
+  background: linear-gradient(to right, var(--accent) var(--p), rgba(242, 238, 232, 0.2) var(--p));
 }
 .range::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -775,7 +784,7 @@ html:not(.acrylic) .backdrop-tint {
   overflow: hidden;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #3a2420, #1a1110);
+  background: linear-gradient(135deg, #211816, #171514);
   flex-shrink: 0;
 }
 .cover.round {
@@ -827,7 +836,7 @@ html:not(.acrylic) .backdrop-tint {
   height: 1.1em;
   margin-right: 16px;
   border-radius: 2px;
-  background: linear-gradient(180deg, var(--accent-hi), var(--accent) 70%, #9c1a14);
+  background: linear-gradient(180deg, var(--accent-hi), var(--accent) 70%, var(--accent-deep));
   vertical-align: -0.06em;
 }
 
@@ -919,7 +928,7 @@ html:not(.acrylic) .backdrop-tint {
   display: grid;
   place-items: center;
   border-radius: 10px;
-  background: linear-gradient(135deg, var(--accent-hi), #8f1410 70%, #5a0b09);
+  background: linear-gradient(135deg, var(--accent-hi), var(--accent-deep) 70%, #4a0b0e);
   border: 1px solid var(--gold-soft);
   color: #fff;
   box-shadow: 0 8px 26px rgba(0, 0, 0, 0.35);
@@ -949,7 +958,7 @@ html:not(.acrylic) .backdrop-tint {
   aspect-ratio: 1;
   border-radius: 10px;
   overflow: hidden;
-  background: linear-gradient(135deg, #3a2420, #1a1110);
+  background: linear-gradient(135deg, #211816, #171514);
   box-shadow: 0 8px 26px rgba(0, 0, 0, 0.35);
   isolation: isolate;
 }
@@ -972,7 +981,7 @@ html:not(.acrylic) .backdrop-tint {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(160deg, #e2392f, #8f1410 70%);
+  background: linear-gradient(160deg, var(--accent), var(--accent-deep) 70%);
   mix-blend-mode: multiply;
 }
 /* the genre name on a dark band, like a hanging scroll label */
@@ -982,7 +991,7 @@ html:not(.acrylic) .backdrop-tint {
   right: 0;
   bottom: 0;
   padding: 26px 12px 10px;
-  background: linear-gradient(180deg, transparent, rgba(14, 8, 7, 0.88) 55%);
+  background: linear-gradient(180deg, transparent, rgba(9, 9, 9, 0.88) 55%);
   font-family: var(--font-display);
   font-size: 17px;
   font-weight: 800;
@@ -1002,7 +1011,7 @@ html:not(.acrylic) .backdrop-tint {
   background: url('./assets/hero-mask.jpg') 60% 30% / 120% no-repeat, #0d0706;
 }
 .mix-art.branded.radar {
-  background: radial-gradient(circle at 62% 42%, #f04a3e 0, #b81d18 24%, transparent 25%), linear-gradient(180deg, #3a3330, #120c0b 75%);
+  background: radial-gradient(circle at 62% 42%, var(--accent-hi) 0, #b51f25 24%, transparent 25%), linear-gradient(180deg, #2b2422, #0d0c0c 75%);
 }
 .mix-art.branded .mix-art-title {
   padding: 26px 12px 10px;
@@ -1015,7 +1024,7 @@ html:not(.acrylic) .backdrop-tint {
   font-family: var(--font-brush);
   font-size: 30px;
   line-height: 1.05;
-  color: #fff8ee;
+  color: #f2eee8;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
   z-index: 1;
 }
@@ -1203,7 +1212,7 @@ html:not(.acrylic) .backdrop-tint {
   min-height: 300px;
   border-radius: 20px;
   border: 1px solid var(--gold-soft);
-  background: rgba(22, 10, 9, 0.5);
+  background: rgba(23, 21, 20, 0.5);
   isolation: isolate;
 }
 /* right side: red sun, ink landscape with a torii, the oni mask fading into the card */
@@ -1221,7 +1230,7 @@ html:not(.acrylic) .backdrop-tint {
   aspect-ratio: 1;
   transform: translateY(-55%);
   border-radius: 50%;
-  background: radial-gradient(circle at 40% 35%, #f04a3e, #b81d18 55%, #6e0d0b);
+  background: radial-gradient(circle at 40% 35%, var(--accent-hi), #b51f25 55%, #5c0e11);
   opacity: 0.85;
   filter: saturate(1.1);
 }
@@ -1241,10 +1250,17 @@ html:not(.acrylic) .backdrop-tint {
   -webkit-mask-image: radial-gradient(closest-side, #000 62%, transparent 100%);
   mask-image: radial-gradient(closest-side, #000 62%, transparent 100%);
 }
-.wave-kanji {
+.wave-seal {
   position: absolute;
-  right: 3.2%;
+  right: 3.5%;
   top: 9%;
+  /* the motto sits centred exactly under the 鬼 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.wave-kanji {
   font-family: var(--font-brush);
   font-size: 74px;
   line-height: 1;
@@ -1252,15 +1268,13 @@ html:not(.acrylic) .backdrop-tint {
   text-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
 }
 .wave-motto {
-  position: absolute;
-  right: 4.4%;
-  top: 40%;
   writing-mode: vertical-rl;
   font-family: var(--font-brush);
   font-size: 20px;
+  line-height: 1;
   letter-spacing: 0.16em;
-  color: var(--text);
-  opacity: 0.9;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
 }
 .wave-hero::after {
   content: '';
@@ -1268,7 +1282,7 @@ html:not(.acrylic) .backdrop-tint {
   inset: 0;
   z-index: -1;
   /* keep the left half dark enough for the title */
-  background: linear-gradient(90deg, rgba(14, 8, 7, 0.92) 30%, rgba(14, 8, 7, 0.35) 62%, transparent 85%);
+  background: linear-gradient(90deg, rgba(9, 9, 9, 0.92) 30%, rgba(9, 9, 9, 0.35) 62%, transparent 85%);
   pointer-events: none;
 }
 .wave-blobs {
@@ -1297,7 +1311,7 @@ html:not(.acrylic) .backdrop-tint {
   animation-delay: -7s;
 }
 .wave-blobs i:nth-child(3) {
-  background: #7a0f14;
+  background: var(--accent-deep);
   left: 30%;
   bottom: -70%;
   animation-delay: -14s;
@@ -1384,7 +1398,7 @@ html:not(.acrylic) .backdrop-tint {
   border-radius: 24px;
   padding: 18px 22px 22px;
   overflow-y: auto;
-  background: rgba(26, 15, 13, 0.78);
+  background: rgba(23, 21, 20, 0.78);
   animation: drawer-in 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 @keyframes drawer-in {
@@ -1450,8 +1464,8 @@ html:not(.acrylic) .backdrop-tint {
   color: var(--text);
 }
 .segmented button.active {
-  background: rgba(226, 57, 47, 0.85);
-  color: #fff8ee;
+  background: rgba(217, 39, 46, 0.85);
+  color: #f2eee8;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
@@ -1478,7 +1492,7 @@ html:not(.acrylic) .backdrop-tint {
 .chip.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff8ee;
+  color: #f2eee8;
   font-weight: 600;
 }
 
@@ -1550,7 +1564,7 @@ html:not(.acrylic) .backdrop-tint {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgba(16, 9, 8, 0.45);
+  background: rgba(9, 9, 9, 0.45);
   -webkit-backdrop-filter: blur(70px) saturate(170%);
   backdrop-filter: blur(70px) saturate(170%);
   animation: np-in 0.38s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -1615,7 +1629,7 @@ html:not(.acrylic) .backdrop-tint {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, rgba(14, 8, 7, 0.82) 0%, rgba(14, 8, 7, 0.45) 45%, rgba(14, 8, 7, 0.72) 100%), linear-gradient(0deg, rgba(14, 8, 7, 0.75), transparent 40%);
+  background: linear-gradient(90deg, rgba(9, 9, 9, 0.82) 0%, rgba(9, 9, 9, 0.45) 45%, rgba(9, 9, 9, 0.72) 100%), linear-gradient(0deg, rgba(9, 9, 9, 0.75), transparent 40%);
 }
 @keyframes np-video-in {
   from {
@@ -1624,7 +1638,7 @@ html:not(.acrylic) .backdrop-tint {
 }
 .nowplaying.has-video {
   isolation: isolate;
-  background: rgba(14, 8, 7, 0.6);
+  background: rgba(9, 9, 9, 0.6);
 }
 .cover.drift img {
   animation: cover-drift 26s ease-in-out infinite alternate;
@@ -1696,7 +1710,7 @@ html.motion .backdrop-img {
   min-height: 0;
   border-radius: 22px;
   overflow: hidden;
-  background: rgba(24, 13, 11, 0.4);
+  background: rgba(23, 21, 20, 0.4);
 }
 
 .tabs {
@@ -1724,7 +1738,7 @@ html.motion .backdrop-img {
   background: var(--hover);
 }
 .tab.active {
-  background: rgba(226, 57, 47, 0.16);
+  background: rgba(217, 39, 46, 0.16);
   color: var(--text);
   box-shadow: inset 0 -2px 0 var(--accent);
 }
@@ -1817,7 +1831,7 @@ html.motion .backdrop-img {
   overflow-y: auto;
   padding: 6px;
   border-radius: 14px;
-  background: rgba(34, 20, 17, 0.86);
+  background: rgba(33, 24, 22, 0.86);
   animation: menu-in 0.14s ease-out;
 }
 @keyframes menu-in {
@@ -1880,7 +1894,7 @@ html.motion .backdrop-img {
   width: min(400px, calc(100% - 32px));
   padding: 22px;
   border-radius: 20px;
-  background: rgba(32, 19, 16, 0.86);
+  background: rgba(33, 24, 22, 0.86);
   animation: menu-in 0.18s ease-out;
 }
 .dialog h3 {
@@ -1909,7 +1923,7 @@ html.motion .backdrop-img {
   max-width: min(560px, calc(100% - 32px));
   padding: 12px 20px;
   border-radius: 14px;
-  background: rgba(40, 24, 20, 0.88);
+  background: rgba(33, 24, 22, 0.88);
   font-weight: 550;
   animation: toast-in 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -1985,7 +1999,7 @@ html.motion .backdrop-img {
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(16, 9, 8, 0.55);
+  background: rgba(9, 9, 9, 0.55);
 }
 .crash-card {
   width: min(520px, 100%);
@@ -2006,7 +2020,7 @@ html.motion .backdrop-img {
   line-height: 1.5;
 }
 .crash-icon {
-  color: #ffb057;
+  color: var(--gold);
 }
 .crash-details {
   margin: 0 0 18px;

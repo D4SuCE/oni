@@ -206,8 +206,10 @@ export function WaveHero() {
           </g>
         </svg>
         <div className="wave-mask" />
-        <span className="wave-kanji">鬼</span>
-        <span className="wave-motto">音楽で生きる</span>
+        <div className="wave-seal">
+          <span className="wave-kanji">鬼</span>
+          <span className="wave-motto">音楽で生きる</span>
+        </div>
       </div>
       <div className="wave-content">
         <div className="kicker">{w.kicker(tuning.noRepeatDays)}</div>

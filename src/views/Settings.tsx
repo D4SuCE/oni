@@ -5,12 +5,14 @@ import { LANGS, setLang, useLang, useT } from '../i18n.ts';
 import { setNormalize, usePlayer } from '../player/player.ts';
 import { logout, useApp } from '../store.ts';
 import { setMotion, useMotion } from '../ui/motion.ts';
+import { MAX_SEE_THROUGH, setSeeThrough, useSeeThrough } from '../ui/seeThrough.ts';
 
 export function SettingsView() {
   const account = useApp((s) => s.account);
   const normalize = usePlayer((s) => s.normalize);
   const lang = useLang((s) => s.lang);
   const motion = useMotion((s) => s.enabled);
+  const seeThrough = useSeeThrough((s) => s.value);
   const [closeToTray, setCloseToTrayState] = useState(() => window.wave?.shellPrefs?.().closeToTray ?? false);
   const t = useT();
   const s = t.settings;
@@ -50,6 +52,26 @@ export function SettingsView() {
           </div>
           <input type="checkbox" className="switch" checked={motion} onChange={(e) => setMotion(e.target.checked)} data-testid="live-covers" />
         </label>
+        {window.wave?.platform === 'electron' && (
+          <div className="slider-row">
+            <div className="slider-head">
+              <span>{s.seeThrough}</span>
+              <span className="slider-value">{Math.round(seeThrough * 100)}%</span>
+            </div>
+            <input
+              type="range"
+              className="range"
+              min={0}
+              max={MAX_SEE_THROUGH * 100}
+              step={5}
+              value={seeThrough * 100}
+              style={{ '--p': `${(seeThrough / MAX_SEE_THROUGH) * 100}%` } as React.CSSProperties}
+              onChange={(e) => setSeeThrough(Number(e.target.value) / 100)}
+              data-testid="see-through"
+            />
+            <div className="hint">{s.seeThroughHint}</div>
+          </div>
+        )}
       </div>
 
       <div className="panel glass">
