@@ -1,0 +1,456 @@
+// Playback: one <audio> element, a queue, wave integration, listening history
+// and OS media controls (Windows SMTC / iOS lock screen via Media Session).
+
+import { create } from 'zustand';
+import type { Track } from '../api/types.ts';
+import { api, loadJson, storage, transport } from '../api/client.ts';
+import { tr } from '../i18n.ts';
+import { artistNames, trackCover } from '../api/yandex.ts';
+import { DEFAULT_TUNING, WaveEngine, waveSeeds, type WaveStats, type WaveTuning } from '../wave/engine.ts';
+import { ListenHistory } from '../wave/history.ts';
+
+export type Repeat = 'off' | 'all' | 'one';
+export type Source = { kind: 'wave' } | { kind: 'list'; title: string };
+
+interface Prefs {
+  volume: number;
+  repeat: Repeat;
+  normalize: boolean;
+}
+
+export interface PlayerState extends Prefs {
+  queue: Track[];
+  index: number;
+  source: Source | null;
+  playing: boolean;
+  loading: boolean;
+  position: number;
+  duration: number;
+  shuffle: boolean;
+  tuning: WaveTuning;
+  waveStats: WaveStats | null;
+  waveBusy: boolean;
+  error: string | null;
+}
+
+const prefs = loadJson<Prefs>('player.prefs', { volume: 0.8, repeat: 'off', normalize: true });
+
+export const usePlayer = create<PlayerState>(() => ({
+  ...prefs,
+  queue: [],
+  index: -1,
+  source: null,
+  playing: false,
+  loading: false,
+  position: 0,
+  duration: 0,
+  shuffle: false,
+  tuning: loadJson<WaveTuning>('wave.tuning', DEFAULT_TUNING),
+  waveStats: null,
+  waveBusy: false,
+  error: null,
+}));
+
+const set = usePlayer.setState;
+const get = usePlayer.getState;
+
+export const history = new ListenHistory(storage);
+export const audio = new Audio();
+audio.preload = 'auto';
+
+let engine: WaveEngine | null = null;
+const waveApi = transport.testMode ? { waveStart: api.waveStart.bind(api), waveMore: api.waveMore.bind(api), waveFeedback: async () => {} } : api;
+let isDisliked: (id: string) => boolean = () => false;
+let loadSeq = 0;
+let listened = 0;
+let lastTime = 0;
+let unshuffled: Track[] | null = null;
+const prefetched = new Map<string, { url: string; at: number }>();
+const STREAM_TTL = 90_000;
+
+export const current = () => {
+  const s = get();
+  return s.queue[s.index] as Track | undefined;
+};
+
+export function setDislikedCheck(fn: (id: string) => boolean) {
+  isDisliked = fn;
+}
+
+// ------------------------------------------------------------------- loading
+
+async function streamUrl(t: Track) {
+  const cached = prefetched.get(t.id);
+  if (cached && Date.now() - cached.at < STREAM_TTL) return cached.url;
+  const s = await api.stream(t.id);
+  prefetched.set(t.id, { url: s.url, at: Date.now() });
+  return s.url;
+}
+
+function prefetchNext() {
+  const s = get();
+  const next = s.queue[s.index + 1];
+  if (next && !prefetched.has(next.id)) streamUrl(next).catch(() => {});
+}
+
+function applyVolume() {
+  const s = get();
+  let gain = 1;
+  const lufs = current()?.r128?.i;
+  if (s.normalize && typeof lufs === 'number') gain = Math.pow(10, Math.min(0, Math.max(-12, -14 - lufs)) / 20);
+  audio.volume = Math.max(0, Math.min(1, s.volume * gain));
+}
+
+async function loadAt(index: number, autoplay = true) {
+  const t = get().queue[index];
+  if (!t) return;
+  const seq = ++loadSeq;
+  set({ index, loading: true, position: 0, duration: (t.durationMs || 0) / 1000, error: null });
+  listened = 0;
+  lastTime = 0;
+  updateMediaSession(t);
+  try {
+    const url = await streamUrl(t);
+    if (seq !== loadSeq) return;
+    audio.src = url;
+    applyVolume();
+    if (autoplay) await audio.play();
+    if (get().source?.kind === 'wave') engine?.feedback('trackStarted', t);
+    prefetchNext();
+    if (get().source?.kind === 'wave') fillWave();
+  } catch (e: any) {
+    if (seq !== loadSeq || e?.name === 'AbortError') return;
+    set({ loading: false, error: tr().player.cantPlay(t.title) });
+    setTimeout(() => seq === loadSeq && next(false), 1500);
+  }
+  persistSoon();
+}
+
+/** Called whenever we leave the current track, before switching. */
+function finishCurrent(ended: boolean) {
+  const t = current();
+  if (!t || (listened < 1 && !ended)) return;
+  history.record(t, listened, ended);
+  if (get().source?.kind === 'wave') {
+    engine?.feedback(ended ? 'trackFinished' : 'skip', t, listened);
+    set({ waveStats: engine ? { ...engine.stats } : null });
+  }
+  listened = 0;
+}
+
+// ---------------------------------------------------------------------- wave
+
+let filling: Promise<void> | null = null;
+
+function fillWave(min = 2): Promise<void> {
+  if (filling) return filling;
+  filling = (async () => {
+    try {
+      while (engine && get().source?.kind === 'wave' && get().queue.length - get().index - 1 < min) {
+        const t = await engine.next();
+        if (!t) break;
+        set((s) => ({ queue: [...s.queue, t], waveStats: { ...engine!.stats } }));
+      }
+      prefetchNext();
+    } catch (e) {
+      console.warn('wave fill failed', e);
+    } finally {
+      filling = null;
+    }
+  })();
+  return filling;
+}
+
+export async function playWave(tuning?: Partial<WaveTuning>) {
+  if (tuning) saveTuning(tuning);
+  finishCurrent(false);
+  engine = new WaveEngine(waveApi, history, get().tuning, (id) => isDisliked(id));
+  set({ waveBusy: true, source: { kind: 'wave' }, queue: [], index: -1, shuffle: false, error: null });
+  unshuffled = null;
+  try {
+    await engine.start();
+    const first = await engine.next();
+    if (!first) throw new Error(tr().player.waveEmpty);
+    set({ queue: [first], waveStats: { ...engine.stats } });
+    await loadAt(0);
+  } catch (e: any) {
+    set({ error: tr().player.waveFailed(String(e?.message || e)) });
+  } finally {
+    set({ waveBusy: false });
+  }
+}
+
+export function saveTuning(patch: Partial<WaveTuning>) {
+  const before = get().tuning;
+  const tuning = { ...before, ...patch };
+  set({ tuning });
+  storage.setItem('wave.tuning', JSON.stringify(tuning));
+  if (engine) Object.assign(engine.tuning, tuning);
+  return waveSeeds(before).join() !== waveSeeds(tuning).join();
+}
+
+/** Re-tune a running wave: keep the current track, replace what comes next. */
+export async function retuneWave(patch: Partial<WaveTuning>) {
+  const seedsChanged = saveTuning(patch);
+  if (get().source?.kind !== 'wave') return;
+  if (!seedsChanged) {
+    // Local filters only: drop upcoming tracks that no longer pass.
+    set((s) => ({ queue: s.queue.filter((t, i) => i <= s.index || !engine?.rejectReason(t)) }));
+    await fillWave();
+    return;
+  }
+  engine = new WaveEngine(waveApi, history, get().tuning, (id) => isDisliked(id));
+  set((s) => ({ waveBusy: true, queue: s.queue.slice(0, s.index + 1) }));
+  try {
+    await engine.start();
+    await fillWave();
+  } finally {
+    set({ waveBusy: false });
+  }
+}
+
+export function waveFeedback(type: 'like' | 'dislike', t: Track) {
+  if (get().source?.kind === 'wave') engine?.feedback(type, t);
+}
+
+// ------------------------------------------------------------------ controls
+
+export async function playTracks(tracks: Track[], start = 0, title = tr().common.list) {
+  finishCurrent(false);
+  engine = null;
+  const playable = tracks.filter((t) => t.available !== false);
+  const startTrack = tracks[start];
+  const index = Math.max(0, playable.indexOf(startTrack));
+  unshuffled = null;
+  set({ queue: playable, source: { kind: 'list', title }, shuffle: false, waveStats: null });
+  await loadAt(index);
+}
+
+export async function playShuffled(tracks: Track[], title = tr().common.list) {
+  const playable = tracks.filter((t) => t.available !== false);
+  await playTracks(shuffleArray(playable), 0, title);
+}
+
+export function toggle() {
+  if (!current()) return;
+  if (audio.paused) {
+    if (!audio.src) loadAt(get().index);
+    else audio.play().catch(() => {});
+  } else audio.pause();
+}
+
+export async function next(user = true) {
+  const s = get();
+  if (!s.queue.length) return;
+  finishCurrent(!user);
+  if (s.index + 1 < s.queue.length) return loadAt(s.index + 1);
+  if (s.source?.kind === 'wave') {
+    await fillWave(1);
+    if (get().index + 1 < get().queue.length) return loadAt(get().index + 1);
+    return;
+  }
+  if (s.repeat === 'all') return loadAt(0);
+  audio.pause();
+}
+
+export function prev() {
+  const s = get();
+  if (audio.currentTime > 3 || s.index <= 0) {
+    audio.currentTime = 0;
+    return;
+  }
+  finishCurrent(false);
+  loadAt(s.index - 1);
+}
+
+export function playAt(index: number) {
+  if (index === get().index) return toggle();
+  finishCurrent(false);
+  loadAt(index);
+}
+
+export function seek(seconds: number) {
+  if (!Number.isFinite(seconds)) return;
+  audio.currentTime = Math.max(0, seconds);
+  set({ position: audio.currentTime });
+}
+
+export function setVolume(volume: number) {
+  set({ volume: Math.max(0, Math.min(1, volume)) });
+  applyVolume();
+  savePrefs();
+}
+
+export function setNormalize(normalize: boolean) {
+  set({ normalize });
+  applyVolume();
+  savePrefs();
+}
+
+export function cycleRepeat() {
+  const order: Repeat[] = ['off', 'all', 'one'];
+  set((s) => ({ repeat: order[(order.indexOf(s.repeat) + 1) % order.length] }));
+  savePrefs();
+}
+
+export function toggleShuffle() {
+  const s = get();
+  if (s.source?.kind === 'wave' || !s.queue.length) return;
+  const cur = s.queue[s.index];
+  if (!s.shuffle) {
+    unshuffled = s.queue;
+    const rest = shuffleArray(s.queue.filter((_, i) => i !== s.index));
+    set({ shuffle: true, queue: [cur, ...rest], index: 0 });
+  } else {
+    const original = unshuffled || s.queue;
+    unshuffled = null;
+    set({ shuffle: false, queue: original, index: Math.max(0, original.indexOf(cur)) });
+  }
+  prefetchNext();
+}
+
+export function playNext(t: Track) {
+  set((s) => {
+    const queue = [...s.queue];
+    queue.splice(s.index + 1, 0, t);
+    return { queue };
+  });
+  if (get().index < 0) loadAt(0);
+  prefetchNext();
+}
+
+export function enqueue(t: Track) {
+  set((s) => ({ queue: [...s.queue, t] }));
+  if (get().index < 0) loadAt(0);
+}
+
+export function removeAt(i: number) {
+  const s = get();
+  if (i === s.index) return;
+  const queue = s.queue.filter((_, j) => j !== i);
+  set({ queue, index: i < s.index ? s.index - 1 : s.index });
+}
+
+export function dropFromQueue(trackId: string) {
+  const s = get();
+  const cur = s.queue[s.index];
+  if (cur?.id === trackId) {
+    next(true);
+    return;
+  }
+  const queue = s.queue.filter((t) => t.id !== trackId);
+  set({ queue, index: cur ? queue.indexOf(cur) : -1 });
+}
+
+function shuffleArray<T>(arr: T[]) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// --------------------------------------------------------------- audio events
+
+audio.addEventListener('playing', () => set({ playing: true, loading: false }));
+audio.addEventListener('pause', () => set({ playing: false }));
+audio.addEventListener('waiting', () => set({ loading: true }));
+audio.addEventListener('canplay', () => set({ loading: false }));
+audio.addEventListener('loadedmetadata', () => {
+  if (Number.isFinite(audio.duration)) set({ duration: audio.duration });
+});
+audio.addEventListener('timeupdate', () => {
+  const t = audio.currentTime;
+  const delta = t - lastTime;
+  if (!audio.paused && delta > 0 && delta < 2) listened += delta;
+  lastTime = t;
+  set({ position: t });
+  if ('setPositionState' in navigator.mediaSession && Number.isFinite(audio.duration)) {
+    try {
+      navigator.mediaSession.setPositionState({ duration: audio.duration, position: Math.min(t, audio.duration), playbackRate: 1 });
+    } catch {
+      /* ignore */
+    }
+  }
+});
+audio.addEventListener('ended', () => {
+  if (get().repeat === 'one') {
+    finishCurrent(true);
+    audio.currentTime = 0;
+    audio.play();
+    return;
+  }
+  next(false);
+});
+audio.addEventListener('error', () => {
+  if (!audio.src || !current()) return;
+  // Signed stream URLs expire — retry once with a fresh one.
+  const t = current()!;
+  if (prefetched.has(t.id)) {
+    prefetched.delete(t.id);
+    const at = audio.currentTime;
+    loadAt(get().index).then(() => at > 1 && seek(at));
+    return;
+  }
+  set({ loading: false, error: tr().player.playbackError(t.title) });
+});
+
+// --------------------------------------------------------------- media keys
+
+function updateMediaSession(t: Track) {
+  if (!('mediaSession' in navigator)) return;
+  const art = trackCover(t, 400);
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: t.title + (t.version ? ` (${t.version})` : ''),
+    artist: artistNames(t),
+    album: t.albums?.[0]?.title || '',
+    artwork: art ? [{ src: art, sizes: '400x400', type: 'image/jpeg' }] : [],
+  });
+}
+
+if ('mediaSession' in navigator) {
+  const ms = navigator.mediaSession;
+  ms.setActionHandler('play', () => toggle());
+  ms.setActionHandler('pause', () => toggle());
+  ms.setActionHandler('nexttrack', () => next(true));
+  ms.setActionHandler('previoustrack', () => prev());
+  ms.setActionHandler('seekto', (d) => d.seekTime !== undefined && seek(d.seekTime));
+}
+
+// -------------------------------------------------------------- persistence
+
+function savePrefs() {
+  const { volume, repeat, normalize } = get();
+  storage.setItem('player.prefs', JSON.stringify({ volume, repeat, normalize }));
+}
+
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+function persistSoon() {
+  if (persistTimer) return;
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    const s = get();
+    if (!s.queue.length) return;
+    const from = Math.max(0, s.index - 20);
+    storage.setItem(
+      'player.session',
+      JSON.stringify({ queue: s.queue.slice(from, from + 200), index: s.index - from, title: s.source?.kind === 'list' ? s.source.title : tr().common.myWave }),
+    );
+  }, 1000);
+}
+
+/** Restore the last queue (paused) so the app opens where you left off. */
+export function restoreSession() {
+  try {
+    const raw = storage.getItem('player.session');
+    if (!raw) return;
+    const { queue, index, title } = JSON.parse(raw);
+    if (!Array.isArray(queue) || !queue[index]) return;
+    set({ queue, index, source: { kind: 'list', title }, duration: (queue[index].durationMs || 0) / 1000 });
+    updateMediaSession(queue[index]);
+  } catch {
+    /* ignore */
+  }
+}
+

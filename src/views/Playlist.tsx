@@ -1,0 +1,133 @@
+import { Pencil, Play, Shuffle, Trash2, Upload } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { api } from '../api/client.ts';
+import type { Playlist } from '../api/types.ts';
+import { playlistCover } from '../api/yandex.ts';
+import { ErrorBox, PageHeader, Spinner } from '../components/Common.tsx';
+import { askText, confirmDialog } from '../components/Dialog.tsx';
+import { TrackList } from '../components/TrackList.tsx';
+import { useT } from '../i18n.ts';
+import { playShuffled, playTracks } from '../player/player.ts';
+import { back, errorText, isOwn, refreshPlaylists, toast } from '../store.ts';
+import { fmtTotal, useAsync } from '../ui/util.ts';
+
+export function PlaylistView({ uid, kind }: { uid: number | string; kind: number | string }) {
+  const { data: pl, loading, error, reload, setData } = useAsync(() => api.playlist(uid, kind), [uid, kind]);
+  const [uploading, setUploading] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const t = useT();
+
+  if (loading && !pl) return <Spinner />;
+  if (error || !pl) return <ErrorBox error={error} onRetry={reload} />;
+  const tracks = (pl.tracks || []).map((x) => x.track!).filter(Boolean);
+  const own = isOwn(pl);
+  const total = tracks.reduce((s, t) => s + (t.durationMs || 0), 0);
+
+  const remove = async (index: number) => {
+    try {
+      const fresh = await api.playlist(pl.uid, pl.kind);
+      await api.removeFromPlaylist(fresh, index);
+      reload();
+      refreshPlaylists();
+    } catch (e) {
+      toast(t.playlist.removeFailed(errorText(e)));
+    }
+  };
+
+  const rename = async () => {
+    const title = await askText(t.playlist.renameTitle, pl.title, t.common.save);
+    if (!title || title === pl.title) return;
+    const updated = await api.renamePlaylist(pl.kind, title);
+    setData({ ...pl, title: updated.title });
+    refreshPlaylists();
+  };
+
+  const destroy = async () => {
+    if (!(await confirmDialog(t.playlist.deleteTitle, t.playlist.deleteMessage(pl.title)))) return;
+    await api.deletePlaylist(pl.kind);
+    await refreshPlaylists();
+    back();
+  };
+
+  const upload = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const before = pl.trackCount;
+    let ok = 0;
+    for (const f of Array.from(files)) {
+      setUploading(t.playlist.uploading(f.name));
+      try {
+        await api.upload({ name: f.name, data: await f.arrayBuffer() }, pl as Playlist);
+        ok++;
+      } catch (e) {
+        toast(`${f.name}: ${errorText(e)}`);
+      }
+    }
+    if (fileInput.current) fileInput.current.value = '';
+    if (!ok) return setUploading(null);
+    setUploading(t.playlist.processing(t.count.files(ok)));
+    // Processing is asynchronous on Yandex's side; poll for up to ~3 minutes.
+    for (let i = 0; i < 18; i++) {
+      await new Promise((r) => setTimeout(r, 10_000));
+      const fresh = await api.playlist(pl.uid, pl.kind).catch(() => null);
+      if (fresh && fresh.trackCount >= before + ok) {
+        setData(fresh);
+        refreshPlaylists();
+        toast(t.playlist.uploadDone);
+        return setUploading(null);
+      }
+    }
+    setUploading(null);
+    toast(t.playlist.uploadPending);
+  };
+
+  return (
+    <div className="page">
+      <PageHeader
+        cover={playlistCover(pl, 600)}
+        kicker={own ? t.playlist.yours : t.playlist.byOwner(pl.owner?.name || pl.owner?.login || '')}
+        title={pl.title}
+        meta={
+          <>
+            {t.count.tracks(pl.trackCount)}
+            {total > 0 && `, ${fmtTotal(total)}`}
+            {pl.description && <div className="muted desc">{pl.description}</div>}
+          </>
+        }
+        actions={
+          <>
+            <button className="btn primary" onClick={() => playTracks(tracks, 0, pl.title)} disabled={!tracks.length}>
+              <Play size={16} fill="currentColor" /> {t.common.play}
+            </button>
+            <button className="btn glass-btn" onClick={() => playShuffled(tracks, pl.title)} disabled={!tracks.length}>
+              <Shuffle size={16} /> {t.common.shuffle}
+            </button>
+            {own && (
+              <>
+                <button className="btn glass-btn" onClick={() => fileInput.current?.click()} disabled={!!uploading} title={t.playlist.uploadHint}>
+                  <Upload size={16} /> {t.playlist.upload}
+                </button>
+                <button className="icon-btn" onClick={rename} title={t.playlist.rename}>
+                  <Pencil size={17} />
+                </button>
+                <button className="icon-btn" onClick={destroy} title={t.playlist.delete}>
+                  <Trash2 size={17} />
+                </button>
+                <input ref={fileInput} type="file" accept="audio/mpeg,.mp3" multiple hidden onChange={(e) => upload(e.target.files)} />
+              </>
+            )}
+          </>
+        }
+      />
+      {uploading && (
+        <div className="notice glass">
+          <Spinner label={uploading} />
+        </div>
+      )}
+      {tracks.length ? (
+        <TrackList tracks={tracks} onPlay={(i) => playTracks(tracks, i, pl.title)} onRemove={own ? remove : undefined} />
+      ) : (
+        <div className="empty-hint">{own ? t.playlist.emptyOwn : t.playlist.empty}</div>
+      )}
+    </div>
+  );
+}
