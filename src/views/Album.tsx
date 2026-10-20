@@ -1,10 +1,10 @@
-import { Play, Shuffle } from 'lucide-react';
+import { Play, Radio, Shuffle } from 'lucide-react';
 import { api } from '../api/client.ts';
 import { coverUrl } from '../api/yandex.ts';
 import { ArtistLinks, ErrorBox, PageHeader, Spinner } from '../components/Common.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { useT } from '../i18n.ts';
-import { playShuffled, playTracks } from '../player/player.ts';
+import { playRadio, playShuffled, playTracks } from '../player/player.ts';
 import { fmtTotal, useAsync } from '../ui/util.ts';
 
 export function AlbumView({ id }: { id: number | string }) {
@@ -36,6 +36,9 @@ export function AlbumView({ id }: { id: number | string }) {
             </button>
             <button className="btn glass-btn" onClick={() => playShuffled(tracks, album.title)}>
               <Shuffle size={16} /> {t.common.shuffle}
+            </button>
+            <button className="btn glass-btn" onClick={() => playRadio(`album:${album.id}`, album.title)} data-testid="radio">
+              <Radio size={16} /> {t.common.radio}
             </button>
           </>
         }

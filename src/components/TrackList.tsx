@@ -1,9 +1,9 @@
 import { memo } from 'react';
-import { Ban, Disc3, Heart, ListEnd, ListPlus, ListStart, MoreHorizontal, Play, Plus, Trash2, User } from 'lucide-react';
+import { Ban, Disc3, Heart, ListEnd, ListPlus, ListStart, MoreHorizontal, Play, Plus, Radio, Trash2, User } from 'lucide-react';
 import type { Track } from '../api/types.ts';
 import { trackCover } from '../api/yandex.ts';
 import { tr, useT } from '../i18n.ts';
-import { enqueue, playNext, toggle, usePlayer } from '../player/player.ts';
+import { enqueue, playNext, playRadio, toggle, usePlayer } from '../player/player.ts';
 import { addToPlaylist, createPlaylist, dislike, isOwn, navigate, toggleLike, useApp } from '../store.ts';
 import { cx, fmtTime } from '../ui/util.ts';
 import { ArtistLinks, Cover } from './Common.tsx';
@@ -29,6 +29,7 @@ export function trackMenu(t: Track, extra: MenuItem[] = []): MenuItem[] {
   ];
   const items: MenuItem[] = [
     { label: tx.menu.playNext, icon: <ListStart size={15} />, onClick: () => playNext(t) },
+    { label: tx.menu.radio, icon: <Radio size={15} />, onClick: () => playRadio(`track:${t.id}`, t.title) },
     { label: tx.menu.addToQueue, icon: <ListEnd size={15} />, onClick: () => enqueue(t) },
     { label: tx.menu.addToPlaylist, icon: <ListPlus size={15} />, submenu: playlistItems },
     { label: liked ? tx.menu.unlike : tx.common.like, icon: <Heart size={15} />, onClick: () => toggleLike(t) },

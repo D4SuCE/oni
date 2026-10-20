@@ -74,17 +74,21 @@ export function MenuHost() {
   useEffect(() => {
     if (!menu) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
+    // The page scrolling away from the menu closes it; scrolling a long menu itself must not.
+    const onScroll = (e: Event) => {
+      if (!(e.target instanceof Element && e.target.closest('.menu'))) close();
+    };
     window.addEventListener('mousedown', close);
     window.addEventListener('blur', close);
     window.addEventListener('resize', close);
     window.addEventListener('keydown', onKey);
-    document.addEventListener('scroll', close, true);
+    document.addEventListener('scroll', onScroll, true);
     return () => {
       window.removeEventListener('mousedown', close);
       window.removeEventListener('blur', close);
       window.removeEventListener('resize', close);
       window.removeEventListener('keydown', onKey);
-      document.removeEventListener('scroll', close, true);
+      document.removeEventListener('scroll', onScroll, true);
     };
   }, [menu]);
   if (!menu) return null;

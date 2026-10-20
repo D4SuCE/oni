@@ -10,7 +10,15 @@ import { DEFAULT_TUNING, WaveEngine, waveSeeds, type WaveStats, type WaveTuning 
 import { ListenHistory } from '../wave/history.ts';
 
 export type Repeat = 'off' | 'all' | 'one';
-export type Source = { kind: 'wave' } | { kind: 'list'; title: string };
+/** A wave without a station is My Wave; with one it is a radio seeded by a track, artist, album or playlist. */
+export type Source = { kind: 'wave'; station?: { seed: string; title: string } } | { kind: 'list'; title: string };
+
+export function sourceTitle(source: Source | null) {
+  if (source?.kind === 'list') return source.title;
+  return source?.station ? tr().common.radioOf(source.station.title) : tr().common.myWave;
+}
+
+export const isMyWave = (source: Source | null) => source?.kind === 'wave' && !source.station;
 
 interface Prefs {
   volume: number;
@@ -163,9 +171,18 @@ function fillWave(min = 2): Promise<void> {
 
 export async function playWave(tuning?: Partial<WaveTuning>) {
   if (tuning) saveTuning(tuning);
+  await startWave({ kind: 'wave' });
+}
+
+/** Endless radio from one seed, e.g. `track:123`, `artist:45`, `album:67`, `playlist:<uid>:<kind>`. Repeat filters apply. */
+export async function playRadio(seed: string, title: string) {
+  await startWave({ kind: 'wave', station: { seed, title } });
+}
+
+async function startWave(source: Source & { kind: 'wave' }) {
   finishCurrent(false);
-  engine = new WaveEngine(waveApi, history, get().tuning, (id) => isDisliked(id));
-  set({ waveBusy: true, source: { kind: 'wave' }, queue: [], index: -1, shuffle: false, error: null });
+  engine = new WaveEngine(waveApi, history, get().tuning, (id) => isDisliked(id), source.station ? [source.station.seed] : null);
+  set({ waveBusy: true, source, queue: [], index: -1, shuffle: false, error: null });
   unshuffled = null;
   try {
     await engine.start();
@@ -192,8 +209,10 @@ export function saveTuning(patch: Partial<WaveTuning>) {
 /** Re-tune a running wave: keep the current track, replace what comes next. */
 export async function retuneWave(patch: Partial<WaveTuning>) {
   const seedsChanged = saveTuning(patch);
-  if (get().source?.kind !== 'wave') return;
-  if (!seedsChanged) {
+  const source = get().source;
+  if (source?.kind !== 'wave') return;
+  // A station radio keeps its own seed: only the local filters apply to it.
+  if (!seedsChanged || source.station) {
     // Local filters only: drop upcoming tracks that no longer pass.
     set((s) => ({ queue: s.queue.filter((t, i) => i <= s.index || !engine?.rejectReason(t)) }));
     await fillWave();
@@ -435,7 +454,7 @@ function persistSoon() {
     const from = Math.max(0, s.index - 20);
     storage.setItem(
       'player.session',
-      JSON.stringify({ queue: s.queue.slice(from, from + 200), index: s.index - from, title: s.source?.kind === 'list' ? s.source.title : tr().common.myWave }),
+      JSON.stringify({ queue: s.queue.slice(from, from + 200), index: s.index - from, title: sourceTitle(s.source) }),
     );
   }, 1000);
 }

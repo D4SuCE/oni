@@ -1380,7 +1380,8 @@ html:not(.acrylic) .backdrop-tint {
   cursor: default;
 }
 
-.queue {
+.queue,
+.similar {
   flex: 1;
   overflow-y: auto;
   padding: 0 8px 12px;

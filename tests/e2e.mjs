@@ -145,6 +145,26 @@ await step('open artist page', async () => {
   await shot('08-artist');
 });
 
+await step('artist radio and similar tracks', async () => {
+  await page.click('[data-testid="radio"]');
+  await page.waitForFunction(
+    () => {
+      const s = window.__wave.usePlayer.getState();
+      return s.source?.station?.seed?.startsWith('artist:') && s.index >= 0 && !s.loading && !window.__wave.audio.paused;
+    },
+    null,
+    { timeout: 30000 },
+  );
+  const label = await page.locator('.pb-source').innerText();
+  if (!label.includes('Радио')) throw new Error(`source label "${label}"`);
+  await page.click('.pb-cover');
+  await page.click('[data-testid="tab-similar"]');
+  await page.waitForSelector('.similar .track-row, .np-side .muted', { timeout: 15000 });
+  console.log(`       ${label}; similar: ${await page.locator('.similar .track-row').count()}`);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.nowplaying', { state: 'detached' });
+});
+
 await step('back navigation', async () => {
   await page.click('.sidebar-top .icon-btn');
   await page.waitForSelector('.page-header .page-cover:not(.round)');

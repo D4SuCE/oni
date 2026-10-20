@@ -2,7 +2,7 @@ import { Loader2, Pause, Play, SlidersHorizontal, Trash2, X } from 'lucide-react
 import { useState } from 'react';
 import { api } from '../api/client.ts';
 import { useT } from '../i18n.ts';
-import { history, playWave, retuneWave, toggle, usePlayer } from '../player/player.ts';
+import { history, isMyWave, playWave, retuneWave, toggle, usePlayer } from '../player/player.ts';
 import { useApp } from '../store.ts';
 import { cx, useAsync } from '../ui/util.ts';
 import type { Diversity, Language, Mood, WaveTuning } from '../wave/engine.ts';
@@ -169,7 +169,8 @@ export function TuningPanel() {
 }
 
 export function WaveHero() {
-  const isWave = usePlayer((s) => s.source?.kind === 'wave');
+  // Only My Wave itself; a track or artist radio is a wave too, but not this one.
+  const isWave = usePlayer((s) => isMyWave(s.source));
   const playing = usePlayer((s) => s.playing);
   const busy = usePlayer((s) => s.waveBusy);
   const tuning = usePlayer((s) => s.tuning);

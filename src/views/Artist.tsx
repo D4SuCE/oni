@@ -1,11 +1,11 @@
-import { Play, Shuffle } from 'lucide-react';
+import { Play, Radio, Shuffle } from 'lucide-react';
 import { useState } from 'react';
 import { api } from '../api/client.ts';
 import { artistCover } from '../api/yandex.ts';
 import { AlbumCard, ArtistCard, ErrorBox, PageHeader, Section, Shelf, Spinner } from '../components/Common.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { useLang, useT } from '../i18n.ts';
-import { playShuffled, playTracks } from '../player/player.ts';
+import { playRadio, playShuffled, playTracks } from '../player/player.ts';
 import { useAsync } from '../ui/util.ts';
 
 export function ArtistView({ id }: { id: number | string }) {
@@ -38,6 +38,9 @@ export function ArtistView({ id }: { id: number | string }) {
             </button>
             <button className="btn glass-btn" onClick={() => playAll(true)}>
               <Shuffle size={16} /> {t.common.shuffle}
+            </button>
+            <button className="btn glass-btn" onClick={() => playRadio(`artist:${artist.id}`, artist.name)} data-testid="radio">
+              <Radio size={16} /> {t.common.radio}
             </button>
           </>
         }

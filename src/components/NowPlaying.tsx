@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Ban, ChevronDown, X } from 'lucide-react';
 import { api } from '../api/client.ts';
+import type { Track } from '../api/types.ts';
 import { trackCover } from '../api/yandex.ts';
 import { useT } from '../i18n.ts';
-import { playAt, removeAt, seek, usePlayer } from '../player/player.ts';
+import { playAt, playTracks, removeAt, seek, usePlayer } from '../player/player.ts';
 import { dislike, useApp } from '../store.ts';
 import { cx, useAsync } from '../ui/util.ts';
 import { ArtistLinks, Cover, Spinner } from './Common.tsx';
 import { LikeButton, SeekBar, Transport } from './PlayerBar.tsx';
+import { TrackList } from './TrackList.tsx';
 import { WaveStatsLine } from './Wave.tsx';
 
 function parseLrc(text: string) {
@@ -39,6 +41,18 @@ function Lyrics({ trackId }: { trackId: string }) {
           {l.text || '♪'}
         </p>
       ))}
+    </div>
+  );
+}
+
+function Similar({ track }: { track: Track }) {
+  const { data, loading, error } = useAsync(() => api.similarTracks(track.id), [track.id]);
+  const t = useT();
+  if (loading) return <Spinner />;
+  if (error || !data?.length) return <div className="muted pad">{t.nowPlaying.noSimilar}</div>;
+  return (
+    <div className="similar">
+      <TrackList tracks={data} showAlbum={false} onPlay={(i) => playTracks(data, i, t.nowPlaying.similarTo(track.title))} />
     </div>
   );
 }
@@ -94,7 +108,7 @@ function QueueRow({ i, current }: { i: number; current?: boolean }) {
 export function NowPlaying() {
   const track = usePlayer((s) => s.queue[s.index]);
   const isWave = usePlayer((s) => s.source?.kind === 'wave');
-  const [tab, setTab] = useState<'queue' | 'lyrics'>('queue');
+  const [tab, setTab] = useState<'queue' | 'lyrics' | 'similar'>('queue');
   const t = useT();
   const close = () => useApp.setState({ nowPlayingOpen: false });
   useEffect(() => {
@@ -104,7 +118,7 @@ export function NowPlaying() {
   }, []);
   const hasLyrics = Boolean(track?.lyricsInfo?.hasAvailableSyncLyrics || track?.lyricsInfo?.hasAvailableTextLyrics);
   useEffect(() => {
-    if (!hasLyrics) setTab('queue');
+    if (!hasLyrics) setTab((tab) => (tab === 'lyrics' ? 'queue' : tab));
   }, [hasLyrics]);
 
   return (
@@ -147,8 +161,11 @@ export function NowPlaying() {
             <button className={cx('tab', tab === 'lyrics' && 'active')} onClick={() => setTab('lyrics')} disabled={!hasLyrics} title={hasLyrics ? '' : t.nowPlaying.lyricsMissing}>
               {t.nowPlaying.lyrics}
             </button>
+            <button className={cx('tab', tab === 'similar' && 'active')} onClick={() => setTab('similar')} data-testid="tab-similar">
+              {t.nowPlaying.similar}
+            </button>
           </div>
-          {tab === 'queue' || !track ? <Queue /> : <Lyrics trackId={track.id} />}
+          {tab === 'queue' || !track ? <Queue /> : tab === 'lyrics' ? <Lyrics trackId={track.id} /> : <Similar track={track} />}
         </aside>
       </div>
     </div>

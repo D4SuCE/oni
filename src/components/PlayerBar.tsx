@@ -2,8 +2,8 @@ import { Ban, Heart, ListMusic, Loader2, Maximize2, Pause, Play, Repeat, Repeat1
 import { useRef } from 'react';
 import type { Track } from '../api/types.ts';
 import { trackCover } from '../api/yandex.ts';
-import { useT } from '../i18n.ts';
-import { cycleRepeat, next, prev, seek, setVolume, toggle, toggleShuffle, usePlayer } from '../player/player.ts';
+import { useLang, useT } from '../i18n.ts';
+import { cycleRepeat, next, prev, seek, setVolume, sourceTitle, toggle, toggleShuffle, usePlayer } from '../player/player.ts';
 import { dislike, toggleLike, useApp } from '../store.ts';
 import { cx, fmtTime } from '../ui/util.ts';
 import { ArtistLinks, Cover } from './Common.tsx';
@@ -110,7 +110,8 @@ export function PlayerBar() {
   const track = usePlayer((s) => s.queue[s.index]);
   const isWave = usePlayer((s) => s.source?.kind === 'wave');
   const t = useT();
-  const sourceTitle = usePlayer((s) => (s.source?.kind === 'list' ? s.source.title : t.common.myWave));
+  useLang((s) => s.lang); // the source title is localized
+  const source = usePlayer((s) => s.source);
   const openNow = () => useApp.setState({ nowPlayingOpen: true });
 
   return (
@@ -148,7 +149,7 @@ export function PlayerBar() {
       <div className="pb-right">
         {track && (
           <span className="pb-source" title={t.player.source}>
-            {isWave && <Waves size={14} />} {sourceTitle}
+            {isWave && <Waves size={14} />} {sourceTitle(source)}
           </span>
         )}
         <button className="icon-btn" onClick={openNow} title={t.player.queue}>

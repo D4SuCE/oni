@@ -1,4 +1,4 @@
-import { Heart, Pencil, Play, Shuffle, Trash2, Upload } from 'lucide-react';
+import { Heart, Pencil, Play, Radio, Shuffle, Trash2, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { api } from '../api/client.ts';
 import type { Playlist } from '../api/types.ts';
@@ -7,7 +7,7 @@ import { ErrorBox, PageHeader, Spinner } from '../components/Common.tsx';
 import { askText, confirmDialog } from '../components/Dialog.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { useT } from '../i18n.ts';
-import { playShuffled, playTracks } from '../player/player.ts';
+import { playRadio, playShuffled, playTracks } from '../player/player.ts';
 import { back, errorText, isOwn, refreshPlaylists, samePlaylist, toast, togglePlaylistLike, useApp } from '../store.ts';
 import { cx, fmtTotal, useAsync } from '../ui/util.ts';
 
@@ -102,6 +102,9 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
             </button>
             <button className="btn glass-btn" onClick={() => playShuffled(tracks, pl.title)} disabled={!tracks.length}>
               <Shuffle size={16} /> {t.common.shuffle}
+            </button>
+            <button className="btn glass-btn" onClick={() => playRadio(`playlist:${pl.uid}:${pl.kind}`, pl.title)} disabled={!tracks.length} data-testid="radio">
+              <Radio size={16} /> {t.common.radio}
             </button>
             {!own && (
               <button className={cx('icon-btn', saved && 'on like')} onClick={() => togglePlaylistLike(pl)} title={saved ? t.playlist.unsave : t.playlist.save} data-testid="playlist-like">

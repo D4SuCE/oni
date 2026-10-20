@@ -86,15 +86,19 @@ export class WaveEngine {
   private reserve: Track[] = [];
   private recentArtists: string[][] = [];
 
-  constructor(api: WaveApi, history: ListenHistory, tuning: WaveTuning, isDisliked: (id: string) => boolean = () => false) {
+  /** Fixed seeds for a station radio (track:<id>, artist:<id>, …); My Wave derives them from the tuning. */
+  private stationSeeds: string[] | null;
+
+  constructor(api: WaveApi, history: ListenHistory, tuning: WaveTuning, isDisliked: (id: string) => boolean = () => false, stationSeeds: string[] | null = null) {
     this.api = api;
     this.history = history;
     this.tuning = tuning;
     this.isDisliked = isDisliked;
+    this.stationSeeds = stationSeeds;
   }
 
   async start() {
-    const batch = await this.api.waveStart(waveSeeds(this.tuning));
+    const batch = await this.api.waveStart(this.stationSeeds ?? waveSeeds(this.tuning));
     this.session = { id: batch.sessionId, batchId: batch.batchId };
     this.feedback('radioStarted');
     this.ingest(batch);
