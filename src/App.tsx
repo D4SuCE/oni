@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { api } from './api/client.ts';
 import { trackCover } from './api/yandex.ts';
 import { Spinner } from './components/Common.tsx';
 import { DialogHost } from './components/Dialog.tsx';
@@ -172,4 +173,4 @@ export function App() {
 }
 
 // Handy for debugging and for the automated UI test.
-Object.assign(window, { __wave: { usePlayer, useApp, audio } });
+Object.assign(window, { __wave: { usePlayer, useApp, audio, api, navigate } });

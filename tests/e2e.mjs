@@ -163,19 +163,49 @@ await step('like then unlike (reverted)', async () => {
   await page.waitForTimeout(800);
 });
 
-await step('library: liked tracks', async () => {
-  await page.click('[data-testid="nav-library"]');
-  await page.waitForSelector('.tabs.big');
+await step('liked tracks page', async () => {
+  await page.click('[data-testid="nav-liked"]');
   await page.waitForSelector('.track-row, .empty-hint', { timeout: 20000 });
+  // Library and Liked used to open the same page and both lit up.
+  if ((await page.locator('.sidebar .nav-item.active').count()) !== 1) throw new Error('more than one nav item is active');
   await page.waitForTimeout(1500);
-  await shot('09-library');
+  await shot('09-liked');
 });
 
-await step('library: playlists tab', async () => {
-  await page.locator('.tabs.big .tab', { hasText: 'Плейлисты' }).click();
-  await page.waitForSelector('.grid .card');
+await step('library: own and liked playlists', async () => {
+  await page.click('[data-testid="nav-library"]');
+  await page.waitForSelector('[data-testid="liked-card"]');
+  const expected = await page.evaluate(() => window.__wave.useApp.getState().likedPlaylists.length);
+  const shown = await page.locator('[data-testid="liked-playlists"] .card').count();
+  if (shown !== expected) throw new Error(`liked playlists: shown ${shown}, expected ${expected}`);
+  console.log(`       liked playlists: ${shown}`);
   await page.waitForTimeout(800);
   await shot('10-playlists');
+});
+
+await step('like then unlike a playlist (reverted)', async () => {
+  // Someone else's playlist from search that is not liked yet.
+  const target = await page.evaluate(async () => {
+    const s = window.__wave.useApp.getState();
+    const r = await window.__wave.api.search('Кино');
+    const mine = String(s.account.uid);
+    return (r.playlists?.results || []).find((p) => String(p.uid) !== mine && !s.likedPlaylists.some((l) => String(l.uid) === String(p.uid) && String(l.kind) === String(p.kind)));
+  });
+  if (!target) throw new Error('no playlist to try');
+  await page.evaluate((p) => window.__wave.navigate({ name: 'playlist', uid: p.uid, kind: p.kind }), target);
+  const btn = page.locator('[data-testid="playlist-like"]');
+  const onServer = async () => (await page.evaluate(() => window.__wave.api.likedPlaylists())).some((p) => String(p.uid) === String(target.uid) && String(p.kind) === String(target.kind));
+  try {
+    await btn.click();
+    await page.waitForSelector('[data-testid="playlist-like"].on');
+    if (!(await onServer())) throw new Error('like did not reach Yandex');
+    await btn.click();
+    await page.waitForSelector('[data-testid="playlist-like"]:not(.on)');
+    if (await onServer()) throw new Error('unlike did not reach Yandex');
+  } finally {
+    // Never leave the test's like on the real account.
+    if (await onServer()) await page.evaluate((p) => window.__wave.api.setPlaylistLiked(p, false), target);
+  }
 });
 
 await step('settings page', async () => {

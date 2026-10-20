@@ -1,4 +1,4 @@
-import { Pencil, Play, Shuffle, Trash2, Upload } from 'lucide-react';
+import { Heart, Pencil, Play, Shuffle, Trash2, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { api } from '../api/client.ts';
 import type { Playlist } from '../api/types.ts';
@@ -8,19 +8,21 @@ import { askText, confirmDialog } from '../components/Dialog.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { useT } from '../i18n.ts';
 import { playShuffled, playTracks } from '../player/player.ts';
-import { back, errorText, isOwn, refreshPlaylists, toast } from '../store.ts';
-import { fmtTotal, useAsync } from '../ui/util.ts';
+import { back, errorText, isOwn, refreshPlaylists, samePlaylist, toast, togglePlaylistLike, useApp } from '../store.ts';
+import { cx, fmtTotal, useAsync } from '../ui/util.ts';
 
 export function PlaylistView({ uid, kind }: { uid: number | string; kind: number | string }) {
   const { data: pl, loading, error, reload, setData } = useAsync(() => api.playlist(uid, kind), [uid, kind]);
   const [uploading, setUploading] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const t = useT();
+  const likedPlaylists = useApp((s) => s.likedPlaylists);
 
   if (loading && !pl) return <Spinner />;
   if (error || !pl) return <ErrorBox error={error} onRetry={reload} />;
   const tracks = (pl.tracks || []).map((x) => x.track!).filter(Boolean);
   const own = isOwn(pl);
+  const saved = likedPlaylists.some((p) => samePlaylist(p, pl));
   const total = tracks.reduce((s, t) => s + (t.durationMs || 0), 0);
 
   const remove = async (index: number) => {
@@ -101,6 +103,11 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
             <button className="btn glass-btn" onClick={() => playShuffled(tracks, pl.title)} disabled={!tracks.length}>
               <Shuffle size={16} /> {t.common.shuffle}
             </button>
+            {!own && (
+              <button className={cx('icon-btn', saved && 'on like')} onClick={() => togglePlaylistLike(pl)} title={saved ? t.playlist.unsave : t.playlist.save} data-testid="playlist-like">
+                <Heart size={19} fill={saved ? 'currentColor' : 'none'} />
+              </button>
+            )}
             {own && (
               <>
                 <button className="btn glass-btn" onClick={() => fileInput.current?.click()} disabled={!!uploading} title={t.playlist.uploadHint}>

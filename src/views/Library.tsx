@@ -1,17 +1,17 @@
-import { Heart, Play, Plus, Shuffle } from 'lucide-react';
+import { Heart, Library as LibraryIcon, Play, Plus, Shuffle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api } from '../api/client.ts';
 import type { Track } from '../api/types.ts';
-import { AlbumCard, ArtistCard, ErrorBox, PlaylistCard, Spinner } from '../components/Common.tsx';
+import { AlbumCard, ArtistCard, ErrorBox, PlaylistCard, Section, Spinner } from '../components/Common.tsx';
 import { askText } from '../components/Dialog.tsx';
 import { TrackList } from '../components/TrackList.tsx';
-import { useT, type Dict } from '../i18n.ts';
+import { useT } from '../i18n.ts';
 import { playShuffled, playTracks } from '../player/player.ts';
 import { createPlaylist, navigate, useApp, type LibraryTab } from '../store.ts';
 import { cx, useAsync } from '../ui/util.ts';
 
-const TABS: LibraryTab[] = ['tracks', 'playlists', 'albums', 'artists'];
-const tabLabel = (tab: LibraryTab, t: Dict) => (tab === 'tracks' ? t.common.liked : t.common[tab]);
+/** "tracks" (liked songs) is its own page, reached from the sidebar or the Liked Songs card. */
+const TABS = ['playlists', 'albums', 'artists'] as const;
 
 const FIRST_PAGE = 100;
 
@@ -59,30 +59,69 @@ function LikedTracks() {
   );
 }
 
-function Playlists() {
-  const playlists = useApp((s) => s.playlists);
+function NewPlaylistCard() {
   const t = useT();
   return (
-    <div className="grid">
-      <button
-        className="card new-card"
-        onClick={async () => {
-          const title = await askText(t.common.newPlaylist, '', t.common.create);
-          if (title) {
-            const pl = await createPlaylist(title);
-            navigate({ name: 'playlist', uid: pl.uid, kind: pl.kind });
-          }
-        }}
-      >
-        <div className="card-cover new-cover">
-          <Plus size={36} />
+    <button
+      className="card new-card"
+      onClick={async () => {
+        const title = await askText(t.common.newPlaylist, '', t.common.create);
+        if (title) {
+          const pl = await createPlaylist(title);
+          navigate({ name: 'playlist', uid: pl.uid, kind: pl.kind });
+        }
+      }}
+    >
+      <div className="card-cover new-cover">
+        <Plus size={36} />
+      </div>
+      <div className="card-title">{t.common.newPlaylist}</div>
+    </button>
+  );
+}
+
+/** Liked tracks shown as a playlist, like Spotify's "Liked Songs". */
+function LikedSongsCard() {
+  const count = useApp((s) => s.likedKeys.length);
+  const t = useT();
+  return (
+    <button className="card" onClick={() => navigate({ name: 'library', tab: 'tracks' })} data-testid="liked-card">
+      <div className="card-cover liked-cover">
+        <Heart size={44} fill="currentColor" />
+      </div>
+      <div className="card-title">{t.common.liked}</div>
+      <div className="card-sub">{t.count.tracksShort(count)}</div>
+    </button>
+  );
+}
+
+function Playlists() {
+  const playlists = useApp((s) => s.playlists);
+  const liked = useApp((s) => s.likedPlaylists);
+  const t = useT();
+  return (
+    <>
+      <Section title={t.library.yourPlaylists}>
+        <div className="grid">
+          <NewPlaylistCard />
+          <LikedSongsCard />
+          {playlists.map((p) => (
+            <PlaylistCard key={`${p.uid}-${p.kind}`} playlist={p} />
+          ))}
         </div>
-        <div className="card-title">{t.common.newPlaylist}</div>
-      </button>
-      {playlists.map((p) => (
-        <PlaylistCard key={p.kind} playlist={p} />
-      ))}
-    </div>
+      </Section>
+      <Section title={t.library.likedPlaylists}>
+        {liked.length ? (
+          <div className="grid" data-testid="liked-playlists">
+            {liked.map((p) => (
+              <PlaylistCard key={`${p.uid}-${p.kind}`} playlist={p} />
+            ))}
+          </div>
+        ) : (
+          <div className="empty-hint">{t.library.noLikedPlaylists}</div>
+        )}
+      </Section>
+    </>
   );
 }
 
@@ -116,21 +155,30 @@ function Artists() {
   );
 }
 
-export function Library({ tab = 'tracks' }: { tab?: LibraryTab }) {
+export function Library({ tab = 'playlists' }: { tab?: LibraryTab }) {
   const t = useT();
+  if (tab === 'tracks') {
+    return (
+      <div className="page">
+        <h1 className="page-title">
+          <Heart size={26} /> {t.common.liked}
+        </h1>
+        <LikedTracks />
+      </div>
+    );
+  }
   return (
     <div className="page">
       <h1 className="page-title">
-        <Heart size={26} /> {t.nav.library}
+        <LibraryIcon size={26} /> {t.nav.library}
       </h1>
       <div className="tabs big">
         {TABS.map((id) => (
           <button key={id} className={cx('tab', id === tab && 'active')} onClick={() => navigate({ name: 'library', tab: id })}>
-            {tabLabel(id, t)}
+            {t.common[id]}
           </button>
         ))}
       </div>
-      {tab === 'tracks' && <LikedTracks />}
       {tab === 'playlists' && <Playlists />}
       {tab === 'albums' && <Albums />}
       {tab === 'artists' && <Artists />}

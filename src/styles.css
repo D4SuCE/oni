@@ -319,6 +319,10 @@ html:not(.acrylic) .backdrop-tint {
   gap: 1px;
   margin-bottom: 8px;
 }
+.nav-owner {
+  color: var(--text-3);
+  font-weight: 400;
+}
 
 /* -------------------------------------------------------------- buttons */
 
@@ -788,6 +792,16 @@ html:not(.acrylic) .backdrop-tint {
   border-radius: 10px;
   border: 1.5px dashed var(--line-strong);
   color: var(--text-2);
+}
+
+.liked-cover {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent), #ff6fb1);
+  color: #fff;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.35);
 }
 
 /* ---------------------------------------------------------- page header */

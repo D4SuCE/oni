@@ -3,7 +3,7 @@ import { Disc3, Loader2, Music2, Play, User } from 'lucide-react';
 import type { Album, Artist, Playlist } from '../api/types.ts';
 import { artistCover, coverUrl, playlistCover } from '../api/yandex.ts';
 import { useT } from '../i18n.ts';
-import { navigate } from '../store.ts';
+import { isOwn, navigate } from '../store.ts';
 import { cx } from '../ui/util.ts';
 
 export function Cover({ src, size, round, icon = 'music', className }: { src?: string; size?: number; round?: boolean; icon?: 'music' | 'user' | 'disc'; className?: string }) {
@@ -94,7 +94,7 @@ export function PlaylistCard({ playlist, onPlay }: { playlist: Playlist; onPlay?
     <Card
       cover={playlistCover(playlist, 300)}
       title={playlist.title}
-      subtitle={t.count.tracksShort(playlist.trackCount)}
+      subtitle={isOwn(playlist) ? t.count.tracksShort(playlist.trackCount) : `${playlist.owner?.name || playlist.owner?.login || ''} · ${t.count.tracksShort(playlist.trackCount)}`}
       onOpen={() => navigate({ name: 'playlist', uid: playlist.uid, kind: playlist.kind })}
       onPlay={onPlay}
     />

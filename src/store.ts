@@ -27,6 +27,7 @@ interface AppState {
   likedKeys: string[];
   disliked: Set<string>;
   playlists: Playlist[];
+  likedPlaylists: Playlist[];
   toast: { id: number; text: string } | null;
   nowPlayingOpen: boolean;
   tuningOpen: boolean;
@@ -42,6 +43,7 @@ export const useApp = create<AppState>(() => ({
   likedKeys: [],
   disliked: new Set(),
   playlists: [],
+  likedPlaylists: [],
   toast: null,
   nowPlayingOpen: false,
   tuningOpen: false,
@@ -105,18 +107,20 @@ export async function loginWithYandex() {
 
 export async function logout() {
   await transport.setToken(null);
-  set({ auth: 'login', account: null, playlists: [], liked: new Set(), likedKeys: [] });
+  set({ auth: 'login', account: null, playlists: [], likedPlaylists: [], liked: new Set(), likedKeys: [] });
 }
 
 // ------------------------------------------------------------------ library
 
 export async function refreshLibrary() {
-  const [likedKeys, disliked, playlists] = await Promise.all([
+  const [likedKeys, disliked, playlists, likedPlaylists] = await Promise.all([
     api.likedTrackKeys().catch(() => get().likedKeys),
     api.dislikedTrackIds().catch(() => [...get().disliked]),
     api.playlists().catch(() => get().playlists),
+    api.likedPlaylists().catch(() => get().likedPlaylists),
   ]);
   set({
+    likedPlaylists,
     likedKeys,
     liked: new Set(likedKeys.map((k) => k.split(':')[0])),
     disliked: new Set(disliked),
@@ -195,4 +199,21 @@ export async function createPlaylist(title: string) {
 
 export function isOwn(pl: { uid: number | string }) {
   return String(pl.uid) === String(get().account?.uid);
+}
+
+/** Playlists are identified by owner + kind: kinds of different owners overlap. */
+export const samePlaylist = (a: { uid: number | string; kind: number | string }, b: { uid: number | string; kind: number | string }) =>
+  String(a.uid) === String(b.uid) && String(a.kind) === String(b.kind);
+
+export async function togglePlaylistLike(pl: Playlist) {
+  const before = get().likedPlaylists;
+  const wasLiked = before.some((p) => samePlaylist(p, pl));
+  set({ likedPlaylists: wasLiked ? before.filter((p) => !samePlaylist(p, pl)) : [pl, ...before] });
+  try {
+    await api.setPlaylistLiked(pl, !wasLiked);
+    toast(wasLiked ? tr().toast.playlistRemoved : tr().toast.playlistSaved);
+  } catch (e) {
+    set({ likedPlaylists: before });
+    toast(tr().common.failed(errorText(e)));
+  }
 }

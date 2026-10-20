@@ -200,6 +200,18 @@ export class YandexMusic {
     return this.call<Playlist[]>(`/users/${await this.uid()}/playlists/list`);
   }
 
+  /** Other people's playlists the user liked; /playlists/list returns only their own. */
+  async likedPlaylists(): Promise<Playlist[]> {
+    const r = await this.call<any[]>(`/users/${await this.uid()}/likes/playlists`);
+    return r.map((x) => x.playlist || x).filter((p) => p?.kind !== undefined);
+  }
+
+  async setPlaylistLiked(pl: { uid: number; kind: number }, liked: boolean) {
+    // "remove" ignores the owner-uid/kind form that "add" accepts; playlist-ids works for both.
+    const action = liked ? 'add-multiple' : 'remove';
+    await this.call(`/users/${await this.uid()}/likes/playlists/${action}`, { method: 'POST', form: { 'playlist-ids': `${pl.uid}:${pl.kind}` } });
+  }
+
   playlist(uid: number | string, kind: number | string) {
     return this.call<Playlist>(`/users/${uid}/playlists/${kind}`, { query: { 'rich-tracks': true } });
   }
