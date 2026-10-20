@@ -610,28 +610,37 @@ html.acrylic .backdrop {
   cursor: pointer;
   --p: 0%;
 }
+/* Seek, volume and settings sliders: a quiet light line at rest; on hover (or while
+   dragging) it fills red and shows the same knob as the equalizer. */
 .range::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 4px;
   background: linear-gradient(to right, var(--text) var(--p), rgba(242, 238, 232, 0.16) var(--p));
+  transition: background 0.15s;
 }
-.range:hover::-webkit-slider-runnable-track {
+.range:hover::-webkit-slider-runnable-track,
+.range:active::-webkit-slider-runnable-track,
+.range:focus-visible::-webkit-slider-runnable-track {
   background: linear-gradient(to right, var(--accent) var(--p), rgba(242, 238, 232, 0.2) var(--p));
 }
 .range::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 12px;
-  height: 12px;
-  margin-top: -4px;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
   border-radius: 50%;
-  background: var(--gold);
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+  background: var(--accent);
+  border: 2px solid var(--ink);
+  box-shadow: 0 0 0 1px rgba(217, 39, 46, 0.55), 0 0 10px rgba(217, 39, 46, 0.45);
   opacity: 0;
-  transition: opacity 0.15s;
+  transform: scale(0.6);
+  transition: opacity 0.15s, transform 0.15s;
 }
 .range:hover::-webkit-slider-thumb,
+.range:active::-webkit-slider-thumb,
 .range:focus-visible::-webkit-slider-thumb {
   opacity: 1;
+  transform: scale(1);
 }
 
 /* ------------------------------------------------------------ playerbar */
