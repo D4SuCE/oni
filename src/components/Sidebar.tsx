@@ -1,7 +1,7 @@
-import { ChevronLeft, ChevronRight, Heart, History, Home, Library, ListMusic, Menu, Plus, Search, Settings } from 'lucide-react';
+import { Heart, History, Home, Library, ListMusic, Menu, Plus, Search, Settings } from 'lucide-react';
 import { create } from 'zustand';
 import { useT } from '../i18n.ts';
-import { back, createPlaylist, forward, isOwn, navigate, samePlaylist, useApp, type Route } from '../store.ts';
+import { createPlaylist, isOwn, navigate, samePlaylist, useApp, type Route } from '../store.ts';
 import { cx } from '../ui/util.ts';
 import { askText } from './Dialog.tsx';
 
@@ -35,8 +35,6 @@ function toggleSidebar() {
 
 export function Sidebar() {
   const route = useApp((s) => s.route);
-  const canBack = useApp((s) => s.backStack.length > 0);
-  const canForward = useApp((s) => s.forwardStack.length > 0);
   const playlists = useApp((s) => s.playlists);
   const likedPlaylists = useApp((s) => s.likedPlaylists);
   const open = useSidebar((s) => s.open);
@@ -58,12 +56,6 @@ export function Sidebar() {
       <div className="sidebar-tools no-drag">
         <button className="icon-btn" onClick={toggleSidebar} title={open ? t.nav.collapse : t.nav.expand} data-testid="sidebar-toggle">
           <Menu size={19} />
-        </button>
-        <button className="icon-btn" onClick={back} disabled={!canBack} title={t.common.back} data-testid="back">
-          <ChevronLeft size={20} />
-        </button>
-        <button className="icon-btn" onClick={forward} disabled={!canForward} title={t.common.forward} data-testid="forward">
-          <ChevronRight size={20} />
         </button>
       </div>
       <div className="nav">

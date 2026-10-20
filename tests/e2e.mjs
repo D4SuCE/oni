@@ -166,11 +166,11 @@ await step('artist radio and similar tracks', async () => {
 });
 
 await step('back navigation', async () => {
-  await page.click('[data-testid="back"]');
+  await page.keyboard.press('Alt+ArrowLeft');
   await page.waitForSelector('.page-header .page-cover:not(.round)');
 });
 
-await step('back and forward: mouse 4/5, Alt+arrows, the shell command, the button', async () => {
+await step('back and forward: mouse 4/5, Alt+arrows, the shell command', async () => {
   const at = () => page.evaluate(() => window.__wave.useApp.getState().route.name);
   const wait = async (name) => page.waitForFunction((n) => window.__wave.useApp.getState().route.name === n, name, { timeout: 5000 });
   const side = (button) =>
@@ -193,9 +193,10 @@ await step('back and forward: mouse 4/5, Alt+arrows, the shell command, the butt
   const win = await app.browserWindow(page);
   await win.evaluate((w) => w.webContents.send('wave:command', 'back'));
   await wait('home');
-  await page.click('[data-testid="forward"]');
+  await page.waitForTimeout(350);
+  await page.keyboard.press('Alt+ArrowRight');
   await wait('search');
-  if ((await at()) !== 'search') throw new Error('forward button');
+  if ((await at()) !== 'search') throw new Error('Alt+Right');
 });
 
 await step('like then unlike (reverted)', async () => {
