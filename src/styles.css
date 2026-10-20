@@ -1753,6 +1753,9 @@ kbd {
   display: flex;
   gap: 8px;
 }
+.login-hint {
+  margin: 18px 0 0 !important;
+}
 .token-form .btn {
   height: 42px;
   padding: 0 14px;

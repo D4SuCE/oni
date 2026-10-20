@@ -43,6 +43,7 @@ export function Login() {
             <KeyRound size={16} />
           </button>
         </form>
+        <p className="hint login-hint">{t.login.plusHint}</p>
       </div>
     </div>
   );

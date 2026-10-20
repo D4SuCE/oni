@@ -1,7 +1,7 @@
 // Electron main process: window, secure token storage and network transport.
 // All Yandex requests go through here so the renderer is not limited by CORS
 // and the OAuth token never has to live in page JavaScript.
-const { app, BrowserWindow, ipcMain, safeStorage, shell, nativeTheme } = require('electron');
+const { app, BrowserWindow, ipcMain, safeStorage, session, shell, nativeTheme } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const desktop = require('./desktop.cjs');
@@ -14,6 +14,8 @@ if (TEST_MODE) app.commandLine.appendSwitch('mute-audio');
 // Must match build.appId so the taskbar ties the window to the installed shortcut.
 if (process.platform === 'win32') app.setAppUserModelId('local.wave.player');
 
+// In-memory session (no "persist:" prefix): Yandex cookies never reach the disk.
+const LOGIN_PARTITION = 'yandex-login';
 const OAUTH_CLIENT_ID = '23cabbbdc6cd418abb4b39c32c41195d'; // official Yandex Music client
 const DEFAULT_CLIENT = 'YandexMusicAndroid/24023621';
 
@@ -50,7 +52,9 @@ function loadToken() {
     const raw = fs.readFileSync(tokenFile());
     token = safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(raw) : raw.toString('utf8');
   } catch {
-    token = process.env.YANDEX_MUSIC_TOKEN || null;
+    // Development and tests only: an installed app always signs in through Yandex,
+    // so whoever runs it uses their own account and "Sign out" really signs out.
+    token = (!app.isPackaged && process.env.YANDEX_MUSIC_TOKEN) || null;
   }
 }
 
@@ -58,6 +62,8 @@ function saveToken(value) {
   token = value;
   if (!value) {
     fs.rmSync(tokenFile(), { force: true });
+    // Forget the Yandex web session too, or the next sign-in silently reuses the same account.
+    session.fromPartition(LOGIN_PARTITION).clearStorageData().catch(() => {});
     return;
   }
   const data = safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(value) : Buffer.from(value, 'utf8');
@@ -120,7 +126,7 @@ function login() {
       title: 'Вход в Яндекс',
       backgroundColor: '#111',
       autoHideMenuBar: true,
-      webPreferences: { partition: 'yandex-login' },
+      webPreferences: { partition: LOGIN_PARTITION },
     });
     let done = false;
     const check = (target) => {

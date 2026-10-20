@@ -150,6 +150,7 @@ const ru = {
     tagline: 'Яндекс Музыка в новом интерфейсе. Войдите в свой аккаунт Яндекса, чтобы продолжить.',
     withYandex: 'Войти через Яндекс',
     orToken: 'или вставьте OAuth-токен',
+    plusHint: 'Целиком треки играют с подпиской Яндекс Плюс, без неё — 30-секундные фрагменты.',
   },
   playlist: {
     yours: 'Ваш плейлист',
@@ -387,6 +388,7 @@ const en: Dict = {
     tagline: 'Yandex Music with a new interface. Sign in to your Yandex account to continue.',
     withYandex: 'Sign in with Yandex',
     orToken: 'or paste an OAuth token',
+    plusHint: 'Full tracks need a Yandex Plus subscription; without it you get 30-second previews.',
   },
   playlist: {
     yours: 'Your playlist',
