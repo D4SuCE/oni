@@ -150,6 +150,8 @@ export function SettingsView() {
           <kbd>Ctrl + L</kbd> <span>{s.like}</span>
           <kbd>Ctrl + F</kbd> <span>{s.search}</span>
           <kbd>Esc</kbd> <span>{s.collapse}</span>
+          <kbd>Alt + ← / →</kbd> <span>{s.backForward}</span>
+          <kbd>{s.mouseButtons}</kbd> <span>{s.backForward}</span>
         </div>
       </div>
 
