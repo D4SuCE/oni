@@ -264,6 +264,27 @@ await step('narrow (phone) layout renders', async () => {
   await win.evaluate((w) => w.setSize(1320, 840));
 });
 
+await step('live cover: Yandex cover video plays with the music', async () => {
+  const has = await page.evaluate(async () => {
+    const withVideo = (await window.__wave.api.chart()).filter((t) => t.backgroundVideoUri);
+    if (withVideo.length) await window.__wave.playTracks(withVideo, 0, 'e2e');
+    return withVideo.length;
+  });
+  if (!has) return console.log('       no chart track has a cover video today');
+  await waitPlaying(0.5);
+  await page.click('.pb-cover');
+  await page.waitForSelector('[data-testid="live-video"] video', { timeout: 5000 });
+  await page.waitForFunction(() => {
+    const v = document.querySelector('[data-testid="live-video"] video');
+    return v && !v.paused && v.currentTime > 0.5;
+  }, null, { timeout: 15000 });
+  await shot('14-live-cover');
+  await page.evaluate(() => window.__wave.audio.pause());
+  await page.waitForFunction(() => document.querySelector('[data-testid="live-video"] video')?.paused, null, { timeout: 5000 });
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.nowplaying', { state: 'detached' });
+});
+
 await step('history: this app and all devices', async () => {
   await page.click('[data-testid="nav-history"]');
   // Earlier steps played several tracks for longer than the 5 s that counts as a play.

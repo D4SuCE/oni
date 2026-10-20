@@ -32,6 +32,7 @@ export function trimTrack(t: Track): Track {
     contentWarning: t.contentWarning,
     r128: t.r128,
     lyricsInfo: t.lyricsInfo,
+    backgroundVideoUri: t.backgroundVideoUri,
   };
 }
 

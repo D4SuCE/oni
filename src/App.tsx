@@ -9,7 +9,7 @@ import { NowPlaying } from './components/NowPlaying.tsx';
 import { PlayerBar } from './components/PlayerBar.tsx';
 import { Sidebar } from './components/Sidebar.tsx';
 import { TuningPanel } from './components/Wave.tsx';
-import { audio, current, next, prev, restoreSession, setVolume, toggle, usePlayer } from './player/player.ts';
+import { audio, current, next, playTracks, prev, restoreSession, setVolume, toggle, usePlayer } from './player/player.ts';
 import { init, navigate, toggleLike, useApp } from './store.ts';
 import { AlbumView } from './views/Album.tsx';
 import { ArtistView } from './views/Artist.tsx';
@@ -169,4 +169,4 @@ export function App() {
 }
 
 // Handy for debugging and for the automated UI test.
-Object.assign(window, { __wave: { usePlayer, useApp, audio, api, navigate } });
+Object.assign(window, { __wave: { usePlayer, useApp, audio, api, navigate, playTracks } });

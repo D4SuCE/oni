@@ -9,6 +9,7 @@ import { dislike, useApp } from '../store.ts';
 import { cx, useAsync } from '../ui/util.ts';
 import { ArtistLinks, Cover, Spinner } from './Common.tsx';
 import { LikeButton, SeekBar, Transport } from './PlayerBar.tsx';
+import { BackgroundVideo, LiveCover, useCoverVideo } from './LiveCover.tsx';
 import { TrackList } from './TrackList.tsx';
 import { WaveStatsLine } from './Wave.tsx';
 
@@ -109,6 +110,7 @@ export function NowPlaying() {
   const track = usePlayer((s) => s.queue[s.index]);
   const isWave = usePlayer((s) => s.source?.kind === 'wave');
   const [tab, setTab] = useState<'queue' | 'lyrics' | 'similar'>('queue');
+  const video = useCoverVideo(track);
   const t = useT();
   const close = () => useApp.setState({ nowPlayingOpen: false });
   useEffect(() => {
@@ -122,14 +124,15 @@ export function NowPlaying() {
   }, [hasLyrics]);
 
   return (
-    <div className="nowplaying">
+    <div className={cx('nowplaying', video && 'has-video')}>
+      {video && <BackgroundVideo key={track?.id} src={video} poster={trackCover(track, 1000)} />}
       <div className="np-drag" />
       <button className="icon-btn np-close" onClick={close} title={t.nowPlaying.collapse}>
         <ChevronDown size={24} />
       </button>
       <div className="np-stage">
         <div className="np-art">
-          <Cover src={trackCover(track, 1000)} className="np-cover" />
+          <LiveCover track={track} className="np-cover" />
           {track && (
             <>
               <div className="np-meta">

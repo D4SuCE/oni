@@ -38,6 +38,8 @@ export interface Track {
   lyricsInfo?: { hasAvailableSyncLyrics?: boolean; hasAvailableTextLyrics?: boolean };
   r128?: { i: number; tp: number };
   derivedColors?: { average: string; waveText: string; miniPlayer: string; accent: string };
+  /** Short looping video Yandex shows instead of the cover for some tracks. */
+  backgroundVideoUri?: string;
 }
 
 export interface PlaylistTrackItem {

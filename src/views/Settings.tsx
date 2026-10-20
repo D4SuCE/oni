@@ -4,11 +4,13 @@ import { Segmented } from '../components/Wave.tsx';
 import { LANGS, setLang, useLang, useT } from '../i18n.ts';
 import { setNormalize, usePlayer } from '../player/player.ts';
 import { logout, useApp } from '../store.ts';
+import { setMotion, useMotion } from '../ui/motion.ts';
 
 export function SettingsView() {
   const account = useApp((s) => s.account);
   const normalize = usePlayer((s) => s.normalize);
   const lang = useLang((s) => s.lang);
+  const motion = useMotion((s) => s.enabled);
   const [closeToTray, setCloseToTrayState] = useState(() => window.wave?.shellPrefs?.().closeToTray ?? false);
   const t = useT();
   const s = t.settings;
@@ -37,6 +39,17 @@ export function SettingsView() {
           <div className="hint">{s.languageHint}</div>
           <Segmented options={LANGS} value={lang} onChange={setLang} />
         </div>
+      </div>
+
+      <div className="panel glass">
+        <h3>{s.appearance}</h3>
+        <label className="toggle-row">
+          <div>
+            <div>{s.liveCovers}</div>
+            <div className="hint">{s.liveCoversHint}</div>
+          </div>
+          <input type="checkbox" className="switch" checked={motion} onChange={(e) => setMotion(e.target.checked)} data-testid="live-covers" />
+        </label>
       </div>
 
       <div className="panel glass">
