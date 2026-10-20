@@ -1,5 +1,6 @@
-// Regenerates every app icon from src/assets/oni.svg: build/icon.png and build/icon.ico
-// (installer and exe), electron/assets/icon.png (window) and electron/assets/tray.ico.
+// Regenerates every app icon from the master artwork design/oni-icon-1024.png (any PNG or
+// SVG works): build/icon.png and build/icon.ico (installer and exe), electron/assets/icon.png
+// (window), electron/assets/tray.ico and src/assets/oni-mark.png (logo in the app).
 // Renders with the project's Electron, so it needs nothing else installed.
 // Run: npm run icons
 import { _electron as electron } from 'playwright-core';
@@ -8,7 +9,9 @@ import os from 'node:os';
 import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..');
-const svg = fs.readFileSync(path.join(root, 'src', 'assets', 'oni.svg'), 'utf8');
+const master = path.join(root, 'design', process.argv[2] || 'oni-icon-1024.png');
+const mime = master.endsWith('.svg') ? 'image/svg+xml' : 'image/png';
+const source = `data:${mime};base64,${fs.readFileSync(master).toString('base64')}`;
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wave-icons-'));
 const main = path.join(tmp, 'main.cjs');
@@ -21,13 +24,13 @@ app.whenReady().then(() => new BrowserWindow({ width: 1024, height: 1024, show: 
 const app = await electron.launch({ args: [main] });
 const page = await app.firstWindow();
 
-/** PNG bytes of the SVG drawn at size × size, downscaled by the browser from a 4× render for clean edges. */
+/** PNG bytes of the artwork drawn at size × size (the browser downscales it smoothly). */
 async function png(size) {
   const big = Math.min(size * 4, 1024);
   await page.setViewportSize({ width: size, height: size });
   await page.setContent(
     `<html><body style="margin:0;background:transparent">
-       <img src="data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}" width="${big}" height="${big}"
+       <img src="${source}" width="${big}" height="${big}"
             style="width:${size}px;height:${size}px;display:block">
      </body></html>`,
   );
@@ -67,7 +70,8 @@ fs.writeFileSync(out('build', 'icon.png'), await png(512));
 fs.writeFileSync(out('electron', 'assets', 'icon.png'), await png(256));
 fs.writeFileSync(out('build', 'icon.ico'), ico(await render([16, 24, 32, 48, 64, 128, 256])));
 fs.writeFileSync(out('electron', 'assets', 'tray.ico'), ico(await render([16, 20, 24, 32, 48, 64])));
+fs.writeFileSync(out('src', 'assets', 'oni-mark.png'), await png(128));
 
 await app.close();
 fs.rmSync(tmp, { recursive: true, force: true });
-console.log('icons written: build/icon.png, build/icon.ico, electron/assets/icon.png, electron/assets/tray.ico');
+console.log('icons written: build/icon.png, build/icon.ico, electron/assets/icon.png, electron/assets/tray.ico, src/assets/oni-mark.png');

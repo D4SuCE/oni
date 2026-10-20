@@ -259,7 +259,7 @@ html:not(.acrylic) .backdrop-tint {
   width: 26px;
   height: 26px;
   border-radius: 7px;
-  background: url('./assets/oni.svg') center / cover no-repeat;
+  background: url('./assets/oni-mark.png') center / cover no-repeat;
   box-shadow: 0 2px 10px rgba(226, 57, 47, 0.35);
 }
 .logo-mark.big {
