@@ -291,7 +291,8 @@ await step('sound settings: equalizer hears the music', async () => {
   await page.click('[data-testid="sound-button"]');
   await page.waitForSelector('[data-testid="sound-panel"]');
   await page.locator('[data-testid="eq-toggle"]').check();
-  await page.selectOption('[data-testid="eq-preset"]', 'bass');
+  await page.click('[data-testid="eq-preset"]');
+  await page.click('[data-testid="preset-bass"]');
   // A CORS-blocked stream would reach Web Audio as silence.
   await page.waitForFunction(() => (window.__wave.eqOutputLevel() ?? 0) > 0.005, null, { timeout: 10000 });
   await page.locator('[data-testid="eq-toggle"]').uncheck();
