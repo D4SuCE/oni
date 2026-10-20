@@ -4,6 +4,7 @@ import type {
   Album,
   Artist,
   ArtistInfo,
+  GenreTree,
   HistoryContext,
   HistoryDay,
   HistoryGroup,
@@ -103,7 +104,7 @@ export class YandexMusic {
   private transport: Transport;
   /** Sent as Accept-Language: Yandex localizes station, context and genre names by it. */
   language = 'ru';
-  private genreCache = new Map<string, Promise<Record<string, string>>>();
+  private genreCache = new Map<string, Promise<GenreTree>>();
 
   constructor(transport: Transport) {
     this.transport = transport;
@@ -361,25 +362,48 @@ export class YandexMusic {
 
   // -------------------------------------------------------------------- wave
 
-  /** Genre id → title in the current language (artist pages list genres by id). */
-  genreTitles(): Promise<Record<string, string>> {
+  /** Genre titles in the current language and each genre's top-level parent. */
+  genreTree(): Promise<GenreTree> {
     let cached = this.genreCache.get(this.language);
     if (!cached) {
       cached = this.call<any[]>('/genres').then((list) => {
-        const titles: Record<string, string> = {};
-        const walk = (gs: any[]) => {
+        const tree: GenreTree = { parent: {}, title: {} };
+        const walk = (gs: any[], top?: string) => {
           for (const g of gs || []) {
-            if (g.id && g.title) titles[g.id] = g.title;
-            walk(g.subGenres);
+            if (!g.id) continue;
+            if (g.title) tree.title[g.id] = g.title;
+            tree.parent[g.id] = top ?? g.id;
+            walk(g.subGenres, top ?? g.id);
           }
         };
         walk(list);
-        return titles;
+        return tree;
       });
       cached.catch(() => this.genreCache.delete(this.language));
       this.genreCache.set(this.language, cached);
     }
     return cached;
+  }
+
+  /** Genre id → title in the current language (artist pages list genres by id). */
+  async genreTitles(): Promise<Record<string, string>> {
+    return (await this.genreTree()).title;
+  }
+
+  /** The artist's own releases, newest first. */
+  async artistAlbums(id: number | string, pageSize = 6): Promise<Album[]> {
+    const r = await this.call<any>(`/artists/${id}/direct-albums`, { query: { page: 0, 'page-size': pageSize, 'sort-by': 'year' } });
+    return r.albums || [];
+  }
+
+  /** Yandex's own personal playlists (Playlist of the Day, Déjà vu, Premiere, …). */
+  async personalPlaylists(): Promise<Playlist[]> {
+    const r = await this.call<any>('/landing3', { query: { blocks: 'personalplaylists' } });
+    return (r.blocks || [])
+      .flatMap((b: any) => b.entities || [])
+      .filter((e: any) => e.data?.ready !== false)
+      .map((e: any) => e.data?.data)
+      .filter((p: any) => p?.kind !== undefined);
   }
 
   async waveContexts(): Promise<WaveContext[]> {

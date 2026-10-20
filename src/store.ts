@@ -15,6 +15,7 @@ export type Route =
   | { name: 'artist'; id: number | string }
   | { name: 'playlist'; uid: number | string; kind: number | string }
   | { name: 'history' }
+  | { name: 'mix'; id: string }
   | { name: 'settings' };
 
 export type LibraryTab = 'tracks' | 'playlists' | 'albums' | 'artists';
@@ -29,6 +30,8 @@ interface AppState {
   disliked: Set<string>;
   playlists: Playlist[];
   likedPlaylists: Playlist[];
+  /** Likes and playlists have been loaded at least once. */
+  libraryReady: boolean;
   toast: { id: number; text: string } | null;
   nowPlayingOpen: boolean;
   tuningOpen: boolean;
@@ -45,6 +48,7 @@ export const useApp = create<AppState>(() => ({
   disliked: new Set(),
   playlists: [],
   likedPlaylists: [],
+  libraryReady: false,
   toast: null,
   nowPlayingOpen: false,
   tuningOpen: false,
@@ -121,6 +125,7 @@ export async function refreshLibrary() {
     api.likedPlaylists().catch(() => get().likedPlaylists),
   ]);
   set({
+    libraryReady: true,
     likedPlaylists,
     likedKeys,
     liked: new Set(likedKeys.map((k) => k.split(':')[0])),

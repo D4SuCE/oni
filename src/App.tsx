@@ -16,6 +16,7 @@ import { ArtistView } from './views/Artist.tsx';
 import { HistoryView } from './views/History.tsx';
 import { Home } from './views/Home.tsx';
 import { Library } from './views/Library.tsx';
+import { MixView } from './views/Mix.tsx';
 import { Login } from './views/Login.tsx';
 import { PlaylistView } from './views/Playlist.tsx';
 import { Search } from './views/Search.tsx';
@@ -98,6 +99,9 @@ function Main() {
       break;
     case 'history':
       view = <HistoryView />;
+      break;
+    case 'mix':
+      view = <MixView id={route.id} />;
       break;
     case 'settings':
       view = <SettingsView />;

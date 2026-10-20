@@ -47,7 +47,7 @@ export function spreadArtists(tracks: Track[], gap = 3): Track[] {
 
 /** Runs fn over items with at most `limit` calls in flight; failed calls yield undefined. */
 export async function mapLimit<T, R>(items: T[], limit: number, fn: (x: T) => Promise<R>): Promise<(R | undefined)[]> {
-  const out: (R | undefined)[] = new Array(items.length);
+  const out: (R | undefined)[] = Array.from({ length: items.length });
   let next = 0;
   const worker = async () => {
     while (next < items.length) {

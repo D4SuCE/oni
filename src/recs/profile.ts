@@ -1,21 +1,16 @@
 // Taste profile: how much the user cares about each track, artist and genre,
 // from likes and from what they actually listen to (and skip) in this app.
 
-import type { Track } from '../api/types.ts';
-import type { HistoryEntry } from '../wave/history.ts';
+import type { GenreTree, Track } from '../api/types.ts';
 import { DAY, trackGenre } from './util.ts';
 
-export interface GenreTree {
-  /** Top-level genre for any genre or sub-genre id. */
-  parent: Record<string, string>;
-  title: Record<string, string>;
-}
+export type { GenreTree };
 
 export interface TasteInput {
   /** Liked tracks, newest like first. */
   liked: Track[];
-  /** Tracks from the local listening history, with their history entries. */
-  heard: { track: Track; entry: HistoryEntry }[];
+  /** Listening: this app's history (plays and skips) and Yandex's history from other devices (plays). */
+  heard: { track: Track; plays: number; skips: number; last: number }[];
   disliked: Set<string>;
   now: number;
 }
@@ -57,9 +52,8 @@ export function buildProfile(input: TasteInput, tree: GenreTree): Profile {
   // Newer likes say more about the current taste: weight goes from 3 (newest) to 1.5 (oldest).
   input.liked.forEach((t, i) => add(t, LIKE_WEIGHT * (1 - (0.5 * i) / Math.max(input.liked.length, 1)), true));
 
-  for (const { track, entry } of input.heard) {
-    const fresh = decay(input.now - entry.last);
-    add(track, (Math.min(entry.plays, MAX_COUNTED_PLAYS) * PLAY_WEIGHT - entry.skips * SKIP_WEIGHT) * fresh);
+  for (const { track, plays, skips, last } of input.heard) {
+    add(track, (Math.min(plays, MAX_COUNTED_PLAYS) * PLAY_WEIGHT - skips * SKIP_WEIGHT) * decay(input.now - last));
   }
   for (const [id, t] of tracks) if (t.weight <= 0) tracks.delete(id);
 

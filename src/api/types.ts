@@ -63,6 +63,12 @@ export interface Playlist {
   playlistUuid?: string;
 }
 
+export interface GenreTree {
+  /** Top-level genre for any genre or sub-genre id. */
+  parent: Record<string, string>;
+  title: Record<string, string>;
+}
+
 /** Where a stretch of listening happened, as Yandex's history groups it. */
 export type HistoryContext =
   | { type: 'wave'; seeds: string[]; title?: string }

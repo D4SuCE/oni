@@ -859,6 +859,90 @@ html:not(.acrylic) .backdrop-tint {
 .page-header-text {
   min-width: 0;
 }
+
+/* ------------------------------------------------------------- mix covers */
+
+.mix-art {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #3a2420, #1a1110);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.35);
+  isolation: isolate;
+}
+.mix-collage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+.mix-collage img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* the genre name on a dark band, like a hanging scroll label */
+.mix-art-title {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 26px 12px 10px;
+  background: linear-gradient(180deg, transparent, rgba(14, 8, 7, 0.88) 55%);
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--text);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+.mix-art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--gold-soft);
+  pointer-events: none;
+}
+.mix-art.branded.discover {
+  background: radial-gradient(90% 70% at 70% 20%, #ff6a52, var(--accent) 45%, #7a0f14);
+}
+.mix-art.branded.radar {
+  background: radial-gradient(90% 70% at 30% 20%, #f6d27a, #b8862e 40%, #2a1608 85%);
+}
+.mix-art.branded .mix-art-title {
+  background: none;
+  padding: 0 12px 12px;
+}
+.mix-seal {
+  position: absolute;
+  top: 10%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: var(--font-kanji);
+  font-size: 64px;
+  font-weight: 600;
+  line-height: 1;
+  color: rgba(255, 248, 238, 0.92);
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+}
+.mix-art.big .mix-art-title {
+  font-size: 26px;
+  padding-bottom: 16px;
+}
+.mix-art.big .mix-seal {
+  font-size: 96px;
+}
+.mix-cover {
+  overflow: visible;
+}
+.mix-cover .mix-art {
+  border-radius: 14px;
+}
 .kicker {
   font-size: 11.5px;
   font-weight: 700;

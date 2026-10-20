@@ -1,4 +1,8 @@
+import { RefreshCw } from 'lucide-react';
+import { useEffect } from 'react';
 import { api } from '../api/client.ts';
+import { MixCard, useGenreTitles } from '../components/Mixes.tsx';
+import { loadRecs, useRecs } from '../recs/index.ts';
 import { AlbumCard, ErrorBox, PlaylistCard, Section, Shelf, Spinner } from '../components/Common.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { WaveHero } from '../components/Wave.tsx';
@@ -10,6 +14,58 @@ import { useAsync } from '../ui/util.ts';
 async function playAlbum(id: number) {
   const a = await api.album(id);
   playTracks((a.volumes || []).flat(), 0, a.title, { album: a.id });
+}
+
+function ForYou() {
+  const t = useT();
+  const ready = useApp((s) => s.libraryReady);
+  const { status, mixes, personal } = useRecs();
+  const genres = useGenreTitles();
+  useEffect(() => {
+    if (ready) loadRecs();
+  }, [ready]);
+  return (
+    <>
+      <Section
+        title={t.recs.forYou}
+        action={
+          status === 'ready' && (
+            <button className="btn ghost small" onClick={() => loadRecs(true)} title={t.recs.refresh}>
+              <RefreshCw size={13} /> {t.recs.refresh}
+            </button>
+          )
+        }
+      >
+        {status === 'loading' || status === 'idle' ? (
+          <Spinner label={t.recs.building} />
+        ) : !mixes.length ? (
+          <div className="empty-hint">{t.recs.notEnough}</div>
+        ) : (
+          <Shelf>
+            {mixes.map((m) => (
+              <MixCard key={m.id} mix={m} genres={genres} />
+            ))}
+          </Shelf>
+        )}
+      </Section>
+      {personal.length > 0 && (
+        <Section title={t.recs.byYandex}>
+          <Shelf>
+            {personal.map((p) => (
+              <PlaylistCard
+                key={`${p.uid}-${p.kind}`}
+                playlist={p}
+                onPlay={async () => {
+                  const full = await api.playlist(p.uid, p.kind);
+                  playTracks((full.tracks || []).map((x) => x.track!).filter(Boolean), 0, p.title, { playlist: `${p.uid}:${p.kind}` });
+                }}
+              />
+            ))}
+          </Shelf>
+        </Section>
+      )}
+    </>
+  );
 }
 
 export function Home() {
@@ -27,6 +83,7 @@ export function Home() {
         {account ? `, ${account.displayName}` : ''}
       </div>
       <WaveHero />
+      <ForYou />
 
       {playlists.length > 0 && (
         <Section title={t.home.yourPlaylists}>
