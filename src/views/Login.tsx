@@ -12,7 +12,7 @@ export function Login() {
     <div className="login">
       <div className="login-card glass">
         <span className="logo-mark big" />
-        <h1>Wave</h1>
+        <h1>Oni</h1>
         <p className="muted">{t.login.tagline}</p>
         {transport.login && (
           <button

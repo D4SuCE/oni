@@ -15,7 +15,7 @@ let quitting = false;
 /** Last playback state reported by the page, including localized labels. */
 let state = { hasTrack: false, playing: false, title: '', artist: '', labels: {} };
 
-const FALLBACK_LABELS = { play: 'Play', pause: 'Pause', next: 'Next track', prev: 'Previous track', show: 'Show Wave', quit: 'Quit', nothing: 'Nothing playing' };
+const FALLBACK_LABELS = { play: 'Play', pause: 'Pause', next: 'Next track', prev: 'Previous track', show: 'Show Oni', quit: 'Quit', nothing: 'Nothing playing' };
 const label = (key) => state.labels?.[key] || FALLBACK_LABELS[key];
 
 function loadPrefs() {
@@ -81,7 +81,7 @@ function updateThumbar() {
 
 function updateTray() {
   if (!tray) return;
-  tray.setToolTip((playing() || 'Wave').slice(0, 127));
+  tray.setToolTip((playing() || 'Oni').slice(0, 127));
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: playing() || label('nothing'), enabled: false },
@@ -144,7 +144,7 @@ app.on('before-quit', () => {
 
 ipcMain.on('wave:playback', (_e, s) => {
   state = { ...state, ...s };
-  if (win && !win.isDestroyed()) win.setTitle(playing() || 'Wave');
+  if (win && !win.isDestroyed()) win.setTitle(playing() || 'Oni');
   updateThumbar();
   updateTray();
 });

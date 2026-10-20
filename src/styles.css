@@ -1239,7 +1239,8 @@ html:not(.acrylic) .backdrop-tint {
 }
 .drawer {
   position: absolute;
-  top: 10px;
+  /* below the window's minimize / maximize / close buttons (title bar overlay) */
+  top: calc(var(--titlebar) + 6px);
   right: 10px;
   bottom: 10px;
   width: min(440px, calc(100% - 20px));

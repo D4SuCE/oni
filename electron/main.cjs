@@ -6,7 +6,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const desktop = require('./desktop.cjs');
 
-if (process.env.WAVE_USER_DATA) app.setPath('userData', process.env.WAVE_USER_DATA);
+// The app was called Wave before it became Oni; keep its data folder so the sign-in,
+// history and settings survive the rename.
+app.setPath('userData', process.env.WAVE_USER_DATA || path.join(app.getPath('appData'), 'Wave'));
 // Automated UI test: silent, and the renderer won't send wave feedback to the real account.
 const TEST_MODE = process.env.WAVE_E2E === '1';
 if (TEST_MODE) app.commandLine.appendSwitch('mute-audio');
@@ -154,7 +156,7 @@ function createWindow() {
     ...desktop.windowBounds({ width: 1320, height: 840 }),
     minWidth: 960,
     minHeight: 620,
-    title: 'Wave',
+    title: 'Oni',
     show: false,
     backgroundColor: '#00000000',
     backgroundMaterial: 'acrylic',

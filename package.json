@@ -1,6 +1,6 @@
 {
   "name": "wave-player",
-  "productName": "Wave",
+  "productName": "Oni",
   "version": "0.1.0",
   "private": true,
   "description": "Неофициальный клиент Яндекс Музыки с собственным интерфейсом",
@@ -23,7 +23,7 @@
   },
   "build": {
     "appId": "local.wave.player",
-    "productName": "Wave",
+    "productName": "Oni",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -55,11 +55,11 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Wave",
-      "artifactName": "Wave-Setup-${version}.exe"
+      "shortcutName": "Oni",
+      "artifactName": "Oni-Setup-${version}.exe"
     },
     "portable": {
-      "artifactName": "Wave-${version}-portable.exe"
+      "artifactName": "Oni-${version}-portable.exe"
     }
   },
   "devDependencies": {
