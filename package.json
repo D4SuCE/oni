@@ -20,25 +20,43 @@
   "build": {
     "appId": "local.wave.player",
     "productName": "Wave",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
     "files": [
       "dist/**",
       "electron/**",
       "package.json"
     ],
     "win": {
-      "target": "nsis",
-      "icon": "build/icon.png"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Wave",
+      "artifactName": "Wave-Setup-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "Wave-${version}-portable.exe"
     }
-  },
-  "dependencies": {
-    "lucide-react": "^1.60.0",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",
@@ -46,8 +64,13 @@
     "@vitejs/plugin-react": "^6.1.2",
     "electron": "^44.9.1",
     "electron-builder": "^26.15.3",
+    "lucide-react": "^1.60.0",
     "playwright-core": "^1.64.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "typescript": "^7.0.2",
-    "vite": "^8.3.4"
-  }
+    "vite": "^8.3.4",
+    "zustand": "^5.0.15"
+  },
+  "author": "D4SuCE"
 }

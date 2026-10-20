@@ -10,6 +10,9 @@ if (process.env.WAVE_USER_DATA) app.setPath('userData', process.env.WAVE_USER_DA
 const TEST_MODE = process.env.WAVE_E2E === '1';
 if (TEST_MODE) app.commandLine.appendSwitch('mute-audio');
 
+// Must match build.appId so the taskbar ties the window to the installed shortcut.
+if (process.platform === 'win32') app.setAppUserModelId('local.wave.player');
+
 const OAUTH_CLIENT_ID = '23cabbbdc6cd418abb4b39c32c41195d'; // official Yandex Music client
 const DEFAULT_CLIENT = 'YandexMusicAndroid/24023621';
 
