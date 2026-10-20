@@ -71,6 +71,8 @@ const ru = {
     library: 'Коллекция',
     history: 'История',
     settings: 'Настройки',
+    expand: 'Развернуть меню',
+    collapse: 'Свернуть меню',
   },
   recs: {
     forYou: 'Для вас',
@@ -337,6 +339,8 @@ const en: Dict = {
     library: 'Library',
     history: 'History',
     settings: 'Settings',
+    expand: 'Expand menu',
+    collapse: 'Collapse menu',
   },
   recs: {
     forYou: 'Made for you',

@@ -1,4 +1,5 @@
-import { ChevronLeft, Heart, History, Home, Library, ListMusic, Plus, Search, Settings } from 'lucide-react';
+import { ChevronLeft, Heart, History, Home, Library, ListMusic, Menu, Plus, Search, Settings } from 'lucide-react';
+import { create } from 'zustand';
 import { useT } from '../i18n.ts';
 import { back, createPlaylist, isOwn, navigate, samePlaylist, useApp, type Route } from '../store.ts';
 import { cx } from '../ui/util.ts';
@@ -10,44 +11,80 @@ const NAV: { route: Route & { name: 'home' | 'search' | 'library' }; icon: typeo
   { route: { name: 'library' }, icon: Library },
 ];
 
+const KEY = 'ui.sidebar.open';
+const stored = () => {
+  try {
+    return localStorage.getItem(KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+/** Collapsed (icons only) by default; ☰ opens the labels. Remembered between runs. */
+export const useSidebar = create<{ open: boolean }>(() => ({ open: stored() }));
+
+function toggleSidebar() {
+  const open = !useSidebar.getState().open;
+  useSidebar.setState({ open });
+  try {
+    localStorage.setItem(KEY, open ? '1' : '0');
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 export function Sidebar() {
   const route = useApp((s) => s.route);
   const canBack = useApp((s) => s.backStack.length > 0);
   const playlists = useApp((s) => s.playlists);
   const likedPlaylists = useApp((s) => s.likedPlaylists);
+  const open = useSidebar((s) => s.open);
   const own = playlists.filter((p) => isOwn(p));
   const t = useT();
   const isActive = (r: Route) => route.name === r.name && !(r.name === 'library' && route.name === 'library' && route.tab === 'tracks');
+  // Collapsed, the labels are hidden: show them as tooltips instead.
+  const tip = (label: string) => (open ? undefined : label);
 
   return (
-    <nav className="sidebar">
+    <nav className={cx('sidebar', !open && 'collapsed')}>
       <div className="sidebar-top drag">
-        <button className="icon-btn no-drag" onClick={back} disabled={!canBack} title={t.common.back}>
+        <button className="logo no-drag" onClick={() => navigate({ name: 'home' })} title={t.nav.home} data-testid="logo">
+          <span className="logo-mark" />
+          <span className="logo-name nav-label">ONI</span>
+          <span className="logo-kanji nav-label">鬼</span>
+        </button>
+      </div>
+      <div className="sidebar-tools no-drag">
+        <button className="icon-btn" onClick={toggleSidebar} title={open ? t.nav.collapse : t.nav.expand} data-testid="sidebar-toggle">
+          <Menu size={19} />
+        </button>
+        <button className="icon-btn" onClick={back} disabled={!canBack} title={t.common.back} data-testid="back">
           <ChevronLeft size={20} />
         </button>
-        <div className="logo">
-          <span className="logo-mark" />
-          Wave
-        </div>
       </div>
       <div className="nav">
         {NAV.map(({ route: r, icon: Icon }) => (
-          <button key={r.name} className={cx('nav-item', isActive(r) && 'active')} onClick={() => navigate(r)} data-testid={`nav-${r.name}`}>
+          <button key={r.name} className={cx('nav-item', isActive(r) && 'active')} onClick={() => navigate(r)} data-testid={`nav-${r.name}`} title={tip(t.nav[r.name])}>
             <Icon size={19} />
-            {t.nav[r.name]}
+            <span className="nav-label">{t.nav[r.name]}</span>
           </button>
         ))}
-        <button className={cx('nav-item', route.name === 'library' && route.tab === 'tracks' && 'active')} onClick={() => navigate({ name: 'library', tab: 'tracks' })} data-testid="nav-liked">
+        <button
+          className={cx('nav-item', route.name === 'library' && route.tab === 'tracks' && 'active')}
+          onClick={() => navigate({ name: 'library', tab: 'tracks' })}
+          data-testid="nav-liked"
+          title={tip(t.common.liked)}
+        >
           <Heart size={19} />
-          {t.common.liked}
+          <span className="nav-label">{t.common.liked}</span>
         </button>
-        <button className={cx('nav-item', route.name === 'history' && 'active')} onClick={() => navigate({ name: 'history' })} data-testid="nav-history">
+        <button className={cx('nav-item', route.name === 'history' && 'active')} onClick={() => navigate({ name: 'history' })} data-testid="nav-history" title={tip(t.nav.history)}>
           <History size={19} />
-          {t.nav.history}
+          <span className="nav-label">{t.nav.history}</span>
         </button>
       </div>
       <div className="nav-section">
-        <span>{t.common.playlists}</span>
+        <span className="nav-label">{t.common.playlists}</span>
         <button
           className="icon-btn small"
           title={t.common.newPlaylist}
@@ -71,16 +108,16 @@ export function Sidebar() {
             title={isOwn(p) ? p.title : `${p.title} · ${p.owner?.name || p.owner?.login || ''}`}
           >
             <ListMusic size={16} />
-            <span className="ellipsis">
+            <span className="ellipsis nav-label">
               {p.title}
               {!isOwn(p) && <span className="nav-owner"> · {p.owner?.name || p.owner?.login}</span>}
             </span>
           </button>
         ))}
       </div>
-      <button className={cx('nav-item', route.name === 'settings' && 'active')} onClick={() => navigate({ name: 'settings' })}>
+      <button className={cx('nav-item', route.name === 'settings' && 'active')} onClick={() => navigate({ name: 'settings' })} title={tip(t.nav.settings)}>
         <Settings size={19} />
-        {t.nav.settings}
+        <span className="nav-label">{t.nav.settings}</span>
       </button>
     </nav>
   );

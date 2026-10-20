@@ -17,7 +17,9 @@
   --sidebar: 248px;
   --titlebar: 44px;
   --font: 'Zen Kaku Gothic New', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
-  --font-display: 'Noto Serif Display', 'Yu Mincho', Georgia, serif;
+  --font-display: 'Montserrat', 'Segoe UI', system-ui, sans-serif;
+  --font-wide: 'Montserrat', 'Segoe UI', system-ui, sans-serif;
+  --font-brush: 'Oni Brush', 'Yu Mincho', serif;
   --font-kanji: 'Yu Mincho', 'MS Mincho', serif;
   color-scheme: dark;
 }
@@ -141,6 +143,13 @@ img {
     opacity: 0.55;
   }
 }
+/* sakura, ink splashes and gold streaks over the whole window (scripts/backdrop.py) */
+.backdrop-art {
+  position: absolute;
+  inset: 0;
+  background: url('./assets/backdrop.svg') center / cover no-repeat;
+  opacity: 0.85;
+}
 .backdrop-tint {
   position: absolute;
   inset: 0;
@@ -209,11 +218,12 @@ html:not(.acrylic) .backdrop-tint {
 .page-title {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-family: var(--font-display);
-  font-size: 34px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  gap: 14px;
+  font-family: var(--font-wide);
+  font-size: 30px;
+  font-weight: 300;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
   margin: 0 0 22px;
 }
 
@@ -227,7 +237,10 @@ html:not(.acrylic) .backdrop-tint {
   padding: 0 12px 12px;
   min-height: 0;
   border-right: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.02);
+  /* dark glass: the sakura backdrop shows through */
+  background: rgba(10, 6, 5, 0.55);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
 }
 .sidebar-top {
   height: var(--titlebar);
@@ -240,25 +253,32 @@ html:not(.acrylic) .backdrop-tint {
 .logo {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 19px;
-  letter-spacing: 0.04em;
+  gap: 12px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
 }
-/* 波 (nami, "wave") in gold after the name */
-.logo::after {
-  content: '波';
-  margin-left: -4px;
-  font-family: var(--font-kanji);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--gold);
+.logo-name {
+  font-family: var(--font-wide);
+  font-weight: 400;
+  font-size: 17px;
+  letter-spacing: 0.42em;
+}
+/* 鬼 (oni) in vermilion after the name */
+.logo-kanji {
+  margin-left: -6px;
+  font-family: var(--font-brush);
+  font-size: 22px;
+  line-height: 1;
+  color: var(--accent);
 }
 .logo-mark {
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 9px;
   background: url('./assets/oni-mark.png') center / cover no-repeat;
   box-shadow: 0 2px 10px rgba(226, 57, 47, 0.35);
 }
@@ -269,6 +289,50 @@ html:not(.acrylic) .backdrop-tint {
   display: block;
   margin: 0 auto 10px;
   box-shadow: 0 10px 34px rgba(226, 57, 47, 0.35);
+}
+
+.sidebar-tools {
+  display: flex;
+  gap: 2px;
+  margin: -4px 0 8px 2px;
+}
+
+/* Collapsed sidebar: icons only, labels come back as tooltips. */
+@media (min-width: 761px) {
+  .app-root.sidebar-collapsed {
+    --sidebar: 76px;
+  }
+}
+.shell {
+  transition: grid-template-columns 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.sidebar.collapsed {
+  align-items: center;
+  padding: 0 10px 12px;
+}
+.sidebar.collapsed .nav-label {
+  display: none;
+}
+.sidebar.collapsed .sidebar-tools {
+  flex-direction: column;
+  align-items: center;
+  margin: -4px 0 8px;
+}
+.sidebar.collapsed .nav,
+.sidebar.collapsed .nav-playlists {
+  align-items: center;
+}
+.sidebar.collapsed .nav-item {
+  width: 48px;
+  justify-content: center;
+  padding: 0;
+}
+.sidebar.collapsed .nav-item.small {
+  width: 40px;
+}
+.sidebar.collapsed .nav-section {
+  justify-content: center;
+  padding: 14px 0 6px;
 }
 
 .nav {
@@ -567,7 +631,24 @@ html:not(.acrylic) .backdrop-tint {
 
 /* ------------------------------------------------------------ playerbar */
 
+/* red and gold brush streaks across the player, as in the mockup */
+.playerbar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(112deg, transparent 18%, rgba(179, 23, 27, 0.32) 19%, rgba(179, 23, 27, 0.08) 30%, transparent 31%),
+    linear-gradient(112deg, transparent 44%, rgba(201, 151, 62, 0.22) 44.6%, transparent 46%),
+    linear-gradient(112deg, transparent 63%, rgba(179, 23, 27, 0.28) 64%, rgba(179, 23, 27, 0.06) 74%, transparent 75%),
+    linear-gradient(112deg, transparent 81%, rgba(201, 151, 62, 0.18) 81.5%, transparent 82.6%);
+}
 .playerbar {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 1.3fr) minmax(0, 1fr);
@@ -732,18 +813,19 @@ html:not(.acrylic) .backdrop-tint {
 }
 .section-head h2 {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: 23px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  font-family: var(--font-wide);
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
 }
 /* a short vermilion brush stroke before each section title */
 .section-head h2::before {
   content: '';
   display: inline-block;
   width: 4px;
-  height: 0.82em;
-  margin-right: 11px;
+  height: 1.1em;
+  margin-right: 16px;
   border-radius: 2px;
   background: linear-gradient(180deg, var(--accent-hi), var(--accent) 70%, #9c1a14);
   vertical-align: -0.06em;
@@ -883,6 +965,15 @@ html:not(.acrylic) .backdrop-tint {
   height: 100%;
   object-fit: cover;
   display: block;
+  /* red-and-black duotone: grayscale, then vermilion multiplied over it */
+  filter: grayscale(1) contrast(1.25) brightness(0.95);
+}
+.mix-collage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, #e2392f, #8f1410 70%);
+  mix-blend-mode: multiply;
 }
 /* the genre name on a dark band, like a hanging scroll label */
 .mix-art-title {
@@ -908,34 +999,34 @@ html:not(.acrylic) .backdrop-tint {
   pointer-events: none;
 }
 .mix-art.branded.discover {
-  background: radial-gradient(90% 70% at 70% 20%, #ff6a52, var(--accent) 45%, #7a0f14);
+  background: url('./assets/hero-mask.jpg') 60% 30% / 120% no-repeat, #0d0706;
 }
 .mix-art.branded.radar {
-  background: radial-gradient(90% 70% at 30% 20%, #f6d27a, #b8862e 40%, #2a1608 85%);
+  background: radial-gradient(circle at 62% 42%, #f04a3e 0, #b81d18 24%, transparent 25%), linear-gradient(180deg, #3a3330, #120c0b 75%);
 }
 .mix-art.branded .mix-art-title {
-  background: none;
-  padding: 0 12px 12px;
+  padding: 26px 12px 10px;
 }
 .mix-seal {
   position: absolute;
-  top: 10%;
-  left: 0;
-  right: 0;
-  text-align: center;
-  font-family: var(--font-kanji);
-  font-size: 64px;
-  font-weight: 600;
-  line-height: 1;
-  color: rgba(255, 248, 238, 0.92);
-  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+  top: 9px;
+  left: 11px;
+  writing-mode: vertical-rl;
+  font-family: var(--font-brush);
+  font-size: 30px;
+  line-height: 1.05;
+  color: #fff8ee;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+  z-index: 1;
 }
 .mix-art.big .mix-art-title {
   font-size: 26px;
   padding-bottom: 16px;
 }
 .mix-art.big .mix-seal {
-  font-size: 96px;
+  top: 14px;
+  left: 16px;
+  font-size: 46px;
 }
 .mix-cover {
   overflow: visible;
@@ -944,18 +1035,19 @@ html:not(.acrylic) .backdrop-tint {
   border-radius: 14px;
 }
 .kicker {
+  font-family: var(--font-wide);
   font-size: 11.5px;
-  font-weight: 700;
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: var(--gold);
+  letter-spacing: 0.32em;
+  color: var(--text-2);
 }
 .page-header h1 {
   margin: 8px 0 10px;
   font-family: var(--font-display);
-  font-size: clamp(30px, 4.2vw, 58px);
-  font-weight: 800;
-  letter-spacing: 0;
+  font-size: clamp(30px, 4.2vw, 56px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
   line-height: 1.02;
   overflow: hidden;
   display: -webkit-box;
@@ -1114,31 +1206,69 @@ html:not(.acrylic) .backdrop-tint {
   background: rgba(22, 10, 9, 0.5);
   isolation: isolate;
 }
-/* seigaiha, the classic overlapping-waves pattern */
-.wave-hero::before {
+/* right side: red sun, ink landscape with a torii, the oni mask fading into the card */
+.wave-art {
+  position: absolute;
+  inset: 0 0 0 38%;
+  z-index: -1;
+  pointer-events: none;
+}
+.wave-sun {
+  position: absolute;
+  right: 26%;
+  top: 50%;
+  width: 62%;
+  aspect-ratio: 1;
+  transform: translateY(-55%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #f04a3e, #b81d18 55%, #6e0d0b);
+  opacity: 0.85;
+  filter: saturate(1.1);
+}
+.wave-land {
+  position: absolute;
+  inset: auto 0 0 0;
+  width: 100%;
+  height: 70%;
+}
+.wave-mask {
+  position: absolute;
+  right: 10%;
+  top: -6%;
+  width: 46%;
+  aspect-ratio: 1;
+  background: url('./assets/hero-mask.jpg') center / cover no-repeat;
+  -webkit-mask-image: radial-gradient(closest-side, #000 62%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 62%, transparent 100%);
+}
+.wave-kanji {
+  position: absolute;
+  right: 3.2%;
+  top: 9%;
+  font-family: var(--font-brush);
+  font-size: 74px;
+  line-height: 1;
+  color: var(--accent);
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+}
+.wave-motto {
+  position: absolute;
+  right: 4.4%;
+  top: 40%;
+  writing-mode: vertical-rl;
+  font-family: var(--font-brush);
+  font-size: 20px;
+  letter-spacing: 0.16em;
+  color: var(--text);
+  opacity: 0.9;
+}
+.wave-hero::after {
   content: '';
   position: absolute;
   inset: 0;
   z-index: -1;
-  opacity: 0.11;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='40' viewBox='0 0 80 40'%3E%3Cg fill='none' stroke='%23f3d58a' stroke-width='1.6'%3E%3Cg id='a'%3E%3Ccircle cx='40' cy='40' r='38'/%3E%3Ccircle cx='40' cy='40' r='30'/%3E%3Ccircle cx='40' cy='40' r='22'/%3E%3Ccircle cx='40' cy='40' r='14'/%3E%3C/g%3E%3Cuse href='%23a' x='-40' y='-20'/%3E%3Cuse href='%23a' x='40' y='-20'/%3E%3Cuse href='%23a' x='-40' y='20'/%3E%3Cuse href='%23a' x='40' y='20'/%3E%3C/g%3E%3C/svg%3E");
-  background-size: 80px 40px;
-  -webkit-mask-image: linear-gradient(100deg, transparent 25%, #000 85%);
-  mask-image: linear-gradient(100deg, transparent 25%, #000 85%);
-}
-/* 波 ("wave") as a large ink watermark */
-.wave-hero::after {
-  content: '波';
-  position: absolute;
-  right: 5%;
-  top: 50%;
-  z-index: -1;
-  transform: translateY(-52%);
-  font-family: var(--font-kanji);
-  font-size: 250px;
-  font-weight: 600;
-  line-height: 1;
-  color: rgba(246, 225, 200, 0.07);
+  /* keep the left half dark enough for the title */
+  background: linear-gradient(90deg, rgba(14, 8, 7, 0.92) 30%, rgba(14, 8, 7, 0.35) 62%, transparent 85%);
   pointer-events: none;
 }
 .wave-blobs {
@@ -1193,17 +1323,24 @@ html:not(.acrylic) .backdrop-tint {
   padding: 44px 44px 36px;
 }
 .wave-content h1 {
-  margin: 10px 0 8px;
-  font-family: var(--font-display);
-  font-size: clamp(40px, 5.5vw, 70px);
-  font-weight: 800;
-  letter-spacing: 0.01em;
+  margin: 14px 0 12px;
+  font-family: var(--font-wide);
+  font-size: clamp(40px, 5.2vw, 66px);
+  font-weight: 300;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   line-height: 1;
 }
 .wave-desc {
   margin: 0;
+  max-width: 440px;
   color: var(--text-2);
-  font-size: 15px;
+  font-family: var(--font-wide);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.8;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
 }
 .wave-actions {
   display: flex;
@@ -1263,9 +1400,11 @@ html:not(.acrylic) .backdrop-tint {
 }
 .drawer-head h2 {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: 23px;
-  font-weight: 700;
+  font-family: var(--font-wide);
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
 }
 .drawer-group {
   margin-top: 22px;
@@ -1529,7 +1668,7 @@ html.motion .backdrop-img {
   margin: 0;
   font-family: var(--font-display);
   font-size: 30px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1824,7 +1963,7 @@ html.motion .backdrop-img {
   margin: 6px 0 4px;
   font-family: var(--font-display);
   font-size: 28px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 0;
 }
 
@@ -1973,10 +2112,11 @@ kbd {
 }
 .login-card h1 {
   margin: 8px 0 6px;
-  font-family: var(--font-display);
-  font-size: 38px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
+  font-family: var(--font-wide);
+  font-size: 34px;
+  font-weight: 300;
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
 }
 .login-card p {
   margin: 0 0 24px;

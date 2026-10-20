@@ -166,7 +166,7 @@ await step('artist radio and similar tracks', async () => {
 });
 
 await step('back navigation', async () => {
-  await page.click('.sidebar-top .icon-btn');
+  await page.click('[data-testid="back"]');
   await page.waitForSelector('.page-header .page-cover:not(.round)');
 });
 

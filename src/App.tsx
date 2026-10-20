@@ -7,7 +7,8 @@ import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { MenuHost } from './components/Menu.tsx';
 import { NowPlaying } from './components/NowPlaying.tsx';
 import { PlayerBar } from './components/PlayerBar.tsx';
-import { Sidebar } from './components/Sidebar.tsx';
+import { Sidebar, useSidebar } from './components/Sidebar.tsx';
+import { cx } from './ui/util.ts';
 import { TuningPanel } from './components/Wave.tsx';
 import { audio, current, next, playTracks, prev, restoreSession, setVolume, toggle, usePlayer } from './player/player.ts';
 import { init, navigate, toggleLike, useApp } from './store.ts';
@@ -40,6 +41,7 @@ function Backdrop() {
         <div key={l.id} className="backdrop-img" style={{ backgroundImage: `url("${l.url}")` }} />
       ))}
       <div className="backdrop-tint" />
+      <div className="backdrop-art" />
     </div>
   );
 }
@@ -122,6 +124,7 @@ export function App() {
   const nowPlaying = useApp((s) => s.nowPlayingOpen);
   const tuning = useApp((s) => s.tuningOpen);
   const toastMsg = useApp((s) => s.toast);
+  const sidebarOpen = useSidebar((s) => s.open);
   const error = usePlayer((s) => s.error);
   useShortcuts();
 
@@ -135,7 +138,7 @@ export function App() {
   }, [error]);
 
   return (
-    <div className="app-root" data-platform={window.wave?.platform}>
+    <div className={cx('app-root', !sidebarOpen && 'sidebar-collapsed')} data-platform={window.wave?.platform}>
       <Backdrop />
       {auth === 'loading' && (
         <div className="center-fill drag">

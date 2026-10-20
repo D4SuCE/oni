@@ -19,7 +19,8 @@
     "lint": "oxlint",
     "check": "npm run typecheck && npm run lint && npm run test:wave && npm run test:recs",
     "icons": "node scripts/icons.mjs",
-    "test:recs": "node --experimental-strip-types tests/recs.test.ts"
+    "test:recs": "node --experimental-strip-types tests/recs.test.ts",
+    "brush-font": "python scripts/brush-font.py node_modules/@fontsource/yuji-boku"
   },
   "build": {
     "appId": "local.wave.player",
@@ -63,7 +64,8 @@
     }
   },
   "devDependencies": {
-    "@fontsource/noto-serif-display": "^5.3.0",
+    "@fontsource/montserrat": "^5.3.0",
+    "@fontsource/yuji-boku": "^5.3.1",
     "@fontsource/zen-kaku-gothic-new": "^5.3.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

@@ -21,27 +21,53 @@ export function mixTitle(mix: Mix, genres: Record<string, string>) {
 
 export const mixSubtitle = (mix: Mix) => tr().recs.andMore(mix.artists.slice(0, 2).join(', '));
 
-/** Kanji on the branded covers: 発見 "discovery", 新作 "new works". */
-const SEAL: Record<string, string> = { discover: '発見', radar: '新作' };
+/**
+ * Brush seals on the covers (the glyphs must be in src/assets/brush.woff2 — scripts/brush-font.py).
+ * 発見 discovery, 新作 new works; genres: 和風 rap (as in the mockup), 電子 electronic, 代替
+ * alternative, 人気 pop, 激音 rock, 鋼鉄 metal, 舞踏 dance, 独立 indie, 民謡 folk, 映画 soundtrack,
+ * 古典 classical, 魂歌 R&B, 歌謡 estrada, 反逆 punk, 即興 jazz, 哀歌 blues, 太陽 reggae, 日本 J-pop.
+ */
+const SEALS: Record<string, string> = {
+  discover: '発見',
+  radar: '新作',
+  rap: '和風',
+  rusrap: '和風',
+  foreignrap: '和風',
+  electronics: '電子',
+  alternative: '代替',
+  pop: '人気',
+  ruspop: '人気',
+  allrock: '激音',
+  rock: '激音',
+  metal: '鋼鉄',
+  dance: '舞踏',
+  indie: '独立',
+  folk: '民謡',
+  soundtrack: '映画',
+  classicalmusic: '古典',
+  rnb: '魂歌',
+  estrada: '歌謡',
+  punk: '反逆',
+  jazz: '即興',
+  blues: '哀歌',
+  reggae: '太陽',
+  japanesepop: '日本',
+};
+const seal = (mix: Mix) => SEALS[mix.kind === 'mix' ? (mix.genre ?? '') : mix.kind] ?? '音楽';
 
-/** Cover art: branded for the weekly lists, a 2×2 collage with the genre for taste mixes. */
+/** Cover art with a brush seal: the oni for discoveries, a red sun for the radar, a duotone collage for mixes. */
 export function MixArt({ mix, title, big }: { mix: Mix; title: string; big?: boolean }) {
-  if (mix.kind !== 'mix') {
-    return (
-      <div className={cx('mix-art', 'branded', mix.kind, big && 'big')}>
-        <span className="mix-seal">{SEAL[mix.kind]}</span>
-        <span className="mix-art-title">{title}</span>
-      </div>
-    );
-  }
   const covers = [...mix.covers, ...mix.covers, ...mix.covers, ...mix.covers].slice(0, 4);
   return (
-    <div className={cx('mix-art', big && 'big')}>
-      <div className="mix-collage">
-        {covers.map((c, i) => (
-          <img key={i} src={c} alt="" loading="lazy" draggable={false} />
-        ))}
-      </div>
+    <div className={cx('mix-art', mix.kind !== 'mix' && 'branded', mix.kind, big && 'big')}>
+      {mix.kind === 'mix' && (
+        <div className="mix-collage">
+          {covers.map((c, i) => (
+            <img key={i} src={c} alt="" loading="lazy" draggable={false} />
+          ))}
+        </div>
+      )}
+      <span className="mix-seal">{seal(mix)}</span>
       <span className="mix-art-title">{title}</span>
     </div>
   );
