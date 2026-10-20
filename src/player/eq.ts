@@ -10,9 +10,11 @@ import { audio } from './player.ts';
 export const EQ_BANDS = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000];
 export const EQ_RANGE = 12;
 
-export type EqPreset = 'flat' | 'bass' | 'treble' | 'rock' | 'pop' | 'electronic' | 'hiphop' | 'vocal' | 'classical' | 'jazz';
+export type EqPreset = 'mine' | 'flat' | 'bass' | 'treble' | 'rock' | 'pop' | 'electronic' | 'hiphop' | 'vocal' | 'classical' | 'jazz';
 
 export const EQ_PRESETS: Record<EqPreset, number[]> = {
+  // the user's own curve from the official app: warm lows, a dip around 600 Hz, bright highs
+  mine: [6, 5, 2, -2, -1, 1, 1.5, 5.5, 7.5, 7.5],
   flat: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   bass: [7, 6, 4, 2, 0, 0, 0, 0, 0, 0],
   treble: [0, 0, 0, 0, 0, 1, 3, 5, 6, 7],
@@ -35,7 +37,7 @@ interface EqState {
 }
 
 const KEY = 'player.eq';
-export const useEq = create<EqState>(() => loadJson<EqState>(KEY, { enabled: false, preamp: 0, gains: [...EQ_PRESETS.flat], preset: 'flat' }));
+export const useEq = create<EqState>(() => loadJson<EqState>(KEY, { enabled: false, preamp: 0, gains: [...EQ_PRESETS.mine], preset: 'mine' }));
 
 let ctx: AudioContext | null = null;
 let preamp: GainNode | null = null;

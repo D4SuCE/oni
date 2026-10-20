@@ -290,6 +290,7 @@ const ru = {
     db: 'дБ',
     custom: 'Свои настройки',
     presets: {
+      mine: 'Мой',
       flat: 'Без обработки',
       bass: 'Басы',
       treble: 'Высокие',
@@ -300,7 +301,7 @@ const ru = {
       vocal: 'Голос',
       classical: 'Классика',
       jazz: 'Джаз',
-    } as Record<'flat' | 'bass' | 'treble' | 'rock' | 'pop' | 'electronic' | 'hiphop' | 'vocal' | 'classical' | 'jazz', string>,
+    } as Record<'mine' | 'flat' | 'bass' | 'treble' | 'rock' | 'pop' | 'electronic' | 'hiphop' | 'vocal' | 'classical' | 'jazz', string>,
   },
   shell: {
     show: 'Показать Oni',
@@ -586,6 +587,7 @@ const en: Dict = {
     db: 'dB',
     custom: 'Custom settings',
     presets: {
+      mine: 'Mine',
       flat: 'Flat',
       bass: 'Bass boost',
       treble: 'Treble boost',
