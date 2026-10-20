@@ -63,6 +63,25 @@ export interface Playlist {
   playlistUuid?: string;
 }
 
+/** Where a stretch of listening happened, as Yandex's history groups it. */
+export type HistoryContext =
+  | { type: 'wave'; seeds: string[]; title?: string }
+  | { type: 'playlist'; uid: number; kind: number; title?: string }
+  | { type: 'album'; id: number; title?: string }
+  | { type: 'artist'; id: number; title?: string }
+  | { type: 'other' };
+
+export interface HistoryGroup {
+  context: HistoryContext;
+  tracks: Track[];
+}
+
+export interface HistoryDay {
+  /** YYYY-MM-DD */
+  date: string;
+  groups: HistoryGroup[];
+}
+
 export interface Account {
   uid: number;
   login: string;

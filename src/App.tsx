@@ -13,6 +13,7 @@ import { audio, current, next, prev, restoreSession, setVolume, toggle, usePlaye
 import { init, navigate, toggleLike, useApp } from './store.ts';
 import { AlbumView } from './views/Album.tsx';
 import { ArtistView } from './views/Artist.tsx';
+import { HistoryView } from './views/History.tsx';
 import { Home } from './views/Home.tsx';
 import { Library } from './views/Library.tsx';
 import { Login } from './views/Login.tsx';
@@ -105,6 +106,9 @@ function Main() {
       break;
     case 'playlist':
       view = <PlaylistView uid={route.uid} kind={route.kind} />;
+      break;
+    case 'history':
+      view = <HistoryView />;
       break;
     case 'settings':
       view = <SettingsView />;

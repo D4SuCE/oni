@@ -264,6 +264,18 @@ await step('narrow (phone) layout renders', async () => {
   await win.evaluate((w) => w.setSize(1320, 840));
 });
 
+await step('history: this app and all devices', async () => {
+  await page.click('[data-testid="nav-history"]');
+  // Earlier steps played several tracks for longer than the 5 s that counts as a play.
+  await page.waitForSelector('.history-group .track-row', { timeout: 10000 });
+  const local = await page.locator('.history-group').count();
+  await page.click('[data-testid="history-yandex"]');
+  await page.waitForSelector('.history-group .track-row, .empty-hint, .error-box', { timeout: 30000 });
+  if (await page.locator('.error-box').count()) throw new Error(await page.locator('.error-box').innerText());
+  console.log(`       in this app: ${local} groups; from Yandex: ${await page.locator('.history-group .track-row').count()} tracks`);
+  await shot('13-history');
+});
+
 await step('english interface has no Russian left', async () => {
   // Only the app's own chrome: titles, tabs, buttons, tooltips. Yandex data stays as it is.
   const CHROME = [
@@ -286,6 +298,7 @@ await step('english interface has no Russian left', async () => {
     ['home', '.wave-hero'],
     ['search', '[data-testid="search-input"]'],
     ['library', '[data-testid="liked-card"]'],
+    ['history', '[data-testid="history-app"]'],
     ['liked', '.track-row, .empty-hint'],
   ]) {
     if (nav !== 'settings') await page.click(`[data-testid="nav-${nav}"]`);

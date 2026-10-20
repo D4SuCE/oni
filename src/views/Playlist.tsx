@@ -22,6 +22,7 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
   if (error || !pl) return <ErrorBox error={error} onRetry={reload} />;
   const tracks = (pl.tracks || []).map((x) => x.track!).filter(Boolean);
   const own = isOwn(pl);
+  const from = { playlist: `${pl.uid}:${pl.kind}` };
   const saved = likedPlaylists.some((p) => samePlaylist(p, pl));
   const total = tracks.reduce((s, t) => s + (t.durationMs || 0), 0);
 
@@ -97,10 +98,10 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
         }
         actions={
           <>
-            <button className="btn primary" onClick={() => playTracks(tracks, 0, pl.title)} disabled={!tracks.length}>
+            <button className="btn primary" onClick={() => playTracks(tracks, 0, pl.title, from)} disabled={!tracks.length}>
               <Play size={16} fill="currentColor" /> {t.common.play}
             </button>
-            <button className="btn glass-btn" onClick={() => playShuffled(tracks, pl.title)} disabled={!tracks.length}>
+            <button className="btn glass-btn" onClick={() => playShuffled(tracks, pl.title, from)} disabled={!tracks.length}>
               <Shuffle size={16} /> {t.common.shuffle}
             </button>
             <button className="btn glass-btn" onClick={() => playRadio(`playlist:${pl.uid}:${pl.kind}`, pl.title)} disabled={!tracks.length} data-testid="radio">
@@ -134,7 +135,7 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
         </div>
       )}
       {tracks.length ? (
-        <TrackList tracks={tracks} onPlay={(i) => playTracks(tracks, i, pl.title)} onRemove={own ? remove : undefined} />
+        <TrackList tracks={tracks} onPlay={(i) => playTracks(tracks, i, pl.title, from)} onRemove={own ? remove : undefined} />
       ) : (
         <div className="empty-hint">{own ? t.playlist.emptyOwn : t.playlist.empty}</div>
       )}

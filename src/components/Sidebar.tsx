@@ -1,4 +1,4 @@
-import { ChevronLeft, Heart, Home, Library, ListMusic, Plus, Search, Settings } from 'lucide-react';
+import { ChevronLeft, Heart, History, Home, Library, ListMusic, Plus, Search, Settings } from 'lucide-react';
 import { useT } from '../i18n.ts';
 import { back, createPlaylist, isOwn, navigate, samePlaylist, useApp, type Route } from '../store.ts';
 import { cx } from '../ui/util.ts';
@@ -40,6 +40,10 @@ export function Sidebar() {
         <button className={cx('nav-item', route.name === 'library' && route.tab === 'tracks' && 'active')} onClick={() => navigate({ name: 'library', tab: 'tracks' })} data-testid="nav-liked">
           <Heart size={19} />
           {t.common.liked}
+        </button>
+        <button className={cx('nav-item', route.name === 'history' && 'active')} onClick={() => navigate({ name: 'history' })} data-testid="nav-history">
+          <History size={19} />
+          {t.nav.history}
         </button>
       </div>
       <div className="nav-section">

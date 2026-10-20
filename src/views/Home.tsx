@@ -9,7 +9,7 @@ import { useAsync } from '../ui/util.ts';
 
 async function playAlbum(id: number) {
   const a = await api.album(id);
-  playTracks((a.volumes || []).flat(), 0, a.title);
+  playTracks((a.volumes || []).flat(), 0, a.title, { album: a.id });
 }
 
 export function Home() {
@@ -34,7 +34,7 @@ export function Home() {
             {playlists.map((p) => (
               <PlaylistCard key={p.kind} playlist={p} onPlay={async () => {
                 const full = await api.playlist(p.uid, p.kind);
-                playTracks((full.tracks || []).map((x) => x.track!).filter(Boolean), 0, p.title);
+                playTracks((full.tracks || []).map((x) => x.track!).filter(Boolean), 0, p.title, { playlist: `${p.uid}:${p.kind}` });
               }} />
             ))}
           </Shelf>

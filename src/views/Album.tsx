@@ -13,6 +13,7 @@ export function AlbumView({ id }: { id: number | string }) {
   if (loading) return <Spinner />;
   if (error || !album) return <ErrorBox error={error} onRetry={reload} />;
   const tracks = (album.volumes || []).flat();
+  const from = { album: album.id };
   const total = tracks.reduce((s, t) => s + (t.durationMs || 0), 0);
   const kind = album.type === 'single' ? t.common.single : album.type === 'compilation' ? t.common.compilation : t.common.album;
   return (
@@ -31,10 +32,10 @@ export function AlbumView({ id }: { id: number | string }) {
         }
         actions={
           <>
-            <button className="btn primary" onClick={() => playTracks(tracks, 0, album.title)}>
+            <button className="btn primary" onClick={() => playTracks(tracks, 0, album.title, from)}>
               <Play size={16} fill="currentColor" /> {t.common.play}
             </button>
-            <button className="btn glass-btn" onClick={() => playShuffled(tracks, album.title)}>
+            <button className="btn glass-btn" onClick={() => playShuffled(tracks, album.title, from)}>
               <Shuffle size={16} /> {t.common.shuffle}
             </button>
             <button className="btn glass-btn" onClick={() => playRadio(`album:${album.id}`, album.title)} data-testid="radio">
@@ -43,7 +44,7 @@ export function AlbumView({ id }: { id: number | string }) {
           </>
         }
       />
-      <TrackList tracks={tracks} showAlbum={false} onPlay={(i) => playTracks(tracks, i, album.title)} />
+      <TrackList tracks={tracks} showAlbum={false} onPlay={(i) => playTracks(tracks, i, album.title, from)} />
     </div>
   );
 }

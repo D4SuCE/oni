@@ -4,6 +4,9 @@ import type {
   Album,
   Artist,
   ArtistInfo,
+  HistoryContext,
+  HistoryDay,
+  HistoryGroup,
   Playlist,
   SearchResult,
   StreamInfo,
@@ -78,6 +81,23 @@ function normalizeIds(value: unknown): void {
 const chunk = <T,>(arr: T[], size: number) =>
   Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
 
+function historyContext(ctx: any): HistoryContext {
+  const id = ctx?.data?.itemId || {};
+  const full = ctx?.data?.fullModel || {};
+  switch (ctx?.type) {
+    case 'wave':
+      return { type: 'wave', seeds: id.seeds || [], title: full.wave?.title };
+    case 'playlist':
+      return { type: 'playlist', uid: id.uid, kind: id.kind, title: full.playlist?.title };
+    case 'album':
+      return { type: 'album', id: id.id ?? id.albumId, title: full.album?.title };
+    case 'artist':
+      return { type: 'artist', id: id.id ?? id.artistId, title: full.artist?.name };
+    default:
+      return { type: 'other' };
+  }
+}
+
 export class YandexMusic {
   private me?: Account;
   private transport: Transport;
@@ -134,6 +154,62 @@ export class YandexMusic {
       out.push(...(await this.call<Track[]>('/tracks', { method: 'POST', form: { 'track-ids': part.join(',') } })));
     }
     return out;
+  }
+
+  /**
+   * Tells Yandex a track was listened to, like the official clients do. This is what
+   * puts plays into the account's history and lets Yandex's own recommendations learn.
+   */
+  async reportPlay(r: { track: Track; playId: string; startedAt: Date; playedSeconds: number; endSeconds: number; playlist?: string; album?: number | string }) {
+    const form: Record<string, string | number> = {
+      'track-id': r.track.id,
+      from: 'desktop_win-wave-player',
+      'from-cache': 'false',
+      'play-id': r.playId,
+      uid: await this.uid(),
+      timestamp: r.startedAt.toISOString(),
+      'track-length-seconds': Math.round((r.track.durationMs || 0) / 1000),
+      'total-played-seconds': Math.round(r.playedSeconds),
+      'end-position-seconds': Math.round(r.endSeconds),
+      'client-now': new Date().toISOString(),
+    };
+    const album = r.album ?? r.track.albums?.[0]?.id;
+    if (album !== undefined) form['album-id'] = album;
+    if (r.playlist) form['playlist-id'] = r.playlist;
+    await this.call('/play-audio', { method: 'POST', form });
+  }
+
+  /**
+   * Listening history across all the user's devices, by day and by where it was played
+   * (about the last ten days). Yandex sends full track data only for the first items,
+   * so the rest is fetched in batches.
+   */
+  async musicHistory(): Promise<HistoryDay[]> {
+    const r = await this.call<any>('/music-history', { query: { fullModelsCount: 50 } });
+    const known = new Map<string, Track>();
+    const keys: string[] = [];
+    const days = (r.historyTabs || []).map((tab: any) => ({
+      date: tab.date,
+      groups: (tab.items || []).map((item: any) => {
+        const ids = (item.tracks || []).map((x: any) => {
+          const id = x.data?.itemId;
+          const key = id?.albumId ? `${id.trackId}:${id.albumId}` : String(id?.trackId);
+          if (x.data?.fullModel) known.set(key, x.data.fullModel);
+          else keys.push(key);
+          return key;
+        });
+        return { context: historyContext(item.context), ids };
+      }),
+    }));
+    for (const t of await this.tracks([...new Set(keys)].filter((k) => !known.has(k)))) known.set(trackKey(t), t);
+    // Tracks come back keyed by "id:albumId" for whatever album Yandex picks; fall back to the id alone.
+    const byId = new Map([...known.values()].map((t) => [String(t.id), t]));
+    return days.map((d: any) => ({
+      date: d.date,
+      groups: d.groups
+        .map((g: any) => ({ context: g.context, tracks: g.ids.map((k: string) => known.get(k) ?? byId.get(k.split(':')[0])).filter(Boolean) }))
+        .filter((g: HistoryGroup) => g.tracks.length),
+    }));
   }
 
   album(id: number | string) {

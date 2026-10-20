@@ -8,10 +8,17 @@ import { tr } from '../i18n.ts';
 import { artistNames, trackCover } from '../api/yandex.ts';
 import { DEFAULT_TUNING, WaveEngine, waveSeeds, type WaveStats, type WaveTuning } from '../wave/engine.ts';
 import { ListenHistory } from '../wave/history.ts';
+import { RecentPlays } from './recent.ts';
 
 export type Repeat = 'off' | 'all' | 'one';
 /** A wave without a station is My Wave; with one it is a radio seeded by a track, artist, album or playlist. */
-export type Source = { kind: 'wave'; station?: { seed: string; title: string } } | { kind: 'list'; title: string };
+/** Where a list came from, reported to Yandex with each play so its history groups plays right. */
+export interface PlayContext {
+  /** "<uid>:<kind>" */
+  playlist?: string;
+  album?: number | string;
+}
+export type Source = { kind: 'wave'; station?: { seed: string; title: string } } | { kind: 'list'; title: string; from?: PlayContext };
 
 export function sourceTitle(source: Source | null) {
   if (source?.kind === 'list') return source.title;
@@ -63,6 +70,9 @@ const set = usePlayer.setState;
 const get = usePlayer.getState;
 
 export const history = new ListenHistory(storage);
+export const recentPlays = new RecentPlays(storage);
+/** Bumped on every new entry so the History page re-reads the list. */
+export const useRecent = create<{ version: number }>(() => ({ version: 0 }));
 export const audio = new Audio();
 audio.preload = 'auto';
 
@@ -115,6 +125,7 @@ async function loadAt(index: number, autoplay = true) {
   const seq = ++loadSeq;
   set({ index, loading: true, position: 0, duration: (t.durationMs || 0) / 1000, error: null });
   listened = 0;
+  play = { id: crypto.randomUUID(), startedAt: new Date() };
   lastTime = 0;
   updateMediaSession(t);
   try {
@@ -139,11 +150,36 @@ function finishCurrent(ended: boolean) {
   const t = current();
   if (!t || (listened < 1 && !ended)) return;
   history.record(t, listened, ended);
+  reportPlay(t, ended);
+  if (ended || listened >= 5) {
+    const source = get().source;
+    recentPlays.add({ track: t, at: play.startedAt.getTime(), source: sourceTitle(source), from: source?.kind === 'list' ? source.from : undefined });
+    useRecent.setState((s) => ({ version: s.version + 1 }));
+  }
   if (get().source?.kind === 'wave') {
     engine?.feedback(ended ? 'trackFinished' : 'skip', t, listened);
     set({ waveStats: engine ? { ...engine.stats } : null });
   }
   listened = 0;
+}
+
+/** Current play for the Yandex listening report. */
+let play = { id: '', startedAt: new Date() };
+
+function reportPlay(t: Track, ended: boolean) {
+  const source = get().source;
+  // Wave plays reach Yandex through the radio session feedback; tests must not touch the history.
+  if (source?.kind !== 'list' || transport.testMode || listened < 1) return;
+  api
+    .reportPlay({
+      track: t,
+      playId: play.id,
+      startedAt: play.startedAt,
+      playedSeconds: listened,
+      endSeconds: ended ? (t.durationMs || 0) / 1000 : audio.currentTime,
+      ...source.from,
+    })
+    .catch((e) => console.warn('play report failed', e));
 }
 
 // ---------------------------------------------------------------------- wave
@@ -234,20 +270,20 @@ export function waveFeedback(type: 'like' | 'dislike', t: Track) {
 
 // ------------------------------------------------------------------ controls
 
-export async function playTracks(tracks: Track[], start = 0, title = tr().common.list) {
+export async function playTracks(tracks: Track[], start = 0, title = tr().common.list, from?: PlayContext) {
   finishCurrent(false);
   engine = null;
   const playable = tracks.filter((t) => t.available !== false);
   const startTrack = tracks[start];
   const index = Math.max(0, playable.indexOf(startTrack));
   unshuffled = null;
-  set({ queue: playable, source: { kind: 'list', title }, shuffle: false, waveStats: null });
+  set({ queue: playable, source: { kind: 'list', title, from }, shuffle: false, waveStats: null });
   await loadAt(index);
 }
 
-export async function playShuffled(tracks: Track[], title = tr().common.list) {
+export async function playShuffled(tracks: Track[], title = tr().common.list, from?: PlayContext) {
   const playable = tracks.filter((t) => t.available !== false);
-  await playTracks(shuffleArray(playable), 0, title);
+  await playTracks(shuffleArray(playable), 0, title, from);
 }
 
 export function toggle() {

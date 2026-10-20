@@ -1673,6 +1673,25 @@ html:not(.acrylic) .backdrop-tint {
   gap: 8px;
 }
 
+.history-hint {
+  margin: -14px 0 18px;
+}
+.history-day::first-letter {
+  text-transform: uppercase;
+}
+.history-group {
+  margin-bottom: 18px;
+}
+.history-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px 4px;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .lib-actions {
   display: flex;
   align-items: center;

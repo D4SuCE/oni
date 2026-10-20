@@ -14,6 +14,7 @@ export type Route =
   | { name: 'album'; id: number | string }
   | { name: 'artist'; id: number | string }
   | { name: 'playlist'; uid: number | string; kind: number | string }
+  | { name: 'history' }
   | { name: 'settings' };
 
 export type LibraryTab = 'tracks' | 'playlists' | 'albums' | 'artists';

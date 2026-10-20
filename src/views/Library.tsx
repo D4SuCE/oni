@@ -20,6 +20,9 @@ function LikedTracks() {
   const [tracks, setTracks] = useState<Track[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const t = useT();
+  // Liked tracks are the account's playlist number 3.
+  const uid = useApp((s) => s.account?.uid);
+  const from = { playlist: `${uid}:3` };
 
   useEffect(() => {
     let alive = true;
@@ -46,15 +49,15 @@ function LikedTracks() {
   return (
     <>
       <div className="lib-actions">
-        <button className="btn primary" onClick={() => playTracks(tracks, 0, t.common.liked)} disabled={!tracks.length}>
+        <button className="btn primary" onClick={() => playTracks(tracks, 0, t.common.liked, from)} disabled={!tracks.length}>
           <Play size={16} fill="currentColor" /> {t.common.play}
         </button>
-        <button className="btn glass-btn" onClick={() => playShuffled(tracks, t.common.liked)} disabled={!tracks.length}>
+        <button className="btn glass-btn" onClick={() => playShuffled(tracks, t.common.liked, from)} disabled={!tracks.length}>
           <Shuffle size={16} /> {t.common.shuffle}
         </button>
         <span className="muted">{t.count.tracks(keys.length)}</span>
       </div>
-      {tracks.length ? <TrackList tracks={tracks} onPlay={(i) => playTracks(tracks, i, t.common.liked)} /> : <div className="empty-hint">{t.library.likedEmpty}</div>}
+      {tracks.length ? <TrackList tracks={tracks} onPlay={(i) => playTracks(tracks, i, t.common.liked, from)} /> : <div className="empty-hint">{t.library.likedEmpty}</div>}
     </>
   );
 }
