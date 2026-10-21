@@ -1,4 +1,5 @@
 import { Heart, Pencil, Play, Radio, Shuffle, Trash2, Upload } from 'lucide-react';
+import { DownloadButton } from '../components/DownloadButton.tsx';
 import { useRef, useState } from 'react';
 import { api, transport } from '../api/client.ts';
 import type { Playlist } from '../api/types.ts';
@@ -109,6 +110,7 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
               <Shuffle size={16} /> {t.common.shuffle}
             </button>
             <SmartShuffleButton tracks={tracks} title={pl.title} from={from} />
+            <DownloadButton listKey={`playlist:${pl.uid}:${pl.kind}`} tracks={tracks} />
             <button className="btn glass-btn" onClick={() => playRadio(`playlist:${pl.uid}:${pl.kind}`, pl.title)} disabled={!tracks.length} data-testid="radio">
               <Radio size={16} /> {t.common.radio}
             </button>

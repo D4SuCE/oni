@@ -1,7 +1,8 @@
-import { Heart, History, Home, Library, ListMusic, Menu, Plus, Search, Settings } from 'lucide-react';
+import { HardDriveDownload, Heart, History, Home, Library, ListMusic, Menu, Plus, Search, Settings } from 'lucide-react';
 import { create } from 'zustand';
 import { useT } from '../i18n.ts';
 import { createPlaylist, isOwn, navigate, samePlaylist, useApp, type Route } from '../store.ts';
+import { offline } from '../player/player.ts';
 import { useUpdate } from '../ui/update.ts';
 import { cx } from '../ui/util.ts';
 import { askText } from './Dialog.tsx';
@@ -80,6 +81,12 @@ export function Sidebar() {
           <History size={19} />
           <span className="nav-label">{t.nav.history}</span>
         </button>
+        {offline && (
+          <button className={cx('nav-item', route.name === 'downloads' && 'active')} onClick={() => navigate({ name: 'downloads' })} data-testid="nav-downloads" title={tip(t.nav.downloads)}>
+            <HardDriveDownload size={19} />
+            <span className="nav-label">{t.nav.downloads}</span>
+          </button>
+        )}
       </div>
       <div className="nav-section">
         <span className="nav-label">{t.common.playlists}</span>

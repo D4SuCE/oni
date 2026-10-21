@@ -1,4 +1,5 @@
 import { Heart, Library as LibraryIcon, Play, Plus, Shuffle } from 'lucide-react';
+import { DownloadButton } from '../components/DownloadButton.tsx';
 import { useEffect, useState } from 'react';
 import { api } from '../api/client.ts';
 import type { Track } from '../api/types.ts';
@@ -57,6 +58,7 @@ function LikedTracks() {
           <Shuffle size={16} /> {t.common.shuffle}
         </button>
         <SmartShuffleButton tracks={tracks} title={t.common.liked} from={from} />
+        <DownloadButton listKey="liked" tracks={tracks} />
         <span className="muted">{t.count.tracks(keys.length)}</span>
       </div>
       {tracks.length ? <TrackList tracks={tracks} onPlay={(i) => playTracks(tracks, i, t.common.liked, from)} /> : <div className="empty-hint">{t.library.likedEmpty}</div>}

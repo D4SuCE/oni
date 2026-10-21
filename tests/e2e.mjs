@@ -246,8 +246,9 @@ await step('uploaded mp3s are marked in a playlist', async () => {
   await page.locator('.track-row', { has: page.locator('[data-testid="upload-badge"]') }).first().click({ button: 'right' });
   await page.waitForSelector('.menu');
   const items = (await page.locator('.menu .menu-item .menu-label').allInnerTexts()).map((x) => x.trim());
-  const want = ['Не рекомендовать', 'Добавить в плейлист', 'Изменить', 'Информация о треке', 'Удалить из плейлиста'];
-  if (items.length !== 6 || !/нравится/.test(items[0]) || want.some((w, k) => items[k + 1] !== w)) throw new Error(`upload menu: ${items.join(' | ')}`);
+  // The official app's order: like, download, don't recommend, add to playlist, edit, details.
+  const want = ['Скачать', 'Не рекомендовать', 'Добавить в плейлист', 'Изменить', 'Информация о треке', 'Удалить из плейлиста'];
+  if (items.length !== 7 || !/нравится/.test(items[0]) || want.some((w, k) => items[k + 1] !== w)) throw new Error(`upload menu: ${items.join(' | ')}`);
   await page.keyboard.press('Escape');
 
   // Edit: rename, see it in the list, and always put the real name back.

@@ -11,6 +11,7 @@ import { ListenHistory } from '../wave/history.ts';
 import { playOutcome, RecsFeedback } from '../recs/feedback.ts';
 import { RecentPlays } from './recent.ts';
 import { levellingGain } from './loudness.ts';
+import { OfflineLibrary } from './offline.ts';
 import { PlayStats, type Origin } from './stats.ts';
 
 export type Repeat = 'off' | 'all' | 'one';
@@ -90,6 +91,32 @@ const get = usePlayer.getState;
 export const history = new ListenHistory(storage);
 /** Hidden tracks and demoted artists, for the mixes. */
 export const recsFeedback = new RecsFeedback(storage);
+/** Downloaded tracks; null where the shell keeps no files. */
+export const offline =
+  transport.files && transport.fetchBytes
+    ? new OfflineLibrary({
+        files: transport.files,
+        fetchBytes: (url) => transport.fetchBytes!(url),
+        stream: (id) => api.stream(id, get().quality),
+        store: storage,
+        crypto,
+      })
+    : null;
+offline?.reconcile();
+
+/** No network (set by the app store): only downloaded tracks can play, the rest are skipped at once. */
+let offlineMode = false;
+export const setOfflineMode = (on: boolean) => {
+  offlineMode = on;
+};
+
+/** The object URL of the downloaded track playing now; freed when the next one loads. */
+let localUrl: string | null = null;
+function setLocalAudio(blob: Blob | null) {
+  if (localUrl) URL.revokeObjectURL(localUrl);
+  localUrl = blob ? URL.createObjectURL(blob) : null;
+  return localUrl;
+}
 export const recentPlays = new RecentPlays(storage);
 export const stats = new PlayStats(storage);
 /** Bumped on every new entry so the History page re-reads the list. */
@@ -133,7 +160,7 @@ async function streamUrl(t: Track) {
 function prefetchNext() {
   const s = get();
   const next = s.queue[s.index + 1];
-  if (next && !prefetched.has(next.id)) streamUrl(next).catch(() => {});
+  if (next && !offlineMode && !offline?.has(next.id) && !prefetched.has(next.id)) streamUrl(next).catch(() => {});
 }
 
 function applyVolume() {
@@ -152,9 +179,13 @@ async function loadAt(index: number, autoplay = true) {
   lastTime = 0;
   updateMediaSession(t);
   try {
-    const stream = await streamUrl(t);
+    if (offlineMode && !offline?.has(t.id)) throw new Error('not downloaded and no network');
+    // A downloaded copy plays first: it needs no network and no traffic.
+    const local = offline?.has(t.id) ? await offline.open(t.id).catch(() => null) : null;
+    const stream = local ? { url: '', codec: local.entry.codec, bitrate: local.entry.bitrate } : await streamUrl(t);
     if (seq !== loadSeq) return;
-    audio.src = stream.url;
+    audio.src = local ? setLocalAudio(local.blob)! : stream.url;
+    if (!local) setLocalAudio(null);
     set({ stream: { codec: stream.codec, bitrate: stream.bitrate } });
     applyVolume();
     if (autoplay) await audio.play();
@@ -164,7 +195,7 @@ async function loadAt(index: number, autoplay = true) {
   } catch (e: any) {
     if (seq !== loadSeq || e?.name === 'AbortError') return;
     set({ loading: false, error: tr().player.cantPlay(t.title) });
-    setTimeout(() => seq === loadSeq && next(false), 1500);
+    setTimeout(() => seq === loadSeq && next(false), offlineMode ? 0 : 1500);
   }
   persistSoon();
 }

@@ -1,10 +1,11 @@
 import { memo } from 'react';
-import { ArrowUp, Ban, Disc3, Info, Pencil, Heart, Link, ListEnd, ListPlus, ListStart, MoreHorizontal, Play, Plus, Radio, Share, Trash2, User } from 'lucide-react';
+import { ArrowDownToLine, ArrowUp, Ban, CircleCheck, Disc3, Download, Info, Loader2, Pencil, Heart, Link, ListEnd, ListPlus, ListStart, MoreHorizontal, Play, Plus, Radio, Share, Trash2, User } from 'lucide-react';
 import type { Track } from '../api/types.ts';
 import { trackCover } from '../api/yandex.ts';
 import { tr, useT } from '../i18n.ts';
-import { enqueue, playNext, playRadio, toggle, usePlayer } from '../player/player.ts';
+import { enqueue, offline, playNext, playRadio, toggle, usePlayer } from '../player/player.ts';
 import { addToPlaylist, createPlaylist, dislike, isOwn, navigate, toggleLike, useApp } from '../store.ts';
+import { downloadTrack, offlineState, useOfflineVersion, type OfflineState } from '../ui/offline.ts';
 import { shareTrack } from '../ui/share.ts';
 import { cx, fmtTime } from '../ui/util.ts';
 import { ArtistLinks, Cover } from './Common.tsx';
@@ -38,9 +39,18 @@ export function trackMenu(t: Track, extra: MenuItem[] = []): MenuItem[] {
   // Your own upload gets what the official app offers for one: no radio, album, artist or link,
   // none of which exist for a private file.
   const details: MenuItem = { label: tx.menu.details, icon: <Info size={15} />, onClick: () => showTrackInfo(t) };
+  const state = offlineState(t.id);
+  const download: MenuItem[] = !offline
+    ? []
+    : state === 'done'
+      ? [{ label: tx.menu.removeDownload, icon: <CircleCheck size={15} />, onClick: () => offline?.remove(t.id) }]
+      : state === 'busy'
+        ? [{ label: tx.menu.downloading, icon: <Loader2 size={15} className="spin" /> }]
+        : [{ label: tx.menu.download, icon: <Download size={15} />, onClick: () => downloadTrack(t) }];
   if (isUpload(t))
     return [
       like,
+      ...download,
       dontRecommend,
       addTo,
       { label: tx.menu.edit, icon: <Pencil size={15} />, onClick: () => editUpload(t) },
@@ -54,6 +64,7 @@ export function trackMenu(t: Track, extra: MenuItem[] = []): MenuItem[] {
     { label: tx.menu.addToQueue, icon: <ListEnd size={15} />, onClick: () => enqueue(t) },
     addTo,
     like,
+    ...download,
     { label: tx.menu.share, icon: <Share size={15} />, submenu: [{ label: tx.menu.copyLink, icon: <Link size={15} />, onClick: () => shareTrack(t) }] },
     { label: '', separator: true },
   ];
@@ -74,9 +85,10 @@ interface RowProps {
   onPlay: (index: number) => void;
   onRemove?: (index: number) => void;
   rowMenu?: (t: Track, index: number) => MenuItem[];
+  saved: OfflineState;
 }
 
-const TrackRow = memo(function TrackRow({ track: t, index, active, playing, liked, showAlbum, onPlay, onRemove, rowMenu }: RowProps) {
+const TrackRow = memo(function TrackRow({ track: t, index, active, playing, liked, showAlbum, onPlay, onRemove, rowMenu, saved }: RowProps) {
   const unavailable = t.available === false;
   const tx = useT();
   const menu = (e: React.MouseEvent) =>
@@ -137,7 +149,11 @@ const TrackRow = memo(function TrackRow({ track: t, index, active, playing, like
       <button className={cx('icon-btn tr-like', liked && 'on')} onClick={() => toggleLike(t)} title={tx.common.like}>
         <Heart size={16} fill={liked ? 'currentColor' : 'none'} />
       </button>
-      <div className="tr-dur">{fmtTime((t.durationMs || 0) / 1000)}</div>
+      <div className="tr-dur">
+        {saved === 'done' && <ArrowDownToLine size={14} className="tr-saved" aria-label={tx.menu.downloaded} data-testid="saved-mark" />}
+        {saved === 'busy' && <Loader2 size={14} className="tr-saved spin" />}
+        {fmtTime((t.durationMs || 0) / 1000)}
+      </div>
       <button className="icon-btn tr-more" onClick={menu} title={tx.common.more}>
         <MoreHorizontal size={18} />
       </button>
@@ -162,6 +178,7 @@ export function TrackList({
   const currentId = usePlayer((s) => s.queue[s.index]?.id);
   const playing = usePlayer((s) => s.playing);
   const liked = useApp((s) => s.liked);
+  useOfflineVersion((s) => s.v);
   return (
     <div className={cx('track-list', !showAlbum && 'no-album')}>
       {tracks.map((t, i) => (
@@ -176,6 +193,7 @@ export function TrackList({
           onPlay={onPlay}
           onRemove={onRemove}
           rowMenu={rowMenu}
+          saved={offlineState(t.id)}
         />
       ))}
     </div>

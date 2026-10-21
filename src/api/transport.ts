@@ -32,6 +32,17 @@ export interface Transport {
   canAnalyzeAudio?: boolean;
   /** Uploading your own mp3 files into a playlist. */
   canUpload?: boolean;
+  /** The app's own folder for downloaded tracks (plain file names, no paths). */
+  files?: {
+    write(name: string, data: ArrayBuffer): Promise<void>;
+    read(name: string): Promise<ArrayBuffer>;
+    remove(name: string): Promise<void>;
+    list(): Promise<{ name: string; size: number }[]>;
+  };
+  /** The bytes behind a URL, fetched natively (the audio CDN sends no CORS headers). */
+  fetchBytes?(url: string): Promise<ArrayBuffer>;
+  /** Tests only: pretend the network is down (true) or back (false). */
+  setNetworkForTest?(up: boolean): void;
   request<T = any>(req: HttpRequest): Promise<HttpResponse<T>>;
   hasToken(): Promise<boolean>;
   setToken(value: string | null): Promise<void>;

@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { WifiOff } from 'lucide-react';
+import { DownloadsView } from './views/Downloads.tsx';
+import { useT } from './i18n.ts';
 import { api } from './api/client.ts';
 import { trackCover } from './api/yandex.ts';
 import { Spinner } from './components/Common.tsx';
@@ -14,7 +17,7 @@ import { eqOutputLevel } from './player/eq.ts';
 import { pulseLevel, pulseTempo } from './player/pulse.ts';
 import { cx } from './ui/util.ts';
 import { TuningPanel } from './components/Wave.tsx';
-import { audio, current, next, playTracks, prev, restoreSession, setVolume, toggle, usePlayer } from './player/player.ts';
+import { audio, current, next, offline, playTracks, prev, restoreSession, setVolume, toggle, usePlayer } from './player/player.ts';
 import { historyStep, init, navigate, toggleLike, useApp } from './store.ts';
 import { AlbumView } from './views/Album.tsx';
 import { ArtistView } from './views/Artist.tsx';
@@ -95,6 +98,8 @@ function useShortcuts() {
 
 function Main() {
   const route = useApp((s) => s.route);
+  const offline = useApp((s) => s.offline);
+  const t = useT();
   const ref = useRef<HTMLElement>(null);
   // Block body on purpose: Chromium's scrollTo() now returns a Promise, which React would treat as the cleanup.
   useEffect(() => {
@@ -126,6 +131,9 @@ function Main() {
     case 'mix':
       view = <MixView id={route.id} />;
       break;
+    case 'downloads':
+      view = <DownloadsView />;
+      break;
     case 'settings':
       view = <SettingsView />;
       break;
@@ -133,6 +141,11 @@ function Main() {
   return (
     <main className="main" ref={ref}>
       <div className="main-drag drag" />
+      {offline && (
+        <div className="offline-banner" data-testid="offline-banner">
+          <WifiOff size={15} /> {t.downloads.offlineBanner}
+        </div>
+      )}
       <div key={JSON.stringify(route)} className="view-enter">
         <ErrorBoundary kind="view">{view}</ErrorBoundary>
       </div>
@@ -196,4 +209,4 @@ export function App() {
 }
 
 // Handy for debugging and for the automated UI test.
-Object.assign(window, { __wave: { usePlayer, useApp, audio, api, navigate, playTracks, eqOutputLevel, pulseLevel, pulseTempo } });
+Object.assign(window, { __wave: { offline, usePlayer, useApp, audio, api, navigate, playTracks, eqOutputLevel, pulseLevel, pulseTempo } });

@@ -2251,6 +2251,35 @@ html.motion .backdrop-img {
   color: var(--text-2);
   line-height: 1.45;
 }
+/* downloads */
+.tr-saved {
+  margin-right: 6px;
+  color: var(--gold);
+  vertical-align: -2px;
+}
+.offline-banner {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 8px 24px 0;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: rgba(142, 23, 27, 0.55);
+  color: var(--text);
+  font-size: 13px;
+}
+.downloads-cover {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border-radius: 18px;
+  background: linear-gradient(140deg, var(--accent-deep), var(--ink));
+  color: var(--gold);
+}
 .track-sheet {
   width: min(460px, calc(100% - 32px));
 }

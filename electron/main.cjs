@@ -24,6 +24,8 @@ const DEFAULT_CLIENT = 'YandexMusicAndroid/24023621';
 
 let mainWindow = null;
 let token = null;
+/** Tests only (WAVE_E2E): every request fails as with no network. WAVE_E2E_OFFLINE=1 starts that way. */
+let networkDown = TEST_MODE && process.env.WAVE_E2E_OFFLINE === '1';
 
 // ------------------------------------------------------------------ error log
 
@@ -82,6 +84,7 @@ function needsAuth(url) {
 }
 
 async function request(req) {
+  if (networkDown) throw new TypeError('fetch failed');
   const url = new URL(req.url);
   for (const [k, v] of Object.entries(req.query || {})) {
     if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
@@ -206,6 +209,41 @@ function allowAudioAnalysis() {
     callback({ responseHeaders: headers });
   });
 }
+
+// ------------------------------------------------------------ offline files
+
+// Downloaded tracks (src/player/offline.ts): encrypted by the page, kept here.
+const offlineDir = () => path.join(app.getPath('userData'), 'offline');
+function offlinePath(name) {
+  // Only our own "<track id>.oni" files: nothing like "../x" gets out of the folder.
+  if (!/^[\w-]+\.oni$/.test(String(name))) throw new Error('bad file name');
+  return path.join(offlineDir(), name);
+}
+
+ipcMain.handle('wave:files:write', async (_e, name, data) => {
+  await fs.promises.mkdir(offlineDir(), { recursive: true });
+  await fs.promises.writeFile(offlinePath(name), Buffer.from(data));
+});
+ipcMain.handle('wave:files:read', async (_e, name) => {
+  const b = await fs.promises.readFile(offlinePath(name));
+  return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+});
+ipcMain.handle('wave:files:remove', (_e, name) => fs.promises.rm(offlinePath(name), { force: true }));
+ipcMain.handle('wave:files:list', async () => {
+  const names = await fs.promises.readdir(offlineDir()).catch(() => []);
+  return Promise.all(names.map(async (name) => ({ name, size: (await fs.promises.stat(path.join(offlineDir(), name))).size })));
+});
+ipcMain.handle('wave:fetch-bytes', async (_e, url) => {
+  if (networkDown) throw new TypeError('fetch failed');
+  if (new URL(url).protocol !== 'https:') throw new Error('https only');
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.arrayBuffer();
+});
+// Tests only: requests fail as with no network, to check the offline mode.
+ipcMain.on('wave:test:network', (_e, up) => {
+  if (TEST_MODE) networkDown = !up;
+});
 
 ipcMain.handle('ym:request', (_e, req) => request(req));
 ipcMain.handle('ym:token:has', () => Boolean(token));

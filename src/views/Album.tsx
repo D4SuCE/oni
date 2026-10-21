@@ -1,4 +1,5 @@
 import { Play, Radio, Shuffle } from 'lucide-react';
+import { DownloadButton } from '../components/DownloadButton.tsx';
 import { api } from '../api/client.ts';
 import { coverUrl } from '../api/yandex.ts';
 import { ArtistLinks, ErrorBox, PageHeader, Spinner } from '../components/Common.tsx';
@@ -41,6 +42,7 @@ export function AlbumView({ id }: { id: number | string }) {
             <button className="btn glass-btn" onClick={() => playRadio(`album:${album.id}`, album.title)} data-testid="radio">
               <Radio size={16} /> {t.common.radio}
             </button>
+            <DownloadButton listKey={`album:${album.id}`} tracks={tracks} />
           </>
         }
       />

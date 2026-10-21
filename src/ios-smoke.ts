@@ -5,7 +5,9 @@
 
 type Wave = {
   audio: HTMLAudioElement;
-  usePlayer: { getState(): { queue: { title: string }[]; index: number } };
+  usePlayer: { getState(): { queue: { id: string; title: string }[]; index: number } };
+  offline: { download(t: unknown): Promise<void>; has(id: string): boolean } | null;
+  playTracks(tracks: unknown[], index: number, title: string): Promise<void>;
 };
 
 const wave = () => (window as unknown as { __wave: Wave }).__wave;
@@ -41,6 +43,14 @@ export async function runSmoke() {
     click('.pb-cover');
     report('now-playing', await until(() => document.querySelector('.nowplaying'), 5000));
     await sleep(2500);
+
+    // Download: the track goes to the app's folder (encrypted) and then plays from there.
+    const track = queue[index];
+    await wave().offline!.download(track);
+    report('download', wave().offline!.has(track.id));
+    await wave().playTracks([track], 0, 'smoke');
+    const local = await until(() => wave().audio.src.startsWith('blob:') && !wave().audio.paused && wave().audio.currentTime > 1, 20000);
+    report('offline-playback', local, wave().audio.src.slice(0, 5));
   } catch (e) {
     report('crash', false, String(e));
   }

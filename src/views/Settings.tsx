@@ -1,10 +1,12 @@
-import { Download, ExternalLink, FileText, LogOut, RefreshCw, Undo2 } from 'lucide-react';
+import { Download, ExternalLink, FileText, HardDriveDownload, LogOut, RefreshCw, Trash2, Undo2 } from 'lucide-react';
+import { confirmDialog } from '../components/Dialog.tsx';
+import { formatSize, useOfflineVersion } from '../ui/offline.ts';
 import { useEffect, useState } from 'react';
 import { Segmented } from '../components/Wave.tsx';
 import { LANGS, setLang, useLang, useT } from '../i18n.ts';
 import { canProcessAudio } from '../player/eq.ts';
-import { recsFeedback, setNormalize, stats, usePlayer } from '../player/player.ts';
-import { logout, useApp } from '../store.ts';
+import { offline, recsFeedback, setNormalize, stats, usePlayer } from '../player/player.ts';
+import { logout, navigate, useApp } from '../store.ts';
 import { setMotion, setPulse, useMotion, usePulse } from '../ui/motion.ts';
 import { MAX_SEE_THROUGH, setSeeThrough, useSeeThrough } from '../ui/seeThrough.ts';
 import { useUpdate } from '../ui/update.ts';
@@ -154,6 +156,8 @@ export function SettingsView() {
         <MixFeedback />
       </div>
 
+      {offline && <DownloadsPanel />}
+
       <div className="panel glass">
         <h3>{s.shortcuts}</h3>
         <div className="keys">
@@ -186,6 +190,41 @@ export function SettingsView() {
       </div>
 
       <p className="hint center">{s.disclaimer}</p>
+    </div>
+  );
+}
+
+/** How much the downloads take, a way to them and to free the space. */
+function DownloadsPanel() {
+  const t = useT();
+  const d = t.downloads;
+  useOfflineVersion((v) => v.v);
+  const count = offline?.entries().length ?? 0;
+  return (
+    <div className="panel glass">
+      <h3>{t.nav.downloads}</h3>
+      <div className="settings-row" data-testid="downloads-settings">
+        <div>
+          <div>{count ? `${t.count.tracks(count)} · ${formatSize(offline?.totalSize() ?? 0)}` : d.none}</div>
+          <div className="hint">{d.settingsHint}</div>
+        </div>
+        <div className="update-actions">
+          <button className="btn ghost" onClick={() => navigate({ name: 'downloads' })}>
+            <HardDriveDownload size={16} /> {d.open}
+          </button>
+          {count > 0 && (
+            <button
+              className="btn ghost"
+              onClick={async () => {
+                if (await confirmDialog(d.removeAllTitle, d.removeAllMessage(t.count.tracks(count)), d.removeAll)) await offline?.removeAll();
+              }}
+              data-testid="downloads-remove-all"
+            >
+              <Trash2 size={16} /> {d.removeAll}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

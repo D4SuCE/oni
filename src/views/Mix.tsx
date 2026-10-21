@@ -1,4 +1,5 @@
 import { EyeOff, Play, Shuffle } from 'lucide-react';
+import { DownloadButton } from '../components/DownloadButton.tsx';
 import { MixArt, mixSubtitle, mixTitle, useGenreTitles } from '../components/Mixes.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { useLang, useT } from '../i18n.ts';
@@ -38,6 +39,7 @@ export function MixView({ id }: { id: string }) {
             <button className="btn glass-btn" onClick={() => playShuffled(mix.tracks, title, undefined, extra)}>
               <Shuffle size={16} /> {t.common.shuffle}
             </button>
+            <DownloadButton listKey={`mix:${mix.id}`} tracks={mix.tracks} />
           </div>
         </div>
       </header>

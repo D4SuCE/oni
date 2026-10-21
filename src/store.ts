@@ -2,10 +2,10 @@
 
 import { create } from 'zustand';
 import type { Account, Playlist, Track } from './api/types.ts';
-import { api, transport } from './api/client.ts';
-import { trackKey } from './api/yandex.ts';
+import { api, loadJson, storage, transport } from './api/client.ts';
+import { ApiError, trackKey } from './api/yandex.ts';
 import { tr, useLang } from './i18n.ts';
-import { dropFromQueue, setDislikedCheck, waveFeedback } from './player/player.ts';
+import { dropFromQueue, setDislikedCheck, setOfflineMode, waveFeedback } from './player/player.ts';
 
 export type Route =
   | { name: 'home' }
@@ -16,6 +16,7 @@ export type Route =
   | { name: 'playlist'; uid: number | string; kind: number | string }
   | { name: 'history' }
   | { name: 'mix'; id: string }
+  | { name: 'downloads' }
   | { name: 'settings' };
 
 export type LibraryTab = 'tracks' | 'playlists' | 'albums' | 'artists';
@@ -34,6 +35,8 @@ interface AppState {
   likedPlaylists: Playlist[];
   /** Likes and playlists have been loaded at least once. */
   libraryReady: boolean;
+  /** No network: started from the cached account, only downloaded tracks play. */
+  offline: boolean;
   toast: { id: number; text: string } | null;
   nowPlayingOpen: boolean;
   tuningOpen: boolean;
@@ -53,6 +56,7 @@ export const useApp = create<AppState>(() => ({
   playlists: [],
   likedPlaylists: [],
   libraryReady: false,
+  offline: false,
   toast: null,
   nowPlayingOpen: false,
   tuningOpen: false,
@@ -117,12 +121,68 @@ export async function init() {
   }
   try {
     const account = await api.account(true);
-    set({ account, auth: 'ready' });
+    storage.setItem(ACCOUNT_CACHE, JSON.stringify(account));
+    set({ account, auth: 'ready', offline: false });
+    setOfflineMode(false);
     refreshLibrary();
   } catch (e) {
+    // No network (not a refused token): start from what was saved last time, with the downloads.
+    const cached = loadJson<Account | null>(ACCOUNT_CACHE, null);
+    if (!(e instanceof ApiError) && cached) return goOffline(cached);
     toast(tr().toast.loginFailed(errorText(e)));
     set({ auth: 'login' });
   }
+}
+
+const ACCOUNT_CACHE = 'app.account.v1';
+const LIBRARY_CACHE = 'app.library.v1';
+const RECONNECT = 20_000;
+
+interface LibraryCache {
+  likedKeys: string[];
+  disliked: string[];
+  playlists: Playlist[];
+  likedPlaylists: Playlist[];
+}
+
+let reconnecting: ReturnType<typeof setInterval> | undefined;
+
+function goOffline(account: Account) {
+  const lib = loadJson<LibraryCache | null>(LIBRARY_CACHE, null);
+  set({
+    account,
+    auth: 'ready',
+    offline: true,
+    libraryReady: true,
+    route: { name: 'downloads' },
+    ...(lib && {
+      likedKeys: lib.likedKeys,
+      liked: new Set(lib.likedKeys.map((k) => k.split(':')[0])),
+      disliked: new Set(lib.disliked),
+      playlists: lib.playlists,
+      likedPlaylists: lib.likedPlaylists,
+    }),
+  });
+  setOfflineMode(true);
+  // Back online: the network event where there is one, and a retry every 20 s anyway.
+  clearInterval(reconnecting);
+  reconnecting = setInterval(reconnect, RECONNECT);
+  window.addEventListener('online', reconnect);
+}
+
+async function reconnect() {
+  if (!get().offline) return;
+  try {
+    await api.account(true);
+  } catch {
+    return;
+  }
+  clearInterval(reconnecting);
+  window.removeEventListener('online', reconnect);
+  set({ offline: false });
+  setOfflineMode(false);
+  refreshLibrary();
+  toast(tr().downloads.backOnline);
 }
 
 export async function loginWithToken(token: string) {
@@ -157,6 +217,8 @@ export async function refreshLibrary() {
     disliked: new Set(disliked),
     playlists,
   });
+  // For a start without a network: the sidebar and likes as they were.
+  storage.setItem(LIBRARY_CACHE, JSON.stringify({ likedKeys, disliked, playlists, likedPlaylists } satisfies LibraryCache));
 }
 
 export async function refreshPlaylists() {

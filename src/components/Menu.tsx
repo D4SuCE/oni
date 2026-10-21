@@ -106,21 +106,26 @@ export function MenuHost() {
   useEffect(() => {
     if (!menu) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
-    // The page scrolling away from the menu closes it; scrolling a long menu itself must not.
-    const onScroll = (e: Event) => {
+    // Scrolling the page away from the menu closes it; scrolling a long menu itself must not.
+    // Only the user's own scrolling counts (wheel, touchpad, swipe): a "scroll" event also comes
+    // when the page moves by itself (a route change, content loading in), which would close a
+    // menu just opened.
+    const onUserScroll = (e: Event) => {
       if (!(e.target instanceof Element && e.target.closest('.menu'))) close();
     };
     window.addEventListener('mousedown', close);
     window.addEventListener('blur', close);
     window.addEventListener('resize', close);
     window.addEventListener('keydown', onKey);
-    document.addEventListener('scroll', onScroll, true);
+    window.addEventListener('wheel', onUserScroll, { capture: true, passive: true });
+    window.addEventListener('touchmove', onUserScroll, { capture: true, passive: true });
     return () => {
       window.removeEventListener('mousedown', close);
       window.removeEventListener('blur', close);
       window.removeEventListener('resize', close);
       window.removeEventListener('keydown', onKey);
-      document.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('wheel', onUserScroll, { capture: true });
+      window.removeEventListener('touchmove', onUserScroll, { capture: true });
     };
   }, [menu]);
   if (!menu) return null;

@@ -4,7 +4,9 @@
 // that watches for the redirect carrying the token, as the desktop sign-in window does.
 
 import { Capacitor, CapacitorHttp, registerPlugin } from '@capacitor/core';
+import { Directory, Filesystem } from '@capacitor/filesystem';
 import { DefaultWebViewOptions, InAppBrowser } from '@capacitor/inappbrowser';
+import { fromBase64, toBase64 } from './bytes.ts';
 import type { HttpRequest, HttpResponse, Transport } from './transport.ts';
 
 interface KeychainPlugin {
@@ -18,6 +20,10 @@ const Keychain = registerPlugin<KeychainPlugin>('OniKeychain');
 const TOKEN_KEY = 'yandex-oauth-token';
 const OAUTH_CLIENT_ID = '23cabbbdc6cd418abb4b39c32c41195d'; // official Yandex Music client, as on the desktop
 const DEFAULT_CLIENT = 'YandexMusicAndroid/24023621';
+/** Downloaded tracks: Library/offline, kept by iOS (Caches could be purged when space runs low). */
+const OFFLINE = { dir: 'offline', directory: Directory.Library };
+const offlinePath = (name: string) => `${OFFLINE.dir}/${name}`;
+const asBytes = (data: string | ArrayBuffer | Blob) => (typeof data === 'string' ? fromBase64(data).buffer : data);
 
 export const isNativeIos = () => Capacitor.getPlatform() === 'ios';
 
@@ -56,6 +62,29 @@ export function capacitorTransport(): Transport {
     testMode: Boolean((window as { __oniTest?: boolean }).__oniTest),
     canAnalyzeAudio: false,
     canUpload: false,
+
+    files: {
+      async write(name, data) {
+        await Filesystem.writeFile({ path: offlinePath(name), data: toBase64(new Uint8Array(data)), directory: OFFLINE.directory, recursive: true });
+      },
+      async read(name) {
+        const { data } = await Filesystem.readFile({ path: offlinePath(name), directory: OFFLINE.directory });
+        return asBytes(data as string) as ArrayBuffer;
+      },
+      async remove(name) {
+        await Filesystem.deleteFile({ path: offlinePath(name), directory: OFFLINE.directory }).catch(() => {});
+      },
+      async list() {
+        const r = await Filesystem.readdir({ path: OFFLINE.dir, directory: OFFLINE.directory }).catch(() => ({ files: [] }));
+        return r.files.map((f) => ({ name: f.name, size: f.size }));
+      },
+    },
+
+    async fetchBytes(url) {
+      const r = await CapacitorHttp.request({ url, method: 'GET', responseType: 'arraybuffer' });
+      if (r.status < 200 || r.status >= 300) throw new Error(`HTTP ${r.status}`);
+      return asBytes(r.data) as ArrayBuffer;
+    },
 
     async request<T = any>(req: HttpRequest): Promise<HttpResponse<T>> {
       if (req.multipart) throw new Error('uploads are not supported on iOS');
