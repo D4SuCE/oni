@@ -172,6 +172,7 @@ const ru = {
     goToAlbum: 'Перейти к альбому',
     goToArtist: 'Перейти к исполнителю',
     removeFromPlaylist: 'Удалить из плейлиста',
+    hideFromMixes: 'Скрыть из подборок',
   },
   update: {
     off: 'Обновления приходят в установленную версию',
@@ -188,6 +189,7 @@ const ru = {
     readyToast: (v: string) => `Загружена версия ${v}. Обновить — в настройках`,
   },
   toast: {
+    hiddenFromMixes: 'Больше не появится в подборках',
     loginFailed: (msg: string) => `Не удалось войти: ${msg}`,
     disliked: 'Больше не будет звучать',
     added: (title: string) => `Добавлено в «${title}»`,
@@ -333,6 +335,10 @@ const ru = {
     finished: 'Дослушано',
     skipped: 'Пропущено',
     empty: 'Пока мало данных — послушайте музыку несколько дней',
+    hiddenTracks: (n: number) => `Скрыто из подборок: ${ruPlural(n, 'трек', 'трека', 'треков')}`,
+    demoted: (names: string) => `Не попадают в подборки 30 дней (пропущены дважды подряд): ${names}`,
+    andCount: (names: string, more: number) => `${names} и ещё ${more}`,
+    bringBack: 'Вернуть всё',
     origins: {
       wave: 'Моя волна',
       radio: 'Радио',
@@ -542,6 +548,7 @@ const en: Dict = {
     goToAlbum: 'Go to album',
     goToArtist: 'Go to artist',
     removeFromPlaylist: 'Remove from playlist',
+    hideFromMixes: 'Hide from mixes',
   },
   update: {
     off: 'Updates come to the installed version',
@@ -558,6 +565,7 @@ const en: Dict = {
     readyToast: (v) => `Version ${v} is downloaded. Update from Settings`,
   },
   toast: {
+    hiddenFromMixes: "Won't show up in your mixes again",
     loginFailed: (msg) => `Couldn't sign in: ${msg}`,
     disliked: "You won't hear this again",
     added: (title) => `Added to “${title}”`,
@@ -703,6 +711,10 @@ const en: Dict = {
     finished: 'Finished',
     skipped: 'Skipped',
     empty: 'Not enough data yet — listen for a few days',
+    hiddenTracks: (n) => `Hidden from mixes: ${enPlural(n, 'track', 'tracks')}`,
+    demoted: (names) => `Left out of mixes for 30 days (skipped twice in a row): ${names}`,
+    andCount: (names, more) => `${names} and ${more} more`,
+    bringBack: 'Bring all back',
     origins: {
       wave: 'My Wave',
       radio: 'Radio',

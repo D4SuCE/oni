@@ -8,9 +8,10 @@ import { create } from 'zustand';
 import { api, storage } from '../api/client.ts';
 import type { GenreTree, Playlist, Track } from '../api/types.ts';
 import { trackCover, trackKey } from '../api/yandex.ts';
-import { history, recentPlays } from '../player/player.ts';
+import { history, recentPlays, recsFeedback } from '../player/player.ts';
 import { trimTrack } from '../player/recent.ts';
-import { useApp } from '../store.ts';
+import { toast, useApp } from '../store.ts';
+import { tr } from '../i18n.ts';
 import { discoverSeeds, rankDiscoveries } from './discover.ts';
 import { assembleMix, mixSeeds, planMixes } from './mixes.ts';
 import { assembleDaylist, playedInSlot, SLOT_SEEDS, slotAt, topGenres, type Slot, type SlotSpan } from './daylist.ts';
@@ -240,12 +241,30 @@ async function buildDaylist(span: SlotSpan): Promise<Mix | undefined> {
   return { ...mix, slot: span.slot, slotStart: span.start, slotEnd: span.end, genres: topGenres(tracks) };
 }
 
+/** A mix left with fewer tracks than this after hiding and demoting is not shown. */
+const MIN_SHOWN = 5;
+
+/** The shelf in order, without hidden tracks and demoted artists. */
 const ordered = (c: Cache) => {
+  shown = c;
   const personal = c.personal ?? [];
   const repeat = personal.filter((m) => m.kind === 'repeat');
   const because = personal.filter((m) => m.kind === 'because');
-  return [c.daylist, c.discover, c.radar, ...repeat, ...c.mixes, ...because, c.rewind].filter(Boolean) as Mix[];
+  const now = Date.now();
+  return ([c.daylist, c.discover, c.radar, ...repeat, ...c.mixes, ...because, c.rewind].filter(Boolean) as Mix[])
+    .map((m) => ({ ...m, tracks: m.tracks.filter((t) => recsFeedback.keeps(t, now)) }))
+    .filter((m) => m.tracks.length >= MIN_SHOWN);
 };
+
+/** The cache the shelf was last built from: hiding a track or demoting an artist reapplies the filter to it. */
+let shown: Cache | null = null;
+recsFeedback.subscribe(() => shown && useRecs.setState({ mixes: ordered(shown) }));
+
+/** "Hide from mixes": gone from every mix at once and for good, without telling Yandex. */
+export function hideFromMixes(t: Track) {
+  recsFeedback.hide(t.id);
+  toast(tr().toast.hiddenFromMixes);
+}
 
 let running: Promise<void> | null = null;
 let nextSlot: ReturnType<typeof setTimeout> | undefined;

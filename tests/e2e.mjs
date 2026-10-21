@@ -126,6 +126,28 @@ await step('daylist leads "For you" and fits the time of day', async () => {
   await page.click('[data-testid="nav-home"]');
 });
 
+await step('hide a track from the mixes, then bring it back from Settings', async () => {
+  await page.locator('[data-testid="mix-card"]').first().click();
+  await page.waitForSelector('.track-row');
+  const row = page.locator('.track-row').first();
+  const title = await row.locator('.tr-title').innerText();
+  const before = await page.locator('.track-row').count();
+  await row.click({ button: 'right' });
+  await page.getByText('Скрыть из подборок', { exact: true }).click();
+  await page.waitForFunction((n) => document.querySelectorAll('.track-row').length === n - 1, before, { timeout: 5000 });
+  const titles = await page.locator('.track-row .tr-title').allInnerTexts();
+  if (titles.includes(title)) throw new Error(`"${title}" is still in the mix`);
+  await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
+  const note = await page.locator('[data-testid="mix-feedback"]').innerText();
+  if (!/Скрыто из подборок: 1 трек/.test(note)) throw new Error(`settings: ${note}`);
+  await page.click('[data-testid="mix-feedback-reset"]');
+  await page.waitForSelector('[data-testid="mix-feedback"]', { state: 'detached', timeout: 3000 });
+  await page.click('[data-testid="nav-home"]');
+  await page.locator('[data-testid="mix-card"]').first().click();
+  await page.waitForFunction((n) => document.querySelectorAll('.track-row').length === n, before, { timeout: 5000 });
+  await page.click('[data-testid="nav-home"]');
+});
+
 await step('search and play a track', async () => {
   await page.click('[data-testid="nav-search"]');
   await page.fill('[data-testid="search-input"]', 'Кино');

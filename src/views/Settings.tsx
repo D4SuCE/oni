@@ -1,8 +1,8 @@
-import { Download, ExternalLink, FileText, LogOut, RefreshCw } from 'lucide-react';
-import { useState } from 'react';
+import { Download, ExternalLink, FileText, LogOut, RefreshCw, Undo2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { Segmented } from '../components/Wave.tsx';
 import { LANGS, setLang, useLang, useT } from '../i18n.ts';
-import { setNormalize, stats, usePlayer } from '../player/player.ts';
+import { recsFeedback, setNormalize, stats, usePlayer } from '../player/player.ts';
 import { logout, useApp } from '../store.ts';
 import { setMotion, setPulse, useMotion, usePulse } from '../ui/motion.ts';
 import { MAX_SEE_THROUGH, setSeeThrough, useSeeThrough } from '../ui/seeThrough.ts';
@@ -148,6 +148,7 @@ export function SettingsView() {
         ) : (
           <div className="hint">{t.stats.empty}</div>
         )}
+        <MixFeedback />
       </div>
 
       <div className="panel glass">
@@ -182,6 +183,30 @@ export function SettingsView() {
       </div>
 
       <p className="hint center">{s.disclaimer}</p>
+    </div>
+  );
+}
+
+/** Hidden tracks and demoted artists, with a way to bring them all back. */
+function MixFeedback() {
+  const t = useT().stats;
+  const [, refresh] = useState(0);
+  useEffect(() => {
+    return recsFeedback.subscribe(() => refresh((n) => n + 1));
+  }, []);
+  const hidden = recsFeedback.hiddenCount();
+  const artists = recsFeedback.demotedArtists(Date.now());
+  if (!hidden && !artists.length) return null;
+  const names = artists.length > 3 ? t.andCount(artists.slice(0, 3).join(', '), artists.length - 3) : artists.join(', ');
+  return (
+    <div className="settings-row mix-feedback" data-testid="mix-feedback">
+      <div className="hint">
+        {hidden > 0 && <div>{t.hiddenTracks(hidden)}</div>}
+        {artists.length > 0 && <div>{t.demoted(names)}</div>}
+      </div>
+      <button className="btn ghost" onClick={() => recsFeedback.reset()} data-testid="mix-feedback-reset">
+        <Undo2 size={16} /> {t.bringBack}
+      </button>
     </div>
   );
 }

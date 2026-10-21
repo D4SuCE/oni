@@ -2651,3 +2651,8 @@ kbd {
   flex-shrink: 0;
   gap: 8px;
 }
+.mix-feedback {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}

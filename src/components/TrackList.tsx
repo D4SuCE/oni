@@ -51,13 +51,20 @@ interface RowProps {
   showAlbum: boolean;
   onPlay: (index: number) => void;
   onRemove?: (index: number) => void;
+  rowMenu?: (t: Track, index: number) => MenuItem[];
 }
 
-const TrackRow = memo(function TrackRow({ track: t, index, active, playing, liked, showAlbum, onPlay, onRemove }: RowProps) {
+const TrackRow = memo(function TrackRow({ track: t, index, active, playing, liked, showAlbum, onPlay, onRemove, rowMenu }: RowProps) {
   const unavailable = t.available === false;
   const tx = useT();
   const menu = (e: React.MouseEvent) =>
-    openMenu(e, trackMenu(t, onRemove ? [{ label: tx.menu.removeFromPlaylist, icon: <Trash2 size={15} />, danger: true, onClick: () => onRemove(index) }] : []));
+    openMenu(
+      e,
+      trackMenu(t, [
+        ...(rowMenu?.(t, index) ?? []),
+        ...(onRemove ? [{ label: tx.menu.removeFromPlaylist, icon: <Trash2 size={15} />, danger: true, onClick: () => onRemove(index) }] : []),
+      ]),
+    );
   return (
     <div
       className={cx('track-row', active && 'active', unavailable && 'unavailable')}
@@ -110,7 +117,20 @@ const TrackRow = memo(function TrackRow({ track: t, index, active, playing, like
   );
 });
 
-export function TrackList({ tracks, onPlay, showAlbum = true, onRemove }: { tracks: Track[]; onPlay: (index: number) => void; showAlbum?: boolean; onRemove?: (index: number) => void }) {
+export function TrackList({
+  tracks,
+  onPlay,
+  showAlbum = true,
+  onRemove,
+  rowMenu,
+}: {
+  tracks: Track[];
+  onPlay: (index: number) => void;
+  showAlbum?: boolean;
+  onRemove?: (index: number) => void;
+  /** Extra menu items for a row (above the standard ones' tail). */
+  rowMenu?: (t: Track, index: number) => MenuItem[];
+}) {
   const currentId = usePlayer((s) => s.queue[s.index]?.id);
   const playing = usePlayer((s) => s.playing);
   const liked = useApp((s) => s.liked);
@@ -127,6 +147,7 @@ export function TrackList({ tracks, onPlay, showAlbum = true, onRemove }: { trac
           showAlbum={showAlbum}
           onPlay={onPlay}
           onRemove={onRemove}
+          rowMenu={rowMenu}
         />
       ))}
     </div>

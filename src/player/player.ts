@@ -8,6 +8,7 @@ import { tr } from '../i18n.ts';
 import { artistNames, trackCover, type StreamQuality } from '../api/yandex.ts';
 import { DEFAULT_TUNING, WaveEngine, waveSeeds, type WaveStats, type WaveTuning } from '../wave/engine.ts';
 import { ListenHistory } from '../wave/history.ts';
+import { playOutcome, RecsFeedback } from '../recs/feedback.ts';
 import { RecentPlays } from './recent.ts';
 import { PlayStats, type Origin } from './stats.ts';
 
@@ -86,6 +87,8 @@ const set = usePlayer.setState;
 const get = usePlayer.getState;
 
 export const history = new ListenHistory(storage);
+/** Hidden tracks and demoted artists, for the mixes. */
+export const recsFeedback = new RecsFeedback(storage);
 export const recentPlays = new RecentPlays(storage);
 export const stats = new PlayStats(storage);
 /** Bumped on every new entry so the History page re-reads the list. */
@@ -172,6 +175,7 @@ function finishCurrent(ended: boolean) {
   if (!t || (listened < 1 && !ended)) return;
   history.record(t, listened, ended);
   stats.record(originOf(t), listened, (t.durationMs || 0) / 1000, ended);
+  recsFeedback.recordPlay(t, playOutcome(listened, (t.durationMs || 0) / 1000, ended), Date.now());
   reportPlay(t, ended);
   if (ended || listened >= 5) {
     const source = get().source;

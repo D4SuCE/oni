@@ -1,9 +1,9 @@
-import { Play, Shuffle } from 'lucide-react';
+import { EyeOff, Play, Shuffle } from 'lucide-react';
 import { MixArt, mixSubtitle, mixTitle, useGenreTitles } from '../components/Mixes.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { useLang, useT } from '../i18n.ts';
 import { playShuffled, playTracks } from '../player/player.ts';
-import { useRecs } from '../recs/index.ts';
+import { hideFromMixes, useRecs } from '../recs/index.ts';
 import { fmtTotal } from '../ui/util.ts';
 
 export function MixView({ id }: { id: string }) {
@@ -41,7 +41,11 @@ export function MixView({ id }: { id: string }) {
           </div>
         </div>
       </header>
-      <TrackList tracks={mix.tracks} onPlay={(i) => playTracks(mix.tracks, i, title, undefined, extra)} />
+      <TrackList
+        tracks={mix.tracks}
+        onPlay={(i) => playTracks(mix.tracks, i, title, undefined, extra)}
+        rowMenu={(track) => [{ label: t.menu.hideFromMixes, icon: <EyeOff size={15} />, onClick: () => hideFromMixes(track) }]}
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import type { Album, Track } from '../src/api/types.ts';
 import { assembleDaylist, inSlot, personalShare, playedInSlot, slotAt, topGenres } from '../src/recs/daylist.ts';
 import { discoverSeeds, rankDiscoveries } from '../src/recs/discover.ts';
+import { playOutcome, RecsFeedback } from '../src/recs/feedback.ts';
 import { assembleMix, mixSeeds, planMixes } from '../src/recs/mixes.ts';
 import { buildProfile, type GenreTree, type TasteInput } from '../src/recs/profile.ts';
 import { becauseYouListened, forgottenFavourites, onRepeat, recentArtists } from '../src/recs/personal.ts';
@@ -309,6 +310,56 @@ await test('daylist: own share grows with the log, wave fills the rest, nothing 
   assert(mixed.slice(0, 10).some((t) => own.some((o) => o.track === t)), 'own tracks are spread, not pushed to the end');
 
   assert(topGenres([mk('rap', 1), mk('rap', 2), mk('rock', 3), mk('pop', 4), mk('rock', 5), mk('rap', 6)]).join() === 'rap,rock', 'top genres');
+});
+
+const memory = () => {
+  const m = new Map<string, string>();
+  return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v) };
+};
+
+await test('mix feedback: hidden tracks leave every mix, and stay hidden after a restart', () => {
+  seq = 0;
+  const store = memory();
+  const fb = new RecsFeedback(store);
+  const [a, b] = [mk('rap', 1), mk('rap', 2)];
+  let told = 0;
+  fb.subscribe(() => told++);
+  fb.hide(a.id);
+  assert(!fb.keeps(a, NOW) && fb.keeps(b, NOW) && told === 1, 'hidden track dropped, listener told once');
+  assert(!new RecsFeedback(store).keeps(a, NOW), 'survives a restart');
+});
+
+await test('mix feedback: two skips in a row demote an artist for 30 days; a finished play resets the streak', () => {
+  seq = 0;
+  const fb = new RecsFeedback(memory());
+  let told = 0;
+  fb.subscribe(() => told++);
+  const duo = mk('rap', 7, { artists: [{ id: 7, name: 'A7' }, { id: 8, name: 'A8' }] });
+  const solo8 = mk('rap', 8);
+  const solo7 = mk('rap', 7);
+
+  fb.recordPlay(solo7, 'skipped', NOW);
+  fb.recordPlay(solo7, 'finished', NOW);
+  fb.recordPlay(solo7, 'skipped', NOW);
+  assert(!fb.isDemoted(7, NOW) && told === 0, 'skip, finish, skip: not in a row');
+
+  const demoted = fb.recordPlay(duo, 'skipped', NOW);
+  assert(demoted.join() === 'A7' && fb.isDemoted(7, NOW) && !fb.isDemoted(8, NOW) && told === 1, `second skip in a row demotes A7 only: ${demoted}`);
+  assert(!fb.keeps(duo, NOW) && !fb.keeps(solo7, NOW) && fb.keeps(solo8, NOW), 'tracks with a demoted artist are left out');
+  assert(fb.demotedArtists(NOW).join() === 'A7', 'named in settings');
+
+  fb.recordPlay(solo8, 'skipped', NOW);
+  assert(fb.isDemoted(8, NOW), 'A8: the duo skip and this one make two in a row');
+  assert(!fb.isDemoted(7, NOW + 31 * DAY) && fb.keeps(solo7, NOW + 31 * DAY), 'back after 30 days');
+
+  fb.reset();
+  assert(fb.keeps(solo7, NOW) && fb.keeps(solo8, NOW) && fb.hiddenCount() === 0, 'reset brings everything back');
+});
+
+await test('mix feedback: play outcomes match the stats (skip under 30 s, finished at 85%)', () => {
+  assert(playOutcome(10, 200, false) === 'skipped', 'left at 10 s');
+  assert(playOutcome(60, 200, false) === 'partial', 'left at 60 s');
+  assert(playOutcome(171, 200, false) === 'finished' && playOutcome(5, 200, true) === 'finished', '85% or the end');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
