@@ -33,7 +33,7 @@ export async function downloadList(key: string, tracks: Track[]) {
     const { [key]: _, ...rest } = s;
     return rest;
   }, true);
-  if (failed) toast(tr().downloads.failedSome(failed));
+  toast(failed ? tr().downloads.failedSome(failed) : tr().downloads.listDone(tracks.length));
 }
 
 export function formatSize(bytes: number) {

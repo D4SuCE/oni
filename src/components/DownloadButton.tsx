@@ -14,7 +14,7 @@ export function DownloadButton({ listKey, tracks }: { listKey: string; tracks: T
   const all = playable.length > 0 && playable.every((x) => offline!.has(x.id));
   if (batch)
     return (
-      <button className="btn glass-btn" disabled data-testid="download-all">
+      <button className="btn glass-btn busy" disabled data-testid="download-all">
         <Loader2 size={16} className="spin" /> {t.progress(batch.done, batch.total)}
       </button>
     );
