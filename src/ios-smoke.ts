@@ -128,6 +128,37 @@ async function uploadForm() {
   report('upload-form', false, 'no echo service answered');
 }
 
+/** Equalizer and volume on the iPhone (src/player/processing.ts) rest on this: Web Audio hears a
+ * track fetched whole through the native HTTP stack and played from memory. A separate element
+ * and context, muted at the end, so the main player is untouched. */
+async function webAudioFromMemory() {
+  const { queue, index } = wave().usePlayer.getState();
+  const track = queue[index] as unknown as { id: string };
+  wave().audio.pause();
+  try {
+    const stream = await (wave() as unknown as { api: { stream(id: string): Promise<{ url: string }> } }).api.stream(track.id);
+    const bytes = await transport.fetchBytes!(stream.url);
+    const el = new Audio(URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' })));
+    const ctx = new AudioContext();
+    const analyser = ctx.createAnalyser();
+    const mute = ctx.createGain();
+    mute.gain.value = 0;
+    ctx.createMediaElementSource(el).connect(analyser).connect(mute).connect(ctx.destination);
+    await ctx.resume();
+    await el.play();
+    await sleep(2500);
+    const data = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(data);
+    const rms = Math.sqrt(data.reduce((s, v) => s + v * v, 0) / data.length);
+    el.pause();
+    await ctx.close();
+    report('web-audio-memory', rms > 0.001, `rms ${rms.toFixed(4)}, ${(bytes.byteLength / 1e6).toFixed(1)} MB`);
+  } catch (e) {
+    report('web-audio-memory', false, String(e));
+  }
+  await wave().audio.play().catch(() => {});
+}
+
 export async function runSmoke() {
   try {
     noZoom();
@@ -165,6 +196,7 @@ export async function runSmoke() {
     await wave().playTracks([track], 0, 'smoke');
     const local = await until(() => wave().audio.src.startsWith('blob:') && !wave().audio.paused && wave().audio.currentTime > 1, 20000);
     report('offline-playback', local, wave().audio.src.slice(0, 5));
+    await webAudioFromMemory();
 
     // A shortcut's link. The page asks iOS to open it (Capacitor hands non-web addresses to the
     // system), so it comes back through the scene as from a shortcut, without the "Open in Oni?"

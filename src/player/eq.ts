@@ -5,7 +5,8 @@
 
 import { create } from 'zustand';
 import { loadJson, storage, transport } from '../api/client.ts';
-import { audio } from './player.ts';
+import { audio } from './audio.ts';
+import { processingOn } from './processing.ts';
 
 export const EQ_BANDS = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000];
 export const EQ_RANGE = 12;
@@ -43,9 +44,12 @@ let ctx: AudioContext | null = null;
 let source: MediaElementAudioSourceNode | null = null;
 let preamp: GainNode | null = null;
 let filters: BiquadFilterNode[] = [];
+/** The last stage: the volume, where the element's own cannot be set (iOS ignores audio.volume). */
+let output: GainNode | null = null;
 
-/** Without CORS audio (iOS) Web Audio would only hear silence and mute the music: leave it alone. */
-export const canProcessAudio = () => Boolean(transport.canAnalyzeAudio);
+/** Without a same-origin stream Web Audio would only hear silence and mute the music: the desktop
+ * shell arranges CORS; the iPhone plays from memory when processing is on (processing.ts). */
+export const canProcessAudio = () => Boolean(transport.canAnalyzeAudio) || processingOn;
 
 function build() {
   if (ctx || !canProcessAudio()) return;
@@ -59,14 +63,26 @@ function build() {
     f.Q.value = 1.1;
     return f;
   });
+  output = ctx.createGain();
   let node: AudioNode = source.connect(preamp);
   for (const f of filters) node = node.connect(f);
-  node.connect(ctx.destination);
+  node.connect(output).connect(ctx.destination);
+}
+
+/** The iPhone with processing: the graph from the first track on, so its volume works. */
+export function routeThroughGraph() {
+  build();
+  apply();
+}
+
+/** Volume at the end of the graph (the iPhone); the desktop keeps using audio.volume. */
+export function setOutputGain(gain: number) {
+  if (output) output.gain.value = gain;
 }
 
 function apply() {
   const s = useEq.getState();
-  if (!s.enabled && !ctx) return; // never switched on: leave the element untouched
+  if (!s.enabled && !ctx && !processingOn) return; // never switched on: leave the element untouched
   build();
   if (!ctx) return;
   // Switched off after being on: the graph stays (an element can't be detached), set flat.

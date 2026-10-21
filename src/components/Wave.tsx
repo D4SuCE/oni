@@ -1,8 +1,9 @@
 import { Loader2, Pause, Play, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { api } from '../api/client.ts';
-import { useT } from '../i18n.ts';
-import { history, playWave, retuneWave, toggle, usePlayer } from '../player/player.ts';
+import { useLang, useT } from '../i18n.ts';
+import { artistNames } from '../api/yandex.ts';
+import { history, isMyWave, playWave, retuneWave, sourceTitle, toggle, usePlayer } from '../player/player.ts';
 import { useApp } from '../store.ts';
 import { useSwipeDown } from '../ui/swipe.ts';
 import { cx, useAsync } from '../ui/util.ts';
@@ -177,22 +178,27 @@ export function TuningPanel() {
 }
 
 export function WaveHero() {
-  // My Wave itself, or a radio (a wave seeded by a track, artist, album or playlist): the banner
-  // says which, and plays and pauses whichever is on.
-  const isWave = usePlayer((s) => s.source?.kind === 'wave');
-  const station = usePlayer((s) => (s.source?.kind === 'wave' ? s.source.station : undefined));
+  // My Wave as such; anything else on (a list, a search, a radio seeded by a track, artist, album
+  // or playlist) takes the banner's title: the track, where it plays from, and a way back to My Wave.
+  const source = usePlayer((s) => s.source);
+  const track = usePlayer((s) => s.queue[s.index]);
+  const myWave = isMyWave(source);
+  const other = Boolean(track) && !myWave;
+  const station = source?.kind === 'wave' ? source.station : undefined;
   const playing = usePlayer((s) => s.playing);
   const busy = usePlayer((s) => s.waveBusy);
   const tuning = usePlayer((s) => s.tuning);
-  const active = isWave && playing;
+  const active = (myWave || other) && playing;
   const t = useT();
+  useLang((s) => s.lang); // the source title is localized
   const w = t.wave;
-  const desc = station ? [w.stationOf(station.seed.split(':')[0], station.title)] : [
+  const desc = other ? [artistNames(track!)] : [
     tuning.context?.name,
     tuning.diversity !== 'default' && w.diversity[tuning.diversity],
     tuning.mood !== 'all' && w.moods[tuning.mood],
     tuning.language !== 'any' && w.languages[tuning.language],
   ].filter(Boolean);
+  const kicker = !other ? w.kicker(tuning.noRepeatDays) : station ? w.stationOf(station.seed.split(':')[0], station.title) : `${w.nowPlaying} · ${sourceTitle(source)}`;
 
   return (
     <div className={cx('wave-hero', active && 'active')}>
@@ -211,11 +217,17 @@ export function WaveHero() {
         </div>
       </div>
       <div className="wave-content">
-        <div className="kicker">{w.kicker(tuning.noRepeatDays)}</div>
-        <h1>{t.common.myWave}</h1>
+        <div className="kicker" data-testid="wave-kicker">{kicker}</div>
+        {other ? (
+          <h1 className="wave-track" title={track!.title} data-testid="wave-track">
+            {track!.title}
+          </h1>
+        ) : (
+          <h1>{t.common.myWave}</h1>
+        )}
         <p className={cx('wave-desc', !desc.length && 'tagline')} data-testid="wave-desc">
           {desc.length ? desc.join(' · ') : w.tagline}
-          {station && (
+          {other && (
             <>
               {' · '}
               <button className="link wave-back" onClick={() => playWave()} data-testid="wave-back">
@@ -225,15 +237,15 @@ export function WaveHero() {
           )}
         </p>
         <div className="wave-actions">
-          <button className="btn primary big" onClick={() => (isWave ? toggle() : playWave())} disabled={busy} data-testid="wave-play">
+          <button className="btn primary big" onClick={() => (myWave || other ? toggle() : playWave())} disabled={busy} data-testid="wave-play">
             {busy ? <Loader2 size={20} className="spin" /> : active ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
-            {active ? t.player.pause : isWave ? w.resume : t.common.play}
+            {active ? t.player.pause : myWave || other ? w.resume : t.common.play}
           </button>
           <button className="btn glass-btn big" onClick={() => useApp.setState({ tuningOpen: true })} data-testid="wave-tune">
             <SlidersHorizontal size={18} /> {w.tune}
           </button>
         </div>
-        {isWave && (
+        {myWave && (
           <div className="wave-footer">
             <WaveStatsLine />
           </div>

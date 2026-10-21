@@ -403,15 +403,24 @@ await step('artist radio and similar tracks', async () => {
     return { route, backStack, forwardStack };
   });
   await page.click('[data-testid="nav-home"]');
-  const desc = await page.locator('[data-testid="wave-desc"]').innerText();
-  if (!desc.toLowerCase().startsWith('волна по исполнителю')) throw new Error(`banner says "${desc}"`);
-  await page.click('[data-testid="wave-back"]');
-  await page.waitForFunction(() => {
-    const s = window.__wave.usePlayer.getState();
-    return s.source?.kind === 'wave' && !s.source.station && s.index >= 0;
-  }, null, { timeout: 30000 });
-  console.log(`       banner: ${desc}`);
-  await page.evaluate((n) => window.__wave.useApp.setState(n), nav);
+  try {
+    const kicker = await page.locator('[data-testid="wave-kicker"]').innerText();
+    const playing = await page.locator('[data-testid="wave-track"]').innerText();
+    const desc = `${kicker} / ${playing}`;
+    const title = await page.evaluate(() => {
+      const s = window.__wave.usePlayer.getState();
+      return s.queue[s.index]?.title;
+    });
+    if (!kicker.toLowerCase().startsWith('волна по исполнителю') || playing !== title) throw new Error(`banner says "${desc}", playing "${title}"`);
+    await page.click('[data-testid="wave-back"]');
+    await page.waitForFunction(() => {
+      const s = window.__wave.usePlayer.getState();
+      return s.source?.kind === 'wave' && !s.source.station && s.index >= 0;
+    }, null, { timeout: 30000 });
+    console.log(`       banner: ${desc}`);
+  } finally {
+    await page.evaluate((n) => window.__wave.useApp.setState(n), nav);
+  }
   await page.waitForSelector('[data-testid="radio"]');
 });
 

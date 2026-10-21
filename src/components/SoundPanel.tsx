@@ -1,11 +1,12 @@
 import { Check, ChevronDown, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { StreamQuality } from '../api/yandex.ts';
 import { useT } from '../i18n.ts';
 import { EQ_BANDS, EQ_PRESETS, EQ_RANGE, applyPreset, canProcessAudio, setBand, setEqEnabled, setPreamp, useEq, type EqPreset } from '../player/eq.ts';
 import { setQuality, usePlayer } from '../player/player.ts';
 import { useApp } from '../store.ts';
 import { cx } from '../ui/util.ts';
+import { useSwipeDown } from '../ui/swipe.ts';
 
 const QUALITIES: StreamQuality[] = ['lossless', 'nq', 'lq'];
 const band = (hz: number) => (hz >= 1000 ? `${hz / 1000}k` : String(hz));
@@ -85,7 +86,10 @@ export function SoundPanel() {
   const stream = usePlayer((p) => p.stream);
   const eq = useEq();
   const [pickerOpen, setPickerOpen] = useState(false);
-  const close = () => useApp.setState({ soundOpen: false });
+  const close = useCallback(() => useApp.setState({ soundOpen: false }), []);
+  const sheet = useRef<HTMLDivElement>(null);
+  const grip = useRef<HTMLDivElement>(null);
+  useSwipeDown(sheet, close, grip);
   useEffect(() => {
     // Escape closes the preset list first, then the panel.
     const onKey = (e: KeyboardEvent) => {
@@ -95,16 +99,20 @@ export function SoundPanel() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [pickerOpen]);
+  }, [pickerOpen, close]);
 
   return (
     <div className="sound-backdrop" onMouseDown={close}>
-      <div className="sound-panel glass" onMouseDown={(e) => e.stopPropagation()} data-testid="sound-panel">
-        <div className="sound-head">
-          <h3>{s.title}</h3>
-          <button className="icon-btn" onClick={close} title={t.common.close}>
-            <X size={18} />
-          </button>
+      <div ref={sheet} className="sound-panel glass" onMouseDown={(e) => e.stopPropagation()} data-testid="sound-panel">
+        {/* On the iPhone a sheet from below, dragged down by its top to close (as Tune). */}
+        <div ref={grip} className="drawer-grip-zone">
+          <div className="drawer-grip" />
+          <div className="sound-head">
+            <h3>{s.title}</h3>
+            <button className="icon-btn" onClick={close} title={t.common.close}>
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {QUALITIES.map((q) => (

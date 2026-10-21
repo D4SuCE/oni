@@ -75,13 +75,13 @@ export function LikeButton({ track, size = 18 }: { track: Track; size?: number }
   );
 }
 
-function VolumeControl() {
+export function VolumeControl({ className }: { className?: string }) {
   const volume = usePlayer((s) => s.volume);
   const before = useRef(0.8);
   const Icon = volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
   const t = useT();
   return (
-    <div className="volume">
+    <div className={cx('volume', className)}>
       <button
         className="icon-btn"
         onClick={() => {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Ban, ChevronDown, MoreHorizontal, X } from 'lucide-react';
+import { Ban, ChevronDown, MoreHorizontal, SlidersVertical, X } from 'lucide-react';
 import { api } from '../api/client.ts';
 import type { Track } from '../api/types.ts';
 import { trackCover } from '../api/yandex.ts';
@@ -9,7 +9,9 @@ import { dislike, useApp } from '../store.ts';
 import { useSwipeDown } from '../ui/swipe.ts';
 import { cx, useAsync } from '../ui/util.ts';
 import { ArtistLinks, Cover, Spinner } from './Common.tsx';
-import { LikeButton, SeekBar, Transport } from './PlayerBar.tsx';
+import { LikeButton, SeekBar, Transport, VolumeControl } from './PlayerBar.tsx';
+import { processingOn, useProcessing } from '../player/processing.ts';
+import { isIos } from '../ui/platform.ts';
 import { BackgroundVideo, LiveCover, useCoverVideo } from './LiveCover.tsx';
 import { openMenu } from './Menu.tsx';
 import { isUpload, TrackList, trackMenu } from './TrackList.tsx';
@@ -129,6 +131,7 @@ export function NowPlaying() {
   const close = useCallback(() => useApp.setState({ nowPlayingOpen: false }), []);
   const sheet = useRef<HTMLDivElement>(null);
   useSwipeDown(sheet, close);
+  const volumeSlider = useProcessing((s) => s.volumeSlider);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
     window.addEventListener('keydown', onKey);
@@ -164,6 +167,12 @@ export function NowPlaying() {
                     </button>
                   )}
                   <LikeButton track={track} size={22} />
+                  {/* The equalizer on the iPhone, where the player bar has no room for it. */}
+                  {isIos && processingOn && (
+                    <button className="icon-btn" onClick={() => useApp.setState({ soundOpen: true })} title={t.sound.title} data-testid="np-sound">
+                      <SlidersVertical size={21} />
+                    </button>
+                  )}
                   <button className="icon-btn" onClick={(e) => openMenu(e, trackMenu(track))} title={t.common.more} data-testid="np-more">
                     <MoreHorizontal size={22} />
                   </button>
@@ -171,6 +180,7 @@ export function NowPlaying() {
               </div>
               <SeekBar className="np-seek" />
               <Transport big />
+              {isIos && processingOn && volumeSlider && <VolumeControl className="np-volume" />}
             </>
           )}
         </div>

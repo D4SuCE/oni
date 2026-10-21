@@ -9,6 +9,7 @@ import { offline, recsFeedback, setNormalize, stats, usePlayer } from '../player
 import { logout, navigate, useApp } from '../store.ts';
 import { setMotion, setPulse, useMotion, usePulse } from '../ui/motion.ts';
 import { isIos } from '../ui/platform.ts';
+import { processingOn, setProcessingPrefs, useProcessing } from '../player/processing.ts';
 import { MAX_SEE_THROUGH, setSeeThrough, useSeeThrough } from '../ui/seeThrough.ts';
 import { useUpdate } from '../ui/update.ts';
 import { cx } from '../ui/util.ts';
@@ -100,6 +101,7 @@ export function SettingsView() {
           </div>
           <input type="checkbox" className="switch" checked={normalize} onChange={(e) => setNormalize(e.target.checked)} />
         </label>
+        {isIos && <PhoneSound />}
       </div>
 
       {window.wave?.setCloseToTray && (
@@ -291,5 +293,37 @@ function UpdateRow() {
         )}
       </div>
     </div>
+  );
+}
+
+/** The iPhone's equalizer and volume (src/player/processing.ts): the route is fixed per run. */
+function PhoneSound() {
+  const t = useT();
+  const s = t.settings;
+  const { processing, volumeSlider } = useProcessing();
+  return (
+    <>
+      <label className="toggle-row">
+        <div>
+          <div>{s.processing}</div>
+          <div className="hint">{s.processingHint}</div>
+        </div>
+        <input type="checkbox" className="switch" checked={processing} onChange={(e) => setProcessingPrefs({ processing: e.target.checked })} data-testid="processing" />
+      </label>
+      {processing !== processingOn && (
+        <button className="btn primary" onClick={() => location.reload()} data-testid="processing-restart">
+          {s.restart}
+        </button>
+      )}
+      {processing && (
+        <label className="toggle-row">
+          <div>
+            <div>{s.volumeSlider}</div>
+            <div className="hint">{s.volumeSliderHint}</div>
+          </div>
+          <input type="checkbox" className="switch" checked={volumeSlider} onChange={(e) => setProcessingPrefs({ volumeSlider: e.target.checked })} data-testid="volume-slider" />
+        </label>
+      )}
+    </>
   );
 }
