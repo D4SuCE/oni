@@ -7,6 +7,7 @@ import { OniLogin } from './api/capacitor.ts';
 import { transport } from './api/client.ts';
 import { OniRemote } from './player/remote.ts';
 import { OniVolume } from './player/volume.ts';
+import { background } from './ui/offline.ts';
 
 type Wave = {
   audio: HTMLAudioElement;
@@ -174,6 +175,19 @@ async function touchSeek() {
   report('touch-seek', moved, `at ${wave().audio.currentTime.toFixed(1)} of ${wave().audio.duration.toFixed(1)}`);
 }
 
+/** A list downloads through iOS's background session (iosDownloads.ts): the file lands in the
+ * folder, is sealed into the library, and the books are clear. One track, removed afterwards. */
+async function backgroundDownload() {
+  const { queue, index } = wave().usePlayer.getState();
+  const track = (queue as unknown as { id: string }[]).slice(index + 1).find((t) => !wave().offline!.has(t.id));
+  if (!background || !track) return report('background-download', false, background ? 'no track to try' : 'no background');
+  const started = Date.now();
+  await background.add('smoke', [track]);
+  const kept = await until(() => wave().offline!.has(track.id) && !background.pendingFor('smoke'), 90000);
+  report('background-download', kept, `${((Date.now() - started) / 1000).toFixed(1)} s, pending ${background.pendingFor('smoke')}`);
+  await (wave().offline as unknown as { remove(id: string): Promise<void> }).remove(track.id);
+}
+
 export async function runSmoke() {
   try {
     noZoom();
@@ -215,6 +229,7 @@ export async function runSmoke() {
     const local = await until(() => wave().audio.src.startsWith('blob:') && !wave().audio.paused && wave().audio.currentTime > 1, 20000);
     report('offline-playback', local, wave().audio.src.slice(0, 5));
     await webAudioFromMemory();
+    await backgroundDownload();
 
     // A shortcut's link. The page asks iOS to open it (Capacitor hands non-web addresses to the
     // system), so it comes back through the scene as from a shortcut, without the "Open in Oni?"

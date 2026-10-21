@@ -35,6 +35,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
     }
 
+    /// Background downloads (DownloadsPlugin in OniBridge.swift) finished while the app was away:
+    /// iOS wakes it to deliver them and waits for this to be called back.
+    func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
+        DownloadsPlugin.backgroundCompletion = completionHandler
+        _ = DownloadsPlugin.shared.session
+    }
+
     func application(_ application: UIApplication,
                      configurationForConnecting connectingSceneSession: UISceneSession,
                      options: UIScene.ConnectionOptions) -> UISceneConfiguration {

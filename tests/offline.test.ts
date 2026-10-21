@@ -100,6 +100,15 @@ await test('downloadAll: in the order given, and stops when asked', async () => 
   assert(lib.has('20') && lib.has('21') && !lib.has('22'), 'stopped after two');
 });
 
+await test('keep: audio fetched elsewhere (background downloads) is stored like a download', async () => {
+  const { lib, disk, fetches } = setup();
+  await lib.keep(track('30'), audioOf('30'), 'mp3', 192);
+  assert(lib.has('30') && fetches() === 0, 'kept without a fetch');
+  assert(!new TextDecoder('latin1').decode(disk.get('30.oni')!).includes('fake audio'), 'encrypted on disk');
+  const back = new Uint8Array(await (await lib.open('30')).blob.arrayBuffer());
+  assert(back.length === audioOf('30').byteLength, 'opens back');
+});
+
 await test('the key survives a restart: a new library opens old downloads', async () => {
   const { lib, deps } = setup();
   await lib.download(track('8'));

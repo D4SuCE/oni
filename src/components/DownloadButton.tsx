@@ -2,16 +2,18 @@ import { Check, Download, Loader2, X } from 'lucide-react';
 import type { Track } from '../api/types.ts';
 import { useT } from '../i18n.ts';
 import { offline } from '../player/player.ts';
-import { downloadList, useBatches, useOfflineVersion } from '../ui/offline.ts';
+import { background, downloadList, useBatches, useOfflineVersion } from '../ui/offline.ts';
 
 /** "Download" for a whole playlist, album, mix or "Liked": progress while it runs, "Downloaded" after. */
 export function DownloadButton({ listKey, tracks }: { listKey: string; tracks: Track[] }) {
   const t = useT().downloads;
   useOfflineVersion((s) => s.v);
-  const batch = useBatches((s) => s[listKey]);
+  const running = useBatches((s) => s[listKey]);
   if (!offline || !tracks.length) return null;
   const playable = tracks.filter((x) => x.available !== false);
   const all = playable.length > 0 && playable.every((x) => offline!.has(x.id));
+  // The iPhone's lists download through iOS in the background, also across app restarts.
+  const batch = background?.pendingFor(listKey) ? { done: playable.filter((x) => offline!.has(x.id)).length, total: playable.length } : running;
   // While it runs the button shows how far it is, and a tap cancels it.
   if (batch)
     return (

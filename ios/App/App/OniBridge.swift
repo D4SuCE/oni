@@ -12,6 +12,7 @@ class OniViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(LoginPlugin())
         bridge?.registerPluginInstance(RemotePlugin())
         bridge?.registerPluginInstance(VolumePlugin())
+        bridge?.registerPluginInstance(DownloadsPlugin())
         #if DEBUG
         // Automated runs on the simulator (.github/workflows/ios.yml): sign in with the token the
         // runner passes, and tell the page it is a test (no listening signals to the account,
@@ -324,6 +325,118 @@ public class VolumePlugin: CAPPlugin, CAPBridgedPlugin {
             self.detach = detach
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: detach)
             call.resolve()
+        }
+    }
+}
+
+/// Downloads that go on while Oni is in the background or the screen is locked: a background
+/// URLSession, run by iOS itself (it cancels them only if the app is swiped away). Finished files
+/// land as they are in Library/oni-incoming/<track id>; the page encrypts them into the offline
+/// library when it runs (src/player/backgroundDownloads.ts). JS: registerPlugin('OniDownloads').
+@objc(DownloadsPlugin)
+public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDelegate {
+    public let identifier = "DownloadsPlugin"
+    public let jsName = "OniDownloads"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "enqueue", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "running", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "cancel", returnType: CAPPluginReturnPromise),
+    ]
+
+    /// One instance for the app's whole life: iOS hands the session's events to whoever made it.
+    static var shared = DownloadsPlugin()
+    static var backgroundCompletion: (() -> Void)?
+
+    static var incoming: URL {
+        let dir = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0].appendingPathComponent("oni-incoming", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    lazy var session: URLSession = {
+        let config = URLSessionConfiguration.background(withIdentifier: "oni.downloads")
+        config.sessionSendsLaunchEvents = true
+        config.isDiscretionary = false
+        return URLSession(configuration: config, delegate: DownloadsPlugin.shared, delegateQueue: nil)
+    }()
+
+    private var lastProgress: [String: Date] = [:]
+    private weak var page: DownloadsPlugin?
+
+    override public func load() {
+        // Capacitor makes this instance; events go out through it, the session lives in `shared`.
+        DownloadsPlugin.shared.page = self
+        _ = DownloadsPlugin.shared.session
+    }
+
+    private func emit(_ event: String, _ data: [String: Any]) {
+        (page ?? DownloadsPlugin.shared.page)?.notifyListeners(event, data: data)
+    }
+
+    /// { items: [{ id, url }] }
+    @objc func enqueue(_ call: CAPPluginCall) {
+        let items = call.getArray("items", JSObject.self) ?? []
+        for item in items {
+            guard let id = item["id"] as? String, let address = item["url"] as? String, let url = URL(string: address) else { continue }
+            let task = DownloadsPlugin.shared.session.downloadTask(with: url)
+            task.taskDescription = id
+            task.resume()
+        }
+        call.resolve()
+    }
+
+    /// The ids iOS is still working on.
+    @objc func running(_ call: CAPPluginCall) {
+        DownloadsPlugin.shared.session.getAllTasks { tasks in
+            let ids = tasks.filter { $0.state == .running || $0.state == .suspended }.compactMap { $0.taskDescription }
+            call.resolve(["ids": ids])
+        }
+    }
+
+    /// { ids?: [String] } — those, or all.
+    @objc func cancel(_ call: CAPPluginCall) {
+        let ids = call.getArray("ids", String.self).map(Set.init)
+        DownloadsPlugin.shared.session.getAllTasks { tasks in
+            for task in tasks where ids == nil || ids!.contains(task.taskDescription ?? "") { task.cancel() }
+            call.resolve()
+        }
+    }
+
+    public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        guard let id = downloadTask.taskDescription else { return }
+        let status = (downloadTask.response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else {
+            emit("failed", ["id": id, "status": status])
+            return
+        }
+        let target = DownloadsPlugin.incoming.appendingPathComponent(id)
+        try? FileManager.default.removeItem(at: target)
+        do {
+            try FileManager.default.moveItem(at: location, to: target)
+            emit("done", ["id": id])
+        } catch {
+            emit("failed", ["id": id, "status": 0])
+        }
+    }
+
+    public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard let error = error, let id = task.taskDescription else { return }
+        if (error as NSError).code == NSURLErrorCancelled { return }
+        emit("failed", ["id": id, "status": 0])
+    }
+
+    public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        guard let id = downloadTask.taskDescription else { return }
+        let now = Date()
+        if let last = lastProgress[id], now.timeIntervalSince(last) < 0.5 { return }
+        lastProgress[id] = now
+        emit("progress", ["id": id, "written": totalBytesWritten, "total": totalBytesExpectedToWrite])
+    }
+
+    public func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+        DispatchQueue.main.async {
+            DownloadsPlugin.backgroundCompletion?()
+            DownloadsPlugin.backgroundCompletion = nil
         }
     }
 }

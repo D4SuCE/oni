@@ -116,14 +116,7 @@ export class OfflineLibrary {
     if (running) return running;
     const job = (async () => {
       const { url, codec, bitrate } = await this.deps.stream(id);
-      const audio = await this.deps.fetchBytes(url);
-      const iv = this.deps.crypto.getRandomValues(new Uint8Array(IV));
-      const sealed = new Uint8Array(await this.deps.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await this.cryptoKey(), audio));
-      const file = new Uint8Array(IV + sealed.length);
-      file.set(iv);
-      file.set(sealed, IV);
-      await this.deps.files.write(fileName(id), file.buffer);
-      this.index[id] = { track: trimTrack(track), size: file.length, at: Date.now(), codec, bitrate };
+      await this.seal(track, await this.deps.fetchBytes(url), codec, bitrate);
     })().finally(() => {
       this.busy.delete(id);
       this.changed();
@@ -134,9 +127,25 @@ export class OfflineLibrary {
   }
 
   /**
-   * Downloads a list, a few at a time, skipping what is already there.
-   * `progress(done, total)` after each one; resolves with how many failed.
+   * Keeps audio fetched elsewhere (the iPhone's background downloads): encrypted on disk and in
+   * the index, as `download` keeps what it fetches.
    */
+  async keep(track: Track, audio: ArrayBuffer, codec: string, bitrate: number) {
+    await this.seal(track, audio, codec, bitrate);
+    this.changed();
+  }
+
+  private async seal(track: Track, audio: ArrayBuffer, codec: string, bitrate: number) {
+    const id = String(track.id);
+    const iv = this.deps.crypto.getRandomValues(new Uint8Array(IV));
+    const sealed = new Uint8Array(await this.deps.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await this.cryptoKey(), audio));
+    const file = new Uint8Array(IV + sealed.length);
+    file.set(iv);
+    file.set(sealed, IV);
+    await this.deps.files.write(fileName(id), file.buffer);
+    this.index[id] = { track: trimTrack(track), size: file.length, at: Date.now(), codec, bitrate };
+  }
+
   /**
    * Downloads in the order given what is not there yet. Progress counts the whole list, the part
    * already downloaded included, so a resumed download shows where it is. `stop` ends it after
