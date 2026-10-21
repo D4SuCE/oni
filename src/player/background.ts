@@ -1,24 +1,27 @@
 // The iPhone with the equalizer on (processing.ts): iOS suspends Web Audio when the app goes to
-// the background or the screen locks, and the music went on in silence. First the audio session
-// is declared as playback and the context woken whenever it stops; if it still sleeps in the
-// background, a plain second element, outside the graph, plays the same track from the same
-// place until the app is back (the main element keeps running silently and stays in charge:
-// queue, lock screen, the next track all follow it as usual).
+// the background or the screen locks, and the music went on in silence, though the context may
+// still call itself running. So the moment the page is hidden, a plain second element, outside
+// the graph, takes over the sound from the same place, and the graph is muted (should it go on,
+// nothing plays twice); back in the app, the graph has the sound again. The main element keeps
+// running and stays in charge: queue, lock screen, the next track all follow it as usual. The
+// switch happens at once: a delay let iOS freeze the page first (checked by the user on 1.5.4).
 
 import { audio } from './audio.ts';
-import { audioContext } from './eq.ts';
+import { audioContext, muteGraph } from './eq.ts';
 
 const plain = new Audio();
 let covering = false;
 
-const asleep = () => audioContext()?.state !== 'running';
-
 function cover() {
   if (covering || audio.paused || !audio.src) return;
   covering = true;
+  muteGraph(true);
   plain.src = audio.src;
   plain.currentTime = audio.currentTime;
-  plain.play().catch(() => (covering = false));
+  plain.play().catch(() => {
+    covering = false;
+    muteGraph(false);
+  });
 }
 
 function uncover() {
@@ -29,6 +32,7 @@ function uncover() {
   plain.pause();
   plain.removeAttribute('src');
   plain.load();
+  muteGraph(false);
 }
 
 function wake() {
@@ -41,15 +45,14 @@ export function keepSoundInBackground() {
   if (session) session.type = 'playback';
 
   const check = () => {
-    wake();
-    if (document.hidden) setTimeout(() => document.hidden && asleep() && cover(), 400);
+    if (document.hidden) cover();
     else {
-      uncover();
       wake();
+      uncover();
     }
   };
   document.addEventListener('visibilitychange', check);
-  audioContext()?.addEventListener('statechange', () => document.hidden && asleep() && cover());
+  window.addEventListener('pagehide', cover);
 
   // While covering, the plain element follows the main one: a new track, a seek, a pause.
   audio.addEventListener('loadeddata', () => {
@@ -67,6 +70,6 @@ export function keepSoundInBackground() {
   audio.addEventListener('pause', () => covering && plain.pause());
   audio.addEventListener('play', () => {
     if (covering) plain.play().catch(() => {});
-    else if (document.hidden && asleep()) cover();
+    else if (document.hidden) cover();
   });
 }

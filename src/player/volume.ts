@@ -14,8 +14,14 @@ export const OniVolume = registerPlugin<VolumePlugin>('OniVolume');
 
 /** Mirrors the phone's volume into the player state (`show`), now and on every change. */
 export function followSystemVolume(show: (value: number) => void) {
-  OniVolume.get()
-    .then(({ value }) => show(value))
-    .catch(() => {});
-  OniVolume.addListener('change', ({ value }) => show(value));
+  let last = -1;
+  const read = () =>
+    OniVolume.get()
+      .then(({ value }) => value !== last && show((last = value)))
+      .catch(() => {});
+  read();
+  OniVolume.addListener('change', ({ value }) => show((last = value)));
+  // The volume buttons did not move the slider on the user's phone (1.5.4): while the slider is
+  // on screen, the volume is also read twice a second.
+  setInterval(() => !document.hidden && document.querySelector('.np-volume') && read(), 500);
 }

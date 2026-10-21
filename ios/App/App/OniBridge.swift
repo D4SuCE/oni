@@ -303,6 +303,9 @@ public class VolumePlugin: CAPPlugin, CAPBridgedPlugin {
     private var detach: DispatchWorkItem?
 
     override public func load() {
+        // The music plays in WebKit's own process: without a session active here, iOS neither
+        // reports the volume buttons to this process nor keeps outputVolume current in it.
+        try? AVAudioSession.sharedInstance().setActive(true)
         observation = AVAudioSession.sharedInstance().observe(\.outputVolume, options: [.new]) { [weak self] _, change in
             if let value = change.newValue { self?.notifyListeners("change", data: ["value": value]) }
         }

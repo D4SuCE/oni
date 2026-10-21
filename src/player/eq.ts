@@ -83,9 +83,19 @@ export function routeThroughGraph() {
 /** The graph's context, once built (background.ts watches it). */
 export const audioContext = () => ctx;
 
+let outputGain = 1;
+let graphMuted = false;
+
 /** Volume at the end of the graph (the iPhone); the desktop keeps using audio.volume. */
 export function setOutputGain(gain: number) {
-  if (output) output.gain.value = gain;
+  outputGain = gain;
+  if (output) output.gain.value = graphMuted ? 0 : gain;
+}
+
+/** Silences the graph while another element plays for it (background.ts), keeping the volume. */
+export function muteGraph(on: boolean) {
+  graphMuted = on;
+  if (output) output.gain.value = on ? 0 : outputGain;
 }
 
 function apply() {

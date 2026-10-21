@@ -79,12 +79,15 @@ async function longPressMenu() {
   const at = { pointerId: 9, pointerType: 'touch', isPrimary: true, clientX: box.left + 40, clientY: box.top + box.height / 2, bubbles: true };
   row.dispatchEvent(new PointerEvent('pointerdown', at));
   const opened = await until(() => document.querySelector('.menu'), 1500);
+  // A sheet along the bottom, all of it on screen (it ran off the bottom on Now Playing).
+  const sheet = document.querySelector('.menu')?.getBoundingClientRect();
+  const fits = Boolean(sheet && sheet.left >= 0 && sheet.right <= window.innerWidth && sheet.top >= 0 && sheet.bottom <= window.innerHeight);
   row.dispatchEvent(new PointerEvent('pointerup', at));
   row.dispatchEvent(new MouseEvent('mousedown', { ...at, bubbles: true }));
   row.dispatchEvent(new MouseEvent('click', { ...at, bubbles: true }));
   await sleep(300);
   const stays = Boolean(document.querySelector('.menu'));
-  report('long-press-menu', Boolean(opened) && stays, `${document.querySelectorAll('.menu-item').length} items${stays ? '' : ', closed on lift'}`);
+  report('long-press-menu', Boolean(opened) && stays && fits, `${document.querySelectorAll('.menu-item').length} items${stays ? '' : ', closed on lift'}${fits ? '' : ', off screen'}`);
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
 }
 

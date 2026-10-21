@@ -91,7 +91,9 @@ export function MixArt({ mix, title, big }: { mix: Mix; title: string; big?: boo
         </div>
       )}
       <span className="mix-seal">{seal(mix)}</span>
-      <span className="mix-art-title">{title}</span>
+      <span className="mix-art-title">
+        <span>{title}</span>
+      </span>
     </div>
   );
 }

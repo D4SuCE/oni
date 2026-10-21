@@ -2920,6 +2920,26 @@ kbd {
     font-size: 12.5px;
     white-space: nowrap;
   }
+  /* Search sits at the right edge (after the list size where there is one). */
+  html.ios .lib-actions .muted {
+    order: 9;
+  }
+  html.ios [data-testid='list-search'] {
+    order: 10;
+  }
+  html.ios .page-actions [data-testid='list-search'] {
+    margin-left: auto;
+  }
+  /* Menus: a sheet along the bottom, the full width, as iOS's own; a submenu lies over it. */
+  html.ios .menu {
+    left: 8px !important;
+    right: 8px;
+    top: auto !important;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    width: auto;
+    max-height: 72vh;
+    overflow-y: auto;
+  }
   /* A round icon button among them (search) matches the others. */
   html.ios .lib-actions .icon-btn,
   html.ios .page-actions .icon-btn {
@@ -2992,6 +3012,9 @@ kbd {
   html.ios .mix-art-title {
     padding: 22px 10px 9px;
     font-size: 14px;
+  }
+  /* clamped inside the padding: on the box itself a third line showed in its bottom padding */
+  html.ios .mix-art-title > span {
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
