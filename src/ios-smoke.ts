@@ -38,8 +38,21 @@ async function loginRedirect() {
   report('login-redirect', token === 'smoke-token', token ?? 'none');
 }
 
+/** Fields iPhone would zoom into: text under 16 px (a sample of each kind, the sign-in screen's
+ * token field among them), and a viewport that still allows zooming. */
+function noZoom() {
+  const probes = ['input', 'textarea'].map((tag) => Object.assign(document.createElement(tag), { className: 'input' }));
+  document.body.append(...probes);
+  const fields = [...probes, ...document.querySelectorAll('input:not([type=range])')] as HTMLElement[];
+  const small = fields.map((f) => parseFloat(getComputedStyle(f).fontSize)).filter((px) => px < 16);
+  probes.forEach((p) => p.remove());
+  const viewport = document.querySelector('meta[name=viewport]')?.getAttribute('content') ?? '';
+  report('no-zoom', !small.length && /maximum-scale=1/.test(viewport), `${fields.length} fields, small: ${small.join(',') || 'none'}`);
+}
+
 export async function runSmoke() {
   try {
+    noZoom();
     await loginRedirect();
     report('home', await until(() => document.querySelector('.wave-hero'), 30000));
     const mixes = await until(() => document.querySelectorAll('[data-testid="mix-card"]').length, 60000);
