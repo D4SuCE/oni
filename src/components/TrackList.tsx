@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Ban, Disc3, Heart, Link, ListEnd, ListPlus, ListStart, MoreHorizontal, Play, Plus, Radio, Share, Trash2, Upload, User } from 'lucide-react';
+import { ArrowUp, Ban, Disc3, Heart, Link, ListEnd, ListPlus, ListStart, MoreHorizontal, Play, Plus, Radio, Share, Trash2, User } from 'lucide-react';
 import type { Track } from '../api/types.ts';
 import { trackCover } from '../api/yandex.ts';
 import { tr, useT } from '../i18n.ts';
@@ -11,7 +11,7 @@ import { ArtistLinks, Cover } from './Common.tsx';
 import { askText } from './Dialog.tsx';
 import { openMenu, type MenuItem } from './Menu.tsx';
 
-/** A file the user uploaded: marked in lists, and not shared (its link opens for nobody else). */
+/** A file the user uploaded: marked in lists, with a short menu (its link opens for nobody else). */
 export const isUpload = (t: Track) => t.trackSource === 'UGC';
 
 export function trackMenu(t: Track, extra: MenuItem[] = []): MenuItem[] {
@@ -31,19 +31,26 @@ export function trackMenu(t: Track, extra: MenuItem[] = []): MenuItem[] {
     ...(own.length ? [{ label: '', separator: true }] : []),
     ...own.map((p) => ({ label: p.title, onClick: () => addToPlaylist(p, t) })),
   ];
+  const like: MenuItem = { label: liked ? tx.menu.unlike : tx.common.like, icon: <Heart size={15} />, onClick: () => toggleLike(t) };
+  const dontRecommend: MenuItem = { label: tx.common.dontRecommend, icon: <Ban size={15} />, danger: true, onClick: () => dislike(t) };
+  const addTo: MenuItem = { label: tx.menu.addToPlaylist, icon: <ListPlus size={15} />, submenu: playlistItems };
+  // Your own upload gets what the official app offers for one: no radio, album, artist or link,
+  // none of which exist for a private file.
+  if (isUpload(t)) return [like, dontRecommend, addTo, ...(extra.length ? [{ label: '', separator: true }, ...extra] : [])];
+
   const items: MenuItem[] = [
     { label: tx.menu.playNext, icon: <ListStart size={15} />, onClick: () => playNext(t) },
     { label: tx.menu.radio, icon: <Radio size={15} />, onClick: () => playRadio(`track:${t.id}`, t.title) },
     { label: tx.menu.addToQueue, icon: <ListEnd size={15} />, onClick: () => enqueue(t) },
-    { label: tx.menu.addToPlaylist, icon: <ListPlus size={15} />, submenu: playlistItems },
-    { label: liked ? tx.menu.unlike : tx.common.like, icon: <Heart size={15} />, onClick: () => toggleLike(t) },
-    ...(isUpload(t) ? [] : [{ label: tx.menu.share, icon: <Share size={15} />, submenu: [{ label: tx.menu.copyLink, icon: <Link size={15} />, onClick: () => shareTrack(t) }] }]),
+    addTo,
+    like,
+    { label: tx.menu.share, icon: <Share size={15} />, submenu: [{ label: tx.menu.copyLink, icon: <Link size={15} />, onClick: () => shareTrack(t) }] },
     { label: '', separator: true },
   ];
   if (t.albums?.[0]?.id) items.push({ label: tx.menu.goToAlbum, icon: <Disc3 size={15} />, onClick: () => navigate({ name: 'album', id: t.albums[0].id }) });
   if (t.artists?.[0] && !t.artists[0].various) items.push({ label: tx.menu.goToArtist, icon: <User size={15} />, onClick: () => navigate({ name: 'artist', id: t.artists[0].id }) });
   items.push(...extra);
-  items.push({ label: '', separator: true }, { label: tx.common.dontRecommend, icon: <Ban size={15} />, danger: true, onClick: () => dislike(t) });
+  items.push({ label: '', separator: true }, dontRecommend);
   return items;
 }
 
@@ -94,14 +101,15 @@ const TrackRow = memo(function TrackRow({ track: t, index, active, playing, like
       <Cover src={trackCover(t, 100)} size={40} />
       <div className="tr-main">
         <div className="tr-title">
+          {/* In front of the title: a long one cuts off its end, and the mark must stay visible. */}
+          {isUpload(t) && (
+            <span className="badge upload" title={tx.menu.uploaded} data-testid="upload-badge">
+              <ArrowUp size={12} strokeWidth={2.75} />
+            </span>
+          )}
           {t.title}
           {t.version && <span className="tr-version"> {t.version}</span>}
           {t.contentWarning === 'explicit' && <span className="badge">E</span>}
-          {isUpload(t) && (
-            <span className="badge upload" title={tx.menu.uploaded} data-testid="upload-badge">
-              <Upload size={11} strokeWidth={2.6} />
-            </span>
-          )}
         </div>
         <div className="tr-artists">
           <ArtistLinks artists={t.artists} />

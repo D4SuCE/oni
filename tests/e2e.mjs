@@ -224,9 +224,20 @@ await step('uploaded mp3s are marked in a playlist', async () => {
   if (!found) return console.log('       no own playlist with uploads on this account');
   await page.evaluate(({ uid, kind }) => window.__wave.navigate({ name: 'playlist', uid, kind }), found);
   await page.waitForSelector('[data-testid="upload-badge"]', { timeout: 15000 });
+  // In front of the title (a long title cuts off its end), with the arrow centred in the square.
+  const geometry = await page.evaluate(() => {
+    const badge = document.querySelector('[data-testid="upload-badge"]');
+    const b = badge.getBoundingClientRect();
+    const i = badge.querySelector('svg').getBoundingClientRect();
+    return { first: badge.parentElement.firstElementChild === badge, dx: i.x + i.width / 2 - (b.x + b.width / 2), dy: i.y + i.height / 2 - (b.y + b.height / 2) };
+  });
+  if (!geometry.first || Math.abs(geometry.dx) > 0.5 || Math.abs(geometry.dy) > 0.5) throw new Error(`badge: ${JSON.stringify(geometry)}`);
+  // Only what the official app offers for an upload, plus removing it from this playlist.
   await page.locator('.track-row', { has: page.locator('[data-testid="upload-badge"]') }).first().click({ button: 'right' });
   await page.waitForSelector('.menu');
-  if (await page.locator('.menu-item', { hasText: 'Поделиться' }).count()) throw new Error('an upload offers a share link nobody else can open');
+  const items = (await page.locator('.menu .menu-item .menu-label').allInnerTexts()).map((x) => x.trim());
+  const want = ['Не рекомендовать', 'Добавить в плейлист', 'Удалить из плейлиста'];
+  if (items.length !== 4 || !/нравится/.test(items[0]) || want.some((w, k) => items[k + 1] !== w)) throw new Error(`upload menu: ${items.join(' | ')}`);
   await page.keyboard.press('Escape');
   // back to the search results the next steps start from
   await page.click('[data-testid="nav-search"]');

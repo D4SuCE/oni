@@ -588,8 +588,13 @@ html.acrylic .backdrop {
 
 /* Uploaded by the user: the gold of the palette, so it reads apart from the grey "E". */
 .badge.upload {
+  margin: 0 7px 0 0;
   background: var(--gold-soft);
   color: var(--text);
+}
+/* The icon centred in the square, not sitting on the text baseline. */
+.badge svg {
+  display: block;
 }
 .badge {
   display: inline-grid;
