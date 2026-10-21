@@ -13,6 +13,8 @@
 
 ## [Не выпущено]
 
+## [1.5.3] — 2026-10-21
+
 ### Добавлено
 - Баннер на главной показывает, что играет, если это не «Моя волна»: трек, откуда он играет (или
   по чему идёт волна — «Волна по треку…», «…по исполнителю» и т. д.), исполнители и ссылку
@@ -186,7 +188,8 @@
 - Фон-картина «Blood Moon Over Misty Pagodas», прозрачность окна (Acrylic).
 - Живые видеообложки Яндекса и пульсация обложек в такт музыке.
 
-[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.5.2...HEAD
+[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.5.3...HEAD
+[1.5.3]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.3
 [1.5.2]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.2
 [1.5.1]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.1
 [1.5.0]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.0
