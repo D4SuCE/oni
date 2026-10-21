@@ -47,6 +47,10 @@ npm run dist
 
 `npm run dist` — то же без публикации, для проверки.
 
+Скриншоты для страницы oni-releases снимает `npm run screenshots` (в `release/showcase/`,
+нужен `YANDEX_MUSIC_TOKEN`): имя аккаунта убирается, экраны с аккаунтом не снимаются.
+Картинки кладутся в `assets/` репозитория oni-releases.
+
 ## Запуск для разработки
 
 ```sh

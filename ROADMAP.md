@@ -226,6 +226,8 @@
       установка при выходе или кнопкой в настройках, метка на «Настройках». Выпуск — `npm run release`
       (`scripts/release.mjs`). Код — `electron/updater.cjs`, тест — `tests/update.mjs` (локальный
       сервер вместо GitHub: новая версия, актуальная, нет сети).
+- [x] Страница [oni-releases](https://github.com/D4SuCE/oni-releases): логотип, бейджи, скриншоты
+      (`npm run screenshots`), возможности, установка, обновления и вопросы.
 - [ ] Подпись кода Windows — по желанию: без неё SmartScreen предупреждает
       при первой установке.
 

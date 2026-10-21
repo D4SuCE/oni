@@ -22,7 +22,8 @@
     "test:recs": "node --experimental-strip-types tests/recs.test.ts",
     "brush-font": "python scripts/brush-font.py node_modules/@fontsource/yuji-boku",
     "test:beat": "node --experimental-strip-types tests/beat.test.ts",
-    "release": "node scripts/release.mjs"
+    "release": "node scripts/release.mjs",
+    "screenshots": "vite build && node scripts/screenshots.mjs"
   },
   "build": {
     "appId": "local.wave.player",
