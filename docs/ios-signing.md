@@ -90,6 +90,12 @@ IPA. CI после сборки обновляет `sidestore-source.json` (ве
   Servers → Jkcoxson или SideStore (New), без автосмены; Reset adi.pb без сохранения заголовков;
   полностью закрыть SideStore и войти снова. Не запрашивать код много раз — Apple блокирует
   («Could not connect to iCloud»).
+- Переподпись каждую ночь без участия (сделано у пользователя по инструкции 21.10.2026):
+  «Обновление контента» включено для SideStore; LocalDevVPN всегда подключён; «Команды» →
+  «Автоматизация» → «Время суток» 4:00, ежедневно, «Запускать немедленно» → действия «Открыть
+  приложение: SideStore», «Подождать 5 с», «SideStore → Refresh All Apps». Известные сбои действия:
+  «You are not signed in» (SideStore был закрыт, SideStore #1584) и «targetAppBundle is missing in
+  context» (SideStore #1613, не исправлен; ручное обновление работает).
 - Бандл ID должен быть уникальным. SideStore сам добавляет суффикс к
   `local.wave.player`.
 
