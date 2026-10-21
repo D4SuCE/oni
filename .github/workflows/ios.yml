@@ -1,11 +1,17 @@
 # iOS build on a cloud Mac: a simulator smoke test (launch, screenshot, app log) and an
 # unsigned Oni.ipa (signed later on the phone, see docs/ios-signing.md).
-# macOS minutes count ×10 on a private repo (a run is ~45 of the 2,000 free a month; 90% were
-# gone on 22.10.2026), so this runs only on version tags (the release needs its IPA) and by hand.
+# macOS minutes count ×10 on a private repo (90% of the 2,000 free a month were gone on
+# 22.10.2026). A version tag only builds the IPA the release needs (~1.5 min, ~20 billed); the
+# simulator smoke test (~3 min more) runs when started by hand, once per batch of iOS changes.
 name: ios
 
 on:
   workflow_dispatch:
+    inputs:
+      smoke:
+        description: Build for the simulator and run the smoke test
+        type: boolean
+        default: true
   push:
     tags: ['v*']
 
@@ -36,6 +42,7 @@ jobs:
           npx cap sync ios
 
       - name: Simulator build
+        if: github.event_name == 'workflow_dispatch' && inputs.smoke
         run: |
           set -o pipefail
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
@@ -43,6 +50,7 @@ jobs:
             -derivedDataPath build/sim CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= build | tail -40
           # Ad-hoc signed ("sign to run locally"), so the Keychain works as on a phone.
       - name: Smoke test on a simulator
+        if: github.event_name == 'workflow_dispatch' && inputs.smoke
         run: |
           # The Debug bridge logs plugin calls, the token and the Authorization header among them:
           # take it out of both logs before anything prints them or uploads them, however the step ends.
