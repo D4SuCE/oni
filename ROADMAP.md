@@ -285,9 +285,12 @@ Oni 1.5.0 поставлен из источника, скачивание ра�
       тот же интерфейс. Иконка и экран запуска — маска они.
 - [x] Нативный `Transport` (`src/api/capacitor.ts`): запросы через `CapacitorHttp` (без CORS),
       токен в Keychain — свой плагин `OniKeychain` в `ios/App/App/OniBridge.swift`.
-- [~] Вход: встроенный браузер (`@capacitor/inappbrowser`) ловит редирект с `access_token`, как окно
-      входа на Windows (`ASWebAuthenticationSession` не подходит: редирект Яндекса не на нашу схему).
-      Запасной путь — вставить токен. **Проверить на телефоне.**
+- [~] Вход: свой лист с WKWebView (плагин `OniLogin` в `ios/App/App/OniBridge.swift`) ловит редирект
+      с `access_token`, как окно входа на Windows (`ASWebAuthenticationSession` не подходит: редирект
+      Яндекса не на нашу схему). Раньше был `@capacitor/inappbrowser`, но на телефоне с приложением
+      Яндекс Музыки iOS отдавал ему адрес music.yandex.ru — токен терялся (найдено 21.10.2026);
+      теперь переход отменяется в `decidePolicyFor`, шаг `login-redirect` в CI. Запасной путь —
+      вставить токен. **Проверить на телефоне** (после выпуска с исправлением).
 - [~] Фоновое воспроизведение: `UIBackgroundModes: audio`, аудиосессия `.playback`. Экран блокировки
       и «Исполняется» на часах — через Media Session API WebKit (плеер её уже заполняет).
       **Проверить на телефоне**; если не появится — свой плагин `MPNowPlayingInfoCenter`.
