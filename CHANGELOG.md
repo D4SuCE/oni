@@ -13,6 +13,8 @@
 
 ## [Не выпущено]
 
+## [1.5.1] — 2026-10-21
+
 ### Добавлено
 - iPhone: ссылка `oni://search?text=…` открывает Oni на поиске с готовыми результатами — для
   шорткатов. В шорткате, который открывал `yandexmusic://search?text=…`, достаточно заменить
@@ -137,7 +139,8 @@
 - Фон-картина «Blood Moon Over Misty Pagodas», прозрачность окна (Acrylic).
 - Живые видеообложки Яндекса и пульсация обложек в такт музыке.
 
-[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.5.0...HEAD
+[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.5.1...HEAD
+[1.5.1]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.1
 [1.5.0]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.0
 [1.4.1]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.4.1
 [1.4.0]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.4.0
