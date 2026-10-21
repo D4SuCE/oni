@@ -179,8 +179,9 @@ async function touchSeek() {
 /** A list downloads through iOS's background session (iosDownloads.ts): the file lands in the
  * folder, is sealed into the library, and the books are clear. One track, removed afterwards. */
 async function backgroundDownload() {
-  const { queue, index } = wave().usePlayer.getState();
-  const track = (queue as unknown as Track[]).slice(index + 1).find((t) => !wave().offline!.has(String(t.id)));
+  // A chart track not downloaded yet (the queue holds one track by now).
+  const chart = await (wave() as unknown as { api: { chart(): Promise<Track[]> } }).api.chart().catch(() => [] as Track[]);
+  const track = chart.find((t) => t.available !== false && !wave().offline!.has(String(t.id)));
   const bg = background;
   if (!bg || !track) return report('background-download', false, bg ? 'no track to try' : 'no background');
   const started = Date.now();
