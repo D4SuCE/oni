@@ -13,6 +13,8 @@
 
 ## [Не выпущено]
 
+## [1.5.5] — 2026-10-21
+
 ### Добавлено
 - iPhone: плейлисты и «Мне нравится» скачиваются в фоне — загрузка продолжается, когда Oni свёрнут
   или экран заблокирован (и после перезапуска приложения). Если Oni смахнуть из списка приложений,
@@ -232,7 +234,8 @@
 - Фон-картина «Blood Moon Over Misty Pagodas», прозрачность окна (Acrylic).
 - Живые видеообложки Яндекса и пульсация обложек в такт музыке.
 
-[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.5.4...HEAD
+[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.5.5...HEAD
+[1.5.5]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.5
 [1.5.4]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.4
 [1.5.3]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.3
 [1.5.2]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.2
