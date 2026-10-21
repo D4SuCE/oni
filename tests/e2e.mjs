@@ -53,6 +53,34 @@ await step('app starts and logs in with token', async () => {
   await shot('01-home');
 });
 
+await step('button labels sit in the middle of the button', async () => {
+  // Optical middle of a label: halfway between the x-height and cap-height middles above the
+  // baseline. The baseline comes from an empty inline-block probe, the heights from the font itself.
+  const off = await page.evaluate(() => {
+    const ctx = document.createElement('canvas').getContext('2d');
+    return [...document.querySelectorAll('.btn')].flatMap((btn) => {
+      const text = [...btn.childNodes].find((n) => n.nodeType === 3 && n.textContent.trim());
+      const box = btn.getBoundingClientRect();
+      if (!text || !box.height) return [];
+      // The button is a flex box: the probe shares a wrapper with the text to sit on its line.
+      const wrap = document.createElement('span');
+      const probe = document.createElement('span');
+      probe.style.display = 'inline-block';
+      text.replaceWith(wrap);
+      wrap.append(probe, text);
+      const baseline = probe.getBoundingClientRect().bottom;
+      wrap.replaceWith(text);
+      ctx.font = getComputedStyle(btn).font;
+      const cap = ctx.measureText('H').actualBoundingBoxAscent;
+      const x = ctx.measureText('x').actualBoundingBoxAscent;
+      const middle = baseline - (cap + x) / 4;
+      return [{ label: text.textContent.trim(), off: +(middle - (box.top + box.height / 2)).toFixed(2) }];
+    });
+  });
+  const bad = off.filter((b) => Math.abs(b.off) > 0.6);
+  if (!off.length || bad.length) throw new Error(`${off.length} buttons, off-centre (px, + is low): ${JSON.stringify(bad)}`);
+});
+
 await step('wave plays real audio', async () => {
   await page.click('[data-testid="wave-play"]');
   await waitPlaying();
