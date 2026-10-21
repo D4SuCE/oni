@@ -3,6 +3,8 @@
 // prints "SMOKE <step> ok|FAIL" lines, which the workflow reads from the console. Nothing is
 // sent to the account: test mode keeps wave feedback and listening reports off.
 
+import { OniLogin } from './api/capacitor.ts';
+
 type Wave = {
   audio: HTMLAudioElement;
   usePlayer: { getState(): { queue: { id: string; title: string }[]; index: number } };
@@ -25,8 +27,20 @@ async function until(what: () => unknown, timeout: number) {
 const report = (step: string, ok: boolean, detail = '') => console.log(`SMOKE ${step} ${ok ? 'ok' : 'FAIL'}${detail ? ` ${detail}` : ''}`);
 const click = (selector: string) => (document.querySelector(selector) as HTMLElement | null)?.click();
 
+/** Sign-in: the redirect to music.yandex.ru with the token is caught in the app's sheet (on a phone
+ * with Yandex's app installed iOS used to open that app instead). A test page stands in for the
+ * Yandex sign-in, so the real token stays as it is. */
+async function loginRedirect() {
+  const redirect = 'https://music.yandex.ru/#access_token=smoke-token&token_type=bearer';
+  const page = `data:text/html,${encodeURIComponent(`<script>setTimeout(()=>location.href=${JSON.stringify(redirect)},500)</script>`)}`;
+  const timeout = new Promise<{ token?: string }>((r) => setTimeout(() => r({ token: 'timeout' }), 15000));
+  const { token } = await Promise.race([OniLogin.open({ url: page }), timeout]);
+  report('login-redirect', token === 'smoke-token', token ?? 'none');
+}
+
 export async function runSmoke() {
   try {
+    await loginRedirect();
     report('home', await until(() => document.querySelector('.wave-hero'), 30000));
     const mixes = await until(() => document.querySelectorAll('[data-testid="mix-card"]').length, 60000);
     report('mixes', mixes, String(document.querySelectorAll('[data-testid="mix-card"]').length));

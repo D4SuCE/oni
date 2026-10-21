@@ -1,11 +1,10 @@
 // The iOS shell (Capacitor): what electron/main.cjs and preload.cjs do on the desktop.
 // Requests go through the native HTTP stack (no CORS in the way), the OAuth token lives in
-// the Keychain (the OniKeychain plugin in ios/App/App), and sign-in runs in an in-app browser
-// that watches for the redirect carrying the token, as the desktop sign-in window does.
+// the Keychain (the OniKeychain plugin in ios/App/App), and sign-in runs in the app's own browser
+// sheet (OniLogin) that catches the redirect carrying the token, as the desktop sign-in window does.
 
 import { Capacitor, CapacitorHttp, registerPlugin } from '@capacitor/core';
 import { Directory, Filesystem } from '@capacitor/filesystem';
-import { DefaultWebViewOptions, InAppBrowser } from '@capacitor/inappbrowser';
 import { fromBase64, toBase64 } from './bytes.ts';
 import type { HttpRequest, HttpResponse, Transport } from './transport.ts';
 
@@ -16,6 +15,14 @@ interface KeychainPlugin {
 }
 
 const Keychain = registerPlugin<KeychainPlugin>('OniKeychain');
+
+interface LoginPlugin {
+  /** Opens the sign-in page; { token } from the redirect, {} when closed without one. */
+  open(options: { url: string; lang?: string }): Promise<{ token?: string }>;
+}
+
+/** Native, not @capacitor/inappbrowser: that one let iOS hand the redirect to Yandex's own app. */
+export const OniLogin = registerPlugin<LoginPlugin>('OniLogin');
 
 const TOKEN_KEY = 'yandex-oauth-token';
 const OAUTH_CLIENT_ID = '23cabbbdc6cd418abb4b39c32c41195d'; // official Yandex Music client, as on the desktop
@@ -129,31 +136,18 @@ export function capacitorTransport(): Transport {
 
     setToken: (value) => saveToken(value),
 
-    login() {
-      return new Promise<boolean>((resolve) => {
-        let done = false;
-        const handles: Promise<{ remove: () => Promise<void> }>[] = [];
-        const finish = (ok: boolean) => {
-          if (done) return;
-          done = true;
-          for (const h of handles) h.then((x) => x.remove()).catch(() => {});
-          resolve(ok);
-        };
-        handles.push(
-          InAppBrowser.addListener('browserPageNavigationCompleted', async ({ url }) => {
-            const found = tokenFromUrl(url);
-            if (!found || done) return;
-            await saveToken(found);
-            finish(true);
-            InAppBrowser.close().catch(() => {});
-          }),
-          InAppBrowser.addListener('browserClosed', () => finish(false)),
-        );
-        InAppBrowser.openInWebView({
+    async login(lang) {
+      try {
+        const { token: found } = await OniLogin.open({
           url: `https://oauth.yandex.ru/authorize?response_type=token&client_id=${OAUTH_CLIENT_ID}`,
-          options: { ...DefaultWebViewOptions, showURL: false, showNavigationButtons: false, closeButtonText: '✕' },
-        }).catch(() => finish(false));
-      });
+          lang,
+        });
+        if (!found) return false;
+        await saveToken(found);
+        return true;
+      } catch {
+        return false;
+      }
     },
 
     log(level, source, message) {
