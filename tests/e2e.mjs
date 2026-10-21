@@ -396,6 +396,23 @@ await step('artist radio and similar tracks', async () => {
   console.log(`       ${label}; similar: ${await page.locator('.similar .track-row').count()}`);
   await page.keyboard.press('Escape');
   await page.waitForSelector('.nowplaying', { state: 'detached' });
+  // The banner on Home says what the wave follows, and leads back to My Wave. The trip to Home is
+  // undone afterwards (route and history), so the navigation steps below start where they did.
+  const nav = await page.evaluate(() => {
+    const { route, backStack, forwardStack } = window.__wave.useApp.getState();
+    return { route, backStack, forwardStack };
+  });
+  await page.click('[data-testid="nav-home"]');
+  const desc = await page.locator('[data-testid="wave-desc"]').innerText();
+  if (!desc.toLowerCase().startsWith('волна по исполнителю')) throw new Error(`banner says "${desc}"`);
+  await page.click('[data-testid="wave-back"]');
+  await page.waitForFunction(() => {
+    const s = window.__wave.usePlayer.getState();
+    return s.source?.kind === 'wave' && !s.source.station && s.index >= 0;
+  }, null, { timeout: 30000 });
+  console.log(`       banner: ${desc}`);
+  await page.evaluate((n) => window.__wave.useApp.setState(n), nav);
+  await page.waitForSelector('[data-testid="radio"]');
 });
 
 await step('back navigation', async () => {

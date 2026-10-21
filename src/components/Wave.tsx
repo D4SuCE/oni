@@ -2,7 +2,7 @@ import { Loader2, Pause, Play, SlidersHorizontal, Trash2, X } from 'lucide-react
 import { useCallback, useRef, useState } from 'react';
 import { api } from '../api/client.ts';
 import { useT } from '../i18n.ts';
-import { history, isMyWave, playWave, retuneWave, toggle, usePlayer } from '../player/player.ts';
+import { history, playWave, retuneWave, toggle, usePlayer } from '../player/player.ts';
 import { useApp } from '../store.ts';
 import { useSwipeDown } from '../ui/swipe.ts';
 import { cx, useAsync } from '../ui/util.ts';
@@ -177,15 +177,17 @@ export function TuningPanel() {
 }
 
 export function WaveHero() {
-  // Only My Wave itself; a track or artist radio is a wave too, but not this one.
-  const isWave = usePlayer((s) => isMyWave(s.source));
+  // My Wave itself, or a radio (a wave seeded by a track, artist, album or playlist): the banner
+  // says which, and plays and pauses whichever is on.
+  const isWave = usePlayer((s) => s.source?.kind === 'wave');
+  const station = usePlayer((s) => (s.source?.kind === 'wave' ? s.source.station : undefined));
   const playing = usePlayer((s) => s.playing);
   const busy = usePlayer((s) => s.waveBusy);
   const tuning = usePlayer((s) => s.tuning);
   const active = isWave && playing;
   const t = useT();
   const w = t.wave;
-  const desc = [
+  const desc = station ? [w.stationOf(station.seed.split(':')[0], station.title)] : [
     tuning.context?.name,
     tuning.diversity !== 'default' && w.diversity[tuning.diversity],
     tuning.mood !== 'all' && w.moods[tuning.mood],
@@ -211,7 +213,17 @@ export function WaveHero() {
       <div className="wave-content">
         <div className="kicker">{w.kicker(tuning.noRepeatDays)}</div>
         <h1>{t.common.myWave}</h1>
-        <p className={cx('wave-desc', !desc.length && 'tagline')}>{desc.length ? desc.join(' · ') : w.tagline}</p>
+        <p className={cx('wave-desc', !desc.length && 'tagline')} data-testid="wave-desc">
+          {desc.length ? desc.join(' · ') : w.tagline}
+          {station && (
+            <>
+              {' · '}
+              <button className="link wave-back" onClick={() => playWave()} data-testid="wave-back">
+                {w.backToMyWave}
+              </button>
+            </>
+          )}
+        </p>
         <div className="wave-actions">
           <button className="btn primary big" onClick={() => (isWave ? toggle() : playWave())} disabled={busy} data-testid="wave-play">
             {busy ? <Loader2 size={20} className="spin" /> : active ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}

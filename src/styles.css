@@ -1374,6 +1374,14 @@ html.acrylic .backdrop {
   letter-spacing: 0.3em;
   text-transform: uppercase;
 }
+.wave-back {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--gold);
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
 .wave-actions {
   display: flex;
   gap: 12px;

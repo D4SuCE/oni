@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { ArrowDownToLine, ArrowUp, Ban, CircleCheck, Disc3, Download, Info, Loader2, Pencil, Heart, Link, ListEnd, ListPlus, ListStart, MoreHorizontal, Play, Plus, Radio, Share, Trash2, User } from 'lucide-react';
 import type { Track } from '../api/types.ts';
-import { trackCover } from '../api/yandex.ts';
+import { artistNames, trackCover } from '../api/yandex.ts';
 import { tr, useT } from '../i18n.ts';
 import { enqueue, offline, playNext, playRadio, toggle, usePlayer } from '../player/player.ts';
 import { addToPlaylist, createPlaylist, dislike, isOwn, navigate, toggleLike, useApp } from '../store.ts';
@@ -61,7 +61,7 @@ export function trackMenu(t: Track, extra: MenuItem[] = []): MenuItem[] {
 
   const items: MenuItem[] = [
     { label: tx.menu.playNext, icon: <ListStart size={15} />, onClick: () => playNext(t) },
-    { label: tx.menu.radio, icon: <Radio size={15} />, onClick: () => playRadio(`track:${t.id}`, t.title) },
+    { label: tx.menu.radio, icon: <Radio size={15} />, onClick: () => playRadio(`track:${t.id}`, `${t.title} — ${artistNames(t)}`) },
     { label: tx.menu.addToQueue, icon: <ListEnd size={15} />, onClick: () => enqueue(t) },
     addTo,
     like,

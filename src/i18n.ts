@@ -353,6 +353,10 @@ const ru = {
   wave: {
     kicker: (days: number) => `Без повторов · фильтр ${days ? `${days} дн.` : 'выкл.'}`,
     tagline: 'Бесконечный поток музыки, подобранной для вас',
+    /** The banner while a radio plays: what the wave follows. */
+    stationOf: (kind: string, title: string) =>
+      `${({ track: 'Волна по треку', artist: 'Волна по исполнителю', album: 'Волна по альбому', playlist: 'Волна по плейлисту' } as Record<string, string>)[kind] ?? 'Волна по'} «${title}»`,
+    backToMyWave: 'Моя волна',
     resume: 'Продолжить',
     tune: 'Настроить',
     tuneTitle: 'Настройка волны',
@@ -786,6 +790,9 @@ const en: Dict = {
   wave: {
     kicker: (days) => `No repeats · filter ${days ? `${days} d` : 'off'}`,
     tagline: 'An endless stream of music picked for you',
+    stationOf: (kind, title) =>
+      `${({ track: 'Wave from the track', artist: 'Wave from the artist', album: 'Wave from the album', playlist: 'Wave from the playlist' } as Record<string, string>)[kind] ?? 'Wave from'} “${title}”`,
+    backToMyWave: 'My Wave',
     resume: 'Resume',
     tune: 'Tune',
     tuneTitle: 'Tune My Wave',
