@@ -473,9 +473,19 @@ await step('artist radio and similar tracks', async () => {
     await page.click('[data-testid="wave-back"]');
     await page.waitForFunction(() => {
       const s = window.__wave.usePlayer.getState();
-      return s.source?.kind === 'wave' && !s.source.station && s.index >= 0;
+      return s.source?.kind === 'wave' && !s.source.station && s.index >= 0 && !s.waveBusy;
     }, null, { timeout: 30000 });
-    console.log(`       banner: ${desc}`);
+    // Plain My Wave plays: the banner shows its track too, says "My Wave", and offers no link back
+    // to where it already is (the user).
+    await page.waitForFunction(() => {
+      const s = window.__wave.usePlayer.getState();
+      const shown = document.querySelector('[data-testid="wave-track"]')?.textContent;
+      return shown === s.queue[s.index]?.title;
+    }, null, { timeout: 10000 });
+    const now = await page.locator('[data-testid="wave-kicker"]').innerText();
+    const link = await page.locator('[data-testid="wave-back"]').count();
+    if (!now.toLowerCase().startsWith('моя волна') || link) throw new Error(`My Wave banner: "${now}", link ${link}`);
+    console.log(`       banner: ${desc}; then "${now}"`);
   } finally {
     await page.evaluate((n) => window.__wave.useApp.setState(n), nav);
   }

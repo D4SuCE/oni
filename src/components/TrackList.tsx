@@ -63,6 +63,10 @@ export function trackMenu(t: Track, extra: MenuItem[] = []): MenuItem[] {
   const items: MenuItem[] = [
     { label: tx.menu.playNext, icon: <ListStart size={15} />, onClick: () => playNext(t) },
     { label: tx.menu.radio, icon: <Radio size={15} />, onClick: () => playRadio(`track:${t.id}`, `${t.title} — ${artistNames(t)}`) },
+    // The artist's radio, as on the artist's page, without going there (the user asked).
+    ...(t.artists?.[0] && !t.artists[0].various
+      ? [{ label: tx.menu.artistRadio, icon: <Radio size={15} />, onClick: () => playRadio(`artist:${t.artists[0].id}`, t.artists[0].name) }]
+      : []),
     { label: tx.menu.addToQueue, icon: <ListEnd size={15} />, onClick: () => enqueue(t) },
     addTo,
     like,
