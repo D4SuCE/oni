@@ -96,6 +96,11 @@ IPA. CI после сборки обновляет `sidestore-source.json` (ве
   приложение: SideStore», «Подождать 5 с», «SideStore → Refresh All Apps». Известные сбои действия:
   «You are not signed in» (SideStore был закрыт, SideStore #1584) и «targetAppBundle is missing in
   context» (SideStore #1613, не исправлен; ручное обновление работает).
+- LocalDevVPN только на время SideStore (пользователь держит другой VPN, Happ): «Команды» →
+  «Автоматизация» → приложение SideStore «Открыто» → «Настроить VPN: Подключить LocalDevVPN»; SideStore
+  «Закрыто» → «Настроить VPN: Подключить Happ» (один VPN за раз — второй выключает первый). Ночная
+  переподпись: те же два шага в начале и в конце (с «Подождать 60 с»). Обновление из Oni («Обновить»
+  открывает SideStore с IPA) так проходит без ручного переключения VPN.
 - Бандл ID должен быть уникальным. SideStore сам добавляет суффикс к
   `local.wave.player`.
 
