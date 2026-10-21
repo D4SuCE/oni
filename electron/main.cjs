@@ -120,7 +120,8 @@ async function request(req) {
 
 // ---------------------------------------------------------------- OAuth login
 
-function login() {
+/** lang: the interface language ('ru' | 'en'); the Yandex sign-in page follows it, not the system's. */
+function login(lang) {
   return new Promise((resolve) => {
     const win = new BrowserWindow({
       width: 480,
@@ -131,6 +132,10 @@ function login() {
       backgroundColor: '#111',
       autoHideMenuBar: true,
       webPreferences: { partition: LOGIN_PARTITION },
+    });
+    const language = lang === 'en' ? 'en-US,en;q=0.9' : 'ru-RU,ru;q=0.9';
+    win.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
+      callback({ requestHeaders: { ...details.requestHeaders, 'Accept-Language': language } });
     });
     let done = false;
     const check = (target) => {
@@ -206,7 +211,7 @@ ipcMain.handle('ym:request', (_e, req) => request(req));
 ipcMain.handle('ym:token:has', () => Boolean(token));
 ipcMain.on('wave:test-mode', (e) => (e.returnValue = TEST_MODE));
 ipcMain.handle('ym:token:set', (_e, value) => saveToken(value ? String(value).trim() : null));
-ipcMain.handle('ym:login', () => login());
+ipcMain.handle('ym:login', (_e, lang) => login(lang));
 ipcMain.on('wave:log', (_e, entry) => writeLog(entry?.level || 'error', entry?.source || 'ui', entry?.message));
 ipcMain.handle('wave:logs:open', () => {
   if (!fs.existsSync(logFile())) writeLog('info', 'main', 'log opened');

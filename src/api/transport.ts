@@ -27,7 +27,8 @@ export interface Transport {
   request<T = any>(req: HttpRequest): Promise<HttpResponse<T>>;
   hasToken(): Promise<boolean>;
   setToken(value: string | null): Promise<void>;
-  login?(): Promise<boolean>;
+  /** Sign-in through Yandex; `lang` is the interface language, for the sign-in page. */
+  login?(lang?: string): Promise<boolean>;
   /** Appends a line to the app's log file. */
   log?(level: 'error' | 'warn' | 'info', source: string, message: string): void;
   /** Opens the log file in the system's default viewer. */

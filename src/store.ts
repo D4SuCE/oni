@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import type { Account, Playlist, Track } from './api/types.ts';
 import { api, transport } from './api/client.ts';
 import { trackKey } from './api/yandex.ts';
-import { tr } from './i18n.ts';
+import { tr, useLang } from './i18n.ts';
 import { dropFromQueue, setDislikedCheck, waveFeedback } from './player/player.ts';
 
 export type Route =
@@ -132,7 +132,7 @@ export async function loginWithToken(token: string) {
 
 export async function loginWithYandex() {
   if (!transport.login) return;
-  if (await transport.login()) await init();
+  if (await transport.login(useLang.getState().lang)) await init();
 }
 
 export async function logout() {
