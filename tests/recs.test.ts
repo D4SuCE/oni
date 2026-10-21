@@ -1,6 +1,7 @@
 // Offline unit tests for the recommendation modules (synthetic library, fixed clock).
 // Run: npm run test:recs
 import type { Album, Track } from '../src/api/types.ts';
+import { assembleDaylist, inSlot, personalShare, playedInSlot, slotAt, topGenres } from '../src/recs/daylist.ts';
 import { discoverSeeds, rankDiscoveries } from '../src/recs/discover.ts';
 import { assembleMix, mixSeeds, planMixes } from '../src/recs/mixes.ts';
 import { buildProfile, type GenreTree, type TasteInput } from '../src/recs/profile.ts';
@@ -249,6 +250,65 @@ await test('play stats: finished at 85%, skipped under 30 s, last 30 days only',
   assert(s[0].origin === 'mix' && mix.plays === 3, `mix first with 3 plays: ${JSON.stringify(s)}`);
   assert(Math.abs(mix.finished - 1 / 3) < 1e-9 && Math.abs(mix.skipped - 1 / 3) < 1e-9, `thirds: ${JSON.stringify(mix)}`);
   assert(s.find((x) => x.origin === 'wave')!.plays === 1, 'the 40-day-old wave play is out of the window');
+});
+
+// Daylist: local times, since parts of the day follow the user's clock.
+const at = (day: number, hour: number, min = 0) => new Date(2026, 9, day, hour, min).getTime();
+const hm = (ms: number) => {
+  const d = new Date(ms);
+  return `${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
+await test('daylist: parts of the day, including the one across midnight', () => {
+  const cases: [number, string, string, string][] = [
+    [at(21, 7), 'morning', '21 5:00', '21 11:00'],
+    [at(21, 11), 'day', '21 11:00', '21 17:00'],
+    [at(21, 18, 30), 'evening', '21 17:00', '21 21:00'],
+    [at(21, 23, 30), 'night', '21 21:00', '22 1:00'],
+    [at(22, 0, 30), 'night', '21 21:00', '22 1:00'],
+    [at(22, 3), 'late', '22 1:00', '22 5:00'],
+  ];
+  for (const [when, slot, start, end] of cases) {
+    const s = slotAt(when);
+    assert(s.slot === slot && hm(s.start) === start && hm(s.end) === end, `${hm(when)}: ${s.slot} ${hm(s.start)}–${hm(s.end)}`);
+  }
+  assert(inSlot(0, 'night') && inSlot(22, 'night') && !inSlot(1, 'night') && inSlot(1, 'late'), 'night wraps midnight');
+});
+
+await test("daylist: the user's own tracks for the part of the day, most played first", () => {
+  seq = 0;
+  const [a, b, c, d, e] = [mk('rap', 1), mk('rock', 2), mk('pop', 3), mk('rap', 4), mk('rap', 5)];
+  const now = at(21, 8);
+  const plays = [
+    { track: a, at: at(20, 7), source: 'x' },
+    { track: a, at: at(19, 9), source: 'x' },
+    { track: b, at: at(20, 6), source: 'x' },
+    { track: c, at: at(20, 14), source: 'x' }, // afternoon
+    { track: d, at: at(20, 8), source: 'x' }, // disliked
+    { track: e, at: at(20, 8), source: 'x' }, // always skipped
+    { track: b, at: now - 90 * DAY, source: 'x' }, // too old
+  ];
+  const own = playedInSlot(plays, 'morning', { now, disliked: new Set([d.id]), skipped: (id) => id === e.id });
+  assert(own.map((x) => `${x.track.id}×${x.plays}`).join(' ') === `${a.id}×2 ${b.id}×1`, JSON.stringify(own.map((x) => [x.track.id, x.plays])));
+});
+
+await test('daylist: own share grows with the log, wave fills the rest, nothing twice', () => {
+  seq = 0;
+  const wave = Array.from({ length: 50 }, (_, i) => mk(i % 2 ? 'rap' : 'rock', 1000 + i));
+  assert(personalShare(0) === 0 && personalShare(20) === 0.25 && personalShare(500) === 0.5, 'share 0 → 0.25 → capped at 0.5');
+
+  const empty = assembleDaylist([], wave, { disliked: new Set(), rand: seededRandom('x') });
+  assert(empty.length === 30 && empty.every((t) => wave.includes(t)), `no log: 30 wave tracks, got ${empty.length}`);
+
+  const own = Array.from({ length: 30 }, (_, i) => ({ track: mk('folk', 2000 + i), plays: 4 }));
+  const disliked = new Set([wave[0].id]);
+  const mixed = assembleDaylist(own, [own[0].track, ...wave], { disliked, rand: seededRandom('x') });
+  const mine = mixed.filter((t) => own.some((o) => o.track === t)).length;
+  assert(mixed.length === 30 && mine === 15, `120 plays: 15 own of 30, got ${mine} of ${mixed.length}`);
+  assert(new Set(mixed.map((t) => t.id)).size === 30 && !mixed.some((t) => disliked.has(t.id)), 'no duplicates, nothing disliked');
+  assert(mixed.slice(0, 10).some((t) => own.some((o) => o.track === t)), 'own tracks are spread, not pushed to the end');
+
+  assert(topGenres([mk('rap', 1), mk('rap', 2), mk('rock', 3), mk('pop', 4), mk('rock', 5), mk('rap', 6)]).join() === 'rap,rock', 'top genres');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

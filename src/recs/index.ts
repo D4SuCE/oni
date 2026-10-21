@@ -1,24 +1,25 @@
-// Builds the "For you" shelf: taste mixes, "on repeat" and "because you listened to"
-// (daily), weekly discoveries and forgotten favourites (Mondays), the release radar
-// (Fridays), plus Yandex's own personal playlists.
+// Builds the "For you" shelf: the daylist (for the current part of the day), taste mixes,
+// "on repeat" and "because you listened to" (daily), weekly discoveries and forgotten
+// favourites (Mondays), the release radar (Fridays), plus Yandex's own personal playlists.
 // Results are cached per account so the shelf opens instantly and stays stable
 // for the period it belongs to, like Spotify's.
 
 import { create } from 'zustand';
 import { api, storage } from '../api/client.ts';
 import type { GenreTree, Playlist, Track } from '../api/types.ts';
-import { trackCover } from '../api/yandex.ts';
+import { trackCover, trackKey } from '../api/yandex.ts';
 import { history, recentPlays } from '../player/player.ts';
 import { trimTrack } from '../player/recent.ts';
 import { useApp } from '../store.ts';
 import { discoverSeeds, rankDiscoveries } from './discover.ts';
 import { assembleMix, mixSeeds, planMixes } from './mixes.ts';
+import { assembleDaylist, playedInSlot, SLOT_SEEDS, slotAt, topGenres, type Slot, type SlotSpan } from './daylist.ts';
 import { buildProfile, type Profile, type TasteInput } from './profile.ts';
 import { becauseYouListened, forgottenFavourites, onRepeat, recentArtists } from './personal.ts';
 import { radarArtists, radarTracks, recentReleases } from './radar.ts';
 import { DAY, dayKey, mapLimit, seededRandom, weekKey } from './util.ts';
 
-export type MixKind = 'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because';
+export type MixKind = 'daylist' | 'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because';
 
 export interface Mix {
   id: string;
@@ -29,6 +30,11 @@ export interface Mix {
   artists: string[];
   /** "Because you listened to": the artist the mix starts from. */
   seedArtist?: string;
+  /** Daylist: the part of the day, when it started and ends, and its leading genres. */
+  slot?: Slot;
+  slotStart?: number;
+  slotEnd?: number;
+  genres?: string[];
   covers: string[];
   tracks: Track[];
   builtAt: number;
@@ -58,6 +64,9 @@ interface Cache {
   personal?: Mix[];
   rewindWeek?: string;
   rewind?: Mix;
+  /** Day and part of the day the daylist was built for. */
+  daylistKey?: string;
+  daylist?: Mix;
 }
 
 function readCache(uid: string): Cache | null {
@@ -201,14 +210,51 @@ function buildRewind(g: Gathered, week: string): Mix | undefined {
   return makeMix('rewind', 'rewind', tracks, [...new Set(tracks.flatMap((t) => t.artists.map((a) => a.name)))]);
 }
 
+const DAYLIST_SIZE = 30;
+const WAVE_BATCHES = 8;
+const daylistKey = (span: SlotSpan) => `${dayKey(span.start)}:${span.slot}`;
+
+/** Wave tracks for the part of the day, plus what the user plays at that time; no full profile needed. */
+async function buildDaylist(span: SlotSpan): Promise<Mix | undefined> {
+  const { disliked } = useApp.getState();
+  const now = Date.now();
+  const own = playedInSlot(recentPlays.list(), span.slot, {
+    now,
+    disliked,
+    // Same rule as the wave's "hide what I skip": skipped twice, never finished.
+    skipped: (id) => {
+      const e = history.get(id);
+      return !!e && e.skips >= 2 && e.plays === 0;
+    },
+  });
+  const wave: Track[] = [];
+  let batch = await api.waveStart(SLOT_SEEDS[span.slot]);
+  for (let i = 0; ; i++) {
+    wave.push(...batch.items.map((x) => x.track));
+    if (wave.length >= DAYLIST_SIZE * 1.5 || i + 1 >= WAVE_BATCHES || !batch.items.length) break;
+    batch = await api.waveMore(batch.sessionId, wave.map(trackKey));
+  }
+  const tracks = assembleDaylist(own, wave, { disliked, rand: seededRandom(daylistKey(span)) }, DAYLIST_SIZE);
+  if (tracks.length < 10) return undefined;
+  const mix = makeMix('daylist', 'daylist', tracks, [...new Set(tracks.flatMap((t) => t.artists.map((a) => a.name)))]);
+  return { ...mix, slot: span.slot, slotStart: span.start, slotEnd: span.end, genres: topGenres(tracks) };
+}
+
 const ordered = (c: Cache) => {
   const personal = c.personal ?? [];
   const repeat = personal.filter((m) => m.kind === 'repeat');
   const because = personal.filter((m) => m.kind === 'because');
-  return [c.discover, c.radar, ...repeat, ...c.mixes, ...because, c.rewind].filter(Boolean) as Mix[];
+  return [c.daylist, c.discover, c.radar, ...repeat, ...c.mixes, ...because, c.rewind].filter(Boolean) as Mix[];
 };
 
 let running: Promise<void> | null = null;
+let nextSlot: ReturnType<typeof setTimeout> | undefined;
+
+/** The daylist changes when the next part of the day begins, even with the app left open. */
+function scheduleNextSlot(span: SlotSpan) {
+  clearTimeout(nextSlot);
+  nextSlot = setTimeout(() => void loadRecs(), Math.max(span.end - Date.now(), 0) + 5000);
+}
 
 /** Shows cached mixes right away and rebuilds whatever is due. `force` rebuilds everything. */
 export function loadRecs(force = false): Promise<void> {
@@ -220,8 +266,21 @@ export function loadRecs(force = false): Promise<void> {
     const day = dayKey(now);
     const discoverWeek = weekKey(now, 1);
     const radarWeek = weekKey(now, 5);
-    const cache = readCache(uid);
+    const span = slotAt(now);
+    scheduleNextSlot(span);
+    let cache = readCache(uid);
     if (cache) useRecs.setState({ mixes: ordered(cache), status: 'ready' });
+
+    // The daylist is cheap and changes several times a day, so it is refreshed on its own.
+    if (cache && (force || cache.daylistKey !== daylistKey(span))) {
+      try {
+        cache = { ...cache, daylist: await buildDaylist(span), daylistKey: daylistKey(span) };
+        storage.setItem(CACHE_KEY, JSON.stringify(cache));
+        useRecs.setState({ mixes: ordered(cache) });
+      } catch (e) {
+        console.warn('daylist failed', e);
+      }
+    }
 
     api
       .personalPlaylists()
@@ -235,6 +294,10 @@ export function loadRecs(force = false): Promise<void> {
     try {
       const g = await gather();
       const next: Cache = { ...cache, uid, day, mixes: cache?.mixes ?? [] };
+      if (!next.daylist || next.daylistKey !== daylistKey(span)) {
+        next.daylist = await buildDaylist(span).catch(() => undefined);
+        next.daylistKey = daylistKey(span);
+      }
       if (force || cache?.day !== day) next.mixes = await buildMixes(g, day);
       if (force || cache?.day !== day || !cache?.personal) next.personal = await buildPersonal(g);
       if (force || cache?.rewindWeek !== discoverWeek) {

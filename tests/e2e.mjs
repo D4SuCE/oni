@@ -105,6 +105,27 @@ await step('now playing screen', async () => {
   await page.waitForSelector('.nowplaying', { state: 'detached' });
 });
 
+await step('daylist leads "For you" and fits the time of day', async () => {
+  await page.click('[data-testid="nav-home"]');
+  await page.waitForSelector('[data-testid="mix-card"]', { timeout: 60000 });
+  const first = page.locator('[data-testid="mix-card"]').first();
+  const seal = await first.locator('.mix-seal').innerText();
+  const h = new Date().getHours();
+  const want = h >= 1 && h < 5 ? '深夜' : h >= 5 && h < 11 ? '朝' : h >= 11 && h < 17 ? '昼' : h >= 17 && h < 21 ? '夕' : '夜';
+  if (seal !== want) throw new Error(`first card seal "${seal}", want "${want}" at ${h}:00`);
+  await first.click();
+  await page.waitForSelector('.track-row');
+  const kicker = await page.locator('.kicker').first().innerText();
+  const rows = await page.locator('.track-row').count();
+  const meta = await page.locator('.page-meta').innerText();
+  if (!/daylist/i.test(kicker) || rows < 10 || !/до \d{1,2}:\d{2}/.test(meta)) throw new Error(`kicker "${kicker}", ${rows} tracks, meta "${meta}"`);
+  await shot('15-daylist');
+  await page.click('[data-testid="mix-play"]');
+  await page.waitForFunction(() => window.__wave.usePlayer.getState().source?.origin === 'daylist', null, { timeout: 10000 });
+  await waitPlaying(0.5);
+  await page.click('[data-testid="nav-home"]');
+});
+
 await step('search and play a track', async () => {
   await page.click('[data-testid="nav-search"]');
   await page.fill('[data-testid="search-input"]', 'Кино');
@@ -172,7 +193,10 @@ await step('back navigation', async () => {
 
 await step('back and forward: mouse 4/5, Alt+arrows, the shell command', async () => {
   const at = () => page.evaluate(() => window.__wave.useApp.getState().route.name);
-  const wait = async (name) => page.waitForFunction((n) => window.__wave.useApp.getState().route.name === n, name, { timeout: 5000 });
+  const wait = async (name) =>
+    page.waitForFunction((n) => window.__wave.useApp.getState().route.name === n, name, { timeout: 5000 }).catch(async () => {
+      throw new Error(`want ${name}, at ${await at()}`);
+    });
   const side = (button) =>
     page.evaluate((b) => {
       window.dispatchEvent(new MouseEvent('mousedown', { button: b }));
@@ -181,6 +205,8 @@ await step('back and forward: mouse 4/5, Alt+arrows, the shell command', async (
   await page.click('[data-testid="nav-home"]');
   await page.click('[data-testid="nav-search"]');
   await page.click('[data-testid="nav-history"]');
+  // The previous step ended with Alt+Left: a press within 300 ms of it counts as the same one.
+  await page.waitForTimeout(350);
   await side(3);
   await wait('search');
   await page.waitForTimeout(350);

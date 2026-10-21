@@ -2,6 +2,7 @@ import { Play } from 'lucide-react';
 import { api } from '../api/client.ts';
 import { tr, useLang } from '../i18n.ts';
 import { playTracks } from '../player/player.ts';
+import type { Slot } from '../recs/daylist.ts';
 import type { Mix } from '../recs/index.ts';
 import { navigate } from '../store.ts';
 import { cx, useAsync } from '../ui/util.ts';
@@ -14,6 +15,7 @@ export function useGenreTitles() {
 
 export function mixTitle(mix: Mix, genres: Record<string, string>) {
   const t = tr();
+  if (mix.kind === 'daylist') return t.recs.daylist(mix.slot ?? 'day', new Date(mix.slotStart ?? mix.builtAt).getDay());
   if (mix.kind === 'discover') return t.recs.discover;
   if (mix.kind === 'radar') return t.recs.radar;
   if (mix.kind === 'repeat') return t.recs.repeat;
@@ -22,7 +24,18 @@ export function mixTitle(mix: Mix, genres: Record<string, string>) {
   return t.recs.mix(genres[mix.genre ?? ''] ?? mix.genre ?? '');
 }
 
-export const mixSubtitle = (mix: Mix) => tr().recs.andMore(mix.artists.slice(0, 2).join(', '));
+/** "Рэп" → "рэп" mid-sentence, while "J-pop" and "R&B" stay as they are. */
+const lowerFirst = (s: string) => (s.length > 1 && s[1] !== s[1].toUpperCase() ? s[0].toLowerCase() + s.slice(1) : s);
+
+/** Leading artists; for the daylist, its character and genres ("Бодрое · рэп, рок"). */
+export function mixSubtitle(mix: Mix, genres: Record<string, string>) {
+  const t = tr();
+  if (mix.kind === 'daylist' && mix.slot) {
+    const names = (mix.genres ?? []).map((g) => genres[g]).filter(Boolean).map(lowerFirst);
+    return [t.recs.daylistMood[mix.slot], names.join(', ')].filter(Boolean).join(' · ');
+  }
+  return t.recs.andMore(mix.artists.slice(0, 2).join(', '));
+}
 
 /**
  * Brush seals on the covers (the glyphs must be in src/assets/brush.woff2 — scripts/brush-font.py).
@@ -59,7 +72,10 @@ const SEALS: Record<string, string> = {
   reggae: '太陽',
   japanesepop: '日本',
 };
-const seal = (mix: Mix) => SEALS[mix.kind === 'mix' ? (mix.genre ?? '') : mix.kind] ?? '音楽';
+/** Daylist: 朝 morning, 昼 afternoon, 夕 evening, 夜 night, 深夜 late night. */
+const SLOT_SEALS: Record<Slot, string> = { morning: '朝', day: '昼', evening: '夕', night: '夜', late: '深夜' };
+const seal = (mix: Mix) =>
+  mix.kind === 'daylist' ? SLOT_SEALS[mix.slot ?? 'day'] : (SEALS[mix.kind === 'mix' ? (mix.genre ?? '') : mix.kind] ?? '音楽');
 
 /** Cover art with a brush seal: the oni for discoveries, a red sun for the radar, a duotone collage for mixes. */
 export function MixArt({ mix, title, big }: { mix: Mix; title: string; big?: boolean }) {
@@ -100,7 +116,7 @@ export function MixCard({ mix, genres }: { mix: Mix; genres: Record<string, stri
       <div className="card-title" title={title}>
         {title}
       </div>
-      <div className="card-sub">{mixSubtitle(mix)}</div>
+      <div className="card-sub">{mixSubtitle(mix, genres)}</div>
     </div>
   );
 }

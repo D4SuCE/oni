@@ -3,6 +3,7 @@
 // Yandex (track titles, wave contexts, genres) is shown as Yandex returns it.
 
 import { create } from 'zustand';
+import type { Slot } from './recs/daylist.ts';
 import type { Diversity, Language, Mood } from './wave/engine.ts';
 
 export type Lang = 'ru' | 'en';
@@ -89,22 +90,32 @@ const ru = {
     rewind: 'Забытые хиты',
     because: (artist: string) => `Потому что вы слушали ${artist}`,
     andMore: (names: string) => `${names} и другие`,
+    /** weekday: 0 = Sunday, of the day the part of the day starts on. */
+    daylist: (slot: Slot, weekday: number): string => {
+      const of = ['воскресенья', 'понедельника', 'вторника', 'среды', 'четверга', 'пятницы', 'субботы'][weekday];
+      const on = ['воскресенье', 'понедельник', 'вторник', 'среду', 'четверг', 'пятницу', 'субботу'][weekday];
+      return { morning: `Утро ${of}`, day: `День ${of}`, evening: `Вечер ${of}`, night: `Поздний вечер ${of}`, late: `Ночь на ${on}` }[slot];
+    },
+    daylistMood: { morning: 'Бодрое', day: 'Для работы', evening: 'Расслабленное', night: 'Спокойное', late: 'Тихое' } as Record<Slot, string>,
+    until: (time: string) => `до ${time}`,
     kicker: {
+      daylist: 'Daylist · под время дня',
       mix: 'Микс дня',
       discover: 'Новое для вас',
       radar: 'Свежие релизы',
       repeat: 'Что вы слушаете чаще всего',
       rewind: 'Любимое, которое давно не звучало',
       because: 'Похожие исполнители',
-    } as Record<'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because', string>,
+    } as Record<'daylist' | 'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because', string>,
     refreshes: {
+      daylist: 'Меняется с временем суток',
       mix: 'Обновляется каждый день',
       discover: 'Обновляется по понедельникам',
       radar: 'Обновляется по пятницам',
       repeat: 'Обновляется каждый день',
       rewind: 'Обновляется по понедельникам',
       because: 'Обновляется каждый день',
-    } as Record<'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because', string>,
+    } as Record<'daylist' | 'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because', string>,
     gone: 'Этой подборки больше нет — на главной уже свежие',
   },
   history: {
@@ -325,6 +336,7 @@ const ru = {
     origins: {
       wave: 'Моя волна',
       radio: 'Радио',
+      daylist: 'Daylist',
       mix: 'Миксы по жанрам',
       discover: 'Открытия недели',
       radar: 'Радар новинок',
@@ -333,7 +345,7 @@ const ru = {
       because: '«Потому что вы слушали»',
       smart: 'Умное перемешивание (✦)',
       list: 'Плейлисты, альбомы, поиск',
-    } as Record<'wave' | 'radio' | 'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because' | 'smart' | 'list', string>,
+    } as Record<'wave' | 'radio' | 'daylist' | 'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because' | 'smart' | 'list', string>,
   },
   sound: {
     title: 'Настройки звука',
@@ -450,7 +462,14 @@ const en: Dict = {
     rewind: 'Forgotten Favourites',
     because: (artist) => `Because you listened to ${artist}`,
     andMore: (names) => `${names} and more`,
+    daylist: (slot, weekday) => {
+      const day = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][weekday];
+      return { morning: `${day} morning`, day: `${day} afternoon`, evening: `${day} evening`, night: `${day} night`, late: `${day} late night` }[slot];
+    },
+    daylistMood: { morning: 'Upbeat', day: 'Focus', evening: 'Laid-back', night: 'Mellow', late: 'Quiet' },
+    until: (time) => `until ${time}`,
     kicker: {
+      daylist: 'Daylist · for this time of day',
       mix: 'Daily mix',
       discover: 'New to you',
       radar: 'Fresh releases',
@@ -459,6 +478,7 @@ const en: Dict = {
       because: 'Similar artists',
     },
     refreshes: {
+      daylist: 'Changes as the day goes on',
       mix: 'Refreshed every day',
       discover: 'Refreshed every Monday',
       radar: 'Refreshed every Friday',
@@ -686,6 +706,7 @@ const en: Dict = {
     origins: {
       wave: 'My Wave',
       radio: 'Radio',
+      daylist: 'Daylist',
       mix: 'Genre mixes',
       discover: 'Weekly Discoveries',
       radar: 'Release Radar',
