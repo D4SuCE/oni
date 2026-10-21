@@ -13,6 +13,8 @@
 
 ## [Не выпущено]
 
+## [1.5.4] — 2026-10-21
+
 ### Добавлено
 - Поиск внутри плейлиста и «Мне нравится»: значок в шапке, список сужается до подходящих треков;
   найденный трек играет весь список с него.
@@ -208,7 +210,8 @@
 - Фон-картина «Blood Moon Over Misty Pagodas», прозрачность окна (Acrylic).
 - Живые видеообложки Яндекса и пульсация обложек в такт музыке.
 
-[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.5.3...HEAD
+[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.5.4...HEAD
+[1.5.4]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.4
 [1.5.3]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.3
 [1.5.2]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.2
 [1.5.1]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.1
