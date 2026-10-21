@@ -2888,15 +2888,15 @@ kbd {
   html.ios .lib-actions,
   html.ios .page-actions {
     flex-wrap: nowrap;
-    gap: 12px;
+    gap: 8px;
     margin-bottom: 20px;
   }
   /* (not while downloading: then the button shows how many are done) */
   html.ios .lib-actions .btn:not(.primary):not(.busy),
   html.ios .page-actions .btn:not(.primary):not(.busy) {
     flex: none;
-    width: 44px;
-    height: 44px;
+    width: 42px;
+    height: 42px;
     padding: 0;
     gap: 0;
     font-size: 0;
@@ -2914,8 +2914,19 @@ kbd {
   html.ios .lib-actions .muted,
   html.ios .page-actions .muted {
     margin-left: auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-size: 12.5px;
     white-space: nowrap;
+  }
+  /* A round icon button among them (search) matches the others. */
+  html.ios .lib-actions .icon-btn,
+  html.ios .page-actions .icon-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: rgba(242, 238, 232, 0.08);
   }
 
   /* Wave's Tune panel: a sheet from below (the side panel's top hid under the status bar),

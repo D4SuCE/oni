@@ -190,6 +190,22 @@ async function backgroundDownload() {
   await (wave().offline as unknown as { remove(id: string): Promise<void> }).remove(String(track.id));
 }
 
+/** An own playlist on the phone: its buttons fit the screen, and "…" holds rename and delete. */
+async function playlistActions() {
+  const app = (window as unknown as { __wave: { useApp: { getState(): { playlists: { uid: number; kind: number; owner?: { uid: number } }[]; account: { uid: number } | null } }; navigate(r: unknown): void } }).__wave;
+  const { playlists, account } = app.useApp.getState();
+  const own = playlists.find((p) => String(p.uid) === String(account?.uid));
+  if (!own) return report('playlist-actions', false, 'no own playlist');
+  app.navigate({ name: 'playlist', uid: own.uid, kind: own.kind });
+  await until(() => document.querySelector('[data-testid="playlist-more"]'), 15000);
+  const over = [...document.querySelectorAll<HTMLElement>('.page-actions > *')].filter((b) => b.getBoundingClientRect().right > window.innerWidth + 1).length;
+  click('[data-testid="playlist-more"]');
+  await until(() => document.querySelector('.menu'), 3000);
+  const items = [...document.querySelectorAll('.menu .menu-item')].map((i) => i.textContent?.trim());
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  report('playlist-actions', over === 0 && items.some((i) => /удалить|delete/i.test(i ?? '')), `${over} off screen; menu: ${items.join(', ')}`);
+}
+
 export async function runSmoke() {
   try {
     noZoom();
@@ -245,6 +261,7 @@ export async function runSmoke() {
     await sleep(600); // a person's next tap, after the hold's aftermath (src/ui/longPress.ts)
     await tapToPlay();
     await uploadForm();
+    await playlistActions();
   } catch (e) {
     report('crash', false, String(e));
   }

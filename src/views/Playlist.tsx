@@ -1,4 +1,4 @@
-import { Heart, Pencil, Play, Radio, Shuffle, Trash2, Upload } from 'lucide-react';
+import { Heart, MoreHorizontal, Pencil, Play, Radio, Shuffle, Trash2, Upload } from 'lucide-react';
 import { DownloadButton } from '../components/DownloadButton.tsx';
 import { useRef, useState } from 'react';
 import { api, transport } from '../api/client.ts';
@@ -6,12 +6,14 @@ import type { Playlist } from '../api/types.ts';
 import { playlistCover } from '../api/yandex.ts';
 import { ErrorBox, PageHeader, Spinner } from '../components/Common.tsx';
 import { askText, confirmDialog } from '../components/Dialog.tsx';
+import { openMenu, type MenuItem } from '../components/Menu.tsx';
 import { useTrackEdits } from '../components/TrackSheet.tsx';
 import { SmartShuffleButton } from '../components/SmartShuffle.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { useT } from '../i18n.ts';
 import { playRadio, playShuffled, playTracks } from '../player/player.ts';
 import { back, errorText, isOwn, refreshPlaylists, samePlaylist, toast, togglePlaylistLike, useApp } from '../store.ts';
+import { isIos } from '../ui/platform.ts';
 import { cx, fmtTotal, useAsync } from '../ui/util.ts';
 import { useListSearch } from '../components/ListSearch.tsx';
 
@@ -90,6 +92,17 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
     toast(t.playlist.uploadPending);
   };
 
+  // "…" on the iPhone: what does not fit its one row of buttons.
+  const more: MenuItem[] = [
+    { label: t.common.radio, icon: <Radio size={15} />, onClick: () => playRadio(`playlist:${pl.uid}:${pl.kind}`, pl.title) },
+    ...(own
+      ? [
+          ...(transport.canUpload ? [{ label: t.playlist.upload, icon: <Upload size={15} />, onClick: () => fileInput.current?.click() }] : []),
+          { label: t.playlist.rename, icon: <Pencil size={15} />, onClick: rename },
+          { label: t.playlist.delete, icon: <Trash2 size={15} />, danger: true, onClick: destroy },
+        ]
+      : [{ label: saved ? t.playlist.unsave : t.playlist.save, icon: <Heart size={15} />, onClick: () => togglePlaylistLike(pl) }]),
+  ];
   return (
     <div className="page">
       <PageHeader
@@ -114,30 +127,39 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
             <SmartShuffleButton tracks={tracks} title={pl.title} from={from} />
             <DownloadButton listKey={`playlist:${pl.uid}:${pl.kind}`} tracks={tracks} />
             {tracks.length > 0 && search.button}
-            <button className="btn glass-btn" onClick={() => playRadio(`playlist:${pl.uid}:${pl.kind}`, pl.title)} disabled={!tracks.length} data-testid="radio">
-              <Radio size={16} /> {t.common.radio}
-            </button>
-            {!own && (
-              <button className={cx('icon-btn', saved && 'on like')} onClick={() => togglePlaylistLike(pl)} title={saved ? t.playlist.unsave : t.playlist.save} data-testid="playlist-like">
-                <Heart size={19} fill={saved ? 'currentColor' : 'none'} />
+            {/* On the iPhone the rest lives in "…": one row of buttons fits its screen. */}
+            {isIos ? (
+              <button className="btn glass-btn" onClick={(e) => openMenu(e, more)} title={t.common.more} data-testid="playlist-more">
+                <MoreHorizontal size={18} />
               </button>
-            )}
-            {own && (
+            ) : (
               <>
-                {transport.canUpload && (
-                  <button className="btn glass-btn" onClick={() => fileInput.current?.click()} disabled={!!uploading} title={t.playlist.uploadHint}>
-                    <Upload size={16} /> {t.playlist.upload}
+                <button className="btn glass-btn" onClick={() => playRadio(`playlist:${pl.uid}:${pl.kind}`, pl.title)} disabled={!tracks.length} data-testid="radio">
+                  <Radio size={16} /> {t.common.radio}
+                </button>
+                {!own && (
+                  <button className={cx('icon-btn', saved && 'on like')} onClick={() => togglePlaylistLike(pl)} title={saved ? t.playlist.unsave : t.playlist.save} data-testid="playlist-like">
+                    <Heart size={19} fill={saved ? 'currentColor' : 'none'} />
                   </button>
                 )}
-                <button className="icon-btn" onClick={rename} title={t.playlist.rename}>
-                  <Pencil size={17} />
-                </button>
-                <button className="icon-btn" onClick={destroy} title={t.playlist.delete}>
-                  <Trash2 size={17} />
-                </button>
-                <input ref={fileInput} type="file" accept="audio/mpeg,.mp3" multiple hidden onChange={(e) => upload(e.target.files)} />
+                {own && (
+                  <>
+                    {transport.canUpload && (
+                      <button className="btn glass-btn" onClick={() => fileInput.current?.click()} disabled={!!uploading} title={t.playlist.uploadHint}>
+                        <Upload size={16} /> {t.playlist.upload}
+                      </button>
+                    )}
+                    <button className="icon-btn" onClick={rename} title={t.playlist.rename}>
+                      <Pencil size={17} />
+                    </button>
+                    <button className="icon-btn" onClick={destroy} title={t.playlist.delete}>
+                      <Trash2 size={17} />
+                    </button>
+                  </>
+                )}
               </>
             )}
+            {own && <input ref={fileInput} type="file" accept="audio/mpeg,.mp3" multiple hidden onChange={(e) => upload(e.target.files)} />}
           </>
         }
       />
