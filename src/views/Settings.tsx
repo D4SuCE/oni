@@ -11,7 +11,7 @@ import { setMotion, setPulse, useMotion, usePulse } from '../ui/motion.ts';
 import { isIos } from '../ui/platform.ts';
 import { setPhoneSound, usePhoneSound } from '../player/phoneSound.ts';
 import { MAX_SEE_THROUGH, setSeeThrough, useSeeThrough } from '../ui/seeThrough.ts';
-import { checkIosUpdate, installIosUpdate, setAutoUpdate, setUpdateViaShortcut, UPDATE_SHORTCUT, useAutoUpdate } from '../ui/iosUpdate.ts';
+import { checkIosUpdate, installIosUpdate, installUpdateShortcut, setAutoUpdate, setUpdateViaShortcut, UPDATE_SHORTCUT, useAutoUpdate } from '../ui/iosUpdate.ts';
 import { useUpdate } from '../ui/update.ts';
 import { cx } from '../ui/util.ts';
 
@@ -336,6 +336,11 @@ function AutoUpdateRow() {
         </div>
         <input type="checkbox" className="switch" checked={shortcut} onChange={(e) => setUpdateViaShortcut(e.target.checked)} data-testid="update-shortcut" />
       </label>
+      {shortcut && (
+        <button className="btn ghost" onClick={installUpdateShortcut} data-testid="update-shortcut-install">
+          <Download size={16} /> {u.iosShortcutInstall}
+        </button>
+      )}
     </>
   );
 }

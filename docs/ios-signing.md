@@ -103,7 +103,8 @@ IPA. CI после сборки обновляет `sidestore-source.json` (ве
 - Команда «Oni - Update» (собрана пользователем 22.10.2026): ввод — текст; «Включить LocalDevVPN» →
   «Открыть [Ввод команды]» → «Подождать 90 с» → «Выключить LocalDevVPN». Oni (переключатель «Через
   команду») запускает её `shortcuts://run-shortcut?name=Oni%20-%20Update&input=text&text=<sidestore://…>`.
-  iCloud-ссылку на неё (для кнопки «Установить команду») — от пользователя, когда пришлёт.
+  iCloud-ссылка (кнопка «Установить команду», `UPDATE_SHORTCUT_LINK` в `src/ui/iosUpdate.ts`):
+  https://www.icloud.com/shortcuts/3c691508574444aeba0005d0801d28e8
 - LocalDevVPN только на время SideStore (пользователь держит другой VPN, Happ): «Команды» →
   «Автоматизация» → приложение SideStore «Открыто» → «Настроить VPN: Подключить LocalDevVPN»; SideStore
   «Закрыто» → «Настроить VPN: Подключить Happ» (один VPN за раз — второй выключает первый). Ночная

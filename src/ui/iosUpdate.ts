@@ -32,9 +32,16 @@ export function setAutoUpdate(on: boolean) {
 /** The Shortcuts shortcut that wraps SideStore with LocalDevVPN: on, open SideStore with the link
  * it is given, wait, off (the user's own, 22.10.2026). Run by name with the SideStore link as input. */
 export const UPDATE_SHORTCUT = 'Oni - Update';
+/** Where Shortcuts adds it from (shared by the user). Capacitor opens other sites outside the app. */
+export const UPDATE_SHORTCUT_LINK = 'https://www.icloud.com/shortcuts/3c691508574444aeba0005d0801d28e8';
+export function installUpdateShortcut() {
+  location.href = UPDATE_SHORTCUT_LINK;
+}
+/** Switched on, it offers the shortcut right away (Shortcuts asks before adding it). */
 export function setUpdateViaShortcut(shortcut: boolean) {
   useAutoUpdate.setState({ shortcut });
   saveAuto();
+  if (shortcut) installUpdateShortcut();
 }
 
 let checkedAt = 0;

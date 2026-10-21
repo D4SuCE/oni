@@ -254,6 +254,7 @@ const ru = {
     iosAuto: 'Автообновление',
     iosShortcut: (name: string) => `Через команду «${name}»`,
     iosShortcutHint: 'Обновление запускает команду из «Команд»: она включает LocalDevVPN, открывает SideStore с новой версией и выключает VPN. Без неё Oni открывает SideStore сам.',
+    iosShortcutInstall: 'Установить команду',
     iosAutoHint:
       'Когда выйдет новая версия, Oni сам откроет SideStore с ней. Чтобы LocalDevVPN включался сам, нужны две автоматизации в «Командах»: «SideStore открыто» → включить LocalDevVPN, «SideStore закрыто» → выключить его.',
   },
@@ -711,6 +712,7 @@ const en: Dict = {
     iosAuto: 'Auto-update',
     iosShortcut: (name) => `Through the "${name}" shortcut`,
     iosShortcutHint: 'The update runs a Shortcuts shortcut: it turns LocalDevVPN on, opens SideStore with the new version and turns the VPN off. Without it Oni opens SideStore itself.',
+    iosShortcutInstall: 'Install the shortcut',
     iosAutoHint:
       'When a new version is out, Oni opens SideStore with it by itself. For LocalDevVPN to switch itself on, set two Shortcuts automations: "SideStore is opened" → turn LocalDevVPN on, "SideStore is closed" → turn it off.',
   },
