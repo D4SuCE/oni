@@ -82,6 +82,14 @@ IPA. CI после сборки обновляет `sidestore-source.json` (ве
 - Приложение перестало открываться через 7 дней: SideStore не смог продлить
   подпись. Откройте его, и он продлит. Нужен интернет и работающий
   LocalDevVPN/WireGuard из инструкции SideStore.
+- iloader: «Failed to get anisette headers … 502 Bad Gateway» — сервер по умолчанию лежит.
+  Settings → Anisette Server → «Jkcoxson (Mac)» или «StikStore (Mac)» (серверы «Windows» не
+  принимают SMS-код).
+- Вход в SideStore: «This action cannot be completed at this time (-80045)» (массово с 16.10.2026,
+  SideStore #1658). Помогло: User Customizations → выключить On-Device Anisette; Anisette
+  Servers → Jkcoxson или SideStore (New), без автосмены; Reset adi.pb без сохранения заголовков;
+  полностью закрыть SideStore и войти снова. Не запрашивать код много раз — Apple блокирует
+  («Could not connect to iCloud»).
 - Бандл ID должен быть уникальным. SideStore сам добавляет суффикс к
   `local.wave.player`.
 
