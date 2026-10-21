@@ -13,6 +13,8 @@
 
 ## [Не выпущено]
 
+## [1.5.6] — 2026-10-22
+
 ### Добавлено
 - iPhone: Oni сам узнаёт о новой версии, как только её файл опубликован, и пишет об этом (как на
   Windows); кнопка «Обновить» в настройках открывает SideStore сразу с этим файлом. Ставит его по-прежнему
@@ -265,7 +267,8 @@
 - Фон-картина «Blood Moon Over Misty Pagodas», прозрачность окна (Acrylic).
 - Живые видеообложки Яндекса и пульсация обложек в такт музыке.
 
-[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.5.5...HEAD
+[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.5.6...HEAD
+[1.5.6]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.6
 [1.5.5]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.5
 [1.5.4]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.4
 [1.5.3]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.3
