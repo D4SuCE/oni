@@ -13,6 +13,8 @@
 
 ## [Не выпущено]
 
+## [1.5.2] — 2026-10-21
+
 ### Добавлено
 - Телефон: долгое нажатие на треке (и всём, где на компьютере есть меню по правому клику)
   открывает это меню.
@@ -161,7 +163,8 @@
 - Фон-картина «Blood Moon Over Misty Pagodas», прозрачность окна (Acrylic).
 - Живые видеообложки Яндекса и пульсация обложек в такт музыке.
 
-[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.5.1...HEAD
+[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.5.2...HEAD
+[1.5.2]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.2
 [1.5.1]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.1
 [1.5.0]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.0
 [1.4.1]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.4.1
