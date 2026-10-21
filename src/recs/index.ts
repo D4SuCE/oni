@@ -18,7 +18,7 @@ import { assembleDaylist, playedInSlot, SLOT_SEEDS, slotAt, topGenres, type Slot
 import { buildProfile, type Profile, type TasteInput } from './profile.ts';
 import { becauseYouListened, forgottenFavourites, onRepeat, recentArtists } from './personal.ts';
 import { radarArtists, radarTracks, recentReleases } from './radar.ts';
-import { DAY, dayKey, mapLimit, seededRandom, weekKey } from './util.ts';
+import { DAY, dayKey, mapLimit, seededRandom, shelfOrder, weekKey } from './util.ts';
 
 export type MixKind = 'daylist' | 'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because';
 
@@ -247,11 +247,8 @@ const MIN_SHOWN = 5;
 /** The shelf in order, without hidden tracks and demoted artists. */
 const ordered = (c: Cache) => {
   shown = c;
-  const personal = c.personal ?? [];
-  const repeat = personal.filter((m) => m.kind === 'repeat');
-  const because = personal.filter((m) => m.kind === 'because');
   const now = Date.now();
-  return ([c.daylist, c.discover, c.radar, ...repeat, ...c.mixes, ...because, c.rewind].filter(Boolean) as Mix[])
+  return shelfOrder([c.daylist, c.discover, c.radar, ...(c.personal ?? []), ...c.mixes, c.rewind].filter(Boolean) as Mix[])
     .map((m) => ({ ...m, tracks: m.tracks.filter((t) => recsFeedback.keeps(t, now)) }))
     .filter((m) => m.tracks.length >= MIN_SHOWN);
 };

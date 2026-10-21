@@ -76,3 +76,8 @@ export function weekKey(now: number, weekday: number) {
   d.setDate(d.getDate() - ((d.getDay() - weekday + 7) % 7));
   return dayKey(d.getTime());
 }
+
+/** "For you" order: the named playlists, newest kinds first, then the taste mixes (user's request). */
+const SHELF = ['daylist', 'repeat', 'because', 'rewind', 'discover', 'radar', 'mix'];
+export const shelfOrder = <T extends { kind: string }>(mixes: T[]) =>
+  [...mixes].sort((a, b) => SHELF.indexOf(a.kind) - SHELF.indexOf(b.kind));

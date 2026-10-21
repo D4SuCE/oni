@@ -11,7 +11,7 @@ import { radarArtists, radarTracks, recentReleases } from '../src/recs/radar.ts'
 import { interleave, pickSuggestions } from '../src/recs/suggest.ts';
 import { levellingGain } from '../src/player/loudness.ts';
 import { PlayStats } from '../src/player/stats.ts';
-import { DAY, artistIds, dayKey, seededRandom, weekKey } from '../src/recs/util.ts';
+import { DAY, artistIds, dayKey, seededRandom, shelfOrder, weekKey } from '../src/recs/util.ts';
 
 let passed = 0;
 let failed = 0;
@@ -368,6 +368,13 @@ await test("volume levelling: only tracks louder than about today's median are t
   assert(Math.abs(db(-8)) < 1e-9 && Math.abs(db(-11)) < 1e-9 && levellingGain(undefined) === 1, 'typical, quiet and unknown play at full volume');
   assert(Math.abs(db(-5) + 3) < 1e-9, `a -5 LUFS track loses 3 dB: ${db(-5)}`);
   assert(Math.abs(db(10) + 12) < 1e-9, 'never more than 12 dB');
+});
+
+await test('"for you": the named playlists first, taste mixes after them', () => {
+  const kinds = (xs: { kind: string }[]) => xs.map((x) => x.kind).join(' ');
+  const shelf = [{ kind: 'mix' }, { kind: 'rewind' }, { kind: 'mix' }, { kind: 'radar' }, { kind: 'because' }, { kind: 'discover' }, { kind: 'repeat' }, { kind: 'because' }, { kind: 'daylist' }];
+  const out = kinds(shelfOrder(shelf));
+  assert(out === 'daylist repeat because because rewind discover radar mix mix', out);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
