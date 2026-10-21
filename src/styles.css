@@ -2778,6 +2778,14 @@ kbd {
 /* iPhone zooms the page into a field whose text is under 16 px (the token field on the sign-in
    screen), and an app has no way to zoom back out. The viewport also forbids zooming (index.html). */
 @media (pointer: coarse) {
+  /* Sliders follow the finger from anywhere on the track (src/ui/touchRange.ts), and the bar
+     keeps up with it: no easing behind the thumb, no page scroll from it. */
+  .range {
+    touch-action: none;
+  }
+  .range::-webkit-slider-runnable-track {
+    transition: none;
+  }
   /* Now Playing follows the finger down (src/ui/swipe.ts) instead of the page scrolling. */
   .nowplaying {
     touch-action: none;
@@ -2793,6 +2801,31 @@ kbd {
   textarea {
     font-size: 16px;
   }
+}
+
+.dl-short {
+  display: none;
+}
+
+/* Search inside a playlist or Liked (src/components/ListSearch.tsx). */
+.list-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 4px 6px 4px 14px;
+  border-radius: 14px;
+  color: var(--text-2);
+}
+.list-search input {
+  flex: 1;
+  min-width: 0;
+  height: 38px;
+  border: none;
+  outline: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
 }
 
 /* ------------------------------------------------- iPhone (html.ios only) */
@@ -2869,6 +2902,15 @@ kbd {
     font-size: 0;
     border-radius: 50%;
   }
+  /* Downloading: the short count, and no list size beside it to run off the screen. */
+  html.ios .btn.busy .dl-full,
+  html.ios .lib-actions:has(.busy) .muted,
+  html.ios .page-actions:has(.busy) .muted {
+    display: none;
+  }
+  html.ios .btn.busy .dl-short {
+    display: inline;
+  }
   html.ios .lib-actions .muted,
   html.ios .page-actions .muted {
     margin-left: auto;
@@ -2932,6 +2974,28 @@ kbd {
   html.ios .pb-left .cover {
     width: 48px !important;
     height: 48px !important;
+  }
+
+  /* "For you" cards are small here: the title on the art keeps to two lines in a smaller face
+     and the seal shrinks, so they no longer run into each other (the full name is under the card). */
+  html.ios .mix-art-title {
+    padding: 22px 10px 9px;
+    font-size: 14px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  html.ios .mix-seal {
+    top: 7px;
+    left: 9px;
+    font-size: 22px;
+  }
+
+  /* An empty search follows the finger down and goes back (src/views/Search.tsx). */
+  html.ios .page.swipe-away {
+    min-height: 100%;
+    touch-action: none;
   }
 
   /* Track rows: a little more air, no cramped extras. */

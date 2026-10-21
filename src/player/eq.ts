@@ -71,9 +71,17 @@ function build() {
 
 /** The iPhone with processing: the graph from the first track on, so its volume works. */
 export function routeThroughGraph() {
+  if (!ctx && processingOn) {
+    build();
+    // Woken and covered for when iOS suspends it in the background (background.ts).
+    import('./background.ts').then((m) => m.keepSoundInBackground());
+  }
   build();
   apply();
 }
+
+/** The graph's context, once built (background.ts watches it). */
+export const audioContext = () => ctx;
 
 /** Volume at the end of the graph (the iPhone); the desktop keeps using audio.volume. */
 export function setOutputGain(gain: number) {

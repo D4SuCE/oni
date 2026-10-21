@@ -6,6 +6,7 @@
 import { OniLogin } from './api/capacitor.ts';
 import { transport } from './api/client.ts';
 import { OniRemote } from './player/remote.ts';
+import { OniVolume } from './player/volume.ts';
 
 type Wave = {
   audio: HTMLAudioElement;
@@ -159,6 +160,20 @@ async function webAudioFromMemory() {
   await wave().audio.play().catch(() => {});
 }
 
+/** Now Playing's seek bar: a tap in its middle (not on the thumb) takes the track there, once,
+ * when the finger lifts (src/ui/touchRange.ts, SeekBar). */
+async function touchSeek() {
+  const bar = document.querySelector<HTMLInputElement>('.nowplaying .np-seek input[type=range]');
+  if (!bar) return report('touch-seek', false, 'no seek bar');
+  const box = bar.getBoundingClientRect();
+  const at = { pointerId: 11, pointerType: 'touch', isPrimary: true, clientX: box.left + box.width / 2, clientY: box.top + box.height / 2, bubbles: true };
+  bar.dispatchEvent(new PointerEvent('pointerdown', at));
+  bar.dispatchEvent(new PointerEvent('pointerup', at));
+  const half = wave().audio.duration / 2;
+  const moved = await until(() => Math.abs(wave().audio.currentTime - half) < 5, 5000);
+  report('touch-seek', moved, `at ${wave().audio.currentTime.toFixed(1)} of ${wave().audio.duration.toFixed(1)}`);
+}
+
 export async function runSmoke() {
   try {
     noZoom();
@@ -184,6 +199,9 @@ export async function runSmoke() {
     click('.pb-cover');
     report('now-playing', await until(() => document.querySelector('.nowplaying'), 5000));
     await sleep(2500);
+    await touchSeek();
+    const { value } = await OniVolume.get().catch(() => ({ value: -1 }));
+    report('phone-volume', value >= 0 && value <= 1, `system volume ${value}`);
     nowPlayingCloses();
     report('np-swipe-down', await until(() => !document.querySelector('.nowplaying'), 3000));
     click('.pb-cover');

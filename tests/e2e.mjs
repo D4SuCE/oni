@@ -485,6 +485,25 @@ await step('liked tracks page', async () => {
   await shot('09-liked');
 });
 
+await step('search inside Liked: the list narrows, and a found track plays the whole list from it', async () => {
+  const total = await page.locator('.track-row').count();
+  const word = (await page.locator('.track-row .tr-title').nth(2).innerText()).split(/\s+/).find((w) => w.length >= 3) ?? '';
+  await page.click('[data-testid="list-search"]');
+  await page.fill('[data-testid="list-search-input"]', word);
+  await page.waitForTimeout(300);
+  const rows = page.locator('.track-row');
+  const shown = await rows.count();
+  const texts = await rows.evaluateAll((els) => els.map((e) => e.textContent.toLowerCase()));
+  if (!shown || shown >= total || !texts.every((x) => x.includes(word.toLowerCase()))) throw new Error(`"${word}": ${shown} of ${total}`);
+  const id = await rows.first().getAttribute('data-track-id');
+  await rows.first().dblclick();
+  await page.waitForFunction((want) => String(window.__wave.usePlayer.getState().queue[window.__wave.usePlayer.getState().index]?.id) === want, id, { timeout: 15000 });
+  const queue = await page.evaluate(() => window.__wave.usePlayer.getState().queue.length);
+  if (queue < total) throw new Error(`queue ${queue}, list ${total}`);
+  console.log(`       "${word}": ${shown} of ${total}`);
+  await page.click('[data-testid="list-search"]');
+});
+
 await step('library: own and liked playlists', async () => {
   await page.click('[data-testid="nav-library"]');
   await page.waitForSelector('[data-testid="liked-card"]');
@@ -655,16 +674,18 @@ await step('history: this app and all devices', async () => {
 });
 
 await step('english interface has no Russian left', async () => {
-  // Only the app's own chrome: titles, tabs, buttons, tooltips. Yandex data stays as it is.
+  // Only the app's own chrome: titles, tabs, buttons, tooltips. Yandex data stays as it is
+  // (also in the Home banner: the playing track, its artists, where it plays from).
   const CHROME = [
     '.nav > .nav-item', '.nav-section > span', '.page-title', '.section-head h2', '.tabs .tab', '.kicker',
     '.wave-hero h1', '.wave-hero .btn', '.panel h3', '.panel .hint', '.empty-hint', '.pb-empty', '.lib-actions .btn',
   ].join(',');
   const leftovers = async () =>
     page.evaluate((sel) => {
-      const texts = [...document.querySelectorAll(sel)].map((el) => el.textContent);
+      const data = '.wave-track, [data-testid="wave-kicker"], [data-testid="wave-desc"]';
+      const texts = [...document.querySelectorAll(sel)].filter((el) => !el.closest(data)).map((el) => el.textContent);
       const titles = [...document.querySelectorAll('button[title], [aria-label]')]
-        .filter((el) => !el.closest('.nav-playlists, .track-row, .q-row, .card'))
+        .filter((el) => !el.closest(`.nav-playlists, .track-row, .q-row, .card, ${data}`))
         .map((el) => el.getAttribute('title') || el.getAttribute('aria-label'));
       return [...texts, ...titles].filter((t) => /[А-Яа-яЁё]/.test(t || ''));
     }, CHROME);

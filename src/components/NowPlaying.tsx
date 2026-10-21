@@ -180,7 +180,7 @@ export function NowPlaying() {
               </div>
               <SeekBar className="np-seek" />
               <Transport big />
-              {isIos && processingOn && volumeSlider && <VolumeControl className="np-volume" />}
+              {isIos && volumeSlider && <VolumeControl className="np-volume" />}
             </>
           )}
         </div>

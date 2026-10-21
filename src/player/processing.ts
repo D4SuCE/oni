@@ -12,7 +12,7 @@ import { audioType } from './offline.ts';
 interface Prefs {
   /** Equalizer and volume on the iPhone (tracks load whole before they play). */
   processing: boolean;
-  /** A volume slider on Now Playing, under play (needs processing). */
+  /** A slider for the phone's volume on Now Playing, under play (volume.ts). */
   volumeSlider: boolean;
 }
 

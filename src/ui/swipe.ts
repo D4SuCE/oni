@@ -7,11 +7,11 @@ const CLOSE_AT = 120;
 const FLICK = 0.6; // px per ms
 
 /** `handle`: where the drag may start, when the sheet itself scrolls (the wave's Tune panel). */
-export function useSwipeDown(ref: RefObject<HTMLElement | null>, onClose: () => void, handle?: RefObject<HTMLElement | null>) {
+export function useSwipeDown(ref: RefObject<HTMLElement | null>, onClose: () => void, handle?: RefObject<HTMLElement | null>, enabled = true) {
   useEffect(() => {
     const el = ref.current;
     const grip = handle?.current ?? el;
-    if (!el || !grip) return;
+    if (!el || !grip || !enabled) return;
     let start: { id: number; y: number; t: number } | null = null;
     let dy = 0;
     const settle = (close: boolean) => {
@@ -47,5 +47,5 @@ export function useSwipeDown(ref: RefObject<HTMLElement | null>, onClose: () => 
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
     };
-  }, [ref, onClose, handle]);
+  }, [ref, onClose, handle, enabled]);
 }

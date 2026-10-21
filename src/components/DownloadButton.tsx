@@ -1,4 +1,4 @@
-import { Check, Download, Loader2 } from 'lucide-react';
+import { Check, Download, Loader2, X } from 'lucide-react';
 import type { Track } from '../api/types.ts';
 import { useT } from '../i18n.ts';
 import { offline } from '../player/player.ts';
@@ -12,10 +12,15 @@ export function DownloadButton({ listKey, tracks }: { listKey: string; tracks: T
   if (!offline || !tracks.length) return null;
   const playable = tracks.filter((x) => x.available !== false);
   const all = playable.length > 0 && playable.every((x) => offline!.has(x.id));
+  // While it runs the button shows how far it is, and a tap cancels it.
   if (batch)
     return (
-      <button className="btn glass-btn busy" disabled data-testid="download-all">
-        <Loader2 size={16} className="spin" /> {t.progress(batch.done, batch.total)}
+      <button className="btn glass-btn busy" onClick={() => downloadList(listKey, playable)} title={t.cancel} data-testid="download-all">
+        <Loader2 size={16} className="spin" /> <span className="dl-full">{t.progress(batch.done, batch.total)}</span>
+        <span className="dl-short">
+          {batch.done} / {batch.total}
+        </span>
+        <X size={15} />
       </button>
     );
   return (

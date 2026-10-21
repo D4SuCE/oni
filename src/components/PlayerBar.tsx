@@ -1,5 +1,5 @@
 import { Ban, Heart, ListMusic, Loader2, Maximize2, MoreHorizontal, Pause, PictureInPicture2, Play, Repeat, Repeat1, Shuffle, SlidersVertical, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Waves } from 'lucide-react';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import type { Track } from '../api/types.ts';
 import { trackCover } from '../api/yandex.ts';
 import { useLang, useT } from '../i18n.ts';
@@ -15,7 +15,19 @@ import { isUpload, trackMenu } from './TrackList.tsx';
 export function SeekBar({ className }: { className?: string }) {
   const position = usePlayer((s) => s.position);
   const duration = usePlayer((s) => s.duration);
-  const p = duration ? (position / duration) * 100 : 0;
+  // While a finger or the mouse holds it, the slider shows where it is taken and seeks once, on
+  // release: a seek per move queued up (the track went on from the old place for seconds), and
+  // the bar followed the playing position, behind the thumb.
+  const [drag, setDrag] = useState<number | null>(null);
+  const holding = useRef(false);
+  const shown = drag ?? position;
+  const p = duration ? (shown / duration) * 100 : 0;
+  const release = (e: React.PointerEvent<HTMLInputElement>) => {
+    if (!holding.current) return;
+    holding.current = false;
+    seek(Number(e.currentTarget.value));
+    setDrag(null);
+  };
   const t = useT();
   return (
     <div className={cx('seek', className)}>
@@ -26,9 +38,13 @@ export function SeekBar({ className }: { className?: string }) {
         min={0}
         max={duration || 1}
         step={0.5}
-        value={position}
+        value={shown}
         style={{ '--p': `${p}%` } as React.CSSProperties}
-        onChange={(e) => seek(Number(e.target.value))}
+        onPointerDown={() => (holding.current = true)}
+        onPointerUp={release}
+        onPointerCancel={release}
+        // Held: follow the hand; otherwise (the keyboard) seek right away.
+        onChange={(e) => (holding.current ? setDrag(Number(e.target.value)) : seek(Number(e.target.value)))}
         aria-label={t.player.position}
       />
       <span className="time">{fmtTime(duration)}</span>

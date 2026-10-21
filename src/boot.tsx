@@ -8,6 +8,8 @@ import { startBeatPulse } from './player/pulse.ts';
 import { connectDesktopShell } from './player/shell.ts';
 import { connectLinks } from './ui/links.ts';
 import { connectLongPress } from './ui/longPress.ts';
+import { isIos } from './ui/platform.ts';
+import { connectTouchRanges } from './ui/touchRange.ts';
 import { installGlobalErrorLogging } from './ui/log.ts';
 
 installGlobalErrorLogging();
@@ -15,6 +17,7 @@ connectDesktopShell();
 startBeatPulse();
 connectLinks();
 connectLongPress();
+if (isIos) connectTouchRanges();
 document.documentElement.lang = useLang.getState().lang;
 
 createRoot(document.getElementById('root')!).render(

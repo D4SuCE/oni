@@ -137,20 +137,26 @@ export class OfflineLibrary {
    * Downloads a list, a few at a time, skipping what is already there.
    * `progress(done, total)` after each one; resolves with how many failed.
    */
-  async downloadAll(tracks: Track[], progress?: (done: number, total: number) => void, parallel = 2): Promise<number> {
-    const todo = tracks.filter((t) => t.available !== false && !this.has(t.id));
-    let done = 0;
+  /**
+   * Downloads in the order given what is not there yet. Progress counts the whole list, the part
+   * already downloaded included, so a resumed download shows where it is. `stop` ends it after
+   * the tracks under way.
+   */
+  async downloadAll(tracks: Track[], progress?: (done: number, total: number) => void, parallel = 2, stop?: () => boolean): Promise<number> {
+    const playable = tracks.filter((t) => t.available !== false);
+    const todo = playable.filter((t) => !this.has(t.id));
+    let done = playable.length - todo.length;
     let failed = 0;
     let next = 0;
     const worker = async () => {
-      while (next < todo.length) {
+      while (next < todo.length && !stop?.()) {
         const t = todo[next++];
         try {
           await this.download(t);
         } catch {
           failed++;
         }
-        progress?.(++done, todo.length);
+        progress?.(++done, playable.length);
       }
     };
     await Promise.all(Array.from({ length: Math.min(parallel, todo.length) }, worker));

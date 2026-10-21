@@ -25,15 +25,29 @@ export async function downloadTrack(t: Track) {
   }
 }
 
+/** Lists whose download was cancelled: they stop after the tracks under way. */
+const cancelled = new Set<string>();
+
+/**
+ * Downloads a list, oldest first: Liked and playlists list the newest on top, so they go from
+ * the bottom up (an album keeps its order). Asking again while it runs cancels it.
+ */
 export async function downloadList(key: string, tracks: Track[]) {
-  if (!offline || useBatches.getState()[key]) return;
-  useBatches.setState({ [key]: { done: 0, total: tracks.length } });
-  const failed = await offline.downloadAll(tracks, (done, total) => useBatches.setState({ [key]: { done, total } }));
+  if (!offline) return;
+  if (useBatches.getState()[key]) {
+    cancelled.add(key);
+    return;
+  }
+  const ordered = key === 'liked' || key.startsWith('playlist:') ? [...tracks].reverse() : tracks;
+  const have = tracks.filter((t) => offline!.has(t.id)).length;
+  useBatches.setState({ [key]: { done: have, total: tracks.length } });
+  const failed = await offline.downloadAll(ordered, (done, total) => useBatches.setState({ [key]: { done, total } }), 2, () => cancelled.has(key));
+  const stopped = cancelled.delete(key);
   useBatches.setState((s) => {
     const { [key]: _, ...rest } = s;
     return rest;
   }, true);
-  toast(failed ? tr().downloads.failedSome(failed) : tr().downloads.listDone(tracks.length));
+  toast(stopped ? tr().downloads.cancelled : failed ? tr().downloads.failedSome(failed) : tr().downloads.listDone(tracks.length));
 }
 
 export function formatSize(bytes: number) {

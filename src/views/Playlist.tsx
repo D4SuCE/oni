@@ -13,6 +13,7 @@ import { useT } from '../i18n.ts';
 import { playRadio, playShuffled, playTracks } from '../player/player.ts';
 import { back, errorText, isOwn, refreshPlaylists, samePlaylist, toast, togglePlaylistLike, useApp } from '../store.ts';
 import { cx, fmtTotal, useAsync } from '../ui/util.ts';
+import { useListSearch } from '../components/ListSearch.tsx';
 
 export function PlaylistView({ uid, kind }: { uid: number | string; kind: number | string }) {
   // An upload renamed from the track menu: show the new name.
@@ -22,6 +23,7 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
   const fileInput = useRef<HTMLInputElement>(null);
   const t = useT();
   const likedPlaylists = useApp((s) => s.likedPlaylists);
+  const search = useListSearch();
 
   if (loading && !pl) return <Spinner />;
   if (error || !pl) return <ErrorBox error={error} onRetry={reload} />;
@@ -111,6 +113,7 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
             </button>
             <SmartShuffleButton tracks={tracks} title={pl.title} from={from} />
             <DownloadButton listKey={`playlist:${pl.uid}:${pl.kind}`} tracks={tracks} />
+            {tracks.length > 0 && search.button}
             <button className="btn glass-btn" onClick={() => playRadio(`playlist:${pl.uid}:${pl.kind}`, pl.title)} disabled={!tracks.length} data-testid="radio">
               <Radio size={16} /> {t.common.radio}
             </button>
@@ -143,8 +146,9 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
           <Spinner label={uploading} />
         </div>
       )}
+      {search.field}
       {tracks.length ? (
-        <TrackList tracks={tracks} onPlay={(i) => playTracks(tracks, i, pl.title, from)} onRemove={own ? remove : undefined} />
+        <TrackList tracks={tracks} filter={search.query} onPlay={(i) => playTracks(tracks, i, pl.title, from)} onRemove={own ? remove : undefined} />
       ) : (
         <div className="empty-hint">{own ? t.playlist.emptyOwn : t.playlist.empty}</div>
       )}

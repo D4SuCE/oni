@@ -82,8 +82,22 @@ await test('downloadAll: skips what is there and what is unavailable, counts fai
   const seen: string[] = [];
   const failures = await lib.downloadAll([track('3'), track('4'), track('5'), track('6'), track('7', { available: false })], (d, n) => seen.push(`${d}/${n}`));
   assert(failures === 1, `failures ${failures}`);
-  assert(seen.join() === '1/3,2/3,3/3', `progress ${seen}`);
+  // Counted against the whole list, the part already there included: a resumed download
+  // shows where it is, not a fresh start (the user took "1 of 495" for starting over).
+  assert(seen.join() === '2/4,3/4,4/4', `progress ${seen}`);
   assert(['3', '4', '6'].every((id) => lib.has(id)) && !lib.has('5') && !lib.has('7'), 'what is downloaded');
+});
+
+await test('downloadAll: in the order given, and stops when asked', async () => {
+  const { lib, deps } = setup();
+  const order: string[] = [];
+  const fetchBytes = deps.fetchBytes;
+  deps.fetchBytes = async (url) => (order.push(url.split('/').pop()!), fetchBytes(url));
+  let stop = false;
+  const tracks = ['20', '21', '22', '23', '24'].map((id) => track(id));
+  await lib.downloadAll(tracks, (done) => void (stop = done >= 2), 1, () => stop);
+  assert(order.join() === '20,21', `fetched ${order}`);
+  assert(lib.has('20') && lib.has('21') && !lib.has('22'), 'stopped after two');
 });
 
 await test('the key survives a restart: a new library opens old downloads', async () => {

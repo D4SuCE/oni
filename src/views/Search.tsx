@@ -1,5 +1,5 @@
 import { Search as SearchIcon, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api/client.ts';
 import type { Album, Artist, Playlist, SearchResult, Track } from '../api/types.ts';
 import { artistCover, coverUrl, playlistCover, trackCover } from '../api/yandex.ts';
@@ -7,7 +7,10 @@ import { AlbumCard, ArtistCard, Cover, ErrorBox, PlaylistCard, Section, Shelf, S
 import { TrackList } from '../components/TrackList.tsx';
 import { useT } from '../i18n.ts';
 import { playTracks } from '../player/player.ts';
-import { navigate, useApp } from '../store.ts';
+import { back, navigate, useApp } from '../store.ts';
+import { isIos } from '../ui/platform.ts';
+import { useSwipeDown } from '../ui/swipe.ts';
+import { cx } from '../ui/util.ts';
 
 function BestResult({ best }: { best: NonNullable<SearchResult['best']> }) {
   const r = best.result as any;
@@ -64,6 +67,14 @@ export function Search() {
   const error = q ? answer?.error : null;
   const loading = Boolean(q) && answer?.q !== q;
   const input = useRef<HTMLInputElement>(null);
+  // On the iPhone an empty search (opened by mistake, or given up) goes away with a swipe down.
+  const page = useRef<HTMLDivElement>(null);
+  const swipeAway = isIos && !q;
+  const leave = useCallback(() => {
+    input.current?.blur();
+    back();
+  }, []);
+  useSwipeDown(page, leave, undefined, swipeAway);
   const t = useT();
 
   // A fresh search starts typing; with a query already there (back to the page, or a shortcut's
@@ -91,7 +102,7 @@ export function Search() {
 
   const tracks = result?.tracks?.results || [];
   return (
-    <div className="page">
+    <div ref={page} className={cx('page', swipeAway && 'swipe-away')}>
       <div className="search-box glass">
         <SearchIcon size={20} />
         <input

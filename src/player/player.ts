@@ -170,7 +170,8 @@ function prefetchNext() {
 function applyVolume() {
   const s = get();
   const gain = s.normalize ? levellingGain(current()?.r128?.i) : 1;
-  const volume = Math.max(0, Math.min(1, s.volume * gain));
+  // On the iPhone the volume is the phone's (volume.ts): only the levelling is ours.
+  const volume = Math.max(0, Math.min(1, (isIos ? 1 : s.volume) * gain));
   // iOS ignores audio.volume: with processing the graph's last stage sets it instead.
   if (processingOn) setOutputGain(volume);
   else audio.volume = volume;
@@ -420,9 +421,14 @@ export function seek(seconds: number) {
 }
 
 export function setVolume(volume: number) {
-  set({ volume: Math.max(0, Math.min(1, volume)) });
-  applyVolume();
-  savePrefs();
+  const v = Math.max(0, Math.min(1, volume));
+  set({ volume: v });
+  // The iPhone: the phone's own volume (its buttons move it too); see volume.ts.
+  if (isIos) import('./volume.ts').then((m) => m.OniVolume.set({ value: v }).catch(() => {}));
+  else {
+    applyVolume();
+    savePrefs();
+  }
 }
 
 export function setNormalize(normalize: boolean) {
@@ -585,6 +591,7 @@ if ('mediaSession' in navigator) {
 }
 // That alone did not change the iPhone's lock screen: there a native plugin runs it (remote.ts).
 if (isIos) import('./remote.ts').then((m) => m.connectRemote());
+if (isIos) import('./volume.ts').then((m) => m.followSystemVolume((volume) => set({ volume })));
 
 // -------------------------------------------------------------- persistence
 

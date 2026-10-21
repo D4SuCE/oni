@@ -296,7 +296,8 @@ function UpdateRow() {
   );
 }
 
-/** The iPhone's equalizer and volume (src/player/processing.ts): the route is fixed per run. */
+/** The iPhone's equalizer (src/player/processing.ts: the route is fixed per run) and the volume
+ * slider on Now Playing (the phone's own volume, src/player/volume.ts). */
 function PhoneSound() {
   const t = useT();
   const s = t.settings;
@@ -315,15 +316,13 @@ function PhoneSound() {
           {s.restart}
         </button>
       )}
-      {processing && (
-        <label className="toggle-row">
-          <div>
-            <div>{s.volumeSlider}</div>
-            <div className="hint">{s.volumeSliderHint}</div>
-          </div>
-          <input type="checkbox" className="switch" checked={volumeSlider} onChange={(e) => setProcessingPrefs({ volumeSlider: e.target.checked })} data-testid="volume-slider" />
-        </label>
-      )}
+      <label className="toggle-row">
+        <div>
+          <div>{s.volumeSlider}</div>
+          <div className="hint">{s.volumeSliderHint}</div>
+        </div>
+        <input type="checkbox" className="switch" checked={volumeSlider} onChange={(e) => setProcessingPrefs({ volumeSlider: e.target.checked })} data-testid="volume-slider" />
+      </label>
     </>
   );
 }

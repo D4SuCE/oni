@@ -13,6 +13,7 @@ import { useT } from '../i18n.ts';
 import { offline, playShuffled, playTracks } from '../player/player.ts';
 import { createPlaylist, navigate, useApp, type LibraryTab } from '../store.ts';
 import { cx, useAsync } from '../ui/util.ts';
+import { useListSearch } from '../components/ListSearch.tsx';
 
 /** "tracks" (liked songs) is its own page, reached from the sidebar or the Liked Songs card. */
 const TABS = ['playlists', 'albums', 'artists'] as const;
@@ -48,6 +49,7 @@ function LikedTracks() {
     };
   }, [keys]);
 
+  const search = useListSearch();
   if (error) return <ErrorBox error={error} />;
   if (!tracks) return <Spinner label={t.library.loadingLikes} />;
   return (
@@ -61,9 +63,15 @@ function LikedTracks() {
         </button>
         <SmartShuffleButton tracks={tracks} title={t.common.liked} from={from} />
         <DownloadButton listKey="liked" tracks={tracks} />
+        {tracks.length > 0 && search.button}
         <span className="muted">{t.count.tracks(keys.length)}</span>
       </div>
-      {tracks.length ? <TrackList tracks={tracks} onPlay={(i) => playTracks(tracks, i, t.common.liked, from)} /> : <div className="empty-hint">{t.library.likedEmpty}</div>}
+      {search.field}
+      {tracks.length ? (
+        <TrackList tracks={tracks} filter={search.query} onPlay={(i) => playTracks(tracks, i, t.common.liked, from)} />
+      ) : (
+        <div className="empty-hint">{t.library.likedEmpty}</div>
+      )}
     </>
   );
 }

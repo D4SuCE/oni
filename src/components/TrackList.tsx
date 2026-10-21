@@ -10,6 +10,7 @@ import { isIos } from '../ui/platform.ts';
 import { shareTrack } from '../ui/share.ts';
 import { cx, fmtTime } from '../ui/util.ts';
 import { ArtistLinks, Cover } from './Common.tsx';
+import { trackMatches } from './ListSearch.tsx';
 import { askText } from './Dialog.tsx';
 import { openMenu, type MenuItem } from './Menu.tsx';
 import { editUpload, showTrackInfo } from './TrackSheet.tsx';
@@ -170,8 +171,11 @@ export function TrackList({
   showAlbum = true,
   onRemove,
   rowMenu,
+  filter,
 }: {
   tracks: Track[];
+  /** Only rows matching this (ListSearch); they keep their positions in the whole list. */
+  filter?: string;
   onPlay: (index: number) => void;
   showAlbum?: boolean;
   onRemove?: (index: number) => void;
@@ -184,21 +188,23 @@ export function TrackList({
   useOfflineVersion((s) => s.v);
   return (
     <div className={cx('track-list', !showAlbum && 'no-album')}>
-      {tracks.map((t, i) => (
-        <TrackRow
-          key={`${t.id}-${i}`}
-          track={t}
-          index={i}
-          active={t.id === currentId}
-          playing={playing}
-          liked={liked.has(String(t.id))}
-          showAlbum={showAlbum}
-          onPlay={onPlay}
-          onRemove={onRemove}
-          rowMenu={rowMenu}
-          saved={offlineState(t.id)}
-        />
-      ))}
+      {tracks.map((t, i) =>
+        filter && !trackMatches(t, filter) ? null : (
+          <TrackRow
+            key={`${t.id}-${i}`}
+            track={t}
+            index={i}
+            active={t.id === currentId}
+            playing={playing}
+            liked={liked.has(String(t.id))}
+            showAlbum={showAlbum}
+            onPlay={onPlay}
+            onRemove={onRemove}
+            rowMenu={rowMenu}
+            saved={offlineState(t.id)}
+          />
+        ),
+      )}
     </div>
   );
 }
