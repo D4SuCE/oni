@@ -15,13 +15,28 @@ export interface MenuItem {
 
 const useMenu = create<{ x: number; y: number; items: MenuItem[] } | null>(() => null);
 
-export function openMenu(e: { clientX: number; clientY: number; preventDefault?: () => void; stopPropagation?: () => void }, items: MenuItem[]) {
+/** When the menu last closed: a "…" button pressed again closes it (the press outside the menu
+ * closes it first) instead of opening it anew, which looked like a flicker (the user). */
+let closedAt = 0;
+const REOPEN_GAP = 400;
+
+export function openMenu(e: { type?: string; clientX: number; clientY: number; preventDefault?: () => void; stopPropagation?: () => void }, items: MenuItem[]) {
   e.preventDefault?.();
   e.stopPropagation?.();
+  if (e.type === 'click' && (useMenu.getState() || performance.now() - closedAt < REOPEN_GAP)) {
+    closedAt = 0;
+    close();
+    return;
+  }
   useMenu.setState({ x: e.clientX, y: e.clientY, items }, true);
 }
 
 const close = () => useMenu.setState(null, true);
+/** A press outside the menu: it closes, and the "…" that pressed will not open it again. */
+const closeOutside = () => {
+  if (useMenu.getState()) closedAt = performance.now();
+  close();
+};
 
 /** How long a submenu stays while the pointer crosses other items on its way there. */
 const SUBMENU_GRACE = 300;
@@ -113,14 +128,14 @@ export function MenuHost() {
     const onUserScroll = (e: Event) => {
       if (!(e.target instanceof Element && e.target.closest('.menu'))) close();
     };
-    window.addEventListener('mousedown', close);
+    window.addEventListener('mousedown', closeOutside);
     window.addEventListener('blur', close);
     window.addEventListener('resize', close);
     window.addEventListener('keydown', onKey);
     window.addEventListener('wheel', onUserScroll, { capture: true, passive: true });
     window.addEventListener('touchmove', onUserScroll, { capture: true, passive: true });
     return () => {
-      window.removeEventListener('mousedown', close);
+      window.removeEventListener('mousedown', closeOutside);
       window.removeEventListener('blur', close);
       window.removeEventListener('resize', close);
       window.removeEventListener('keydown', onKey);

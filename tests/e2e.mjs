@@ -245,6 +245,20 @@ await step('settings picked during a track radio start My Wave with them: quick 
   }
 });
 
+await step('"…" pressed again closes its menu instead of opening it anew', async () => {
+  const open = () => page.locator('.menu').count();
+  await page.click('[data-testid="now-more"]');
+  await page.waitForSelector('.menu');
+  await page.click('[data-testid="now-more"]');
+  await page.waitForTimeout(300);
+  if (await open()) throw new Error('a second press left a menu open');
+  await page.waitForTimeout(500);
+  await page.click('[data-testid="now-more"]');
+  await page.waitForSelector('.menu', { timeout: 3000 });
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.menu', { state: 'detached' });
+});
+
 await step('now playing screen', async () => {
   await page.click('.pb-cover');
   await page.waitForSelector('.nowplaying');
