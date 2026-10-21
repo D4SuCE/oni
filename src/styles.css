@@ -881,8 +881,10 @@ html.acrylic .backdrop {
   transition: background 0.2s;
   min-width: 0;
 }
-.card:hover {
-  background: var(--hover);
+@media (hover: hover) {
+  .card:hover {
+    background: var(--hover);
+  }
 }
 .card-cover {
   position: relative;
@@ -1114,8 +1116,11 @@ html.acrylic .backdrop {
 .no-album .track-row {
   grid-template-columns: 34px 40px minmax(0, 1fr) 32px 46px 32px;
 }
-.track-row:hover {
-  background: var(--hover);
+/* A finger resting on a row while scrolling counts as hover on iOS: highlight with a mouse only. */
+@media (hover: hover) {
+  .track-row:hover {
+    background: var(--hover);
+  }
 }
 .track-row.active .tr-title {
   color: var(--accent);
@@ -1740,6 +1745,12 @@ html.mini-window body {
     transform: translateX(40px);
     opacity: 0;
   }
+}
+.drawer-grip {
+  display: none;
+}
+html.ios .drawer-grip {
+  display: block;
 }
 .drawer-head {
   display: flex;
@@ -2750,9 +2761,11 @@ kbd {
   .nowplaying {
     touch-action: none;
   }
-  /* A long press opens Oni's menu (src/ui/longPress.ts), not iOS's own preview of links and images. */
+  /* A long press opens Oni's menu (src/ui/longPress.ts), not iOS's own preview of links and images;
+     and a touch leaves no grey flash on what it lands on. */
   body {
     -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
   }
   .input,
   input,
@@ -2775,8 +2788,14 @@ kbd {
 }
 
 @media (max-width: 760px) {
-  /* Four tabs: Home, Collection, Liked, History. Search and Settings are icons on Home; Downloads
+  /* Four tabs: Home, Collection, History, Liked. Search and Settings are icons on Home; Downloads
      is a Collection tab. */
+  html.ios [data-testid='nav-history'] {
+    order: 1;
+  }
+  html.ios [data-testid='nav-liked'] {
+    order: 2;
+  }
   html.ios [data-testid='nav-search'],
   html.ios [data-testid='nav-downloads'],
   html.ios [data-testid='nav-settings'] {
@@ -2833,6 +2852,41 @@ kbd {
     margin-left: auto;
     font-size: 12.5px;
     white-space: nowrap;
+  }
+
+  /* Wave's Tune panel: a sheet from below (the side panel's top hid under the status bar),
+     dragged down by its top to close (src/ui/swipe.ts). */
+  html.ios .drawer {
+    top: calc(env(safe-area-inset-top) + 28px);
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    border-radius: 24px 24px 0 0;
+    padding: 8px 22px calc(22px + env(safe-area-inset-bottom));
+  }
+  html.ios .drawer-grip-zone {
+    touch-action: none;
+    padding-bottom: 4px;
+  }
+  html.ios .drawer-grip {
+    width: 40px;
+    height: 5px;
+    margin: 0 auto 12px;
+    border-radius: 3px;
+    background: var(--line-strong);
+  }
+
+  /* The bar below: a touch taller, with previous back beside play and next. */
+  html.ios .playerbar {
+    padding: 10px 12px;
+  }
+  html.ios .playerbar .transport > .icon-btn:nth-child(2) {
+    display: inline-grid;
+  }
+  html.ios .pb-left .cover {
+    width: 48px !important;
+    height: 48px !important;
   }
 
   /* Track rows: a little more air, no cramped extras. */

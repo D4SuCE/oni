@@ -10,7 +10,8 @@ import { useT } from '../i18n.ts';
 import { playTracks } from '../player/player.ts';
 import { isOwn, navigate, useApp } from '../store.ts';
 import { isIos } from '../ui/platform.ts';
-import { useAsync } from '../ui/util.ts';
+import { cx, useAsync } from '../ui/util.ts';
+import { LikedSongsCard } from './Library.tsx';
 
 async function playAlbum(id: number) {
   const a = await api.album(id);
@@ -20,7 +21,7 @@ async function playAlbum(id: number) {
 function ForYou() {
   const t = useT();
   const ready = useApp((s) => s.libraryReady);
-  const { status, mixes, personal } = useRecs();
+  const { status, mixes, refreshing } = useRecs();
   const genres = useGenreTitles();
   useEffect(() => {
     if (ready) loadRecs();
@@ -31,8 +32,8 @@ function ForYou() {
         title={t.recs.forYou}
         action={
           status === 'ready' && (
-            <button className="btn ghost small" onClick={() => loadRecs(true)} title={t.recs.refresh}>
-              <RefreshCw size={13} /> {t.recs.refresh}
+            <button className="btn ghost small" onClick={() => loadRecs(true)} disabled={refreshing} title={t.recs.refresh} data-testid="recs-refresh">
+              <RefreshCw size={13} className={cx(refreshing && 'spin')} /> {refreshing ? t.recs.refreshing : t.recs.refresh}
             </button>
           )
         }
@@ -49,29 +50,16 @@ function ForYou() {
           </Shelf>
         )}
       </Section>
-      {personal.length > 0 && (
-        <Section title={t.recs.byYandex}>
-          <Shelf>
-            {personal.map((p) => (
-              <PlaylistCard
-                key={`${p.uid}-${p.kind}`}
-                playlist={p}
-                onPlay={async () => {
-                  const full = await api.playlist(p.uid, p.kind);
-                  playTracks((full.tracks || []).map((x) => x.track!).filter(Boolean), 0, p.title, { playlist: `${p.uid}:${p.kind}` });
-                }}
-              />
-            ))}
-          </Shelf>
-        </Section>
-      )}
     </>
   );
 }
 
 export function Home() {
   const account = useApp((s) => s.account);
-  const playlists = useApp((s) => s.playlists).filter((p) => isOwn(p));
+  // Own playlists, liked songs and the playlists liked from others: all of the user's music.
+  const own = useApp((s) => s.playlists).filter((p) => isOwn(p));
+  const likedPlaylists = useApp((s) => s.likedPlaylists);
+  const playlists = [...own, ...likedPlaylists];
   const releases = useAsync(() => api.newReleases(18), []);
   const chart = useAsync(() => api.chart(), []);
   const t = useT();
@@ -100,11 +88,12 @@ export function Home() {
       <WaveHero />
       <ForYou />
 
-      {playlists.length > 0 && (
+      {account && (
         <Section title={t.home.yourPlaylists}>
           <Shelf>
+            <LikedSongsCard />
             {playlists.map((p) => (
-              <PlaylistCard key={p.kind} playlist={p} onPlay={async () => {
+              <PlaylistCard key={`${p.uid}-${p.kind}`} playlist={p} onPlay={async () => {
                 const full = await api.playlist(p.uid, p.kind);
                 playTracks((full.tracks || []).map((x) => x.track!).filter(Boolean), 0, p.title, { playlist: `${p.uid}:${p.kind}` });
               }} />

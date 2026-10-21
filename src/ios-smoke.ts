@@ -100,8 +100,10 @@ async function tapToPlay() {
 /** Four tabs below, search and settings as icons on Home. */
 function phoneLayout() {
   const tabs = [...document.querySelectorAll<HTMLElement>('.sidebar .nav-item')].filter((b) => b.offsetParent);
+  const order = tabs.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left).map((b) => b.dataset.testid?.replace('nav-', ''));
   const icons = ['top-search', 'top-settings'].filter((t) => document.querySelector(`[data-testid="${t}"]`)).length;
-  report('phone-layout', tabs.length === 4 && icons === 2, `${tabs.length} tabs, ${icons} top icons`);
+  const want = 'home library history liked';
+  report('phone-layout', order.join(' ') === want && icons === 2, `${order.join(' ')}, ${icons} top icons`);
 }
 
 export async function runSmoke() {

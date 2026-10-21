@@ -1,12 +1,13 @@
 // Builds the "For you" shelf: the daylist (for the current part of the day), taste mixes,
 // "on repeat" and "because you listened to" (daily), weekly discoveries and forgotten
-// favourites (Mondays), the release radar (Fridays), plus Yandex's own personal playlists.
+// favourites (Mondays) and the release radar (Fridays). Yandex's own personal playlists are not
+// shown (the user's choice: only Oni's mixes on Home).
 // Results are cached per account so the shelf opens instantly and stays stable
 // for the period it belongs to, like Spotify's.
 
 import { create } from 'zustand';
 import { api, storage } from '../api/client.ts';
-import type { GenreTree, Playlist, Track } from '../api/types.ts';
+import type { GenreTree, Track } from '../api/types.ts';
 import { trackCover, trackKey } from '../api/yandex.ts';
 import { history, recentPlays, recsFeedback } from '../player/player.ts';
 import { trimTrack } from '../player/recent.ts';
@@ -44,11 +45,12 @@ export interface Mix {
 interface RecsState {
   status: 'idle' | 'loading' | 'ready' | 'error';
   mixes: Mix[];
-  personal: Playlist[];
+  /** A forced rebuild ("Refresh") is running: the button spins, a toast says when it is done. */
+  refreshing: boolean;
   error: string | null;
 }
 
-export const useRecs = create<RecsState>(() => ({ status: 'idle', mixes: [], personal: [], error: null }));
+export const useRecs = create<RecsState>(() => ({ status: 'idle', mixes: [], refreshing: false, error: null }));
 
 const CACHE_KEY = 'recs.v1';
 const CONCURRENCY = 4;
@@ -275,6 +277,7 @@ function scheduleNextSlot(span: SlotSpan) {
 /** Shows cached mixes right away and rebuilds whatever is due. `force` rebuilds everything. */
 export function loadRecs(force = false): Promise<void> {
   if (running) return running;
+  if (force) useRecs.setState({ refreshing: true });
   running = (async () => {
     const uid = String(useApp.getState().account?.uid ?? '');
     if (!uid) return;
@@ -297,11 +300,6 @@ export function loadRecs(force = false): Promise<void> {
         console.warn('daylist failed', e);
       }
     }
-
-    api
-      .personalPlaylists()
-      .then((personal) => useRecs.setState({ personal }))
-      .catch(() => {});
 
     const due =
       force || !cache || cache.day !== day || cache.discoverWeek !== discoverWeek || cache.radarWeek !== radarWeek || cache.rewindWeek !== discoverWeek || !cache.personal;
@@ -330,12 +328,14 @@ export function loadRecs(force = false): Promise<void> {
       }
       storage.setItem(CACHE_KEY, JSON.stringify(next));
       useRecs.setState({ mixes: ordered(next), status: 'ready', error: null });
+      if (force) toast(tr().recs.refreshed);
     } catch (e) {
       console.warn('recommendations failed', e);
       if (!cache) useRecs.setState({ status: 'error', error: e instanceof Error ? e.message : String(e) });
     }
   })().finally(() => {
     running = null;
+    useRecs.setState({ refreshing: false });
   });
   return running;
 }

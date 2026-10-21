@@ -7,6 +7,7 @@ import { cycleRepeat, next, prev, seek, setVolume, sourceTitle, toggle, toggleSh
 import { dislike, toggleLike, useApp } from '../store.ts';
 import { cx, fmtTime } from '../ui/util.ts';
 import { useEq } from '../player/eq.ts';
+import { isIos } from '../ui/platform.ts';
 import { ArtistLinks, Cover } from './Common.tsx';
 import { openMenu } from './Menu.tsx';
 import { isUpload, trackMenu } from './TrackList.tsx';
@@ -119,7 +120,8 @@ export function PlayerBar() {
   const eqOn = useEq((s) => s.enabled);
 
   return (
-    <footer className="playerbar glass">
+    // On the iPhone the whole bar opens Now Playing (its buttons keep their own job).
+    <footer className="playerbar glass" onClick={isIos ? (e) => track && !(e.target as Element).closest('button, a, input') && openNow() : undefined}>
       {/* The playing track has the same menu as in any list: share it, add it to a playlist… even from the wave. */}
       <div className="pb-left" onContextMenu={(e) => track && openMenu(e, trackMenu(track))}>
         {track ? (
@@ -133,7 +135,7 @@ export function PlayerBar() {
                 {track.version && <span className="tr-version"> {track.version}</span>}
               </div>
               <div className="pb-artists">
-                <ArtistLinks artists={track.artists} plain={isUpload(track)} />
+                <ArtistLinks artists={track.artists} plain={isIos || isUpload(track)} />
               </div>
             </div>
             <LikeButton track={track} />

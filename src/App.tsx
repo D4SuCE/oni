@@ -29,6 +29,7 @@ import { Login } from './views/Login.tsx';
 import { PlaylistView } from './views/Playlist.tsx';
 import { Search } from './views/Search.tsx';
 import { SettingsView } from './views/Settings.tsx';
+import { isIos } from './ui/platform.ts';
 
 /** Blurred cover of the current track behind everything, cross-faded between tracks. */
 function Backdrop() {
@@ -132,7 +133,8 @@ function Main() {
       view = <MixView id={route.id} />;
       break;
     case 'downloads':
-      view = <DownloadsView />;
+      // The iPhone keeps the Collection's tabs above it (src/views/Library.tsx).
+      view = isIos ? <Library tab="downloads" /> : <DownloadsView />;
       break;
     case 'settings':
       view = <SettingsView />;

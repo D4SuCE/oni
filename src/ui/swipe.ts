@@ -6,10 +6,12 @@ import { useEffect, type RefObject } from 'react';
 const CLOSE_AT = 120;
 const FLICK = 0.6; // px per ms
 
-export function useSwipeDown(ref: RefObject<HTMLElement | null>, onClose: () => void) {
+/** `handle`: where the drag may start, when the sheet itself scrolls (the wave's Tune panel). */
+export function useSwipeDown(ref: RefObject<HTMLElement | null>, onClose: () => void, handle?: RefObject<HTMLElement | null>) {
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    const grip = handle?.current ?? el;
+    if (!el || !grip) return;
     let start: { id: number; y: number; t: number } | null = null;
     let dy = 0;
     const settle = (close: boolean) => {
@@ -35,15 +37,15 @@ export function useSwipeDown(ref: RefObject<HTMLElement | null>, onClose: () => 
       start = null;
       settle(e.type === 'pointerup' && (dy > CLOSE_AT || (fast && dy > 40)));
     };
-    el.addEventListener('pointerdown', down);
+    grip.addEventListener('pointerdown', down);
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
     return () => {
-      el.removeEventListener('pointerdown', down);
+      grip.removeEventListener('pointerdown', down);
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
     };
-  }, [ref, onClose]);
+  }, [ref, onClose, handle]);
 }

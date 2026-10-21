@@ -19,7 +19,8 @@ export type Route =
   | { name: 'downloads' }
   | { name: 'settings' };
 
-export type LibraryTab = 'tracks' | 'playlists' | 'albums' | 'artists';
+/** `downloads`: the iPhone shows Downloads as a Collection tab (the desktop has its own page). */
+export type LibraryTab = 'tracks' | 'playlists' | 'albums' | 'artists' | 'downloads';
 
 interface AppState {
   auth: 'loading' | 'login' | 'ready';

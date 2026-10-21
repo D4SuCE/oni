@@ -1,9 +1,10 @@
 import { Loader2, Pause, Play, SlidersHorizontal, Trash2, X } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { api } from '../api/client.ts';
 import { useT } from '../i18n.ts';
 import { history, isMyWave, playWave, retuneWave, toggle, usePlayer } from '../player/player.ts';
 import { useApp } from '../store.ts';
+import { useSwipeDown } from '../ui/swipe.ts';
 import { cx, useAsync } from '../ui/util.ts';
 import type { Diversity, Language, Mood, WaveTuning } from '../wave/engine.ts';
 import { confirmDialog } from './Dialog.tsx';
@@ -77,7 +78,10 @@ export function TuningPanel() {
   const tuning = usePlayer((s) => s.tuning);
   const [historySize, setHistorySize] = useState(history.size);
   const contexts = useAsync(() => api.waveContexts(), []);
-  const close = () => useApp.setState({ tuningOpen: false });
+  const close = useCallback(() => useApp.setState({ tuningOpen: false }), []);
+  const sheet = useRef<HTMLElement>(null);
+  const grip = useRef<HTMLDivElement>(null);
+  useSwipeDown(sheet, close, grip);
   const t = useT();
   const w = t.wave;
   const apply = (patch: Partial<WaveTuning>) => {
@@ -86,12 +90,16 @@ export function TuningPanel() {
 
   return (
     <div className="drawer-backdrop" onMouseDown={close}>
-      <aside className="drawer glass" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="drawer-head">
-          <h2>{w.tuneTitle}</h2>
-          <button className="icon-btn" onClick={close} title={t.common.close}>
-            <X size={20} />
-          </button>
+      <aside ref={sheet} className="drawer glass" onMouseDown={(e) => e.stopPropagation()}>
+        {/* On the iPhone the panel is a sheet from below: drag it down by its top to close. */}
+        <div ref={grip} className="drawer-grip-zone">
+          <div className="drawer-grip" />
+          <div className="drawer-head">
+            <h2>{w.tuneTitle}</h2>
+            <button className="icon-btn" onClick={close} title={t.common.close}>
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         <div className="drawer-group">

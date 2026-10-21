@@ -1,6 +1,7 @@
 import { Heart, Library as LibraryIcon, Play, Plus, Shuffle } from 'lucide-react';
 import { isIos } from '../ui/platform.ts';
 import { DownloadButton } from '../components/DownloadButton.tsx';
+import { DownloadsView } from './Downloads.tsx';
 import { useEffect, useState } from 'react';
 import { api } from '../api/client.ts';
 import type { Track } from '../api/types.ts';
@@ -89,7 +90,7 @@ function NewPlaylistCard() {
 }
 
 /** Liked tracks shown as a playlist, like Spotify's "Liked Songs". */
-function LikedSongsCard() {
+export function LikedSongsCard() {
   const count = useApp((s) => s.likedKeys.length);
   const t = useT();
   return (
@@ -188,7 +189,7 @@ export function Library({ tab = 'playlists' }: { tab?: LibraryTab }) {
         ))}
         {/* The iPhone's tab bar has no Downloads tab: it is one of the Collection's. */}
         {isIos && offline && (
-          <button className="tab" onClick={() => navigate({ name: 'downloads' })} data-testid="tab-downloads">
+          <button className={cx('tab', tab === 'downloads' && 'active')} onClick={() => navigate({ name: 'library', tab: 'downloads' })} data-testid="tab-downloads">
             {t.nav.downloads}
           </button>
         )}
@@ -196,6 +197,7 @@ export function Library({ tab = 'playlists' }: { tab?: LibraryTab }) {
       {tab === 'playlists' && <Playlists />}
       {tab === 'albums' && <Albums />}
       {tab === 'artists' && <Artists />}
+      {tab === 'downloads' && <DownloadsView embedded />}
     </div>
   );
 }

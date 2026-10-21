@@ -428,16 +428,6 @@ export class YandexMusic {
     return r.albums || [];
   }
 
-  /** Yandex's own personal playlists (Playlist of the Day, Déjà vu, Premiere, …). */
-  async personalPlaylists(): Promise<Playlist[]> {
-    const r = await this.call<any>('/landing3', { query: { blocks: 'personalplaylists' } });
-    return (r.blocks || [])
-      .flatMap((b: any) => b.entities || [])
-      .filter((e: any) => e.data?.ready !== false)
-      .map((e: any) => e.data?.data)
-      .filter((p: any) => p?.kind !== undefined);
-  }
-
   async waveContexts(): Promise<WaveContext[]> {
     const r = await this.call<any>('/rotor/wave/settings');
     const block = (r.blocks || []).find((b: any) => b.type === 'contexts');

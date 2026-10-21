@@ -8,6 +8,7 @@ import { canProcessAudio } from '../player/eq.ts';
 import { offline, recsFeedback, setNormalize, stats, usePlayer } from '../player/player.ts';
 import { logout, navigate, useApp } from '../store.ts';
 import { setMotion, setPulse, useMotion, usePulse } from '../ui/motion.ts';
+import { isIos } from '../ui/platform.ts';
 import { MAX_SEE_THROUGH, setSeeThrough, useSeeThrough } from '../ui/seeThrough.ts';
 import { useUpdate } from '../ui/update.ts';
 import { cx } from '../ui/util.ts';
@@ -158,20 +159,23 @@ export function SettingsView() {
 
       {offline && <DownloadsPanel />}
 
-      <div className="panel glass">
-        <h3>{s.shortcuts}</h3>
-        <div className="keys">
-          <kbd>{s.keySpace}</kbd> <span>{s.playPause}</span>
-          <kbd>Ctrl + →</kbd> <span>{s.nextTrack}</span>
-          <kbd>Ctrl + ←</kbd> <span>{s.prevTrack}</span>
-          <kbd>Ctrl + ↑ / ↓</kbd> <span>{s.volume}</span>
-          <kbd>Ctrl + L</kbd> <span>{s.like}</span>
-          <kbd>Ctrl + F</kbd> <span>{s.search}</span>
-          <kbd>Esc</kbd> <span>{s.collapse}</span>
-          <kbd>Alt + ← / →</kbd> <span>{s.backForward}</span>
-          <kbd>{s.mouseButtons}</kbd> <span>{s.backForward}</span>
+      {/* A phone has no keyboard shortcuts to show. */}
+      {!isIos && (
+        <div className="panel glass">
+          <h3>{s.shortcuts}</h3>
+          <div className="keys">
+            <kbd>{s.keySpace}</kbd> <span>{s.playPause}</span>
+            <kbd>Ctrl + →</kbd> <span>{s.nextTrack}</span>
+            <kbd>Ctrl + ←</kbd> <span>{s.prevTrack}</span>
+            <kbd>Ctrl + ↑ / ↓</kbd> <span>{s.volume}</span>
+            <kbd>Ctrl + L</kbd> <span>{s.like}</span>
+            <kbd>Ctrl + F</kbd> <span>{s.search}</span>
+            <kbd>Esc</kbd> <span>{s.collapse}</span>
+            <kbd>Alt + ← / →</kbd> <span>{s.backForward}</span>
+            <kbd>{s.mouseButtons}</kbd> <span>{s.backForward}</span>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="panel glass">
         <h3>{s.about}</h3>
