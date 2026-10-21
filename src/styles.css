@@ -2626,3 +2626,28 @@ kbd {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   }
 }
+
+/* ------------------------------------------------------------ auto-update */
+.nav-dot {
+  position: absolute;
+  top: 9px;
+  left: 26px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+.update-row {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.update-ready {
+  color: var(--text);
+}
+.update-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}

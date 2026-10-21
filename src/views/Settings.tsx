@@ -1,4 +1,4 @@
-import { FileText, LogOut } from 'lucide-react';
+import { Download, ExternalLink, FileText, LogOut, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import { Segmented } from '../components/Wave.tsx';
 import { LANGS, setLang, useLang, useT } from '../i18n.ts';
@@ -6,6 +6,8 @@ import { setNormalize, stats, usePlayer } from '../player/player.ts';
 import { logout, useApp } from '../store.ts';
 import { setMotion, setPulse, useMotion, usePulse } from '../ui/motion.ts';
 import { MAX_SEE_THROUGH, setSeeThrough, useSeeThrough } from '../ui/seeThrough.ts';
+import { useUpdate } from '../ui/update.ts';
+import { cx } from '../ui/util.ts';
 
 export function SettingsView() {
   const account = useApp((s) => s.account);
@@ -176,9 +178,47 @@ export function SettingsView() {
             </button>
           )}
         </div>
+        <UpdateRow />
       </div>
 
       <p className="hint center">{s.disclaimer}</p>
+    </div>
+  );
+}
+
+function UpdateRow() {
+  const update = useUpdate();
+  const u = useT().update;
+  const wave = window.wave;
+  if (update.status === 'off') return null;
+  const text = {
+    portable: u.portable,
+    idle: u.idle,
+    checking: u.checking,
+    latest: u.latest,
+    downloading: u.downloading(update.version ?? '', update.percent ?? 0),
+    ready: u.ready(update.version ?? ''),
+    error: u.error(update.error ?? ''),
+  }[update.status];
+  return (
+    <div className="settings-row update-row" data-testid="update" data-status={update.status}>
+      <div className={cx('hint', update.status === 'ready' && 'update-ready')}>{text}</div>
+      <div className="update-actions">
+        <button className="btn ghost" onClick={() => wave?.openReleases?.()}>
+          <ExternalLink size={16} /> {u.releases}
+        </button>
+        {update.status === 'ready' ? (
+          <button className="btn primary" onClick={() => wave?.installUpdate?.()} data-testid="update-install">
+            <Download size={16} /> {u.install}
+          </button>
+        ) : (
+          update.status !== 'portable' && (
+            <button className="btn ghost" disabled={update.status === 'checking' || update.status === 'downloading'} onClick={() => wave?.checkUpdate?.()} data-testid="update-check">
+              <RefreshCw size={16} /> {u.check}
+            </button>
+          )
+        )}
+      </div>
     </div>
   );
 }

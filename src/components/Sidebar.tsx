@@ -2,6 +2,7 @@ import { Heart, History, Home, Library, ListMusic, Menu, Plus, Search, Settings 
 import { create } from 'zustand';
 import { useT } from '../i18n.ts';
 import { createPlaylist, isOwn, navigate, samePlaylist, useApp, type Route } from '../store.ts';
+import { useUpdate } from '../ui/update.ts';
 import { cx } from '../ui/util.ts';
 import { askText } from './Dialog.tsx';
 
@@ -38,6 +39,7 @@ export function Sidebar() {
   const playlists = useApp((s) => s.playlists);
   const likedPlaylists = useApp((s) => s.likedPlaylists);
   const open = useSidebar((s) => s.open);
+  const updateReady = useUpdate((s) => s.status === 'ready');
   const own = playlists.filter((p) => isOwn(p));
   const t = useT();
   const isActive = (r: Route) => route.name === r.name && !(r.name === 'library' && route.name === 'library' && route.tab === 'tracks');
@@ -114,6 +116,7 @@ export function Sidebar() {
       <button className={cx('nav-item', route.name === 'settings' && 'active')} onClick={() => navigate({ name: 'settings' })} title={tip(t.nav.settings)}>
         <Settings size={19} />
         <span className="nav-label">{t.nav.settings}</span>
+        {updateReady && <span className="nav-dot" data-testid="update-dot" title={t.update.install} />}
       </button>
     </nav>
   );

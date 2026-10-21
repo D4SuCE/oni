@@ -5,6 +5,7 @@ const { app, BrowserWindow, ipcMain, safeStorage, session, shell, nativeTheme } 
 const fs = require('node:fs');
 const path = require('node:path');
 const desktop = require('./desktop.cjs');
+const updater = require('./updater.cjs');
 
 // The app was called Wave before it became Oni; keep its data folder so the sign-in,
 // history and settings survive the rename.
@@ -219,6 +220,10 @@ if (!app.requestSingleInstanceLock()) {
     allowAudioAnalysis();
     loadToken();
     createWindow();
+    updater.init(
+      (level, message) => writeLog(level, 'update', message),
+      (state) => mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents.send('wave:update', state),
+    );
   });
   app.on('window-all-closed', () => app.quit());
 }

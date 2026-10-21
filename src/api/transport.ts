@@ -40,12 +40,27 @@ export interface Transport {
   setCloseToTray?(enabled: boolean): void;
   setProgress?(p: ShellProgress): void;
   openMini?(): void;
+  // auto-update (installed desktop app)
+  updateState?(): UpdateState;
+  onUpdate?(cb: (state: UpdateState) => void): void;
+  checkUpdate?(): void;
+  /** Quits, installs the downloaded version and starts it. */
+  installUpdate?(): void;
+  openReleases?(): void;
   // the mini player window's side
   miniCommand?(cmd: MiniCommand): void;
   /** Mini player: listeners are set, send the current state. */
   miniReady?(): void;
   onPlayback?(cb: (state: ShellPlayback) => void): void;
   onProgress?(cb: (p: ShellProgress) => void): void;
+}
+
+export interface UpdateState {
+  /** off: development build; portable: the portable exe, updated by hand. */
+  status: 'off' | 'portable' | 'idle' | 'checking' | 'latest' | 'downloading' | 'ready' | 'error';
+  version?: string;
+  percent?: number;
+  error?: string;
 }
 
 export type MiniCommand = 'toggle' | 'next' | 'prev' | 'like' | 'expand' | 'close';
