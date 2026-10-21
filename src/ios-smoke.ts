@@ -66,8 +66,10 @@ export async function runSmoke() {
     const local = await until(() => wave().audio.src.startsWith('blob:') && !wave().audio.paused && wave().audio.currentTime > 1, 20000);
     report('offline-playback', local, wave().audio.src.slice(0, 5));
 
-    // A shortcut's link: the workflow opens oni://search?text=… once it sees "link-ready".
-    console.log('SMOKE link-ready');
+    // A shortcut's link. The page asks iOS to open it (Capacitor hands non-web addresses to the
+    // system), so it comes back through the scene as from a shortcut, without the "Open in Oni?"
+    // prompt that `simctl openurl` raises and nobody can tap in CI.
+    location.href = 'oni://search?text=%D0%9A%D0%B8%D0%BD%D0%BE+%D0%93%D1%80%D1%83%D0%BF%D0%BF%D0%B0+%D0%BA%D1%80%D0%BE%D0%B2%D0%B8';
     const searched = await until(() => document.querySelector('[data-testid="search-input"]') && document.querySelectorAll('.track-row').length, 45000);
     const input = document.querySelector<HTMLInputElement>('[data-testid="search-input"]');
     report('search-link', Boolean(searched) && input?.value === 'Кино Группа крови', `"${input?.value ?? ''}", ${document.querySelectorAll('.track-row').length} tracks`);

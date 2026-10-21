@@ -68,10 +68,8 @@ jobs:
           shot() { xcrun simctl io "$DEVICE" screenshot "$1"; }
           for i in $(seq 1 120); do grep -q "SMOKE playback" console.log && break; sleep 1; done
           shot playing.png
-          for i in $(seq 1 60); do grep -q "SMOKE link-ready" console.log && break; sleep 1; done
+          for i in $(seq 1 60); do grep -q "SMOKE offline-playback" console.log && break; sleep 1; done
           shot now-playing.png
-          # What an iPhone shortcut does: open the app's link (src/ui/links.ts).
-          xcrun simctl openurl "$DEVICE" "oni://search?text=%D0%9A%D0%B8%D0%BD%D0%BE+%D0%93%D1%80%D1%83%D0%BF%D0%BF%D0%B0+%D0%BA%D1%80%D0%BE%D0%B2%D0%B8" || true
           for i in $(seq 1 60); do grep -q "SMOKE done" console.log && break; sleep 1; done
           shot search-link.png
           kill $LOG $APP || true
