@@ -3,7 +3,8 @@
 // learns of a new version as soon as its IPA is published, says so, and "Update" opens SideStore
 // with that very file (sidestore://install?url=…), so there is nothing to look for and no wait.
 
-import { transport } from '../api/client.ts';
+import { create } from 'zustand';
+import { loadJson, storage, transport } from '../api/client.ts';
 import { tr } from '../i18n.ts';
 import { useApp } from '../store.ts';
 import { useUpdate } from './update.ts';
@@ -11,6 +12,18 @@ import { isNewer } from './version.ts';
 
 const SOURCE = 'https://raw.githubusercontent.com/D4SuCE/oni-releases/main/sidestore.json';
 const EVERY = 6 * 3600_000;
+
+/** Auto-update (Settings, off by default): a new version opens SideStore by itself, once per
+ * version, while Oni is on screen. The user's Shortcuts automations turn LocalDevVPN on when
+ * SideStore opens and off when it closes; Oni cannot set those up itself (iOS lets no app create
+ * automations, nor share them). */
+const AUTO_KEY = 'update.auto';
+export const useAutoUpdate = create<{ on: boolean; opened: string }>(() => loadJson(AUTO_KEY, { on: false, opened: '' }));
+export function setAutoUpdate(on: boolean) {
+  useAutoUpdate.setState({ on });
+  storage.setItem(AUTO_KEY, JSON.stringify(useAutoUpdate.getState()));
+  if (on) checkIosUpdate();
+}
 
 let checkedAt = 0;
 
@@ -24,7 +37,12 @@ export async function checkIosUpdate() {
     if (!r.ok || !latest) throw new Error(`HTTP ${r.status}`);
     if (isNewer(latest.version, __APP_VERSION__)) {
       useUpdate.setState({ status: 'ready', version: latest.version, url: latest.downloadURL }, true);
-      if (was.version !== latest.version) useApp.setState({ toast: { id: Date.now(), text: tr().update.iosToast(latest.version) } });
+      const auto = useAutoUpdate.getState();
+      if (auto.on && auto.opened !== latest.version && !document.hidden) {
+        useAutoUpdate.setState({ opened: latest.version });
+        storage.setItem(AUTO_KEY, JSON.stringify(useAutoUpdate.getState()));
+        installIosUpdate();
+      } else if (was.version !== latest.version) useApp.setState({ toast: { id: Date.now(), text: tr().update.iosToast(latest.version) } });
     } else useUpdate.setState({ status: 'latest' }, true);
   } catch (e) {
     if (was.status !== 'ready') useUpdate.setState({ status: 'error', error: e instanceof Error ? e.message : String(e) }, true);

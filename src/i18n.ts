@@ -251,6 +251,9 @@ const ru = {
     iosReady: (v: string) => `Вышла версия ${v}. «Обновить» откроет SideStore с ней (нужен включённый LocalDevVPN)`,
     iosToast: (v: string) => `Вышла версия ${v}. Обновить — в настройках`,
     iosInstall: 'Обновить',
+    iosAuto: 'Автообновление',
+    iosAutoHint:
+      'Когда выйдет новая версия, Oni сам откроет SideStore с ней. Чтобы LocalDevVPN включался сам, нужны две автоматизации в «Командах»: «SideStore открыто» → включить LocalDevVPN, «SideStore закрыто» → выключить его.',
   },
   toast: {
     hiddenFromMixes: 'Больше не появится в подборках',
@@ -703,6 +706,9 @@ const en: Dict = {
     iosReady: (v) => `Version ${v} is out. "Update" opens SideStore with it (LocalDevVPN must be on)`,
     iosToast: (v) => `Version ${v} is out. Update in Settings`,
     iosInstall: 'Update',
+    iosAuto: 'Auto-update',
+    iosAutoHint:
+      'When a new version is out, Oni opens SideStore with it by itself. For LocalDevVPN to switch itself on, set two Shortcuts automations: "SideStore is opened" → turn LocalDevVPN on, "SideStore is closed" → turn it off.',
   },
   toast: {
     hiddenFromMixes: "Won't show up in your mixes again",

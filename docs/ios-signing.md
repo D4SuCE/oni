@@ -96,6 +96,10 @@ IPA. CI после сборки обновляет `sidestore-source.json` (ве
   приложение: SideStore», «Подождать 5 с», «SideStore → Refresh All Apps». Известные сбои действия:
   «You are not signed in» (SideStore был закрыт, SideStore #1584) и «targetAppBundle is missing in
   context» (SideStore #1613, не исправлен; ручное обновление работает).
+- Так настроено у пользователя (21.10.2026, работает): «SideStore открыто» → «Включить LocalDevVPN»
+  (действие самого LocalDevVPN); «SideStore закрыто» → выключить LocalDevVPN. С «Автообновлением»
+  (настройки Oni на iPhone) новая версия открывает SideStore сама. Автоматизации приложение создать не
+  может (iOS не даёт ни создавать, ни делиться ими) — только руками.
 - LocalDevVPN только на время SideStore (пользователь держит другой VPN, Happ): «Команды» →
   «Автоматизация» → приложение SideStore «Открыто» → «Настроить VPN: Подключить LocalDevVPN»; SideStore
   «Закрыто» → «Настроить VPN: Подключить Happ» (один VPN за раз — второй выключает первый). Ночная
