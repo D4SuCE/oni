@@ -2569,9 +2569,10 @@ kbd {
   }
   .pb-center .seek,
   .pb-right,
-  .transport > .icon-btn:first-child,
-  .transport > .icon-btn:last-child,
-  .transport > .icon-btn:nth-child(2) {
+  /* The bar keeps play and next; the full now-playing screen (.transport.big) keeps them all. */
+  .playerbar .transport > .icon-btn:first-child,
+  .playerbar .transport > .icon-btn:last-child,
+  .playerbar .transport > .icon-btn:nth-child(2) {
     display: none;
   }
   .pb-left .cover {

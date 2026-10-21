@@ -344,6 +344,13 @@ await step('narrow (phone) layout renders', async () => {
   await page.waitForSelector('.page-title');
   await page.waitForTimeout(600);
   await shot('16-phone-settings');
+  // The full now-playing screen keeps every control; only the bar drops some.
+  await page.click('.pb-cover');
+  await page.waitForSelector('.nowplaying');
+  const shown = await page.locator('.transport.big > button').evaluateAll((els) => els.filter((e) => e.offsetParent !== null).length);
+  if (shown < 5) throw new Error(`now playing on a phone shows ${shown} of 5 controls`);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.nowplaying', { state: 'detached' });
   await page.click('[data-testid="nav-home"]');
   await win.evaluate((w) => w.setSize(1320, 840));
 });
