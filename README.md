@@ -63,6 +63,9 @@ npm run test:api   # интеграция с API (нужен YANDEX_MUSIC_TOKEN)
 npm run test:e2e   # UI-тест реального приложения (нужен YANDEX_MUSIC_TOKEN)
 ```
 
+На GitHub `npm run check` и сборка запускаются на каждый push
+(`.github/workflows/check.yml`); e2e — только локально.
+
 ## Устройство
 
 | Папка | Что внутри |
