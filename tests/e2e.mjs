@@ -53,6 +53,37 @@ await step('app starts and logs in with token', async () => {
   await shot('01-home');
 });
 
+await step('the oni mask sits in the middle of the logo', async () => {
+  // The mask's axis is the nose line where the white half meets the black one: per row of the
+  // nose, the sharpest light-to-dark step near the middle; its median must be the image centre.
+  const { seam, width } = await page.evaluate(async () => {
+    const url = getComputedStyle(document.querySelector('.logo-mark')).backgroundImage.slice(5, -2);
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const w = img.naturalWidth;
+    const c = document.createElement('canvas');
+    c.width = c.height = w;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const px = ctx.getImageData(0, 0, w, w).data;
+    const lum = (x, y) => { const i = (y * w + x) * 4; return 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]; };
+    const step = Math.max(1, Math.round(w / 170));
+    const seams = [];
+    for (let y = Math.round(w * 0.51); y < w * 0.74; y++) {
+      let best = 0, at = -1;
+      for (let x = Math.round(w * 0.37); x < w * 0.63 - step; x++) {
+        const g = lum(x, y) - lum(x + step, y);
+        if (g > best) [best, at] = [g, x + step / 2];
+      }
+      if (best > 60) seams.push(at);
+    }
+    seams.sort((a, b) => a - b);
+    return { seam: seams[seams.length >> 1], width: w };
+  });
+  if (!(Math.abs(seam - width / 2) <= width * 0.015)) throw new Error(`mask axis at ${seam} of ${width}`);
+});
+
 await step('button labels sit in the middle of the button', async () => {
   // Optical middle of a label: halfway between the x-height and cap-height middles above the
   // baseline. The baseline comes from an empty inline-block probe, the heights from the font itself.
