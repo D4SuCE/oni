@@ -106,7 +106,10 @@ export function ArtistCard({ artist }: { artist: Artist }) {
   return <Card cover={artistCover(artist, 300)} title={artist.name} subtitle={t.common.artist} round icon="user" onOpen={() => navigate({ name: 'artist', id: artist.id })} />;
 }
 
-export function ArtistLinks({ artists }: { artists?: Artist[] }) {
+/** Artists as links to their pages; `plain` when there is nowhere to go (an uploaded file's
+ * artist has no page) or a tap must stay with the row (track lists on a phone). */
+export function ArtistLinks({ artists, plain }: { artists?: Artist[]; plain?: boolean }) {
+  if (plain) return <>{(artists || []).map((a) => a.name).join(', ')}</>;
   return (
     <>
       {(artists || []).map((a, i) => (

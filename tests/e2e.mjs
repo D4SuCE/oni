@@ -155,6 +155,38 @@ await step('wave tuning panel', async () => {
   await page.waitForSelector('.drawer', { state: 'detached' });
 });
 
+await step('a Yandex-side tuning while a list plays starts the wave with it, and next works', async () => {
+  // Found by the user: an activity picked in "Tune" while a track played left that track on,
+  // and "next" did nothing after it.
+  await page.evaluate(async () => {
+    const chart = await window.__wave.api.chart();
+    await window.__wave.playTracks(chart.slice(0, 3), 0, 'e2e');
+  });
+  await waitPlaying(0.5);
+  const before = await player();
+  await page.click('[data-testid="wave-tune"]');
+  await page.waitForSelector('.drawer .chips .chip:nth-child(2)', { timeout: 15000 });
+  const picked = await page.locator('.drawer .chips .chip').nth(1).innerText();
+  await page.locator('.drawer .chips .chip').nth(1).click();
+  await page.waitForFunction((t) => {
+    const s = window.__wave.usePlayer.getState();
+    return s.source?.kind === 'wave' && !s.waveBusy && s.queue[s.index]?.title !== t;
+  }, before.title, { timeout: 25000 });
+  await waitPlaying(0.5);
+  const started = await player();
+  await page.keyboard.press('Escape');
+  await page.mouse.click(200, 400);
+  await page.waitForSelector('.drawer', { state: 'detached' });
+  await page.click('[data-testid="next"]');
+  await page.waitForFunction((i) => window.__wave.usePlayer.getState().index > i, started.index, { timeout: 20000 }).catch(async (e) => {
+    throw new Error(`next did not advance: ${JSON.stringify(await player())} (${e.message})`);
+  });
+  await waitPlaying(0.5);
+  console.log(`       "${picked}": ${before.title} -> ${started.title} -> ${(await player()).title}`);
+  // Back to the default wave, as the run found it.
+  await page.evaluate(() => window.__wave.usePlayer.setState((s) => ({ tuning: { ...s.tuning, context: null } })));
+});
+
 await step('now playing screen', async () => {
   await page.click('.pb-cover');
   await page.waitForSelector('.nowplaying');

@@ -57,6 +57,27 @@ export class ListenHistory {
     this.save();
   }
 
+  /**
+   * Plays from the account's other devices (Yandex's own history), so the repeat filter is the
+   * account's. Each only moves "last heard" forward: merging the same history again, or one that
+   * holds this device's plays too, counts nothing twice; a track new here counts as heard once.
+   */
+  mergeRemote(plays: { id: string; at: number }[]) {
+    let changed = false;
+    for (const { id, at } of plays) {
+      const e = this.entries[id];
+      if (!e) {
+        this.entries[id] = { plays: 1, skips: 0, last: at };
+        changed = true;
+      } else if (at > e.last) {
+        e.last = at;
+        e.plays = Math.max(e.plays, 1);
+        changed = true;
+      }
+    }
+    if (changed) this.save();
+  }
+
   daysSince(trackId: string): number {
     const e = this.entries[trackId];
     return e ? (this.now() - e.last) / DAY : Infinity;

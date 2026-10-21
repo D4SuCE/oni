@@ -12,7 +12,7 @@ import { ArtistLinks, Cover, Spinner } from './Common.tsx';
 import { LikeButton, SeekBar, Transport } from './PlayerBar.tsx';
 import { BackgroundVideo, LiveCover, useCoverVideo } from './LiveCover.tsx';
 import { openMenu } from './Menu.tsx';
-import { TrackList, trackMenu } from './TrackList.tsx';
+import { isUpload, TrackList, trackMenu } from './TrackList.tsx';
 import { WaveStatsLine } from './Wave.tsx';
 
 function parseLrc(text: string) {
@@ -133,7 +133,7 @@ export function NowPlaying() {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [close]);
   const hasLyrics = Boolean(track?.lyricsInfo?.hasAvailableSyncLyrics || track?.lyricsInfo?.hasAvailableTextLyrics);
   // A track without lyrics shows the queue; the lyrics tab comes back with the next track that has them.
   const tab = picked === 'lyrics' && !hasLyrics ? 'queue' : picked;
@@ -154,7 +154,7 @@ export function NowPlaying() {
                 <div className="np-text">
                   <h1 title={track.title}>{track.title}</h1>
                   <div className="np-artists">
-                    <ArtistLinks artists={track.artists} />
+                    <ArtistLinks artists={track.artists} plain={isUpload(track)} />
                   </div>
                 </div>
                 <div className="np-actions">

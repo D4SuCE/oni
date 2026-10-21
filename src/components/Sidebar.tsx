@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { useT } from '../i18n.ts';
 import { createPlaylist, isOwn, navigate, samePlaylist, useApp, type Route } from '../store.ts';
 import { offline } from '../player/player.ts';
+import { isIos } from '../ui/platform.ts';
 import { useUpdate } from '../ui/update.ts';
 import { cx } from '../ui/util.ts';
 import { askText } from './Dialog.tsx';
@@ -43,7 +44,10 @@ export function Sidebar() {
   const updateReady = useUpdate((s) => s.status === 'ready');
   const own = playlists.filter((p) => isOwn(p));
   const t = useT();
-  const isActive = (r: Route) => route.name === r.name && !(r.name === 'library' && route.name === 'library' && route.tab === 'tracks');
+  const isActive = (r: Route) =>
+    (route.name === r.name && !(r.name === 'library' && route.name === 'library' && route.tab === 'tracks')) ||
+    // On the iPhone Downloads is a Collection tab (src/views/Library.tsx).
+    (isIos && r.name === 'library' && route.name === 'downloads');
   // Collapsed, the labels are hidden: show them as tooltips instead.
   const tip = (label: string) => (open ? undefined : label);
 

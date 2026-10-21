@@ -165,5 +165,26 @@ await test('history persists across instances', async () => {
   assert(h2.get(mkTrack(1).id)?.plays === 1, 'not persisted');
 });
 
+await test("plays on the account's other devices count for the repeat filter, once", async () => {
+  const DAY = 86_400_000;
+  let now = Date.parse('2026-10-21T12:00:00Z');
+  const history = new ListenHistory(memoryStore(), 'h', () => now);
+  const engine = new WaveEngine(fakeYandex([]).api, history, tuning({ noRepeatDays: 7 }));
+  const id = (n: number) => String(mkTrack(n).id);
+  history.record(mkTrack(1), 200, true); // heard here, today
+  history.mergeRemote([
+    { id: id(1), at: now - DAY }, // the same track yesterday elsewhere: nothing changes
+    { id: id(2), at: now - 2 * DAY }, // heard on the PC two days ago
+    { id: id(3), at: now - 9 * DAY }, // long enough ago
+  ]);
+  assert(engine.rejectReason(mkTrack(2)) === 'recent', 'a track from another device is a repeat');
+  assert(engine.rejectReason(mkTrack(3)) === null, 'nine days ago passes a 7-day filter');
+  assert(history.get(id(1))?.plays === 1 && history.daysSince(id(1)) === 0, 'own play kept as it was');
+  history.mergeRemote([{ id: id(2), at: now - 2 * DAY }]);
+  assert(history.get(id(2))?.plays === 1, 'merging the same history again counts nothing more');
+  now += 6 * DAY;
+  assert(engine.rejectReason(mkTrack(2)) === null, 'and it ages out like any play');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

@@ -188,6 +188,18 @@ export class YandexMusic {
     await this.call('/play-audio', { method: 'POST', form });
   }
 
+  /** Which tracks the account played on which day (about ten days, every device): ids only,
+   * for the wave's repeat filter, without fetching the tracks themselves. */
+  async musicHistoryPlays(): Promise<{ id: string; at: number }[]> {
+    const r = await this.call<any>('/music-history', { query: { fullModelsCount: 0 } });
+    return (r.historyTabs || []).flatMap((tab: any) => {
+      const at = Date.parse(tab.date);
+      return (tab.items || []).flatMap((item: any) =>
+        (item.tracks || []).map((x: any) => x.data?.itemId?.trackId).filter(Boolean).map((id: any) => ({ id: String(id), at })),
+      );
+    });
+  }
+
   /**
    * Listening history across all the user's devices, by day and by where it was played
    * (about the last ten days). Yandex sends full track data only for the first items,

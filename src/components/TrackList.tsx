@@ -6,6 +6,7 @@ import { tr, useT } from '../i18n.ts';
 import { enqueue, offline, playNext, playRadio, toggle, usePlayer } from '../player/player.ts';
 import { addToPlaylist, createPlaylist, dislike, isOwn, navigate, toggleLike, useApp } from '../store.ts';
 import { downloadTrack, offlineState, useOfflineVersion, type OfflineState } from '../ui/offline.ts';
+import { isIos } from '../ui/platform.ts';
 import { shareTrack } from '../ui/share.ts';
 import { cx, fmtTime } from '../ui/util.ts';
 import { ArtistLinks, Cover } from './Common.tsx';
@@ -102,7 +103,9 @@ const TrackRow = memo(function TrackRow({ track: t, index, active, playing, like
   return (
     <div
       className={cx('track-row', active && 'active', unavailable && 'unavailable')}
-      onDoubleClick={() => !unavailable && (active ? toggle() : onPlay(index))}
+      // A double click plays on the desktop; on a phone one tap does (a long press opens the menu).
+      onDoubleClick={isIos ? undefined : () => !unavailable && (active ? toggle() : onPlay(index))}
+      onClick={isIos ? (e) => !unavailable && !(e.target as Element).closest('button, a') && (active ? toggle() : onPlay(index)) : undefined}
       onContextMenu={menu}
       data-track-id={t.id}
     >
@@ -134,7 +137,7 @@ const TrackRow = memo(function TrackRow({ track: t, index, active, playing, like
           {t.contentWarning === 'explicit' && <span className="badge">E</span>}
         </div>
         <div className="tr-artists">
-          <ArtistLinks artists={t.artists} />
+          <ArtistLinks artists={t.artists} plain={isIos || isUpload(t)} />
         </div>
       </div>
       {showAlbum && (

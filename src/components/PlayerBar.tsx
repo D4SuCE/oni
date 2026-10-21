@@ -9,7 +9,7 @@ import { cx, fmtTime } from '../ui/util.ts';
 import { useEq } from '../player/eq.ts';
 import { ArtistLinks, Cover } from './Common.tsx';
 import { openMenu } from './Menu.tsx';
-import { trackMenu } from './TrackList.tsx';
+import { isUpload, trackMenu } from './TrackList.tsx';
 
 export function SeekBar({ className }: { className?: string }) {
   const position = usePlayer((s) => s.position);
@@ -133,7 +133,7 @@ export function PlayerBar() {
                 {track.version && <span className="tr-version"> {track.version}</span>}
               </div>
               <div className="pb-artists">
-                <ArtistLinks artists={track.artists} />
+                <ArtistLinks artists={track.artists} plain={isUpload(track)} />
               </div>
             </div>
             <LikeButton track={track} />

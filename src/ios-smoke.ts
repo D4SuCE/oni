@@ -83,11 +83,33 @@ async function longPressMenu() {
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
 }
 
+/** The phone's taps: one tap on a track plays it, and its artists are text, not links. */
+async function tapToPlay() {
+  const rows = document.querySelectorAll<HTMLElement>('.track-row');
+  const row = rows[1] ?? rows[0];
+  const links = document.querySelectorAll('.track-row .tr-artists a').length;
+  const id = row?.dataset.trackId;
+  row?.querySelector<HTMLElement>('.tr-title')?.click();
+  const played = await until(() => {
+    const { queue, index } = wave().usePlayer.getState();
+    return String((queue[index] as { id?: unknown } | undefined)?.id) === id;
+  }, 8000);
+  report('tap-to-play', Boolean(id) && played && links === 0, `${links} artist links`);
+}
+
+/** Four tabs below, search and settings as icons on Home. */
+function phoneLayout() {
+  const tabs = [...document.querySelectorAll<HTMLElement>('.sidebar .nav-item')].filter((b) => b.offsetParent);
+  const icons = ['top-search', 'top-settings'].filter((t) => document.querySelector(`[data-testid="${t}"]`)).length;
+  report('phone-layout', tabs.length === 4 && icons === 2, `${tabs.length} tabs, ${icons} top icons`);
+}
+
 export async function runSmoke() {
   try {
     noZoom();
     await loginRedirect();
     report('home', await until(() => document.querySelector('.wave-hero'), 30000));
+    phoneLayout();
     const mixes = await until(() => document.querySelectorAll('[data-testid="mix-card"]').length, 60000);
     report('mixes', mixes, String(document.querySelectorAll('[data-testid="mix-card"]').length));
 
@@ -126,6 +148,7 @@ export async function runSmoke() {
     const keyboard = document.activeElement === input;
     report('search-link', Boolean(searched) && input?.value === 'Кино Группа крови' && !keyboard, `"${input?.value ?? ''}", ${document.querySelectorAll('.track-row').length} tracks${keyboard ? ', keyboard up' : ''}`);
     await longPressMenu();
+    await tapToPlay();
   } catch (e) {
     report('crash', false, String(e));
   }

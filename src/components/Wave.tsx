@@ -203,7 +203,7 @@ export function WaveHero() {
       <div className="wave-content">
         <div className="kicker">{w.kicker(tuning.noRepeatDays)}</div>
         <h1>{t.common.myWave}</h1>
-        <p className="wave-desc">{desc.length ? desc.join(' · ') : w.tagline}</p>
+        <p className={cx('wave-desc', !desc.length && 'tagline')}>{desc.length ? desc.join(' · ') : w.tagline}</p>
         <div className="wave-actions">
           <button className="btn primary big" onClick={() => (isWave ? toggle() : playWave())} disabled={busy} data-testid="wave-play">
             {busy ? <Loader2 size={20} className="spin" /> : active ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}

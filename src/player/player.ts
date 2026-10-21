@@ -248,25 +248,31 @@ function reportPlay(t: Track, ended: boolean) {
 
 // ---------------------------------------------------------------------- wave
 
-let filling: Promise<void> | null = null;
+/** The fill in progress, per engine: a new wave (re-tuned, restarted) never waits on the old
+ * one's request, which could hang and leave "next" with nothing to play. */
+let filling: { engine: WaveEngine; done: Promise<void> } | null = null;
 
 function fillWave(min = 2): Promise<void> {
-  if (filling) return filling;
-  filling = (async () => {
+  const mine = engine;
+  if (!mine) return Promise.resolve();
+  if (filling?.engine === mine) return filling.done;
+  const done = (async () => {
     try {
-      while (engine && get().source?.kind === 'wave' && get().queue.length - get().index - 1 < min) {
-        const t = await engine.next();
-        if (!t) break;
-        set((s) => ({ queue: [...s.queue, t], waveStats: { ...engine!.stats } }));
+      while (engine === mine && get().source?.kind === 'wave' && get().queue.length - get().index - 1 < min) {
+        const t = await mine.next();
+        // A replaced engine's track belongs to a wave that is gone.
+        if (!t || engine !== mine) break;
+        set((s) => ({ queue: [...s.queue, t], waveStats: { ...mine.stats } }));
       }
-      prefetchNext();
+      if (engine === mine) prefetchNext();
     } catch (e) {
       console.warn('wave fill failed', e);
     } finally {
-      filling = null;
+      if (filling?.engine === mine) filling = null;
     }
   })();
-  return filling;
+  filling = { engine: mine, done };
+  return done;
 }
 
 export async function playWave(tuning?: Partial<WaveTuning>) {
@@ -279,12 +285,27 @@ export async function playRadio(seed: string, title: string) {
   await startWave({ kind: 'wave', station: { seed, title } });
 }
 
+/** Plays on the account's other devices, so the wave's repeat filter is the account's and not
+ * this device's (what was heard on the PC is not repeated on the phone). Refreshed at most every
+ * few minutes; a slow answer does not hold the wave up. */
+let remoteHistoryAt = 0;
+async function syncRemoteHistory() {
+  if (Date.now() - remoteHistoryAt < 5 * 60_000) return;
+  try {
+    history.mergeRemote(await api.musicHistoryPlays());
+    remoteHistoryAt = Date.now();
+  } catch (e) {
+    console.warn('account history unavailable', e);
+  }
+}
+
 async function startWave(source: Source & { kind: 'wave' }) {
   finishCurrent(false);
   engine = new WaveEngine(waveApi, history, get().tuning, (id) => isDisliked(id), source.station ? [source.station.seed] : null);
   set({ waveBusy: true, source, queue: [], index: -1, shuffle: false, error: null });
   unshuffled = null;
   try {
+    await Promise.race([syncRemoteHistory(), new Promise((r) => setTimeout(r, 2500))]);
     await engine.start();
     const first = await engine.next();
     if (!first) throw new Error(tr().player.waveEmpty);
@@ -306,26 +327,20 @@ export function saveTuning(patch: Partial<WaveTuning>) {
   return waveSeeds(before).join() !== waveSeeds(tuning).join();
 }
 
-/** Re-tune a running wave: keep the current track, replace what comes next. */
+/** Re-tune the wave. Local filters keep the current track and drop what no longer passes; a
+ * Yandex-side setting (activity, character, mood, language) starts the wave anew with it right
+ * away, as Yandex's app does, even when a list was playing: before, the old track went on and,
+ * with a list playing, the setting only took effect on the next wave start. */
 export async function retuneWave(patch: Partial<WaveTuning>) {
   const seedsChanged = saveTuning(patch);
   const source = get().source;
-  if (source?.kind !== 'wave') return;
   // A station radio keeps its own seed: only the local filters apply to it.
-  if (!seedsChanged || source.station) {
-    // Local filters only: drop upcoming tracks that no longer pass.
+  if (source?.kind === 'wave' && (!seedsChanged || source.station)) {
     set((s) => ({ queue: s.queue.filter((t, i) => i <= s.index || !engine?.rejectReason(t)) }));
     await fillWave();
     return;
   }
-  engine = new WaveEngine(waveApi, history, get().tuning, (id) => isDisliked(id));
-  set((s) => ({ waveBusy: true, queue: s.queue.slice(0, s.index + 1) }));
-  try {
-    await engine.start();
-    await fillWave();
-  } finally {
-    set({ waveBusy: false });
-  }
+  if (seedsChanged) await startWave({ kind: 'wave' });
 }
 
 export function waveFeedback(type: 'like' | 'dislike', t: Track) {

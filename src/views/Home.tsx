@@ -1,4 +1,4 @@
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Search, Settings } from 'lucide-react';
 import { useEffect } from 'react';
 import { api } from '../api/client.ts';
 import { MixCard, useGenreTitles } from '../components/Mixes.tsx';
@@ -9,6 +9,7 @@ import { WaveHero } from '../components/Wave.tsx';
 import { useT } from '../i18n.ts';
 import { playTracks } from '../player/player.ts';
 import { isOwn, navigate, useApp } from '../store.ts';
+import { isIos } from '../ui/platform.ts';
 import { useAsync } from '../ui/util.ts';
 
 async function playAlbum(id: number) {
@@ -78,9 +79,23 @@ export function Home() {
 
   return (
     <div className="page">
-      <div className="greeting">
-        {greeting}
-        {account ? `, ${account.displayName}` : ''}
+      {/* On the iPhone the tab bar keeps four tabs: search and settings live up here, as in
+          Yandex's app (src/components/Sidebar.tsx hides them below). */}
+      <div className="home-top">
+        <div className="greeting">
+          {greeting}
+          {account ? `, ${account.displayName}` : ''}
+        </div>
+        {isIos && (
+          <>
+            <button className="icon-btn" onClick={() => navigate({ name: 'search' })} title={t.nav.search} data-testid="top-search">
+              <Search size={21} />
+            </button>
+            <button className="icon-btn" onClick={() => navigate({ name: 'settings' })} title={t.nav.settings} data-testid="top-settings">
+              <Settings size={21} />
+            </button>
+          </>
+        )}
       </div>
       <WaveHero />
       <ForYou />

@@ -908,9 +908,12 @@ html.acrylic .backdrop {
   transform: translateY(8px);
   transition: opacity 0.2s, transform 0.2s;
 }
-.card:hover .card-play {
-  opacity: 1;
-  transform: none;
+/* Hover reveals only with a mouse: on a touch screen iOS spends the first tap on showing it. */
+@media (hover: hover) {
+  .card:hover .card-play {
+    opacity: 1;
+    transform: none;
+  }
 }
 .card-title {
   margin-top: 10px;
@@ -1139,12 +1142,16 @@ html.acrylic .backdrop {
   cursor: pointer;
   opacity: 0;
 }
-.track-row:hover .tr-play {
-  opacity: 1;
+@media (hover: hover) {
+  .track-row:hover .tr-play {
+    opacity: 1;
+  }
 }
-.track-row:hover .tr-index,
-.track-row:hover .eq {
-  opacity: 0;
+@media (hover: hover) {
+  .track-row:hover .tr-index,
+  .track-row:hover .eq {
+    opacity: 0;
+  }
 }
 .tr-main {
   min-width: 0;
@@ -1184,9 +1191,11 @@ html.acrylic .backdrop {
   opacity: 1;
   color: var(--accent-hi);
 }
-.track-row:hover .tr-like,
-.track-row:hover .tr-more {
-  opacity: 1;
+@media (hover: hover) {
+  .track-row:hover .tr-like,
+  .track-row:hover .tr-more {
+    opacity: 1;
+  }
 }
 
 .eq {
@@ -2129,8 +2138,10 @@ html.motion .backdrop-img {
   height: 28px;
   opacity: 0;
 }
-.q-row:hover .icon-btn {
-  opacity: 1;
+@media (hover: hover) {
+  .q-row:hover .icon-btn {
+    opacity: 1;
+  }
 }
 
 .lyrics,
@@ -2747,5 +2758,89 @@ kbd {
   input,
   textarea {
     font-size: 16px;
+  }
+}
+
+/* ------------------------------------------------- iPhone (html.ios only) */
+/* Fewer, larger things with room around them; the desktop, even a narrow window, keeps its look. */
+
+.home-top {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.home-top .greeting {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  /* Four tabs: Home, Collection, Liked, History. Search and Settings are icons on Home; Downloads
+     is a Collection tab. */
+  html.ios [data-testid='nav-search'],
+  html.ios [data-testid='nav-downloads'],
+  html.ios [data-testid='nav-settings'] {
+    display: none;
+  }
+  html.ios .sidebar {
+    padding: 6px 18px calc(2px + env(safe-area-inset-bottom));
+  }
+  html.ios .nav-item {
+    height: 50px;
+    padding: 0 14px;
+  }
+  html.ios .nav-item .nav-label {
+    display: none;
+  }
+  html.ios .home-top {
+    margin: 4px -8px 18px 0;
+  }
+  html.ios .home-top .greeting {
+    margin: 0;
+  }
+
+  /* The wave banner: the tagline goes (a picked setting still shows there), less to read. */
+  html.ios .wave-desc.tagline {
+    display: none;
+  }
+
+  /* Page titles: smaller and calmer than the desktop's wide capitals. */
+  html.ios .page-title {
+    font-size: 21px;
+    letter-spacing: 0.14em;
+    margin-bottom: 18px;
+  }
+
+  /* Action rows: Play keeps its word, the rest become round icons, so nothing runs off screen. */
+  html.ios .lib-actions,
+  html.ios .page-actions {
+    flex-wrap: nowrap;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  html.ios .lib-actions .btn:not(.primary),
+  html.ios .page-actions .btn:not(.primary) {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    gap: 0;
+    font-size: 0;
+    border-radius: 50%;
+  }
+  html.ios .lib-actions .muted,
+  html.ios .page-actions .muted {
+    margin-left: auto;
+    font-size: 12.5px;
+    white-space: nowrap;
+  }
+
+  /* Track rows: a little more air, no cramped extras. */
+  html.ios .track-row {
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+  html.ios .section {
+    margin-top: 34px;
   }
 }
