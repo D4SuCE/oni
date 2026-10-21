@@ -1,12 +1,14 @@
 // Publishes the current version to GitHub Releases (D4SuCE/oni-releases, see build.publish
 // in package.json): builds the installer and the portable exe, uploads them with latest.yml,
 // which the installed apps poll, and uses the version's CHANGELOG.md section as the notes.
+// The release stays a draft until every file is up, so no app sees it half-uploaded.
 // Needs `gh auth login`. Run: npm run release (after committing and tagging the version).
 import { execSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..');
+const REPO = 'D4SuCE/oni-releases';
 const sh = (cmd) => execSync(cmd, { cwd: root, encoding: 'utf8' }).trim();
 const fail = (msg) => {
   console.error(`release: ${msg}`);
@@ -35,9 +37,19 @@ const run = (cmd, env = process.env) => {
   const r = spawnSync(cmd, { cwd: root, stdio: 'inherit', shell: true, env });
   if (r.status !== 0) fail(`"${cmd.split(' ').slice(0, 3).join(' ')}" failed`);
 };
+const released = (() => {
+  try {
+    return JSON.parse(sh(`gh release view ${tag} -R ${REPO} --json isDraft`));
+  } catch {
+    return null;
+  }
+})();
+if (released && !released.isDraft) fail(`${tag} is already published`);
+
 run('npx vite build');
-run(
-  `npx electron-builder --win --publish always -c.directories.output=${out} -c.releaseInfo.releaseName="Oni ${version}" -c.releaseInfo.releaseNotesFile=${notesFile}`,
-  { ...process.env, GH_TOKEN: sh('gh auth token') },
-);
-console.log(`\nreleased ${tag}: https://github.com/D4SuCE/oni-releases/releases/tag/${tag}`);
+// Created up front: the installer and the portable target publish in parallel and would
+// race to create the release themselves.
+if (!released) run(`gh release create ${tag} -R ${REPO} --draft --title "Oni ${version}" --notes-file ${notesFile}`);
+run(`npx electron-builder --win --publish always -c.directories.output=${out}`, { ...process.env, GH_TOKEN: sh('gh auth token') });
+run(`gh release edit ${tag} -R ${REPO} --draft=false --latest`);
+console.log(`\nreleased ${tag}: https://github.com/${REPO}/releases/tag/${tag}`);

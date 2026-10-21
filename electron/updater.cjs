@@ -39,6 +39,7 @@ function init(log, broadcast) {
   ({ autoUpdater: updater } = require('electron-updater'));
   updater.logger = { info: (m) => log('info', m), warn: (m) => log('warn', m), error: (m) => log('error', m), debug: () => {} };
   updater.autoDownload = true;
+  updater.disableWebInstaller = true;
   // A test feed serves a dummy file: never run it.
   updater.autoInstallOnAppQuit = !testConfig;
   if (testConfig) {

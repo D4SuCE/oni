@@ -69,7 +69,7 @@
         "provider": "github",
         "owner": "D4SuCE",
         "repo": "oni-releases",
-        "releaseType": "release"
+        "releaseType": "draft"
       }
     ]
   },
