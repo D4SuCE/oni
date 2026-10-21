@@ -4,6 +4,7 @@ import Security
 import WebKit
 import MediaPlayer
 import AVFoundation
+import UserNotifications
 
 /// The app's own bridge controller: registers the plugins that live in this project.
 class OniViewController: CAPBridgeViewController {
@@ -345,7 +346,15 @@ public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDel
         CAPPluginMethod(name: "enqueue", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "running", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "cancel", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "notifications", returnType: CAPPluginReturnPromise),
     ]
+
+    /// The progress notification (a quiet one, replaced in place): texts from the page, with
+    /// {done} and {total}; counts for the files handed over since the last batch was through.
+    private var labels: [String: String] = [:]
+    private var batchTotal = 0
+    private var batchDone = 0
+    private var notifiedAt = Date.distantPast
 
     /// One instance for the app's whole life: iOS hands the session's events to whoever made it.
     static var shared = DownloadsPlugin()
@@ -377,9 +386,19 @@ public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDel
         (page ?? DownloadsPlugin.shared.page)?.notifyListeners(event, data: data)
     }
 
+    /// { progress, done } — asks once for permission to notify, and keeps the texts.
+    @objc func notifications(_ call: CAPPluginCall) {
+        let labels = ["progress": call.getString("progress") ?? "", "done": call.getString("done") ?? ""]
+        DownloadsPlugin.shared.labels = labels
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { granted, _ in
+            call.resolve(["granted": granted])
+        }
+    }
+
     /// { items: [{ id, url }] }
     @objc func enqueue(_ call: CAPPluginCall) {
         let items = call.getArray("items", JSObject.self) ?? []
+        DownloadsPlugin.shared.counted(added: items.count)
         for item in items {
             guard let id = item["id"] as? String, let address = item["url"] as? String, let url = URL(string: address) else { continue }
             let task = DownloadsPlugin.shared.session.downloadTask(with: url)
@@ -424,9 +443,32 @@ public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDel
     }
 
     public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        guard let error = error, let id = task.taskDescription else { return }
-        if (error as NSError).code == NSURLErrorCancelled { return }
+        if let error = error, (error as NSError).code == NSURLErrorCancelled { return }
+        counted(finished: 1)
+        guard error != nil, let id = task.taskDescription else { return }
         emit("failed", ["id": id, "status": 0])
+    }
+
+    /// Keeps the counts and the notification: every couple of seconds while files arrive, and
+    /// once more when the batch is through. Runs natively, so it goes on with the screen locked.
+    private func counted(added: Int = 0, finished: Int = 0) {
+        DispatchQueue.main.async {
+            if added > 0 && self.batchDone >= self.batchTotal {
+                self.batchTotal = 0
+                self.batchDone = 0
+            }
+            self.batchTotal += added
+            self.batchDone += finished
+            guard finished > 0, let template = self.labels[self.batchDone >= self.batchTotal ? "done" : "progress"], !template.isEmpty else { return }
+            let through = self.batchDone >= self.batchTotal
+            if !through && Date().timeIntervalSince(self.notifiedAt) < 2 { return }
+            self.notifiedAt = Date()
+            let content = UNMutableNotificationContent()
+            content.title = "Oni"
+            content.body = template.replacingOccurrences(of: "{done}", with: String(self.batchDone)).replacingOccurrences(of: "{total}", with: String(self.batchTotal))
+            if #available(iOS 15.0, *) { content.interruptionLevel = .passive }
+            UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "oni-downloads", content: content, trigger: nil))
+        }
     }
 
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {

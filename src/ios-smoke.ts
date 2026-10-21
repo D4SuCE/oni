@@ -262,7 +262,7 @@ export async function runSmoke() {
     const keyboard = document.activeElement === input;
     report('search-link', Boolean(searched) && input?.value === 'Кино Группа крови' && !keyboard, `"${input?.value ?? ''}", ${document.querySelectorAll('.track-row').length} tracks${keyboard ? ', keyboard up' : ''}`);
     await longPressMenu();
-    await sleep(600); // a person's next tap, after the hold's aftermath (src/ui/longPress.ts)
+    await sleep(1100); // past the hold's aftermath (src/ui/longPress.ts); a real tap would start a new touch
     await tapToPlay();
     await uploadForm();
     await playlistActions();

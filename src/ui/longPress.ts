@@ -5,8 +5,10 @@
 /** How long to hold, and how far the finger may wander meanwhile (it is a scroll beyond that). */
 const HOLD = 450;
 const SLOP = 10;
-/** After the finger lifts, its leftover mouse events must not close the menu or play the track. */
-const AFTERMATH = 450;
+/** After the finger lifts, its leftover mouse events must not close the menu, play the track or
+ * pick a menu item (the sheet may lie under the finger): they are swallowed until the next touch
+ * starts, or this long at most. */
+const AFTERMATH = 1000;
 
 export function connectLongPress() {
   let press: { id: number; x: number; y: number; timer: ReturnType<typeof setTimeout> } | null = null;
@@ -21,6 +23,7 @@ export function connectLongPress() {
     'pointerdown',
     (e) => {
       if (e.pointerType !== 'touch' || !e.isPrimary) return;
+      swallowUntil = 0; // a new touch: what follows is its own
       const target = e.target as Element;
       if (target.closest('input, textarea, .menu')) return;
       cancel();
@@ -59,8 +62,6 @@ export function connectLongPress() {
   const swallow = (e: Event) => {
     const now = held || performance.now() < swallowUntil;
     if (!now || (e.type === 'touchmove' && !held)) return;
-    // A quick tap on the menu that just opened is meant for it.
-    if (e.type !== 'touchmove' && (e.target as Element).closest?.('.menu')) return;
     e.stopImmediatePropagation();
     if (e.type !== 'touchmove') e.preventDefault();
   };

@@ -4,6 +4,7 @@
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { registerPlugin } from '@capacitor/core';
 import { api, storage } from '../api/client.ts';
+import { tr } from '../i18n.ts';
 import { fromBase64 } from '../api/bytes.ts';
 import { BackgroundDownloads } from './backgroundDownloads.ts';
 import { offline, usePlayer } from './player.ts';
@@ -12,6 +13,7 @@ interface DownloadsPlugin {
   enqueue(options: { items: { id: string; url: string }[] }): Promise<void>;
   running(): Promise<{ ids: string[] }>;
   cancel(options: { ids: string[] }): Promise<void>;
+  notifications(options: { progress: string; done: string }): Promise<{ granted: boolean }>;
   addListener(event: 'done' | 'failed', cb: (e: { id: string }) => void): Promise<unknown>;
 }
 
@@ -44,4 +46,14 @@ export function iosBackgroundDownloads() {
   document.addEventListener('visibilitychange', () => !document.hidden && bg.resume());
   bg.resume();
   return bg;
+}
+
+let asked = false;
+/** Progress in the notification shade, kept by the native side (it runs with the screen locked):
+ * asked for once, when the first list is downloaded (iOS's permission prompt then). */
+export function showProgressInShade() {
+  if (asked) return;
+  asked = true;
+  const d = tr().downloads;
+  OniDownloads.notifications({ progress: d.shadeProgress, done: d.shadeDone }).catch(() => {});
 }

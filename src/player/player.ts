@@ -259,16 +259,26 @@ function reportPlay(t: Track, ended: boolean) {
 
 /** The fill in progress, per engine: a new wave (re-tuned, restarted) never waits on the old
  * one's request, which could hang and leave "next" with nothing to play. */
-let filling: { engine: WaveEngine; done: Promise<void> } | null = null;
+let filling: { engine: WaveEngine; done: Promise<void>; at: number; id: number } | null = null;
+let fills = 0;
+/** A wave request that has not answered by then is given up (the phone in the background could
+ * hold one for good, and "next" waited on it even after the screen was unlocked). */
+const FILL_TIMEOUT = 15_000;
+/** Tracks kept ready ahead: more on the iPhone, where the page may be held in the background. */
+const WAVE_AHEAD = isIos ? 4 : 2;
 
-function fillWave(min = 2): Promise<void> {
+const withTimeout = <T,>(p: Promise<T>) =>
+  Promise.race([p, new Promise<never>((_, reject) => setTimeout(() => reject(new Error('wave request timed out')), FILL_TIMEOUT))]);
+
+function fillWave(min = WAVE_AHEAD): Promise<void> {
   const mine = engine;
   if (!mine) return Promise.resolve();
-  if (filling?.engine === mine) return filling.done;
+  if (filling?.engine === mine && Date.now() - filling.at < FILL_TIMEOUT) return filling.done;
+  const id = ++fills;
   const done = (async () => {
     try {
       while (engine === mine && get().source?.kind === 'wave' && get().queue.length - get().index - 1 < min) {
-        const t = await mine.next();
+        const t = await withTimeout(mine.next());
         // A replaced engine's track belongs to a wave that is gone.
         if (!t || engine !== mine) break;
         set((s) => ({ queue: [...s.queue, t], waveStats: { ...mine.stats } }));
@@ -277,10 +287,10 @@ function fillWave(min = 2): Promise<void> {
     } catch (e) {
       console.warn('wave fill failed', e);
     } finally {
-      if (filling?.engine === mine) filling = null;
+      if (filling?.id === id) filling = null;
     }
   })();
-  filling = { engine: mine, done };
+  filling = { engine: mine, done, at: Date.now(), id };
   return done;
 }
 
@@ -587,6 +597,9 @@ if ('mediaSession' in navigator) {
     }
   }
 }
+// Back from the background (the iPhone may have held the page): the wave tops up its queue.
+document.addEventListener('visibilitychange', () => !document.hidden && get().source?.kind === 'wave' && fillWave());
+
 // That alone did not change the iPhone's lock screen: there a native plugin runs it (remote.ts).
 if (isIos) import('./remote.ts').then((m) => m.connectRemote());
 if (isIos) import('./volume.ts').then((m) => m.followSystemVolume((volume) => set({ volume })));

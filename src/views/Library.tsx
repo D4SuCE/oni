@@ -62,7 +62,8 @@ function LikedTracks() {
           <Shuffle size={16} /> {t.common.shuffle}
         </button>
         <SmartShuffleButton tracks={tracks} title={t.common.liked} from={from} />
-        <DownloadButton listKey="liked" tracks={tracks} />
+        {/* Only the whole list: the first page alone would download the newest hundred. */}
+        {tracks.length >= keys.length && <DownloadButton listKey="liked" tracks={tracks} />}
         {tracks.length > 0 && search.button}
         <span className="muted">{t.count.tracks(keys.length)}</span>
       </div>

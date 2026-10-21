@@ -4,7 +4,7 @@
 import { create } from 'zustand';
 import type { Track } from '../api/types.ts';
 import { tr } from '../i18n.ts';
-import { iosBackgroundDownloads } from '../player/iosDownloads.ts';
+import { iosBackgroundDownloads, showProgressInShade } from '../player/iosDownloads.ts';
 import { offline } from '../player/player.ts';
 import { errorText, toast } from '../store.ts';
 import { isIos } from './platform.ts';
@@ -60,6 +60,7 @@ export async function downloadList(key: string, tracks: Track[]) {
       toast(tr().downloads.cancelled);
     } else {
       watched.set(key, tracks.length);
+      showProgressInShade();
       await background.add(key, ordered);
     }
     return;
