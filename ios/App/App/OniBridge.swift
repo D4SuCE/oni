@@ -2,12 +2,14 @@ import UIKit
 import Capacitor
 import Security
 import WebKit
+import MediaPlayer
 
 /// The app's own bridge controller: registers the plugins that live in this project.
 class OniViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(KeychainPlugin())
         bridge?.registerPluginInstance(LoginPlugin())
+        bridge?.registerPluginInstance(RemotePlugin())
         #if DEBUG
         // Automated runs on the simulator (.github/workflows/ios.yml): sign in with the token the
         // runner passes, and tell the page it is a test (no listening signals to the account,
@@ -163,6 +165,119 @@ public class LoginPlugin: CAPPlugin, CAPBridgedPlugin, WKNavigationDelegate {
             finish(nil)
         } else {
             decisionHandler(.allow)
+        }
+    }
+}
+
+/// The lock screen and Control Center player, run natively. WebKit's own (from the Media Session
+/// API) showed -10 s / +10 s instead of previous / next whatever the page asked for, and has no
+/// like. This one disables the skip-interval commands, offers previous / next / seek / like, and
+/// sends every command to the page: JS registerPlugin('OniRemote') in src/player/remote.ts.
+@objc(RemotePlugin)
+public class RemotePlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "RemotePlugin"
+    public let jsName = "OniRemote"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "setNowPlaying", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "state", returnType: CAPPluginReturnPromise),
+    ]
+
+    private var artworkURL: String?
+    private var artwork: MPMediaItemArtwork?
+
+    override public func load() {
+        DispatchQueue.main.async { self.setUpCommands() }
+    }
+
+    private func setUpCommands() {
+        let center = MPRemoteCommandCenter.shared()
+        for command in [center.skipForwardCommand, center.skipBackwardCommand, center.seekForwardCommand, center.seekBackwardCommand] {
+            command.isEnabled = false
+        }
+        let named: [(MPRemoteCommand, String)] = [
+            (center.playCommand, "play"),
+            (center.pauseCommand, "pause"),
+            (center.togglePlayPauseCommand, "toggle"),
+            (center.nextTrackCommand, "next"),
+            (center.previousTrackCommand, "prev"),
+            (center.likeCommand, "like"),
+        ]
+        for (command, name) in named {
+            command.isEnabled = true
+            command.addTarget { [weak self] _ in
+                self?.notifyListeners("command", data: ["name": name])
+                return .success
+            }
+        }
+        center.likeCommand.localizedTitle = "Мне нравится"
+        center.likeCommand.localizedShortTitle = "Мне нравится"
+        center.changePlaybackPositionCommand.isEnabled = true
+        center.changePlaybackPositionCommand.addTarget { [weak self] event in
+            guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
+            self?.notifyListeners("command", data: ["name": "seek", "position": event.positionTime])
+            return .success
+        }
+    }
+
+    /// { title, artist, album, artwork (URL), duration, position, playing, liked }
+    @objc func setNowPlaying(_ call: CAPPluginCall) {
+        let title = call.getString("title") ?? ""
+        let artist = call.getString("artist") ?? ""
+        let album = call.getString("album") ?? ""
+        let duration = call.getDouble("duration") ?? 0
+        let position = call.getDouble("position") ?? 0
+        let playing = call.getBool("playing") ?? false
+        let liked = call.getBool("liked") ?? false
+        let artworkURL = call.getString("artwork")
+        DispatchQueue.main.async {
+            var info: [String: Any] = [
+                MPMediaItemPropertyTitle: title,
+                MPMediaItemPropertyArtist: artist,
+                MPMediaItemPropertyAlbumTitle: album,
+                MPMediaItemPropertyPlaybackDuration: duration,
+                MPNowPlayingInfoPropertyElapsedPlaybackTime: position,
+                MPNowPlayingInfoPropertyPlaybackRate: playing ? 1.0 : 0.0,
+                MPNowPlayingInfoPropertyDefaultPlaybackRate: 1.0,
+                MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
+            ]
+            if artworkURL == self.artworkURL, let artwork = self.artwork { info[MPMediaItemPropertyArtwork] = artwork }
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+            MPNowPlayingInfoCenter.default().playbackState = playing ? .playing : .paused
+            MPRemoteCommandCenter.shared().likeCommand.isActive = liked
+            if artworkURL != self.artworkURL { self.loadArtwork(artworkURL) }
+            call.resolve()
+        }
+    }
+
+    private func loadArtwork(_ address: String?) {
+        artworkURL = address
+        artwork = nil
+        guard let address = address, let url = URL(string: address) else { return }
+        URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
+            guard let data = data, let image = UIImage(data: data) else { return }
+            DispatchQueue.main.async {
+                guard let self = self, self.artworkURL == address else { return }
+                let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+                self.artwork = artwork
+                var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+                info[MPMediaItemPropertyArtwork] = artwork
+                MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+            }
+        }.resume()
+    }
+
+    /// For the simulator run: what the system was told, and which commands are on.
+    @objc func state(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            let center = MPRemoteCommandCenter.shared()
+            let info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+            call.resolve([
+                "title": info[MPMediaItemPropertyTitle] as? String ?? "",
+                "next": center.nextTrackCommand.isEnabled,
+                "prev": center.previousTrackCommand.isEnabled,
+                "skip": center.skipForwardCommand.isEnabled || center.skipBackwardCommand.isEnabled,
+                "like": center.likeCommand.isEnabled,
+            ])
         }
     }
 }

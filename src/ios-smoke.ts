@@ -4,6 +4,8 @@
 // sent to the account: test mode keeps wave feedback and listening reports off.
 
 import { OniLogin } from './api/capacitor.ts';
+import { transport } from './api/client.ts';
+import { OniRemote } from './player/remote.ts';
 
 type Wave = {
   audio: HTMLAudioElement;
@@ -106,6 +108,26 @@ function phoneLayout() {
   report('phone-layout', order.join(' ') === want && icons === 2, `${order.join(' ')}, ${icons} top icons`);
 }
 
+/** Uploading your own mp3 from the phone: the native side must build a multipart body with the
+ * file intact. A public echo service stands in for Yandex, so nothing lands in the account. */
+async function uploadForm() {
+  const bytes = new Uint8Array([0x49, 0x44, 0x33, 0x04, 0x00, 0xff, 0x80, 0x0d, 0x0a, 0x2d]);
+  const part = { field: 'file', filename: 'смоук.mp3', contentType: 'audio/mpeg', data: bytes.buffer };
+  for (const url of ['https://httpbin.org/post', 'https://postman-echo.com/post']) {
+    try {
+      const r = await transport.request<{ files?: Record<string, string> }>({ method: 'POST', url, multipart: part });
+      const got = r.data?.files?.file ?? '';
+      // Echo services return a binary file as a data URL or as text; compare the bytes either way.
+      const back = got.startsWith('data:') ? Uint8Array.from(atob(got.split(',')[1]), (c) => c.charCodeAt(0)) : Uint8Array.from(got, (c) => c.charCodeAt(0));
+      const same = back.length === bytes.length && back.every((b, i) => b === bytes[i]);
+      return report('upload-form', r.ok && same, `${new URL(url).host}: ${r.status}, ${back.length} bytes back`);
+    } catch (e) {
+      console.log(`upload-form: ${url} unavailable (${e})`);
+    }
+  }
+  report('upload-form', false, 'no echo service answered');
+}
+
 export async function runSmoke() {
   try {
     noZoom();
@@ -124,6 +146,9 @@ export async function runSmoke() {
     report('no-cors-audio', wave().audio.crossOrigin === null);
     // The lock screen title adds the version ("Title (Slowed)"), see updateMediaSession.
     report('media-session', navigator.mediaSession?.metadata?.title?.startsWith(title) === true, `"${navigator.mediaSession?.metadata?.title ?? ''}"`);
+    // The lock screen: told what plays, with previous / next / like and no ±10 s (OniRemote).
+    const remote = await OniRemote.state();
+    report('lock-screen', remote.title.startsWith(title) && remote.next && remote.prev && remote.like && !remote.skip, JSON.stringify(remote));
 
     click('.pb-cover');
     report('now-playing', await until(() => document.querySelector('.nowplaying'), 5000));
@@ -152,6 +177,7 @@ export async function runSmoke() {
     await longPressMenu();
     await sleep(600); // a person's next tap, after the hold's aftermath (src/ui/longPress.ts)
     await tapToPlay();
+    await uploadForm();
   } catch (e) {
     report('crash', false, String(e));
   }

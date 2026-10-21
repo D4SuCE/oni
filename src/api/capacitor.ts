@@ -68,7 +68,7 @@ export function capacitorTransport(): Transport {
     // Set by the Debug build for the simulator runs in CI (ios/App/App/OniBridge.swift).
     testMode: Boolean((window as { __oniTest?: boolean }).__oniTest),
     canAnalyzeAudio: false,
-    canUpload: false,
+    canUpload: true,
 
     files: {
       async write(name, data) {
@@ -94,7 +94,6 @@ export function capacitorTransport(): Transport {
     },
 
     async request<T = any>(req: HttpRequest): Promise<HttpResponse<T>> {
-      if (req.multipart) throw new Error('uploads are not supported on iOS');
       const url = new URL(req.url);
       for (const [k, v] of Object.entries(req.query || {})) if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
       const headers: Record<string, string> = { ...req.headers };
@@ -104,7 +103,14 @@ export function capacitorTransport(): Transport {
         headers['X-Yandex-Music-Client'] ??= DEFAULT_CLIENT;
       }
       let data: unknown;
-      if (req.form) {
+      let dataType: 'formData' | undefined;
+      if (req.multipart) {
+        // An upload (your own mp3): the native side builds the multipart body from base64.
+        const { field, filename, contentType, data: bytes } = req.multipart;
+        data = [{ key: field, value: toBase64(new Uint8Array(bytes)), type: 'base64File', fileName: filename, contentType }];
+        dataType = 'formData';
+        headers['Content-Type'] = 'multipart/form-data';
+      } else if (req.form) {
         data = new URLSearchParams(Object.entries(req.form).map(([k, v]) => [k, String(v)])).toString();
         headers['Content-Type'] = 'application/x-www-form-urlencoded';
       } else if (req.json !== undefined) {
@@ -116,6 +122,7 @@ export function capacitorTransport(): Transport {
         method: req.method || (data !== undefined ? 'POST' : 'GET'),
         headers,
         data,
+        dataType,
         // Parse JSON here, like the desktop: the native side only parses it for JSON content types.
         responseType: 'text',
       });

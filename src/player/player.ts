@@ -13,6 +13,7 @@ import { RecentPlays } from './recent.ts';
 import { levellingGain } from './loudness.ts';
 import { OfflineLibrary } from './offline.ts';
 import { PlayStats, type Origin } from './stats.ts';
+import { isIos } from '../ui/platform.ts';
 
 export type Repeat = 'off' | 'all' | 'one';
 /** A wave without a station is My Wave; with one it is a radio seeded by a track, artist, album or playlist. */
@@ -573,6 +574,8 @@ if ('mediaSession' in navigator) {
     }
   }
 }
+// That alone did not change the iPhone's lock screen: there a native plugin runs it (remote.ts).
+if (isIos) import('./remote.ts').then((m) => m.connectRemote());
 
 // -------------------------------------------------------------- persistence
 
