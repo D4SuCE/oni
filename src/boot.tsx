@@ -6,11 +6,13 @@ import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { useLang } from './i18n.ts';
 import { startBeatPulse } from './player/pulse.ts';
 import { connectDesktopShell } from './player/shell.ts';
+import { connectLinks } from './ui/links.ts';
 import { installGlobalErrorLogging } from './ui/log.ts';
 
 installGlobalErrorLogging();
 connectDesktopShell();
 startBeatPulse();
+connectLinks();
 document.documentElement.lang = useLang.getState().lang;
 
 createRoot(document.getElementById('root')!).render(

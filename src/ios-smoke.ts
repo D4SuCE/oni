@@ -65,6 +65,12 @@ export async function runSmoke() {
     await wave().playTracks([track], 0, 'smoke');
     const local = await until(() => wave().audio.src.startsWith('blob:') && !wave().audio.paused && wave().audio.currentTime > 1, 20000);
     report('offline-playback', local, wave().audio.src.slice(0, 5));
+
+    // A shortcut's link: the workflow opens oni://search?text=… once it sees "link-ready".
+    console.log('SMOKE link-ready');
+    const searched = await until(() => document.querySelector('[data-testid="search-input"]') && document.querySelectorAll('.track-row').length, 45000);
+    const input = document.querySelector<HTMLInputElement>('[data-testid="search-input"]');
+    report('search-link', Boolean(searched) && input?.value === 'Кино Группа крови', `"${input?.value ?? ''}", ${document.querySelectorAll('.track-row').length} tracks`);
   } catch (e) {
     report('crash', false, String(e));
   }
