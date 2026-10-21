@@ -318,22 +318,30 @@ async function syncRemoteHistory() {
   }
 }
 
+/** Bumped by every start: a start overtaken by a newer one (a setting picked again meanwhile)
+ * stops quietly instead of loading its track over the newer wave's. */
+let waveStarts = 0;
+
 async function startWave(source: Source & { kind: 'wave' }) {
+  const start = ++waveStarts;
   finishCurrent(false);
-  engine = new WaveEngine(waveApi, history, get().tuning, (id) => isDisliked(id), source.station ? [source.station.seed] : null);
+  // The old track plays on until the new wave's first one is ready (the user's choice).
+  const mine = new WaveEngine(waveApi, history, get().tuning, (id) => isDisliked(id), source.station ? [source.station.seed] : null);
+  engine = mine;
   set({ waveBusy: true, source, queue: [], index: -1, shuffle: false, error: null });
   unshuffled = null;
   try {
     await Promise.race([syncRemoteHistory(), new Promise((r) => setTimeout(r, 2500))]);
-    await engine.start();
-    const first = await engine.next();
+    await withTimeout(mine.start());
+    const first = await withTimeout(mine.next());
+    if (start !== waveStarts) return;
     if (!first) throw new Error(tr().player.waveEmpty);
-    set({ queue: [first], waveStats: { ...engine.stats } });
+    set({ queue: [first], waveStats: { ...mine.stats } });
     await loadAt(0);
   } catch (e: any) {
-    set({ error: tr().player.waveFailed(String(e?.message || e)) });
+    if (start === waveStarts) set({ error: tr().player.waveFailed(String(e?.message || e)) });
   } finally {
-    set({ waveBusy: false });
+    if (start === waveStarts) set({ waveBusy: false });
   }
 }
 
@@ -347,18 +355,19 @@ export function saveTuning(patch: Partial<WaveTuning>) {
 }
 
 /** Re-tune the wave. Local filters keep the current track and drop what no longer passes; a
- * Yandex-side setting (activity, character, mood, language) starts the wave anew with it right
- * away, as Yandex's app does, even when a list was playing: before, the old track went on and,
- * with a list playing, the setting only took effect on the next wave start. */
+ * Yandex-side setting (activity, character, mood, language) starts My Wave anew with it right
+ * away, as Yandex's app does, whatever was playing: a list, My Wave, or a station radio. */
 export async function retuneWave(patch: Partial<WaveTuning>) {
   const seedsChanged = saveTuning(patch);
   const source = get().source;
-  // A station radio keeps its own seed: only the local filters apply to it.
-  if (source?.kind === 'wave' && (!seedsChanged || source.station)) {
+  // Local filters only: the wave (My Wave or a station) keeps its seed and drops what fails them.
+  if (source?.kind === 'wave' && !seedsChanged) {
     set((s) => ({ queue: s.queue.filter((t, i) => i <= s.index || !engine?.rejectReason(t)) }));
     await fillWave();
     return;
   }
+  // A Yandex-side setting starts My Wave with it, also from a station radio (a track's, an
+  // artist's): there the setting used to do nothing at all, and the radio's track went on.
   if (seedsChanged) await startWave({ kind: 'wave' });
 }
 

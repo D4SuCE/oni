@@ -193,6 +193,58 @@ await step('a Yandex-side tuning while a list plays starts the wave with it, and
   await page.evaluate(() => window.__wave.usePlayer.setState((s) => ({ tuning: { ...s.tuning, context: null } })));
 });
 
+await step('settings picked during a track radio start My Wave with them: quick picks in several sections, the last wins; a slow one switches again', async () => {
+  // Found by the user on the phone: picking "sad" left the old track on, and picking back too.
+  // During a station radio the setting did nothing at all.
+  await page.evaluate(async () => {
+    const chart = await window.__wave.api.chart();
+    window.__wave.usePlayer.setState({ queue: [chart[0]], index: 0 });
+  });
+  await page.click('[data-testid="now-more"]');
+  await page.locator('.menu-item', { hasText: 'Радио по треку' }).click();
+  await page.waitForFunction(() => {
+    const s = window.__wave.usePlayer.getState();
+    return s.source?.station && !s.waveBusy && !window.__wave.audio.paused;
+  }, null, { timeout: 30000 });
+  const before = await player();
+  try {
+    await page.click('[data-testid="nav-home"]');
+    await page.click('[data-testid="wave-tune"]');
+    await page.waitForSelector('.drawer .segmented');
+    const section = (n) => page.locator('.drawer .segmented').nth(n).locator('button');
+    // Several sections, quickly: each pick restarts the wave, and only the last start, with all
+    // of them, may play.
+    await section(1).nth(4).click(); // mood "Грустное"
+    await page.waitForTimeout(150);
+    await section(1).nth(1).click(); // mood "Бодрое", before the first could finish
+    await page.waitForTimeout(150);
+    await section(2).nth(2).click(); // language "Иностранный"
+    await page.waitForTimeout(150);
+    await section(0).nth(2).click(); // character "Незнакомое"
+    const tuning = () => page.evaluate(() => window.__wave.usePlayer.getState().tuning);
+    await page.waitForFunction((t) => {
+      const s = window.__wave.usePlayer.getState();
+      const all = s.tuning.mood === 'active' && s.tuning.language === 'not-russian' && s.tuning.diversity === 'discover';
+      return all && s.source?.kind === 'wave' && !s.source.station && !s.waveBusy && s.queue[s.index]?.title !== t && !window.__wave.audio.paused;
+    }, before.title, { timeout: 30000 }).catch(async (e) => {
+      throw new Error(`${JSON.stringify(await player())}, tuning ${JSON.stringify(await tuning())} (${e.message})`);
+    });
+    // And slowly: one more pick after the wave has settled switches the track again.
+    const settled = await player();
+    await section(1).nth(3).click(); // mood "Спокойное"
+    await page.waitForFunction((t) => {
+      const s = window.__wave.usePlayer.getState();
+      return s.tuning.mood === 'calm' && !s.waveBusy && s.queue[s.index]?.title !== t && !window.__wave.audio.paused;
+    }, settled.title, { timeout: 30000 });
+    console.log(`       radio: ${before.title} -> My Wave (active, foreign, new): ${settled.title} -> calm: ${(await player()).title}`);
+  } finally {
+    await page.evaluate(() => window.__wave.usePlayer.setState((s) => ({ tuning: { ...s.tuning, mood: 'all', language: 'any', diversity: 'default' } })));
+    await page.keyboard.press('Escape');
+    if (await page.locator('.drawer').count()) await page.mouse.click(200, 400);
+    await page.waitForSelector('.drawer', { state: 'detached' });
+  }
+});
+
 await step('now playing screen', async () => {
   await page.click('.pb-cover');
   await page.waitForSelector('.nowplaying');
