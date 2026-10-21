@@ -43,7 +43,10 @@ npm run dist
 3. Коммит «Release x.y.z», затем `git tag vx.y.z` и `git push --follow-tags`.
 4. `npm run release` — собирает установщик и portable-версию в `release/vx.y.z/` и
    выкладывает их в oni-releases с разделом версии из CHANGELOG.md в описании
-   (нужен `gh auth login`). Через несколько часов программы у всех обновятся.
+   (нужен `gh auth login`). Тег из шага 3 запускает на облачном Mac сборку для iPhone;
+   скрипт дожидается её, прикладывает `Oni-x.y.z.ipa` и добавляет версию в `sidestore.json`
+   (`scripts/ios-release.mjs`, отдельно: `node scripts/ios-release.mjs vx.y.z`). Через
+   несколько часов программы у всех обновятся: на Windows — сами, на iPhone — через SideStore.
 
 `npm run dist` — то же без публикации, для проверки.
 

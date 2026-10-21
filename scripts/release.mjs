@@ -4,6 +4,7 @@
 // The release stays a draft until every file is up, so no app sees it half-uploaded.
 // Needs `gh auth login`. Run: npm run release (after committing and tagging the version).
 import { execSync, spawnSync } from 'node:child_process';
+import { releaseIos } from './ios-release.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -51,5 +52,11 @@ run('npx vite build');
 // race to create the release themselves.
 if (!released) run(`gh release create ${tag} -R ${REPO} --draft --title "Oni ${version}" --notes-file ${notesFile}`);
 run(`npx electron-builder --win --publish always -c.directories.output=${out}`, { ...process.env, GH_TOKEN: sh('gh auth token') });
+// The iPhone build of the same tag (the tag push started it); a failure there does not hold back Windows.
+try {
+  await releaseIos(tag, notes);
+} catch (e) {
+  console.warn(`release: iOS skipped (${e.message}); later: node scripts/ios-release.mjs ${tag}`);
+}
 run(`gh release edit ${tag} -R ${REPO} --draft=false --latest`);
 console.log(`\nreleased ${tag}: https://github.com/${REPO}/releases/tag/${tag}`);

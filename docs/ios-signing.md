@@ -30,6 +30,12 @@ entitlement, оно работает на обоих путях.
 
 ## Путь A. Бесплатно: неподписанный IPA из CI + SideStore
 
+> **Выбран для Oni.** Как устроено сейчас: `.github/workflows/ios.yml` на теге версии собирает
+> `Oni-<версия>.ipa`; `scripts/ios-release.mjs` (часть `npm run release`) прикладывает его к выпуску
+> в D4SuCE/oni-releases и добавляет версию в источник
+> `https://raw.githubusercontent.com/D4SuCE/oni-releases/main/sidestore.json`. Инструкция для
+> пользователя — в README oni-releases, раздел «iPhone». Набросок ниже — исходный план.
+
 Идея: CI каждый раз собирает IPA **без подписи**, а SideStore на телефоне
 подписывает его вашим Apple ID и сам продлевает подпись раз в 7 дней — без
 компьютера.
