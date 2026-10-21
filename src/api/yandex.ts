@@ -225,6 +225,18 @@ export class YandexMusic {
     return this.call<Album>(`/albums/${id}/with-tracks`);
   }
 
+  /** Everything the official app's "Track details" shows: album with year, genre and labels, chart place. */
+  async trackFullInfo(t: Track): Promise<Track> {
+    const album = t.albums?.[0]?.id;
+    const r = await this.call<{ track: Track }>(`/tracks/${album ? `${t.id}:${album}` : t.id}/full-info`);
+    return r.track;
+  }
+
+  /** Renames your own upload (title and artist), as "Edit" in the official app does. */
+  async changeUpload(id: string | number, change: { title: string; artist: string }) {
+    await this.call(`/ugc/tracks/${id}/change`, { method: 'POST', json: change });
+  }
+
   async albums(ids: (number | string)[]): Promise<Album[]> {
     if (!ids.length) return [];
     return this.call<Album[]>('/albums', { method: 'POST', form: { 'album-ids': ids.join(',') } });

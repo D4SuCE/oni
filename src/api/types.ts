@@ -19,6 +19,9 @@ export interface Album {
   type?: string;
   trackCount?: number;
   artists: Artist[];
+  labels?: { id: number; name: string }[];
+  /** Where the track sits in this album (full-info). */
+  trackPosition?: { volume: number; index: number };
   volumes?: Track[][];
   likesCount?: number;
 }
@@ -41,6 +44,8 @@ export interface Track {
   derivedColors?: { average: string; waveText: string; miniPlayer: string; accent: string };
   /** Short looping video Yandex shows instead of the cover for some tracks. */
   backgroundVideoUri?: string;
+  /** In the chart now (full-info). */
+  chart?: { position: number; listeners?: number };
 }
 
 export interface PlaylistTrackItem {

@@ -3,6 +3,7 @@ import { api } from './api/client.ts';
 import { trackCover } from './api/yandex.ts';
 import { Spinner } from './components/Common.tsx';
 import { DialogHost } from './components/Dialog.tsx';
+import { TrackSheetHost } from './components/TrackSheet.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { MenuHost } from './components/Menu.tsx';
 import { NowPlaying } from './components/NowPlaying.tsx';
@@ -184,6 +185,7 @@ export function App() {
       {auth === 'ready' && sound && <SoundPanel />}
       <MenuHost />
       <DialogHost />
+      <TrackSheetHost />
       {toastMsg && (
         <div key={toastMsg.id} className="toast glass">
           {toastMsg.text}

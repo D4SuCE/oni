@@ -2251,6 +2251,32 @@ html.motion .backdrop-img {
   color: var(--text-2);
   line-height: 1.45;
 }
+.track-sheet {
+  width: min(460px, calc(100% - 32px));
+}
+.info-rows {
+  margin: 0;
+}
+.info-row {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13.5px;
+}
+.info-row dt {
+  color: var(--text-3);
+}
+.info-row dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
 .dialog-actions {
   display: flex;
   justify-content: flex-end;

@@ -179,6 +179,16 @@ await step('track context menu + add-to-playlist submenu', async () => {
   await page.keyboard.press('Escape');
 });
 
+await step('track details: album, genre and more from the catalog', async () => {
+  await page.locator('.track-row').nth(1).click({ button: 'right' });
+  await page.locator('.menu-item', { hasText: 'Информация о треке' }).click();
+  await page.waitForSelector('[data-testid="track-info"]', { timeout: 15000 });
+  const text = await page.locator('[data-testid="track-info"]').innerText();
+  if (!/Альбом/.test(text) || !/Жанр/.test(text) || !/Длительность/.test(text)) throw new Error(`details: ${text}`);
+  await page.locator('.track-sheet button', { hasText: 'Закрыть' }).click();
+  await page.waitForSelector('.track-sheet', { state: 'detached' });
+});
+
 await step('share a track: its link goes to the clipboard', async () => {
   const saved = await app.evaluate(({ clipboard }) => clipboard.readText());
   try {
@@ -236,9 +246,26 @@ await step('uploaded mp3s are marked in a playlist', async () => {
   await page.locator('.track-row', { has: page.locator('[data-testid="upload-badge"]') }).first().click({ button: 'right' });
   await page.waitForSelector('.menu');
   const items = (await page.locator('.menu .menu-item .menu-label').allInnerTexts()).map((x) => x.trim());
-  const want = ['Не рекомендовать', 'Добавить в плейлист', 'Удалить из плейлиста'];
-  if (items.length !== 4 || !/нравится/.test(items[0]) || want.some((w, k) => items[k + 1] !== w)) throw new Error(`upload menu: ${items.join(' | ')}`);
+  const want = ['Не рекомендовать', 'Добавить в плейлист', 'Изменить', 'Информация о треке', 'Удалить из плейлиста'];
+  if (items.length !== 6 || !/нравится/.test(items[0]) || want.some((w, k) => items[k + 1] !== w)) throw new Error(`upload menu: ${items.join(' | ')}`);
   await page.keyboard.press('Escape');
+
+  // Edit: rename, see it in the list, and always put the real name back.
+  const row = page.locator('.track-row', { has: page.locator('[data-testid="upload-badge"]') }).first();
+  const original = await page.evaluate(async ({ uid, kind }) => {
+    const full = await window.__wave.api.playlist(uid, kind);
+    const t = full.tracks.map((x) => x.track).find((t) => t?.trackSource === 'UGC');
+    return { id: t.id, title: t.title, artist: (t.artists || []).map((a) => a.name).join(', ') };
+  }, found);
+  try {
+    await row.click({ button: 'right' });
+    await page.locator('.menu-item', { hasText: 'Изменить' }).click();
+    await page.fill('[data-testid="edit-title"]', `${original.title} · oni-e2e`);
+    await page.click('[data-testid="edit-save"]');
+    await page.locator('.track-row .tr-title', { hasText: 'oni-e2e' }).first().waitFor({ timeout: 15000 });
+  } finally {
+    await page.evaluate(({ id, title, artist }) => window.__wave.api.changeUpload(id, { title, artist }), original);
+  }
   // back to the search results the next steps start from
   await page.click('[data-testid="nav-search"]');
   await page.waitForSelector('.section');

@@ -5,6 +5,7 @@ import type { Playlist } from '../api/types.ts';
 import { playlistCover } from '../api/yandex.ts';
 import { ErrorBox, PageHeader, Spinner } from '../components/Common.tsx';
 import { askText, confirmDialog } from '../components/Dialog.tsx';
+import { useTrackEdits } from '../components/TrackSheet.tsx';
 import { SmartShuffleButton } from '../components/SmartShuffle.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { useT } from '../i18n.ts';
@@ -13,7 +14,9 @@ import { back, errorText, isOwn, refreshPlaylists, samePlaylist, toast, togglePl
 import { cx, fmtTotal, useAsync } from '../ui/util.ts';
 
 export function PlaylistView({ uid, kind }: { uid: number | string; kind: number | string }) {
-  const { data: pl, loading, error, reload, setData } = useAsync(() => api.playlist(uid, kind), [uid, kind]);
+  // An upload renamed from the track menu: show the new name.
+  const edits = useTrackEdits((s) => s.version);
+  const { data: pl, loading, error, reload, setData } = useAsync(() => api.playlist(uid, kind), [uid, kind, edits]);
   const [uploading, setUploading] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const t = useT();

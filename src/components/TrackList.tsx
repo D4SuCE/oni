@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { ArrowUp, Ban, Disc3, Heart, Link, ListEnd, ListPlus, ListStart, MoreHorizontal, Play, Plus, Radio, Share, Trash2, User } from 'lucide-react';
+import { ArrowUp, Ban, Disc3, Info, Pencil, Heart, Link, ListEnd, ListPlus, ListStart, MoreHorizontal, Play, Plus, Radio, Share, Trash2, User } from 'lucide-react';
 import type { Track } from '../api/types.ts';
 import { trackCover } from '../api/yandex.ts';
 import { tr, useT } from '../i18n.ts';
@@ -10,6 +10,7 @@ import { cx, fmtTime } from '../ui/util.ts';
 import { ArtistLinks, Cover } from './Common.tsx';
 import { askText } from './Dialog.tsx';
 import { openMenu, type MenuItem } from './Menu.tsx';
+import { editUpload, showTrackInfo } from './TrackSheet.tsx';
 
 /** A file the user uploaded: marked in lists, with a short menu (its link opens for nobody else). */
 export const isUpload = (t: Track) => t.trackSource === 'UGC';
@@ -36,7 +37,16 @@ export function trackMenu(t: Track, extra: MenuItem[] = []): MenuItem[] {
   const addTo: MenuItem = { label: tx.menu.addToPlaylist, icon: <ListPlus size={15} />, submenu: playlistItems };
   // Your own upload gets what the official app offers for one: no radio, album, artist or link,
   // none of which exist for a private file.
-  if (isUpload(t)) return [like, dontRecommend, addTo, ...(extra.length ? [{ label: '', separator: true }, ...extra] : [])];
+  const details: MenuItem = { label: tx.menu.details, icon: <Info size={15} />, onClick: () => showTrackInfo(t) };
+  if (isUpload(t))
+    return [
+      like,
+      dontRecommend,
+      addTo,
+      { label: tx.menu.edit, icon: <Pencil size={15} />, onClick: () => editUpload(t) },
+      details,
+      ...(extra.length ? [{ label: '', separator: true }, ...extra] : []),
+    ];
 
   const items: MenuItem[] = [
     { label: tx.menu.playNext, icon: <ListStart size={15} />, onClick: () => playNext(t) },
@@ -49,7 +59,7 @@ export function trackMenu(t: Track, extra: MenuItem[] = []): MenuItem[] {
   ];
   if (t.albums?.[0]?.id) items.push({ label: tx.menu.goToAlbum, icon: <Disc3 size={15} />, onClick: () => navigate({ name: 'album', id: t.albums[0].id }) });
   if (t.artists?.[0] && !t.artists[0].various) items.push({ label: tx.menu.goToArtist, icon: <User size={15} />, onClick: () => navigate({ name: 'artist', id: t.artists[0].id }) });
-  items.push(...extra);
+  items.push(details, ...extra);
   items.push({ label: '', separator: true }, dontRecommend);
   return items;
 }
