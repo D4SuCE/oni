@@ -1,15 +1,13 @@
 # iOS build on a cloud Mac: a simulator smoke test (launch, screenshot, app log) and an
 # unsigned Oni.ipa (signed later on the phone, see docs/ios-signing.md).
-# macOS minutes count ×10 on a private repo, so this runs only when the iOS side changes,
-# on version tags, and by hand.
+# macOS minutes count ×10 on a private repo (a run is ~45 of the 2,000 free a month; 90% were
+# gone on 22.10.2026), so this runs only on version tags (the release needs its IPA) and by hand.
 name: ios
 
 on:
   workflow_dispatch:
   push:
     tags: ['v*']
-    branches: [main, 'feat/ios*']
-    paths: ['ios/**', 'capacitor.config.ts', 'src/api/capacitor.ts', '.github/workflows/ios.yml']
 
 concurrency:
   group: ios-${{ github.ref }}
