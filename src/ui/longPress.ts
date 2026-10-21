@@ -59,6 +59,8 @@ export function connectLongPress() {
   const swallow = (e: Event) => {
     const now = held || performance.now() < swallowUntil;
     if (!now || (e.type === 'touchmove' && !held)) return;
+    // A quick tap on the menu that just opened is meant for it.
+    if (e.type !== 'touchmove' && (e.target as Element).closest?.('.menu')) return;
     e.stopImmediatePropagation();
     if (e.type !== 'touchmove') e.preventDefault();
   };
