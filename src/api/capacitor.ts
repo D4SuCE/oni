@@ -52,6 +52,8 @@ export function capacitorTransport(): Transport {
 
   return {
     platform: 'ios',
+    // Set by the Debug build for the simulator runs in CI (ios/App/App/OniBridge.swift).
+    testMode: Boolean((window as { __oniTest?: boolean }).__oniTest),
     canAnalyzeAudio: false,
     canUpload: false,
 

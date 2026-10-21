@@ -46,6 +46,10 @@ jobs:
           # Ad-hoc signed ("sign to run locally"), so the Keychain works as on a phone.
       - name: Smoke test on a simulator
         run: |
+          # The Debug bridge logs plugin calls, the token and the Authorization header among them:
+          # take it out of both logs before anything prints them or uploads them, however the step ends.
+          scrub() { [ -n "$ONI_TEST_TOKEN" ] && perl -pi -e 's/\Q$ENV{ONI_TEST_TOKEN}\E/***/g' console.log app.log 2>/dev/null || true; }
+          trap scrub EXIT
           DEVICE=$(xcrun simctl list devices available -j | python3 -c "
           import json, sys
           devices = json.load(sys.stdin)['devices']
@@ -57,17 +61,25 @@ jobs:
           xcrun simctl spawn "$DEVICE" log stream --level debug --style compact --predicate 'process == "App"' > app.log 2>&1 &
           LOG=$!
           # Capacitor prints the page's console to stdout, not to the system log.
-          xcrun simctl launch --console-pty "$DEVICE" local.wave.player > console.log 2>&1 &
+          # SIMCTL_CHILD_* reaches the app's environment: the Debug build signs in with the token
+          # and runs src/ios-smoke.ts, which prints "SMOKE <step> ok|FAIL" lines.
+          SIMCTL_CHILD_ONI_TEST_TOKEN="$ONI_TEST_TOKEN" xcrun simctl launch --console-pty "$DEVICE" local.wave.player > console.log 2>&1 &
           APP=$!
-          sleep 25
-          xcrun simctl io "$DEVICE" screenshot launch.png
+          shot() { xcrun simctl io "$DEVICE" screenshot "$1"; }
+          for i in $(seq 1 120); do grep -q "SMOKE playback" console.log && break; sleep 1; done
+          shot playing.png
+          for i in $(seq 1 30); do grep -q "SMOKE done" console.log && break; sleep 1; done
+          shot now-playing.png
           kill $LOG $APP || true
-          echo "--- page console ---"
-          cat console.log | head -80
-          echo "--- keychain ---"
-          grep -i "keychain" app.log | grep -iE "error|-34018" | head -5 || true
-          # The page must have started: the login screen asks the Keychain plugin for a token.
-          if grep -E "not implemented|TypeError|ReferenceError|SyntaxError|keychain\] read failed" console.log; then echo "::error::the page failed on the simulator"; exit 1; fi
+          scrub
+          echo "--- smoke ---"
+          grep "SMOKE" console.log || true
+          echo "--- errors ---"
+          grep -E "not implemented|TypeError|ReferenceError|SyntaxError|keychain\] read failed|\[error\]" console.log | head -20 || true
+          grep -q "SMOKE done" console.log || { echo "::error::the smoke run did not finish"; exit 1; }
+          if grep -q "SMOKE .* FAIL" console.log; then echo "::error::a smoke step failed"; exit 1; fi
+        env:
+          ONI_TEST_TOKEN: ${{ secrets.YANDEX_MUSIC_TOKEN }}
 
       - name: Unsigned IPA
         run: |
@@ -87,7 +99,8 @@ jobs:
         with:
           name: ios
           path: |
-            launch.png
+            playing.png
+            now-playing.png
             app.log
             console.log
             *.ipa

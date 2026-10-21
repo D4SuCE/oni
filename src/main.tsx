@@ -9,3 +9,6 @@ if (window.wave?.platform === 'electron') document.documentElement.classList.add
 
 if (location.hash === '#mini') import('./mini/MiniPlayer.tsx').then((m) => m.mountMini());
 else import('./boot.tsx');
+
+// iOS simulator runs in CI (Debug builds only set the flag): walk the main path once.
+if ((window as { __oniTest?: boolean }).__oniTest) import('./ios-smoke.ts').then((m) => m.runSmoke());

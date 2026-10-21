@@ -1,11 +1,22 @@
 import UIKit
 import Capacitor
 import Security
+import WebKit
 
 /// The app's own bridge controller: registers the plugins that live in this project.
 class OniViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(KeychainPlugin())
+        #if DEBUG
+        // Automated runs on the simulator (.github/workflows/ios.yml): sign in with the token the
+        // runner passes, and tell the page it is a test (no listening signals to the account,
+        // the smoke run in src/ios-smoke.ts). Debug builds only: the phone IPA is Release.
+        if let token = ProcessInfo.processInfo.environment["ONI_TEST_TOKEN"], !token.isEmpty {
+            _ = KeychainPlugin.store(key: KeychainPlugin.tokenKey, value: token)
+            let flag = WKUserScript(source: "window.__oniTest = true;", injectionTime: .atDocumentStart, forMainFrameOnly: true)
+            webView?.configuration.userContentController.addUserScript(flag)
+        }
+        #endif
     }
 }
 
@@ -20,14 +31,26 @@ public class KeychainPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "set", returnType: CAPPluginReturnPromise),
     ]
 
-    private let service = "local.wave.player"
+    /// The key src/api/capacitor.ts keeps the OAuth token under.
+    static let tokenKey = "yandex-oauth-token"
+    private static let service = "local.wave.player"
 
-    private func query(_ key: String) -> [String: Any] {
+    private static func query(_ key: String) -> [String: Any] {
         return [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
         ]
+    }
+
+    /// Replaces the entry; nil deletes it. Returns the Keychain status.
+    static func store(key: String, value: String?) -> OSStatus {
+        SecItemDelete(query(key) as CFDictionary)
+        guard let value = value else { return errSecSuccess }
+        var q = query(key)
+        q[kSecValueData as String] = Data(value.utf8)
+        q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        return SecItemAdd(q as CFDictionary, nil)
     }
 
     /// Resolves { value } with the stored string, or {} when there is none.
@@ -36,7 +59,7 @@ public class KeychainPlugin: CAPPlugin, CAPBridgedPlugin {
             call.reject("key is required")
             return
         }
-        var q = query(key)
+        var q = KeychainPlugin.query(key)
         q[kSecReturnData as String] = true
         q[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
@@ -54,16 +77,10 @@ public class KeychainPlugin: CAPPlugin, CAPBridgedPlugin {
             call.reject("key is required")
             return
         }
-        SecItemDelete(query(key) as CFDictionary)
-        if let value = call.getString("value") {
-            var q = query(key)
-            q[kSecValueData as String] = Data(value.utf8)
-            q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-            let status = SecItemAdd(q as CFDictionary, nil)
-            if status != errSecSuccess {
-                call.reject("keychain error \(status)")
-                return
-            }
+        let status = KeychainPlugin.store(key: key, value: call.getString("value"))
+        if status != errSecSuccess {
+            call.reject("keychain error \(status)")
+            return
         }
         call.resolve()
     }
