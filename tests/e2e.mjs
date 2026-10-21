@@ -164,19 +164,25 @@ await step('a Yandex-side tuning while a list plays starts the wave with it, and
   });
   await waitPlaying(0.5);
   const before = await player();
-  await page.click('[data-testid="wave-tune"]');
-  await page.waitForSelector('.drawer .chips .chip:nth-child(2)', { timeout: 15000 });
-  const picked = await page.locator('.drawer .chips .chip').nth(1).innerText();
-  await page.locator('.drawer .chips .chip').nth(1).click();
-  await page.waitForFunction((t) => {
-    const s = window.__wave.usePlayer.getState();
-    return s.source?.kind === 'wave' && !s.waveBusy && s.queue[s.index]?.title !== t;
-  }, before.title, { timeout: 25000 });
-  await waitPlaying(0.5);
-  const started = await player();
-  await page.keyboard.press('Escape');
-  await page.mouse.click(200, 400);
-  await page.waitForSelector('.drawer', { state: 'detached' });
+  let started;
+  let picked;
+  try {
+    await page.click('[data-testid="wave-tune"]');
+    await page.waitForSelector('.drawer .chips .chip:nth-child(2)', { timeout: 15000 });
+    picked = await page.locator('.drawer .chips .chip').nth(1).innerText();
+    await page.locator('.drawer .chips .chip').nth(1).click();
+    await page.waitForFunction((t) => {
+      const s = window.__wave.usePlayer.getState();
+      return s.source?.kind === 'wave' && !s.waveBusy && s.queue[s.index]?.title !== t;
+    }, before.title, { timeout: 25000 });
+    await waitPlaying(0.5);
+    started = await player();
+  } finally {
+    // Closed whatever happened: left open, it covers the page and every later step fails.
+    await page.keyboard.press('Escape');
+    if (await page.locator('.drawer').count()) await page.mouse.click(200, 400);
+    await page.waitForSelector('.drawer', { state: 'detached' });
+  }
   await page.click('[data-testid="next"]');
   await page.waitForFunction((i) => window.__wave.usePlayer.getState().index > i, started.index, { timeout: 20000 }).catch(async (e) => {
     throw new Error(`next did not advance: ${JSON.stringify(await player())} (${e.message})`);
