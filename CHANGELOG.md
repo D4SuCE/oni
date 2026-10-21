@@ -13,6 +13,8 @@
 
 ## [Не выпущено]
 
+## [1.5.0] — 2026-10-21
+
 ### Добавлено
 - «Скачать»: трек, плейлист, альбом, подборка или «Мне нравится» сохраняются в папке приложения
   в зашифрованном виде и играют без интернета (раздел «Скачанное»). Без сети Oni запускается
@@ -118,7 +120,8 @@
 - Фон-картина «Blood Moon Over Misty Pagodas», прозрачность окна (Acrylic).
 - Живые видеообложки Яндекса и пульсация обложек в такт музыке.
 
-[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.4.1...HEAD
+[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.0
 [1.4.1]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.4.1
 [1.4.0]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.4.0
 [1.3.0]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.3.0
