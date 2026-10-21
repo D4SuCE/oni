@@ -7,12 +7,14 @@ import { useLang } from './i18n.ts';
 import { startBeatPulse } from './player/pulse.ts';
 import { connectDesktopShell } from './player/shell.ts';
 import { connectLinks } from './ui/links.ts';
+import { connectLongPress } from './ui/longPress.ts';
 import { installGlobalErrorLogging } from './ui/log.ts';
 
 installGlobalErrorLogging();
 connectDesktopShell();
 startBeatPulse();
 connectLinks();
+connectLongPress();
 document.documentElement.lang = useLang.getState().lang;
 
 createRoot(document.getElementById('root')!).render(

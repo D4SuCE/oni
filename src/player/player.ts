@@ -548,6 +548,15 @@ if ('mediaSession' in navigator) {
   ms.setActionHandler('nexttrack', () => next(true));
   ms.setActionHandler('previoustrack', () => prev());
   ms.setActionHandler('seekto', (d) => d.seekTime !== undefined && seek(d.seekTime));
+  // The iPhone lock screen showed -10 s / +10 s instead of previous / next: clear the seek
+  // actions explicitly, so only the track ones are offered (not every browser knows them).
+  for (const action of ['seekbackward', 'seekforward'] as const) {
+    try {
+      ms.setActionHandler(action, null);
+    } catch {
+      /* unsupported action */
+    }
+  }
 }
 
 // -------------------------------------------------------------- persistence

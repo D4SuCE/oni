@@ -66,6 +66,23 @@ function nowPlayingCloses() {
   window.dispatchEvent(new PointerEvent('pointerup', at(520)));
 }
 
+/** A long press on a track opens its menu, and lifting the finger neither closes it nor plays. */
+async function longPressMenu() {
+  const row = document.querySelector('.track-row');
+  if (!row) return report('long-press-menu', false, 'no track row');
+  const box = row.getBoundingClientRect();
+  const at = { pointerId: 9, pointerType: 'touch', isPrimary: true, clientX: box.left + 40, clientY: box.top + box.height / 2, bubbles: true };
+  row.dispatchEvent(new PointerEvent('pointerdown', at));
+  const opened = await until(() => document.querySelector('.menu'), 1500);
+  row.dispatchEvent(new PointerEvent('pointerup', at));
+  row.dispatchEvent(new MouseEvent('mousedown', { ...at, bubbles: true }));
+  row.dispatchEvent(new MouseEvent('click', { ...at, bubbles: true }));
+  await sleep(300);
+  const stays = Boolean(document.querySelector('.menu'));
+  report('long-press-menu', Boolean(opened) && stays, `${document.querySelectorAll('.menu-item').length} items${stays ? '' : ', closed on lift'}`);
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+}
+
 export async function runSmoke() {
   try {
     noZoom();
@@ -107,6 +124,7 @@ export async function runSmoke() {
     const input = document.querySelector<HTMLInputElement>('[data-testid="search-input"]');
     const keyboard = document.activeElement === input;
     report('search-link', Boolean(searched) && input?.value === 'Кино Группа крови' && !keyboard, `"${input?.value ?? ''}", ${document.querySelectorAll('.track-row').length} tracks${keyboard ? ', keyboard up' : ''}`);
+    await longPressMenu();
   } catch (e) {
     report('crash', false, String(e));
   }

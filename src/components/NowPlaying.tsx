@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ban, ChevronDown, MoreHorizontal, X } from 'lucide-react';
 import { api } from '../api/client.ts';
 import type { Track } from '../api/types.ts';
@@ -6,6 +6,7 @@ import { trackCover } from '../api/yandex.ts';
 import { useT } from '../i18n.ts';
 import { playAt, playTracks, removeAt, seek, usePlayer } from '../player/player.ts';
 import { dislike, useApp } from '../store.ts';
+import { useSwipeDown } from '../ui/swipe.ts';
 import { cx, useAsync } from '../ui/util.ts';
 import { ArtistLinks, Cover, Spinner } from './Common.tsx';
 import { LikeButton, SeekBar, Transport } from './PlayerBar.tsx';
@@ -125,7 +126,9 @@ export function NowPlaying() {
   const [picked, setTab] = useState<'queue' | 'lyrics' | 'similar'>('queue');
   const video = useCoverVideo(track);
   const t = useT();
-  const close = () => useApp.setState({ nowPlayingOpen: false });
+  const close = useCallback(() => useApp.setState({ nowPlayingOpen: false }), []);
+  const sheet = useRef<HTMLDivElement>(null);
+  useSwipeDown(sheet, close);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
     window.addEventListener('keydown', onKey);
@@ -136,7 +139,7 @@ export function NowPlaying() {
   const tab = picked === 'lyrics' && !hasLyrics ? 'queue' : picked;
 
   return (
-    <div className={cx('nowplaying', video && 'has-video')}>
+    <div ref={sheet} className={cx('nowplaying', video && 'has-video')}>
       {video && <BackgroundVideo key={track?.id} src={video} poster={trackCover(track, 1000)} />}
       <div className="np-drag" />
       <button className="icon-btn np-close" onClick={close} title={t.nowPlaying.collapse}>
