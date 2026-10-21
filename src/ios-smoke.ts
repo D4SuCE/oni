@@ -47,7 +47,7 @@ function noZoom() {
   const small = fields.map((f) => parseFloat(getComputedStyle(f).fontSize)).filter((px) => px < 16);
   probes.forEach((p) => p.remove());
   const viewport = document.querySelector('meta[name=viewport]')?.getAttribute('content') ?? '';
-  report('no-zoom', !small.length && /maximum-scale=1/.test(viewport), `${fields.length} fields, small: ${small.join(',') || 'none'}`);
+  report('no-zoom', !small.length && /maximum-scale=1(?![\d.])/.test(viewport), `${fields.length} fields, small: ${small.join(',') || 'none'}`);
 }
 
 export async function runSmoke() {
