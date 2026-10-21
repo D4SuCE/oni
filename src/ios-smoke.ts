@@ -98,7 +98,8 @@ export async function runSmoke() {
     report('playback', playing, `"${title}" at ${wave().audio.currentTime.toFixed(1)} s`);
     // No CORS request for the stream here: the CDN would refuse it and nothing would play.
     report('no-cors-audio', wave().audio.crossOrigin === null);
-    report('media-session', navigator.mediaSession?.metadata?.title === title, `"${navigator.mediaSession?.metadata?.title ?? ''}"`);
+    // The lock screen title adds the version ("Title (Slowed)"), see updateMediaSession.
+    report('media-session', navigator.mediaSession?.metadata?.title?.startsWith(title) === true, `"${navigator.mediaSession?.metadata?.title ?? ''}"`);
 
     click('.pb-cover');
     report('now-playing', await until(() => document.querySelector('.nowplaying'), 5000));
