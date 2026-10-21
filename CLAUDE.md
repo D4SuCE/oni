@@ -57,6 +57,10 @@
   потеряются вход и история).
 - Сборка для себя: `npx electron-builder --win -c.directories.output=release/oni`
   (если папка занята запущенной копией — `release/oni-next`).
+- Для установки SideStore на компьютере стоят iTunes и **iloader** (`%LOCALAPPDATA%/iloader`,
+  winget `nabdev.iloader`) — по инструкции docs.sidestore.io. Тихая установка iTunes через winget
+  не ставит Apple Mobile Device Support (без неё iloader не видит iPhone): её MSI достаётся из
+  `iTunes64Setup.exe /extract` и ставится `msiexec /i AppleMobileDeviceSupport64.msi`.
 - Официальное приложение Яндекс Музыки стоит у пользователя
   (`%LOCALAPPDATA%/Programs/YandexMusic`, Electron): адреса неизвестных запросов API можно найти
   в его `resources/app.asar` (так найден `ugc/tracks/<id>/change`).
