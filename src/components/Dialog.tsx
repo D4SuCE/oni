@@ -3,6 +3,8 @@ import { create } from 'zustand';
 import { tr, useT } from '../i18n.ts';
 
 interface DialogState {
+  /** Every dialog mounts fresh, with its own input value. */
+  id: number;
   title: string;
   message?: string;
   input?: string;
@@ -13,8 +15,9 @@ interface DialogState {
 
 const useDialog = create<DialogState | null>(() => null);
 
-function open(d: Omit<DialogState, 'resolve'>) {
-  return new Promise<string | null>((resolve) => useDialog.setState({ ...d, resolve }, true));
+let seq = 0;
+function open(d: Omit<DialogState, 'resolve' | 'id'>) {
+  return new Promise<string | null>((resolve) => useDialog.setState({ ...d, id: ++seq, resolve }, true));
 }
 
 /** Text input dialog (window.prompt is not available in Electron). */
@@ -28,17 +31,18 @@ export async function confirmDialog(title: string, message: string, confirmLabel
 
 export function DialogHost() {
   const d = useDialog();
-  const [value, setValue] = useState('');
+  return d ? <Dialog key={d.id} d={d} /> : null;
+}
+
+function Dialog({ d }: { d: DialogState }) {
+  const [value, setValue] = useState(d.input ?? '');
   const inputRef = useRef<HTMLInputElement>(null);
   const t = useT();
 
   useEffect(() => {
-    if (!d) return;
-    setValue(d.input ?? '');
     setTimeout(() => inputRef.current?.select(), 0);
-  }, [d]);
+  }, []);
 
-  if (!d) return null;
   const finish = (v: string | null) => {
     useDialog.setState(null, true);
     d.resolve(v);

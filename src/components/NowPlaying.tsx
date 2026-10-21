@@ -117,7 +117,7 @@ function QueueRow({ i, current }: { i: number; current?: boolean }) {
 export function NowPlaying() {
   const track = usePlayer((s) => s.queue[s.index]);
   const isWave = usePlayer((s) => s.source?.kind === 'wave');
-  const [tab, setTab] = useState<'queue' | 'lyrics' | 'similar'>('queue');
+  const [picked, setTab] = useState<'queue' | 'lyrics' | 'similar'>('queue');
   const video = useCoverVideo(track);
   const t = useT();
   const close = () => useApp.setState({ nowPlayingOpen: false });
@@ -127,9 +127,8 @@ export function NowPlaying() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
   const hasLyrics = Boolean(track?.lyricsInfo?.hasAvailableSyncLyrics || track?.lyricsInfo?.hasAvailableTextLyrics);
-  useEffect(() => {
-    if (!hasLyrics) setTab((tab) => (tab === 'lyrics' ? 'queue' : tab));
-  }, [hasLyrics]);
+  // A track without lyrics shows the queue; the lyrics tab comes back with the next track that has them.
+  const tab = picked === 'lyrics' && !hasLyrics ? 'queue' : picked;
 
   return (
     <div className={cx('nowplaying', video && 'has-video')}>

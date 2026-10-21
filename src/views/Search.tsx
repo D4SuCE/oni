@@ -57,9 +57,12 @@ function BestResult({ best }: { best: NonNullable<SearchResult['best']> }) {
 
 export function Search() {
   const query = useApp((s) => s.searchQuery);
-  const [result, setResult] = useState<SearchResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<unknown>(null);
+  // The latest answer and the query it is for; the previous results stay up while the next ones load.
+  const [answer, setAnswer] = useState<{ q: string; result?: SearchResult; error?: unknown } | null>(null);
+  const q = query.trim();
+  const result = q ? (answer?.result ?? null) : null;
+  const error = q ? answer?.error : null;
+  const loading = Boolean(q) && answer?.q !== q;
   const input = useRef<HTMLInputElement>(null);
   const t = useT();
 
@@ -68,28 +71,21 @@ export function Search() {
   }, []);
 
   useEffect(() => {
-    const q = query.trim();
-    if (!q) {
-      setResult(null);
-      return;
-    }
+    if (!q) return;
     let alive = true;
-    setLoading(true);
     const timer = setTimeout(async () => {
       try {
         const r = await api.search(q);
-        if (alive) (setResult(r), setError(null));
+        if (alive) setAnswer({ q, result: r });
       } catch (e) {
-        if (alive) setError(e);
-      } finally {
-        if (alive) setLoading(false);
+        if (alive) setAnswer((prev) => ({ q, result: prev?.result, error: e }));
       }
     }, 300);
     return () => {
       alive = false;
       clearTimeout(timer);
     };
-  }, [query]);
+  }, [q]);
 
   const tracks = result?.tracks?.results || [];
   return (
