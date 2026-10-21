@@ -300,6 +300,9 @@ Oni 1.5.0 поставлен из источника, скачивание ра�
 - [~] Фоновое воспроизведение: `UIBackgroundModes: audio`, аудиосессия `.playback`. Экран блокировки
       и «Исполняется» на часах — через Media Session API WebKit (плеер её уже заполняет).
       **Проверить на телефоне**; если не появится — свой плагин `MPNowPlayingInfoCenter`.
+- [x] Ссылка `oni://search?text=…` для шорткатов iPhone (просьба пользователя: его шорткат «Найти трек»
+      открывал `yandexmusic://search?text=…`). Схема в Info.plist, приём — `@capacitor/app`,
+      разбор — `src/ui/links.ts` (`npm run test:links`), шаг `search-link` в CI.
 - [x] Телефонная раскладка: safe areas были; «Настройки» в нижнем меню вместо ☰. Эквалайзер и
       пульсация на iOS скрыты (Web Audio без CORS-потока слышит тишину), загрузка mp3 — только на ПК.
 - [x] CI (`.github/workflows/ios.yml`, ~4 мин Mac): сборка для симулятора с запуском на iPhone

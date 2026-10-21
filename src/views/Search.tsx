@@ -66,8 +66,10 @@ export function Search() {
   const input = useRef<HTMLInputElement>(null);
   const t = useT();
 
+  // A fresh search starts typing; with a query already there (back to the page, or a shortcut's
+  // oni://search link) the results come first, and on a phone the keyboard would cover them.
   useEffect(() => {
-    input.current?.focus();
+    if (!useApp.getState().searchQuery.trim()) input.current?.focus();
   }, []);
 
   useEffect(() => {
