@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Ban, ChevronDown, X } from 'lucide-react';
+import { Ban, ChevronDown, MoreHorizontal, X } from 'lucide-react';
 import { api } from '../api/client.ts';
 import type { Track } from '../api/types.ts';
 import { trackCover } from '../api/yandex.ts';
@@ -10,7 +10,8 @@ import { cx, useAsync } from '../ui/util.ts';
 import { ArtistLinks, Cover, Spinner } from './Common.tsx';
 import { LikeButton, SeekBar, Transport } from './PlayerBar.tsx';
 import { BackgroundVideo, LiveCover, useCoverVideo } from './LiveCover.tsx';
-import { TrackList } from './TrackList.tsx';
+import { openMenu } from './Menu.tsx';
+import { TrackList, trackMenu } from './TrackList.tsx';
 import { WaveStatsLine } from './Wave.tsx';
 
 function parseLrc(text: string) {
@@ -92,7 +93,11 @@ function QueueRow({ i, current }: { i: number; current?: boolean }) {
   const tx = useT();
   if (!t) return null;
   return (
-    <div className={cx('q-row', current && 'current')} onDoubleClick={() => playAt(i)}>
+    <div
+      className={cx('q-row', current && 'current')}
+      onDoubleClick={() => playAt(i)}
+      onContextMenu={(e) => openMenu(e, trackMenu(t, current ? [] : [{ label: tx.nowPlaying.removeFromQueue, icon: <X size={15} />, onClick: () => removeAt(i) }]))}
+    >
       <Cover src={trackCover(t, 100)} size={40} />
       <div className="tr-main" onClick={() => playAt(i)}>
         <div className="tr-title">
@@ -142,7 +147,7 @@ export function NowPlaying() {
           <LiveCover track={track} className="np-cover" />
           {track && (
             <>
-              <div className="np-meta">
+              <div className="np-meta" onContextMenu={(e) => openMenu(e, trackMenu(track))}>
                 <div className="np-text">
                   <h1 title={track.title}>{track.title}</h1>
                   <div className="np-artists">
@@ -156,6 +161,9 @@ export function NowPlaying() {
                     </button>
                   )}
                   <LikeButton track={track} size={22} />
+                  <button className="icon-btn" onClick={(e) => openMenu(e, trackMenu(track))} title={t.common.more} data-testid="np-more">
+                    <MoreHorizontal size={22} />
+                  </button>
                 </div>
               </div>
               <SeekBar className="np-seek" />

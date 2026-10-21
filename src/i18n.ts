@@ -173,6 +173,9 @@ const ru = {
     goToArtist: 'Перейти к исполнителю',
     removeFromPlaylist: 'Удалить из плейлиста',
     hideFromMixes: 'Скрыть из подборок',
+    share: 'Поделиться',
+    copyLink: 'Скопировать ссылку',
+    uploaded: 'Загружено вами',
   },
   update: {
     off: 'Обновления приходят в установленную версию',
@@ -190,6 +193,7 @@ const ru = {
   },
   toast: {
     hiddenFromMixes: 'Больше не появится в подборках',
+    linkCopied: 'Ссылка скопирована',
     loginFailed: (msg: string) => `Не удалось войти: ${msg}`,
     disliked: 'Больше не будет звучать',
     added: (title: string) => `Добавлено в «${title}»`,
@@ -549,6 +553,9 @@ const en: Dict = {
     goToArtist: 'Go to artist',
     removeFromPlaylist: 'Remove from playlist',
     hideFromMixes: 'Hide from mixes',
+    share: 'Share',
+    copyLink: 'Copy link',
+    uploaded: 'Uploaded by you',
   },
   update: {
     off: 'Updates come to the installed version',
@@ -566,6 +573,7 @@ const en: Dict = {
   },
   toast: {
     hiddenFromMixes: "Won't show up in your mixes again",
+    linkCopied: 'Link copied',
     loginFailed: (msg) => `Couldn't sign in: ${msg}`,
     disliked: "You won't hear this again",
     added: (title) => `Added to “${title}”`,

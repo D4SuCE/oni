@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronRight } from 'lucide-react';
 import { create } from 'zustand';
 import { cx } from '../ui/util.ts';
@@ -22,10 +23,23 @@ export function openMenu(e: { clientX: number; clientY: number; preventDefault?:
 
 const close = () => useMenu.setState(null, true);
 
-function MenuList({ items, x, y, nested }: { items: MenuItem[]; x: number; y: number; nested?: boolean }) {
+/** How long a submenu stays while the pointer crosses other items on its way there. */
+const SUBMENU_GRACE = 300;
+
+interface Sub {
+  i: number;
+  /** Where it opens: right of the item, or, without room there, left of `parentLeft`. */
+  x: number;
+  y: number;
+  parentLeft: number;
+}
+
+function MenuList({ items, x, y, parentLeft, onEnter }: { items: MenuItem[]; x: number; y: number; parentLeft?: number; onEnter?: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x, y });
-  const [sub, setSub] = useState<{ i: number; x: number; y: number } | null>(null);
+  const [sub, setSub] = useState<Sub | null>(null);
+  const leaving = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const nested = parentLeft !== undefined;
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -33,13 +47,24 @@ function MenuList({ items, x, y, nested }: { items: MenuItem[]; x: number; y: nu
     const r = el.getBoundingClientRect();
     let nx = x;
     let ny = y;
-    if (nx + r.width > window.innerWidth - 8) nx = nested ? x - r.width - 220 : window.innerWidth - r.width - 8;
+    if (nx + r.width > window.innerWidth - 8) nx = nested ? parentLeft - r.width - 4 : window.innerWidth - r.width - 8;
     if (ny + r.height > window.innerHeight - 8) ny = Math.max(8, window.innerHeight - r.height - 8);
     setPos({ x: Math.max(8, nx), y: ny });
-  }, [x, y, nested]);
+  }, [x, y, nested, parentLeft]);
+
+  useEffect(() => {
+    return () => clearTimeout(leaving.current);
+  }, []);
+
+  const openSub = (i: number, el: HTMLElement) => {
+    clearTimeout(leaving.current);
+    const r = el.getBoundingClientRect();
+    const menu = ref.current!.getBoundingClientRect();
+    setSub({ i, x: menu.right + 2, y: r.top - 6, parentLeft: menu.left });
+  };
 
   return (
-    <div ref={ref} className="menu glass" style={{ left: pos.x, top: pos.y }} onMouseDown={(e) => e.stopPropagation()}>
+    <div ref={ref} className="menu glass" style={{ left: pos.x, top: pos.y }} onMouseDown={(e) => e.stopPropagation()} onMouseEnter={onEnter}>
       {items.map((it, i) =>
         it.separator ? (
           <div key={i} className="menu-sep" />
@@ -48,12 +73,13 @@ function MenuList({ items, x, y, nested }: { items: MenuItem[]; x: number; y: nu
             key={i}
             className={cx('menu-item', it.danger && 'danger', sub?.i === i && 'active')}
             onMouseEnter={(e) => {
-              if (!it.submenu) return setSub(null);
-              const r = e.currentTarget.getBoundingClientRect();
-              setSub({ i, x: r.right + 4, y: r.top - 6 });
+              if (it.submenu) return openSub(i, e.currentTarget);
+              // Crossing other items on the way to an open submenu must not close it at once.
+              clearTimeout(leaving.current);
+              leaving.current = setTimeout(() => setSub(null), SUBMENU_GRACE);
             }}
-            onClick={() => {
-              if (it.submenu) return;
+            onClick={(e) => {
+              if (it.submenu) return openSub(i, e.currentTarget);
               close();
               it.onClick?.();
             }}
@@ -64,7 +90,13 @@ function MenuList({ items, x, y, nested }: { items: MenuItem[]; x: number; y: nu
           </button>
         ),
       )}
-      {sub && items[sub.i]?.submenu && <MenuList items={items[sub.i].submenu!} x={sub.x} y={sub.y} nested />}
+      {/*
+        The submenu goes to <body>, not inside this list: the list's glass backdrop-filter makes it
+        the containing block of fixed children, which would offset the submenu by the list's own position.
+      */}
+      {sub &&
+        items[sub.i]?.submenu &&
+        createPortal(<MenuList items={items[sub.i].submenu!} x={sub.x} y={sub.y} parentLeft={sub.parentLeft} onEnter={() => clearTimeout(leaving.current)} />, document.body)}
     </div>
   );
 }

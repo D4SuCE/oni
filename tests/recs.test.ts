@@ -9,6 +9,7 @@ import { buildProfile, type GenreTree, type TasteInput } from '../src/recs/profi
 import { becauseYouListened, forgottenFavourites, onRepeat, recentArtists } from '../src/recs/personal.ts';
 import { radarArtists, radarTracks, recentReleases } from '../src/recs/radar.ts';
 import { interleave, pickSuggestions } from '../src/recs/suggest.ts';
+import { levellingGain } from '../src/player/loudness.ts';
 import { PlayStats } from '../src/player/stats.ts';
 import { DAY, artistIds, dayKey, seededRandom, weekKey } from '../src/recs/util.ts';
 
@@ -360,6 +361,13 @@ await test('mix feedback: play outcomes match the stats (skip under 30 s, finish
   assert(playOutcome(10, 200, false) === 'skipped', 'left at 10 s');
   assert(playOutcome(60, 200, false) === 'partial', 'left at 60 s');
   assert(playOutcome(171, 200, false) === 'finished' && playOutcome(5, 200, true) === 'finished', '85% or the end');
+});
+
+await test("volume levelling: only tracks louder than about today's median are turned down", () => {
+  const db = (lufs?: number) => 20 * Math.log10(levellingGain(lufs));
+  assert(Math.abs(db(-8)) < 1e-9 && Math.abs(db(-11)) < 1e-9 && levellingGain(undefined) === 1, 'typical, quiet and unknown play at full volume');
+  assert(Math.abs(db(-5) + 3) < 1e-9, `a -5 LUFS track loses 3 dB: ${db(-5)}`);
+  assert(Math.abs(db(10) + 12) < 1e-9, 'never more than 12 dB');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

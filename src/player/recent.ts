@@ -30,6 +30,7 @@ export function trimTrack(t: Track): Track {
     ogImage: t.ogImage,
     available: t.available,
     contentWarning: t.contentWarning,
+    trackSource: t.trackSource,
     r128: t.r128,
     lyricsInfo: t.lyricsInfo,
     backgroundVideoUri: t.backgroundVideoUri,

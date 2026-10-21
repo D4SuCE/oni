@@ -10,6 +10,7 @@ import { DEFAULT_TUNING, WaveEngine, waveSeeds, type WaveStats, type WaveTuning 
 import { ListenHistory } from '../wave/history.ts';
 import { playOutcome, RecsFeedback } from '../recs/feedback.ts';
 import { RecentPlays } from './recent.ts';
+import { levellingGain } from './loudness.ts';
 import { PlayStats, type Origin } from './stats.ts';
 
 export type Repeat = 'off' | 'all' | 'one';
@@ -137,9 +138,7 @@ function prefetchNext() {
 
 function applyVolume() {
   const s = get();
-  let gain = 1;
-  const lufs = current()?.r128?.i;
-  if (s.normalize && typeof lufs === 'number') gain = Math.pow(10, Math.min(0, Math.max(-12, -14 - lufs)) / 20);
+  const gain = s.normalize ? levellingGain(current()?.r128?.i) : 1;
   audio.volume = Math.max(0, Math.min(1, s.volume * gain));
 }
 

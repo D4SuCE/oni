@@ -34,6 +34,7 @@ export interface Track {
   ogImage?: string;
   available?: boolean;
   contentWarning?: string;
+  /** 'UGC' for a file the user uploaded themselves (it has no album and no public page). */
   trackSource?: string;
   lyricsInfo?: { hasAvailableSyncLyrics?: boolean; hasAvailableTextLyrics?: boolean };
   r128?: { i: number; tp: number };

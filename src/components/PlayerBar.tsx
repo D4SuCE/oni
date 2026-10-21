@@ -1,4 +1,4 @@
-import { Ban, Heart, ListMusic, Loader2, Maximize2, Pause, PictureInPicture2, Play, Repeat, Repeat1, Shuffle, SlidersVertical, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Waves } from 'lucide-react';
+import { Ban, Heart, ListMusic, Loader2, Maximize2, MoreHorizontal, Pause, PictureInPicture2, Play, Repeat, Repeat1, Shuffle, SlidersVertical, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Waves } from 'lucide-react';
 import { useRef } from 'react';
 import type { Track } from '../api/types.ts';
 import { trackCover } from '../api/yandex.ts';
@@ -8,6 +8,8 @@ import { dislike, toggleLike, useApp } from '../store.ts';
 import { cx, fmtTime } from '../ui/util.ts';
 import { useEq } from '../player/eq.ts';
 import { ArtistLinks, Cover } from './Common.tsx';
+import { openMenu } from './Menu.tsx';
+import { trackMenu } from './TrackList.tsx';
 
 export function SeekBar({ className }: { className?: string }) {
   const position = usePlayer((s) => s.position);
@@ -118,7 +120,8 @@ export function PlayerBar() {
 
   return (
     <footer className="playerbar glass">
-      <div className="pb-left">
+      {/* The playing track has the same menu as in any list: share it, add it to a playlist… even from the wave. */}
+      <div className="pb-left" onContextMenu={(e) => track && openMenu(e, trackMenu(track))}>
         {track ? (
           <>
             <button className="pb-cover" onClick={openNow} title={t.player.expand}>
@@ -139,6 +142,9 @@ export function PlayerBar() {
                 <Ban size={17} />
               </button>
             )}
+            <button className="icon-btn pb-more" onClick={(e) => openMenu(e, trackMenu(track))} title={t.common.more} data-testid="now-more">
+              <MoreHorizontal size={18} />
+            </button>
           </>
         ) : (
           <div className="pb-empty">{t.player.nothing}</div>

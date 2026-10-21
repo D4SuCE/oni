@@ -247,12 +247,13 @@ html.acrylic .backdrop {
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
 }
+/* The logo sits as far from the window's top edge as from the menu button below it. */
 .sidebar-top {
-  height: var(--titlebar);
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 10px;
+  padding-top: 16px;
+  margin-bottom: 8px;
   flex-shrink: 0;
 }
 .logo {
@@ -585,6 +586,11 @@ html.acrylic .backdrop {
   border-color: var(--accent);
 }
 
+/* Uploaded by the user: the gold of the palette, so it reads apart from the grey "E". */
+.badge.upload {
+  background: var(--gold-soft);
+  color: var(--text);
+}
 .badge {
   display: inline-grid;
   place-items: center;
@@ -2569,6 +2575,9 @@ kbd {
   }
   .pb-center .seek,
   .pb-right,
+  .pb-more {
+    display: none;
+  }
   /* The bar keeps play and next; the full now-playing screen (.transport.big) keeps them all. */
   .playerbar .transport > .icon-btn:first-child,
   .playerbar .transport > .icon-btn:last-child,

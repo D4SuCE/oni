@@ -166,11 +166,71 @@ await step('track context menu + add-to-playlist submenu', async () => {
   const row = page.locator('.track-row').nth(1);
   await row.click({ button: 'right' });
   await page.waitForSelector('.menu');
-  await page.locator('.menu-item', { hasText: 'Добавить в плейлист' }).hover();
+  const item = page.locator('.menu-item', { hasText: 'Добавить в плейлист' });
+  await item.hover();
   await page.waitForTimeout(300);
   if ((await page.locator('.menu').count()) < 2) throw new Error('submenu missing');
+  // It must open next to the item and inside the window (it once opened far off-screen).
+  const [at, sub, size] = [await item.boundingBox(), await page.locator('.menu').nth(1).boundingBox(), page.viewportSize() ?? (await page.evaluate(() => ({ width: innerWidth, height: innerHeight })))];
+  const inside = sub.x >= 0 && sub.y >= 0 && sub.x + sub.width <= size.width && sub.y + sub.height <= size.height;
+  const beside = Math.abs(sub.x - (at.x + at.width)) < 40 || Math.abs(sub.x + sub.width - at.x) < 40;
+  if (!inside || !beside) throw new Error(`submenu at ${JSON.stringify(sub)}, item at ${JSON.stringify(at)}, window ${JSON.stringify(size)}`);
   await shot('06-context-menu');
   await page.keyboard.press('Escape');
+});
+
+await step('share a track: its link goes to the clipboard', async () => {
+  const saved = await app.evaluate(({ clipboard }) => clipboard.readText());
+  try {
+    await page.locator('.track-row').nth(1).click({ button: 'right' });
+    await page.locator('.menu-item', { hasText: 'Поделиться' }).click();
+    await page.locator('.menu-item', { hasText: 'Скопировать ссылку' }).click();
+    await page.waitForTimeout(300);
+    const link = await app.evaluate(({ clipboard }) => clipboard.readText());
+    if (!/^https:\/\/music\.yandex\.ru\/(album\/\d+\/)?track\/\d+$/.test(link)) throw new Error(`clipboard: "${link}"`);
+  } finally {
+    await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), saved);
+  }
+});
+
+await step('the playing track has its menu: player bar and now playing', async () => {
+  await page.locator('.pb-left').click({ button: 'right' });
+  await page.locator('.menu-item', { hasText: 'Поделиться' }).waitFor({ timeout: 3000 });
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.menu', { state: 'detached' });
+  await page.click('.pb-cover');
+  await page.waitForSelector('.nowplaying');
+  await page.click('[data-testid="np-more"]');
+  await page.locator('.menu-item', { hasText: 'Добавить в плейлист' }).waitFor({ timeout: 3000 });
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.menu', { state: 'detached' });
+  if (await page.locator('.nowplaying').count()) {
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('.nowplaying', { state: 'detached' });
+  }
+});
+
+await step('uploaded mp3s are marked in a playlist', async () => {
+  const found = await page.evaluate(async () => {
+    const { useApp, api } = window.__wave;
+    const s = useApp.getState();
+    for (const p of s.playlists.filter((p) => String(p.uid) === String(s.account?.uid))) {
+      const full = await api.playlist(p.uid, p.kind);
+      const tracks = (full.tracks || []).map((x) => x.track).filter(Boolean);
+      if (tracks.some((t) => t.trackSource === 'UGC')) return { uid: p.uid, kind: p.kind, all: tracks.every((t) => t.trackSource === 'UGC') };
+    }
+    return null;
+  });
+  if (!found) return console.log('       no own playlist with uploads on this account');
+  await page.evaluate(({ uid, kind }) => window.__wave.navigate({ name: 'playlist', uid, kind }), found);
+  await page.waitForSelector('[data-testid="upload-badge"]', { timeout: 15000 });
+  await page.locator('.track-row', { has: page.locator('[data-testid="upload-badge"]') }).first().click({ button: 'right' });
+  await page.waitForSelector('.menu');
+  if (await page.locator('.menu-item', { hasText: 'Поделиться' }).count()) throw new Error('an upload offers a share link nobody else can open');
+  await page.keyboard.press('Escape');
+  // back to the search results the next steps start from
+  await page.click('[data-testid="nav-search"]');
+  await page.waitForSelector('.section');
 });
 
 await step('open album from search', async () => {
