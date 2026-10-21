@@ -96,7 +96,8 @@ export const useRecent = create<{ version: number }>(() => ({ version: 0 }));
 export const audio = new Audio();
 audio.preload = 'auto';
 // CORS mode so Web Audio (the equalizer) can process the stream; the shell adds the header.
-audio.crossOrigin = 'anonymous';
+// Only where Web Audio may hear the stream (see Transport.canAnalyzeAudio): elsewhere a CORS request would not play.
+if (transport.canAnalyzeAudio) audio.crossOrigin = 'anonymous';
 
 let engine: WaveEngine | null = null;
 const waveApi = transport.testMode ? { waveStart: api.waveStart.bind(api), waveMore: api.waveMore.bind(api), waveFeedback: async () => {} } : api;

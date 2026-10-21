@@ -1,6 +1,6 @@
 import { Heart, Pencil, Play, Radio, Shuffle, Trash2, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
-import { api } from '../api/client.ts';
+import { api, transport } from '../api/client.ts';
 import type { Playlist } from '../api/types.ts';
 import { playlistCover } from '../api/yandex.ts';
 import { ErrorBox, PageHeader, Spinner } from '../components/Common.tsx';
@@ -116,9 +116,11 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
             )}
             {own && (
               <>
-                <button className="btn glass-btn" onClick={() => fileInput.current?.click()} disabled={!!uploading} title={t.playlist.uploadHint}>
-                  <Upload size={16} /> {t.playlist.upload}
-                </button>
+                {transport.canUpload && (
+                  <button className="btn glass-btn" onClick={() => fileInput.current?.click()} disabled={!!uploading} title={t.playlist.uploadHint}>
+                    <Upload size={16} /> {t.playlist.upload}
+                  </button>
+                )}
                 <button className="icon-btn" onClick={rename} title={t.playlist.rename}>
                   <Pencil size={17} />
                 </button>

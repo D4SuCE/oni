@@ -338,6 +338,13 @@ await step('narrow (phone) layout renders', async () => {
   await page.click('[data-testid="nav-home"]');
   await page.waitForTimeout(1200);
   await shot('12-phone-home');
+  // The tab bar has Settings (sign-out, language), and no sidebar toggle that does nothing here.
+  if (await page.locator('[data-testid="sidebar-toggle"]').isVisible()) throw new Error('sidebar toggle shown on a phone');
+  await page.click('[data-testid="nav-settings"]');
+  await page.waitForSelector('.page-title');
+  await page.waitForTimeout(600);
+  await shot('16-phone-settings');
+  await page.click('[data-testid="nav-home"]');
   await win.evaluate((w) => w.setSize(1320, 840));
 });
 

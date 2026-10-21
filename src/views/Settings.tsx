@@ -2,6 +2,7 @@ import { Download, ExternalLink, FileText, LogOut, RefreshCw, Undo2 } from 'luci
 import { useEffect, useState } from 'react';
 import { Segmented } from '../components/Wave.tsx';
 import { LANGS, setLang, useLang, useT } from '../i18n.ts';
+import { canProcessAudio } from '../player/eq.ts';
 import { recsFeedback, setNormalize, stats, usePlayer } from '../player/player.ts';
 import { logout, useApp } from '../store.ts';
 import { setMotion, setPulse, useMotion, usePulse } from '../ui/motion.ts';
@@ -56,13 +57,15 @@ export function SettingsView() {
           </div>
           <input type="checkbox" className="switch" checked={motion} onChange={(e) => setMotion(e.target.checked)} data-testid="live-covers" />
         </label>
-        <label className="toggle-row">
-          <div>
-            <div>{s.pulse}</div>
-            <div className="hint">{s.pulseHint}</div>
-          </div>
-          <input type="checkbox" className="switch" checked={pulse} onChange={(e) => setPulse(e.target.checked)} data-testid="pulse" />
-        </label>
+        {canProcessAudio() && (
+          <label className="toggle-row">
+            <div>
+              <div>{s.pulse}</div>
+              <div className="hint">{s.pulseHint}</div>
+            </div>
+            <input type="checkbox" className="switch" checked={pulse} onChange={(e) => setPulse(e.target.checked)} data-testid="pulse" />
+          </label>
+        )}
         {window.wave?.platform === 'electron' && (
           <div className="slider-row">
             <div className="slider-head">

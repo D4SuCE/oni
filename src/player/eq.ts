@@ -4,7 +4,7 @@
 // the <audio> element plays straight to the speakers.
 
 import { create } from 'zustand';
-import { loadJson, storage } from '../api/client.ts';
+import { loadJson, storage, transport } from '../api/client.ts';
 import { audio } from './player.ts';
 
 export const EQ_BANDS = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000];
@@ -44,8 +44,11 @@ let source: MediaElementAudioSourceNode | null = null;
 let preamp: GainNode | null = null;
 let filters: BiquadFilterNode[] = [];
 
+/** Without CORS audio (iOS) Web Audio would only hear silence and mute the music: leave it alone. */
+export const canProcessAudio = () => Boolean(transport.canAnalyzeAudio);
+
 function build() {
-  if (ctx) return;
+  if (ctx || !canProcessAudio()) return;
   ctx = new AudioContext();
   source = ctx.createMediaElementSource(audio);
   preamp = ctx.createGain();
@@ -65,6 +68,7 @@ function apply() {
   const s = useEq.getState();
   if (!s.enabled && !ctx) return; // never switched on: leave the element untouched
   build();
+  if (!ctx) return;
   // Switched off after being on: the graph stays (an element can't be detached), set flat.
   preamp!.gain.value = s.enabled ? Math.pow(10, s.preamp / 20) : 1;
   filters.forEach((f, i) => (f.gain.value = s.enabled ? (s.gains[i] ?? 0) : 0));

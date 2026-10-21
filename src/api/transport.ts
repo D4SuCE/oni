@@ -1,7 +1,8 @@
-// The platform shell (Electron today, Capacitor on iOS later) performs the
+// The platform shell (Electron on Windows, Capacitor on iOS) performs the
 // actual HTTP requests and keeps the token; the shared code only describes them.
 
 import { tr } from '../i18n.ts';
+import { capacitorTransport, isNativeIos } from './capacitor.ts';
 
 export interface HttpRequest {
   method?: 'GET' | 'POST';
@@ -24,6 +25,13 @@ export interface Transport {
   platform: string;
   /** Automated test run: don't send listening signals to the real account. */
   testMode?: boolean;
+  /**
+   * Web Audio may hear the music (equalizer, beat pulse): the desktop shell makes the audio CDN
+   * CORS-enabled; on iOS it can't, and a CORS request for the stream would not play at all.
+   */
+  canAnalyzeAudio?: boolean;
+  /** Uploading your own mp3 files into a playlist. */
+  canUpload?: boolean;
   request<T = any>(req: HttpRequest): Promise<HttpResponse<T>>;
   hasToken(): Promise<boolean>;
   setToken(value: string | null): Promise<void>;
@@ -94,5 +102,6 @@ declare global {
 
 export function platformTransport(): Transport {
   if (window.wave) return window.wave;
+  if (isNativeIos()) return capacitorTransport();
   throw new Error(tr().errors.noTransport);
 }

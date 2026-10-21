@@ -2,6 +2,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('wave', {
   platform: 'electron',
+  canAnalyzeAudio: true,
+  canUpload: true,
   testMode: ipcRenderer.sendSync('wave:test-mode'),
   request: (req) => ipcRenderer.invoke('ym:request', req),
   hasToken: () => ipcRenderer.invoke('ym:token:has'),

@@ -113,7 +113,7 @@ export function Sidebar() {
           </button>
         ))}
       </div>
-      <button className={cx('nav-item', route.name === 'settings' && 'active')} onClick={() => navigate({ name: 'settings' })} title={tip(t.nav.settings)}>
+      <button className={cx('nav-item', route.name === 'settings' && 'active')} onClick={() => navigate({ name: 'settings' })} title={tip(t.nav.settings)} data-testid="nav-settings">
         <Settings size={19} />
         <span className="nav-label">{t.nav.settings}</span>
         {updateReady && <span className="nav-dot" data-testid="update-dot" title={t.update.install} />}

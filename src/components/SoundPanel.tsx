@@ -2,7 +2,7 @@ import { Check, ChevronDown, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { StreamQuality } from '../api/yandex.ts';
 import { useT } from '../i18n.ts';
-import { EQ_BANDS, EQ_PRESETS, EQ_RANGE, applyPreset, setBand, setEqEnabled, setPreamp, useEq, type EqPreset } from '../player/eq.ts';
+import { EQ_BANDS, EQ_PRESETS, EQ_RANGE, applyPreset, canProcessAudio, setBand, setEqEnabled, setPreamp, useEq, type EqPreset } from '../player/eq.ts';
 import { setQuality, usePlayer } from '../player/player.ts';
 import { useApp } from '../store.ts';
 import { cx } from '../ui/util.ts';
@@ -118,25 +118,29 @@ export function SoundPanel() {
         ))}
         {stream && <div className="hint sound-now">{s.now(stream.codec, stream.bitrate)}</div>}
 
-        <label className="toggle-row sound-eq-toggle">
-          <span className="sound-eq-title">{s.equalizer}</span>
-          <input type="checkbox" className="switch" checked={eq.enabled} onChange={(e) => setEqEnabled(e.target.checked)} data-testid="eq-toggle" />
-        </label>
+        {canProcessAudio() && (
+          <>
+            <label className="toggle-row sound-eq-toggle">
+              <span className="sound-eq-title">{s.equalizer}</span>
+              <input type="checkbox" className="switch" checked={eq.enabled} onChange={(e) => setEqEnabled(e.target.checked)} data-testid="eq-toggle" />
+            </label>
 
-        <div className={cx('eq-grid', !eq.enabled && 'off')}>
-          <div className="eq-scale">
-            <span>+{EQ_RANGE} {s.db}</span>
-            <span>0 {s.db}</span>
-            <span>−{EQ_RANGE} {s.db}</span>
-          </div>
-          <EqSlider value={eq.preamp} onChange={setPreamp} label={s.level} testid="eq-preamp" />
-          <span className="eq-divider" />
-          {EQ_BANDS.map((hz, i) => (
-            <EqSlider key={hz} value={eq.gains[i] ?? 0} onChange={(v) => setBand(i, v)} label={band(hz)} testid={`eq-band-${i}`} />
-          ))}
-        </div>
+            <div className={cx('eq-grid', !eq.enabled && 'off')}>
+              <div className="eq-scale">
+                <span>+{EQ_RANGE} {s.db}</span>
+                <span>0 {s.db}</span>
+                <span>−{EQ_RANGE} {s.db}</span>
+              </div>
+              <EqSlider value={eq.preamp} onChange={setPreamp} label={s.level} testid="eq-preamp" />
+              <span className="eq-divider" />
+              {EQ_BANDS.map((hz, i) => (
+                <EqSlider key={hz} value={eq.gains[i] ?? 0} onChange={(v) => setBand(i, v)} label={band(hz)} testid={`eq-band-${i}`} />
+              ))}
+            </div>
 
-        <PresetPicker open={pickerOpen} setOpen={setPickerOpen} />
+            <PresetPicker open={pickerOpen} setOpen={setPickerOpen} />
+          </>
+        )}
       </div>
     </div>
   );

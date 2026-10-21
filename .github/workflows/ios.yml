@@ -1,0 +1,88 @@
+# iOS build on a cloud Mac: a simulator smoke test (launch, screenshot, app log) and an
+# unsigned Oni.ipa (signed later on the phone, see docs/ios-signing.md).
+# macOS minutes count ×10 on a private repo, so this runs only when the iOS side changes,
+# on version tags, and by hand.
+name: ios
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+    branches: [main, 'feat/ios*']
+    paths: ['ios/**', 'capacitor.config.ts', 'src/api/capacitor.ts', '.github/workflows/ios.yml']
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          xcrun simctl list runtimes | grep iOS || true
+      - run: npm ci
+      - name: Web build and sync
+        run: |
+          npx vite build
+          npx cap sync ios
+
+      - name: Simulator build
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/sim CODE_SIGNING_ALLOWED=NO build | tail -40
+      - name: Smoke test on a simulator
+        run: |
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c "
+          import json, sys
+          devices = json.load(sys.stdin)['devices']
+          print(next(d['udid'] for runtime, ds in sorted(devices.items(), reverse=True) if 'iOS' in runtime for d in ds if d['name'].startswith('iPhone')))")
+          echo "device $DEVICE"
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl install "$DEVICE" build/sim/Build/Products/Debug-iphonesimulator/App.app
+          xcrun simctl spawn "$DEVICE" log stream --level debug --style compact --predicate 'process == "App"' > app.log 2>&1 &
+          LOG=$!
+          xcrun simctl launch "$DEVICE" local.wave.player
+          sleep 25
+          xcrun simctl io "$DEVICE" screenshot launch.png
+          kill $LOG || true
+          echo "--- Capacitor and page messages ---"
+          grep -E "⚡️|\[log\]|\[warn\]|\[error\]|ERROR|TypeError|not implemented" app.log | head -80 || true
+          # The page must have started: the login screen asks the Keychain plugin for a token.
+          if grep -E "not implemented|TypeError|ReferenceError|SyntaxError" app.log; then echo "::error::the page failed on the simulator"; exit 1; fi
+
+      - name: Unsigned IPA
+        run: |
+          set -o pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build/device \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="${{ github.run_number }}" build | tail -20
+          mkdir -p Payload
+          cp -R build/device/Build/Products/Release-iphoneos/App.app Payload/
+          zip -qry "Oni-$VERSION.ipa" Payload
+          ls -la *.ipa
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios
+          path: |
+            launch.png
+            app.log
+            *.ipa
+          if-no-files-found: ignore

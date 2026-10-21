@@ -2538,15 +2538,16 @@ kbd {
     border-right: none;
     border-top: 1px solid var(--line);
   }
+  /* No collapsing on a phone; Settings joins the tab bar instead (sign-out, language). */
   .sidebar-top,
+  .sidebar-tools,
   .nav-section,
-  .nav-playlists,
-  .sidebar > .nav-item {
+  .nav-playlists {
     display: none;
   }
   .nav {
     flex-direction: row;
-    width: 100%;
+    flex: 1;
     justify-content: space-around;
   }
   .nav-item {
