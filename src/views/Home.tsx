@@ -10,6 +10,7 @@ import { useT } from '../i18n.ts';
 import { playTracks } from '../player/player.ts';
 import { isOwn, navigate, useApp } from '../store.ts';
 import { isIos } from '../ui/platform.ts';
+import { useUpdate } from '../ui/update.ts';
 import { cx, useAsync } from '../ui/util.ts';
 import { LikedSongsCard } from './Library.tsx';
 
@@ -63,6 +64,7 @@ export function Home() {
   const releases = useAsync(() => api.newReleases(18), []);
   const chart = useAsync(() => api.chart(), []);
   const t = useT();
+  const updateReady = useUpdate((s) => s.status === 'ready');
   const greeting = t.home.greeting(new Date().getHours());
 
   return (
@@ -79,8 +81,9 @@ export function Home() {
             <button className="icon-btn" onClick={() => navigate({ name: 'search' })} title={t.nav.search} data-testid="top-search">
               <Search size={21} />
             </button>
-            <button className="icon-btn" onClick={() => navigate({ name: 'settings' })} title={t.nav.settings} data-testid="top-settings">
+            <button className="icon-btn top-settings" onClick={() => navigate({ name: 'settings' })} title={t.nav.settings} data-testid="top-settings">
               <Settings size={21} />
+              {updateReady && <span className="nav-dot" title={t.update.iosInstall} />}
             </button>
           </>
         )}

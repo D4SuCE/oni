@@ -81,6 +81,8 @@ export interface UpdateState {
   version?: string;
   percent?: number;
   error?: string;
+  /** The iPhone: the new version's IPA, for SideStore. */
+  url?: string;
 }
 
 export type MiniCommand = 'toggle' | 'next' | 'prev' | 'like' | 'expand' | 'close';

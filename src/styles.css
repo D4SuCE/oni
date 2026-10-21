@@ -2871,6 +2871,14 @@ kbd {
   html.ios .home-top .greeting {
     margin: 0;
   }
+  html.ios .top-settings {
+    position: relative;
+  }
+  html.ios .top-settings .nav-dot {
+    top: 5px;
+    left: auto;
+    right: 5px;
+  }
 
   /* The wave banner: the tagline goes (a picked setting still shows there), less to read. */
   html.ios .wave-desc.tagline {

@@ -210,6 +210,15 @@ async function playlistActions() {
   report('playlist-actions', over === 0 && items.some((i) => /удалить|delete/i.test(i ?? '')), `${over} off screen; menu: ${items.join(', ')}`);
 }
 
+/** The update check reads the SideStore source (iosUpdate.ts): latest, or a newer one offered. */
+async function updateCheck() {
+  const { checkIosUpdate } = await import('./ui/iosUpdate.ts');
+  const { useUpdate } = await import('./ui/update.ts');
+  await checkIosUpdate();
+  const u = useUpdate.getState();
+  report('update-check', u.status === 'latest' || (u.status === 'ready' && Boolean(u.url)), `${u.status} ${u.version ?? ''} ${u.error ?? ''}`);
+}
+
 export async function runSmoke() {
   try {
     noZoom();
@@ -266,6 +275,7 @@ export async function runSmoke() {
     await tapToPlay();
     await uploadForm();
     await playlistActions();
+    await updateCheck();
   } catch (e) {
     report('crash', false, String(e));
   }

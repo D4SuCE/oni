@@ -248,6 +248,9 @@ const ru = {
     install: 'Перезапустить и обновить',
     releases: 'Все выпуски',
     readyToast: (v: string) => `Загружена версия ${v}. Обновить — в настройках`,
+    iosReady: (v: string) => `Вышла версия ${v}. «Обновить» откроет SideStore с ней (нужен включённый LocalDevVPN)`,
+    iosToast: (v: string) => `Вышла версия ${v}. Обновить — в настройках`,
+    iosInstall: 'Обновить',
   },
   toast: {
     hiddenFromMixes: 'Больше не появится в подборках',
@@ -697,6 +700,9 @@ const en: Dict = {
     install: 'Restart and update',
     releases: 'All releases',
     readyToast: (v) => `Version ${v} is downloaded. Update from Settings`,
+    iosReady: (v) => `Version ${v} is out. "Update" opens SideStore with it (LocalDevVPN must be on)`,
+    iosToast: (v) => `Version ${v} is out. Update in Settings`,
+    iosInstall: 'Update',
   },
   toast: {
     hiddenFromMixes: "Won't show up in your mixes again",

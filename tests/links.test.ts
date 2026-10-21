@@ -1,6 +1,7 @@
 // Links into the app (src/ui/links.ts): what an iPhone shortcut sends.
 // Run: npm run test:links
 import { searchFromLink } from '../src/ui/links.ts';
+import { isNewer } from '../src/ui/version.ts';
 
 let passed = 0;
 let failed = 0;
@@ -38,6 +39,14 @@ test('not ours: other schemes and other commands', () => {
   eq(searchFromLink('yandexmusic://search?text=x'), null);
   eq(searchFromLink('oni://play?text=x'), null);
   eq(searchFromLink('not a url'), null);
+});
+
+test('versions: the iPhone offers only a newer one', () => {
+  eq(isNewer('1.5.6', '1.5.5'), true);
+  eq(isNewer('1.5.10', '1.5.9'), true);
+  eq(isNewer('1.6.0', '1.5.12'), true);
+  eq(isNewer('1.5.5', '1.5.5'), false);
+  eq(isNewer('1.5.4', '1.5.5'), false);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

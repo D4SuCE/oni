@@ -17,7 +17,10 @@ connectDesktopShell();
 startBeatPulse();
 connectLinks();
 connectLongPress();
-if (isIos) connectTouchRanges();
+if (isIos) {
+  connectTouchRanges();
+  import('./ui/iosUpdate.ts').then((m) => m.watchIosUpdates());
+}
 document.documentElement.lang = useLang.getState().lang;
 
 createRoot(document.getElementById('root')!).render(

@@ -11,6 +11,7 @@ import { setMotion, setPulse, useMotion, usePulse } from '../ui/motion.ts';
 import { isIos } from '../ui/platform.ts';
 import { setPhoneSound, usePhoneSound } from '../player/phoneSound.ts';
 import { MAX_SEE_THROUGH, setSeeThrough, useSeeThrough } from '../ui/seeThrough.ts';
+import { checkIosUpdate, installIosUpdate } from '../ui/iosUpdate.ts';
 import { useUpdate } from '../ui/update.ts';
 import { cx } from '../ui/util.ts';
 
@@ -270,23 +271,25 @@ function UpdateRow() {
     checking: u.checking,
     latest: u.latest,
     downloading: u.downloading(update.version ?? '', update.percent ?? 0),
-    ready: u.ready(update.version ?? ''),
+    ready: isIos ? u.iosReady(update.version ?? '') : u.ready(update.version ?? ''),
     error: u.error(update.error ?? ''),
   }[update.status];
   return (
     <div className="settings-row update-row" data-testid="update" data-status={update.status}>
       <div className={cx('hint', update.status === 'ready' && 'update-ready')}>{text}</div>
       <div className="update-actions">
-        <button className="btn ghost" onClick={() => wave?.openReleases?.()}>
-          <ExternalLink size={16} /> {u.releases}
-        </button>
+        {!isIos && (
+          <button className="btn ghost" onClick={() => wave?.openReleases?.()}>
+            <ExternalLink size={16} /> {u.releases}
+          </button>
+        )}
         {update.status === 'ready' ? (
-          <button className="btn primary" onClick={() => wave?.installUpdate?.()} data-testid="update-install">
-            <Download size={16} /> {u.install}
+          <button className="btn primary" onClick={() => (isIos ? installIosUpdate() : wave?.installUpdate?.())} data-testid="update-install">
+            <Download size={16} /> {isIos ? u.iosInstall : u.install}
           </button>
         ) : (
           update.status !== 'portable' && (
-            <button className="btn ghost" disabled={update.status === 'checking' || update.status === 'downloading'} onClick={() => wave?.checkUpdate?.()} data-testid="update-check">
+            <button className="btn ghost" disabled={update.status === 'checking' || update.status === 'downloading'} onClick={() => (isIos ? checkIosUpdate() : wave?.checkUpdate?.())} data-testid="update-check">
               <RefreshCw size={16} /> {u.check}
             </button>
           )
