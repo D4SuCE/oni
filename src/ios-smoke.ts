@@ -50,6 +50,22 @@ function noZoom() {
   report('no-zoom', !small.length && /maximum-scale=1(?![\d.])/.test(viewport), `${fields.length} fields, small: ${small.join(',') || 'none'}`);
 }
 
+/** Now Playing on a phone: the collapse button below the status bar (taps up there belong to
+ * iOS), then a downward swipe from the cover, which must close the screen. */
+function nowPlayingCloses() {
+  const probe = Object.assign(document.createElement('div'), { style: 'position:fixed;top:0;height:env(safe-area-inset-top)' });
+  document.body.append(probe);
+  const safeTop = probe.getBoundingClientRect().height;
+  probe.remove();
+  const button = document.querySelector('.np-close')?.getBoundingClientRect();
+  report('np-close-reachable', Boolean(button && safeTop > 0 && button.top >= safeTop), `button at ${button?.top ?? '?'}, status bar ${safeTop}`);
+  const from = document.querySelector('.np-cover') ?? document.querySelector('.nowplaying')!;
+  const at = (y: number) => ({ pointerId: 7, pointerType: 'touch', isPrimary: true, clientX: 200, clientY: y, bubbles: true });
+  from.dispatchEvent(new PointerEvent('pointerdown', at(300)));
+  for (const y of [340, 420, 520]) window.dispatchEvent(new PointerEvent('pointermove', at(y)));
+  window.dispatchEvent(new PointerEvent('pointerup', at(520)));
+}
+
 export async function runSmoke() {
   try {
     noZoom();
@@ -70,6 +86,10 @@ export async function runSmoke() {
     click('.pb-cover');
     report('now-playing', await until(() => document.querySelector('.nowplaying'), 5000));
     await sleep(2500);
+    nowPlayingCloses();
+    report('np-swipe-down', await until(() => !document.querySelector('.nowplaying'), 3000));
+    click('.pb-cover');
+    await until(() => document.querySelector('.nowplaying'), 5000);
 
     // Download: the track goes to the app's folder (encrypted) and then plays from there.
     const track = queue[index];
