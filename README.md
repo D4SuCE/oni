@@ -25,6 +25,17 @@ npm run dist
 Код не подписан, поэтому при первом запуске Windows SmartScreen может показать
 «Система Windows защитила ваш компьютер» → «Подробнее» → «Выполнить в любом случае».
 
+## Выпуск версии
+
+Номер версии — в `package.json`; его показывают настройки и имена установщиков.
+Что изменилось — в [CHANGELOG.md](CHANGELOG.md).
+
+1. Перенести пункты из «Не выпущено» в новый раздел `## [x.y.z] — <дата>` и
+   поправить ссылки внизу файла.
+2. `npm version x.y.z --no-git-tag-version` — меняет `package.json` и `package-lock.json`.
+3. Коммит «Release x.y.z», затем `git tag vx.y.z` и `git push --follow-tags`.
+4. `npm run dist` — установщики с новым номером появятся в `release/`.
+
 ## Запуск для разработки
 
 ```sh
@@ -43,7 +54,7 @@ Electron. Чтобы открыть dev-сервер в Electron, задайте
 ## Проверки
 
 ```sh
-npm run check      # всё быстрое разом: typecheck + lint + test:wave
+npm run check      # всё быстрое разом: typecheck + lint + тесты волны, рекомендаций, ритма
 npm run typecheck  # TypeScript
 npm run lint       # oxlint, в том числе правило lint/wave-plugin.js
 npm run icons      # пересобрать иконки из design/oni-icon-1024.png
