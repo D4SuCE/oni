@@ -1,5 +1,5 @@
 // Desktop shell test: remembered window bounds, track in the window title, taskbar
-// commands, and close-to-tray. Needs YANDEX_MUSIC_TOKEN like e2e.mjs; muted, isolated profile.
+// commands, the mini player (and what happens if its window dies), and close-to-tray. Needs YANDEX_MUSIC_TOKEN like e2e.mjs; muted, isolated profile.
 // Run: npm run test:e2e (runs after e2e.mjs)
 import { _electron as electron } from 'playwright-core';
 import fs from 'node:fs';
@@ -41,6 +41,46 @@ async function step(name, fn) {
 
 let { app, page } = await launch();
 
+/** Opens the mini player from the main window and waits for its page. */
+async function openMini() {
+  const opened = app.waitForEvent('window');
+  await page.click('[data-testid="mini-button"]');
+  const mini = await opened;
+  await mini.waitForSelector('[data-testid="mini"]');
+  await page.waitForTimeout(500);
+  return mini;
+}
+const mainShown = () => win(app, (w) => w.isVisible() && !w.isMinimized());
+const miniOpen = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((w) => w.webContents.getURL().endsWith('#mini')));
+/** Calls into electron/desktop.cjs as loaded by the app (the tray itself can't be clicked from here). */
+const shellModule = path.join(root, 'electron', 'desktop.cjs');
+const shell = (fn) => app.evaluate((_e, [file, name]) => process.mainModule.require(file)[name](), [shellModule, fn]);
+
+await step('mini player with nothing playing puts Oni in the tray; a crash brings the main window back', async () => {
+  if (await shell('hasTray')) throw new Error('tray icon without close-to-tray and mini player');
+  const mini = await openMini();
+  const text = await mini.locator('[data-testid="mini-title"]').innerText();
+  if (!/Ничего не играет/.test(text)) throw new Error(`mini title "${text}"`);
+  // Never no way back: the main window waits in the tray.
+  if (await mainShown()) throw new Error('main window should be in the tray');
+  if (!(await shell('hasTray'))) throw new Error('no tray icon while the mini player is open');
+  // The mini's page dies: the app must not be left with no window to click.
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().endsWith('#mini')).webContents.forcefullyCrashRenderer());
+  await page.waitForTimeout(1500);
+  if (await miniOpen()) throw new Error('crashed mini window still open');
+  if (!(await mainShown())) throw new Error('main window did not come back');
+  if (await shell('hasTray')) throw new Error('tray icon left behind');
+});
+
+await step('the tray icon brings the main window back and closes the mini player', async () => {
+  await openMini();
+  await shell('showWindow'); // what a click on the tray icon (or "Show", or starting Oni again) does
+  await page.waitForTimeout(1000);
+  if (await miniOpen()) throw new Error('mini still open');
+  if (!(await mainShown())) throw new Error('main window not shown');
+  if (await shell('hasTray')) throw new Error('tray icon left behind');
+});
+
 await step('window bounds survive a restart', async () => {
   const want = { x: 140, y: 90, width: 1100, height: 700 };
   await win(app, (w, b) => w.setBounds(b), want);
@@ -72,7 +112,7 @@ await step('taskbar commands drive the player', async () => {
   await page.evaluate(() => window.__wave.audio.pause());
 });
 
-await step('mini player: remote for the hidden main window', async () => {
+await step('mini player: remote for the main window in the tray', async () => {
   await page.evaluate(() => window.__wave.audio.play());
   await page.waitForFunction(() => !window.__wave.audio.paused, null, { timeout: 10000 });
   const opened = app.waitForEvent('window');
@@ -85,7 +125,7 @@ await step('mini player: remote for the hidden main window', async () => {
   });
   await mini.waitForFunction((t) => document.querySelector('[data-testid="mini-title"]')?.textContent === t, title, { timeout: 5000 });
   await page.waitForTimeout(500);
-  if (await win(app, (w) => w.isVisible())) throw new Error('main window should hide');
+  if (await mainShown()) throw new Error('main window should be in the tray');
   await mini.click('[data-testid="mini-toggle"]');
   await page.waitForFunction(() => window.__wave.audio.paused, null, { timeout: 5000 });
   const closed = new Promise((r) => mini.once('close', r));
@@ -93,7 +133,7 @@ await step('mini player: remote for the hidden main window', async () => {
   await mini.click('[data-testid="mini-expand"]', { noWaitAfter: true }).catch(() => {});
   await closed;
   await page.waitForTimeout(500);
-  if (!(await win(app, (w) => w.isVisible()))) throw new Error('main window should come back');
+  if (!(await mainShown())) throw new Error('main window should come back');
 });
 
 await step('close-to-tray hides the window, and closing quits without it', async () => {

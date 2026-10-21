@@ -43,6 +43,7 @@ function writeLog(level, source, message) {
   }
 }
 
+desktop.setLogger((level, message) => writeLog(level, 'shell', message));
 process.on('uncaughtException', (e) => writeLog('error', 'main', e?.stack || e));
 process.on('unhandledRejection', (e) => writeLog('error', 'main', e?.stack || e));
 

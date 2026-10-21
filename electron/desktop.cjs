@@ -15,6 +15,12 @@ let quitting = false;
 /** Last playback state reported by the page, including localized labels. */
 let state = { hasTrack: false, playing: false, title: '', artist: '', labels: {} };
 
+/** (level, message) => void; main.cjs points it at the app log. */
+let log = () => {};
+const setLogger = (fn) => {
+  log = fn;
+};
+
 const FALLBACK_LABELS = { play: 'Play', pause: 'Pause', next: 'Next track', prev: 'Previous track', show: 'Show Oni', quit: 'Quit', nothing: 'Nothing playing' };
 const label = (key) => state.labels?.[key] || FALLBACK_LABELS[key];
 
@@ -58,6 +64,8 @@ function command(cmd) {
 }
 
 function showWindow() {
+  // While the mini player is open the main window waits in the tray: closing the mini player brings it back.
+  if (mini && !mini.isDestroyed()) return closeMini();
   if (!win || win.isDestroyed()) return;
   if (win.isMinimized()) win.restore();
   win.show();
@@ -95,6 +103,9 @@ function updateTray() {
     ]),
   );
 }
+
+/** The tray icon is there with "close to tray" on, and always while the mini player is open. */
+const syncTray = () => setTray(Boolean(prefs.closeToTray) || Boolean(mini && !mini.isDestroyed()));
 
 function setTray(enabled) {
   if (enabled && !tray) {
@@ -141,7 +152,7 @@ function attachWindow(w) {
     remember();
     savePrefs();
   });
-  setTray(Boolean(prefs.closeToTray));
+  syncTray();
 }
 
 app.on('before-quit', () => {
@@ -167,6 +178,16 @@ function miniBounds() {
   return { x: area.x + area.width - MINI.width - 24, y: area.y + area.height - MINI.height - 24, ...MINI };
 }
 
+// While the mini player is open the main window waits in the tray, so there is always a way
+// back to Oni, whatever happens to the mini window; the tray icon brings it back.
+const MINI_SHOW_TIMEOUT = 8000;
+
+function closeMini(reason) {
+  if (!mini || mini.isDestroyed()) return;
+  if (reason) log('warn', `mini player closed: ${reason}`);
+  mini.destroy();
+}
+
 function openMini() {
   if (mini && !mini.isDestroyed()) return mini.focus();
   mini = new BrowserWindow({
@@ -187,16 +208,27 @@ function openMini() {
   });
   if (process.env.VITE_DEV_URL) mini.loadURL(`${process.env.VITE_DEV_URL}#mini`);
   else mini.loadFile(path.join(__dirname, '..', 'dist', 'index.html'), { hash: 'mini' });
+  const self = mini;
+  const notShown = setTimeout(() => self === mini && closeMini('did not show up'), MINI_SHOW_TIMEOUT);
   mini.once('ready-to-show', () => {
+    clearTimeout(notShown);
     mini.showInactive();
+    const b = mini.getBounds();
+    log('info', `mini player opened at ${b.x},${b.y} on display ${screen.getDisplayMatching(b).id}`);
+    syncTray();
     if (win && !win.isDestroyed()) win.hide();
   });
+  // A dead page leaves an empty see-through window: close it and bring the main one back.
+  mini.webContents.on('render-process-gone', (_e, details) => closeMini(`page gone: ${details.reason} (exit ${details.exitCode})`));
+  mini.on('unresponsive', () => closeMini('not responding'));
   mini.on('moved', () => {
     prefs.miniBounds = mini.getBounds();
     savePrefs();
   });
   mini.on('closed', () => {
+    clearTimeout(notShown);
     mini = null;
+    syncTray();
     showWindow();
   });
 }
@@ -231,7 +263,10 @@ ipcMain.on('wave:shell:prefs', (e) => {
 ipcMain.on('wave:shell:close-to-tray', (_e, enabled) => {
   prefs.closeToTray = Boolean(enabled);
   savePrefs();
-  setTray(prefs.closeToTray);
+  syncTray();
 });
 
-module.exports = { windowBounds, attachWindow, showWindow, openMini, asset };
+/** For tests: whether the tray icon is there. */
+const hasTray = () => Boolean(tray);
+
+module.exports = { windowBounds, attachWindow, showWindow, openMini, asset, setLogger, hasTray };
