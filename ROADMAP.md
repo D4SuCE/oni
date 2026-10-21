@@ -24,7 +24,8 @@
 
 **Осталось:**
 1. *На GitHub* ([D4SuCE/oni](https://github.com/D4SuCE/oni), приватный; CI и автообновление
-   уже работают): iOS (сборка только на облачном Mac), затем Apple Watch Ultra
+   уже работают): iOS — каркас готов и запускается на симуляторе, дальше подпись и проверка
+   на телефоне; затем Apple Watch Ultra
    (своё приложение на часах — скорее всего платный Apple Developer).
 2. *Известное:* Яндекс отдаёт этому аккаунту только MP3 192 кбит/с на любом уровне качества;
    подпись кода Windows (SmartScreen) — по желанию, платно.
@@ -250,14 +251,22 @@
 нужна облачная сборка (GitHub Actions на macOS-раннере). Подробности о подписи —
 в [docs/ios-signing.md](docs/ios-signing.md).
 
-- [ ] Каркас Capacitor (`ios/`), сборка того же интерфейса.
-- [ ] Нативный `Transport`: HTTP-запросы через `CapacitorHttp` (без CORS) и токен
-      в Keychain вместо `safeStorage`.
-- [ ] Вход: OAuth Яндекса через `ASWebAuthenticationSession` (in-app browser).
-- [ ] Фоновое воспроизведение (`UIBackgroundModes: audio`) и экран блокировки
-      (Media Session → `MPNowPlayingInfoCenter`).
-- [ ] Адаптация интерфейса под телефон (узкая раскладка уже есть, нужны safe areas и жесты).
-- [ ] CI-сборка IPA с автоматической подписью.
+- [x] Каркас Capacitor 8 (`ios/`, Swift Package Manager — без CocoaPods, создаётся и на Windows),
+      тот же интерфейс. Иконка и экран запуска — маска они.
+- [x] Нативный `Transport` (`src/api/capacitor.ts`): запросы через `CapacitorHttp` (без CORS),
+      токен в Keychain — свой плагин `OniKeychain` в `ios/App/App/OniBridge.swift`.
+- [~] Вход: встроенный браузер (`@capacitor/inappbrowser`) ловит редирект с `access_token`, как окно
+      входа на Windows (`ASWebAuthenticationSession` не подходит: редирект Яндекса не на нашу схему).
+      Запасной путь — вставить токен. **Проверить на телефоне.**
+- [~] Фоновое воспроизведение: `UIBackgroundModes: audio`, аудиосессия `.playback`. Экран блокировки
+      и «Исполняется» на часах — через Media Session API WebKit (плеер её уже заполняет).
+      **Проверить на телефоне**; если не появится — свой плагин `MPNowPlayingInfoCenter`.
+- [x] Телефонная раскладка: safe areas были; «Настройки» в нижнем меню вместо ☰. Эквалайзер и
+      пульсация на iOS скрыты (Web Audio без CORS-потока слышит тишину), загрузка mp3 — только на ПК.
+- [x] CI (`.github/workflows/ios.yml`, ~4 мин Mac): сборка для симулятора с запуском на iPhone
+      (снимок экрана, консоль страницы, проверка Keychain) и неподписанный `Oni-<версия>.ipa`.
+- [ ] Подпись и установка: путь A (SideStore, бесплатно) или B (TestFlight, $99/год) — решение
+      пользователя, см. [docs/ios-signing.md](docs/ios-signing.md).
 
 ## Этап 6. Apple Watch Ultra
 
