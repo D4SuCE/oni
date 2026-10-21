@@ -4,6 +4,7 @@
 // sent to the account: test mode keeps wave feedback and listening reports off.
 
 import { OniLogin } from './api/capacitor.ts';
+import type { Track } from './api/types.ts';
 import { transport } from './api/client.ts';
 import { OniRemote } from './player/remote.ts';
 import { OniVolume } from './player/volume.ts';
@@ -179,13 +180,14 @@ async function touchSeek() {
  * folder, is sealed into the library, and the books are clear. One track, removed afterwards. */
 async function backgroundDownload() {
   const { queue, index } = wave().usePlayer.getState();
-  const track = (queue as unknown as { id: string }[]).slice(index + 1).find((t) => !wave().offline!.has(t.id));
-  if (!background || !track) return report('background-download', false, background ? 'no track to try' : 'no background');
+  const track = (queue as unknown as Track[]).slice(index + 1).find((t) => !wave().offline!.has(String(t.id)));
+  const bg = background;
+  if (!bg || !track) return report('background-download', false, bg ? 'no track to try' : 'no background');
   const started = Date.now();
-  await background.add('smoke', [track]);
-  const kept = await until(() => wave().offline!.has(track.id) && !background.pendingFor('smoke'), 90000);
-  report('background-download', kept, `${((Date.now() - started) / 1000).toFixed(1)} s, pending ${background.pendingFor('smoke')}`);
-  await (wave().offline as unknown as { remove(id: string): Promise<void> }).remove(track.id);
+  await bg.add('smoke', [track]);
+  const kept = await until(() => wave().offline!.has(String(track.id)) && !bg.pendingFor('smoke'), 90000);
+  report('background-download', kept, `${((Date.now() - started) / 1000).toFixed(1)} s, pending ${bg.pendingFor('smoke')}`);
+  await (wave().offline as unknown as { remove(id: string): Promise<void> }).remove(String(track.id));
 }
 
 export async function runSmoke() {
