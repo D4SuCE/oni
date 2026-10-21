@@ -72,6 +72,12 @@ jobs:
           shot now-playing.png
           for i in $(seq 1 60); do grep -q "SMOKE done" console.log && break; sleep 1; done
           shot search-link.png
+          # The native player in the background: away to Settings for 25 s, then back
+          # (src/ios-smoke.ts, backgroundProbe, reports whether the music and the page ran).
+          xcrun simctl launch "$DEVICE" com.apple.Preferences > /dev/null || true
+          sleep 25
+          xcrun simctl launch "$DEVICE" local.wave.player > /dev/null || true
+          for i in $(seq 1 20); do grep -q "SMOKE background-life" console.log && break; sleep 1; done
           kill $LOG $APP || true
           scrub
           echo "--- smoke ---"

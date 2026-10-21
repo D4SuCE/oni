@@ -7,6 +7,7 @@ import { OniLogin } from './api/capacitor.ts';
 import type { Track } from './api/types.ts';
 import { transport } from './api/client.ts';
 import { OniRemote } from './player/remote.ts';
+import { OniPlayer } from './player/nativeAudio.ts';
 import { OniVolume } from './player/volume.ts';
 import { background } from './ui/offline.ts';
 
@@ -134,36 +135,35 @@ async function uploadForm() {
   report('upload-form', false, 'no echo service answered');
 }
 
-/** Equalizer and volume on the iPhone (src/player/processing.ts) rest on this: Web Audio hears a
- * track fetched whole through the native HTTP stack and played from memory. A separate element
- * and context, muted at the end, so the main player is untouched. */
-async function webAudioFromMemory() {
-  const { queue, index } = wave().usePlayer.getState();
-  const track = queue[index] as unknown as { id: string };
-  wave().audio.pause();
-  try {
-    const stream = await (wave() as unknown as { api: { stream(id: string): Promise<{ url: string }> } }).api.stream(track.id);
-    const bytes = await transport.fetchBytes!(stream.url);
-    const el = new Audio(URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' })));
-    const ctx = new AudioContext();
-    const analyser = ctx.createAnalyser();
-    const mute = ctx.createGain();
-    mute.gain.value = 0;
-    ctx.createMediaElementSource(el).connect(analyser).connect(mute).connect(ctx.destination);
-    await ctx.resume();
-    await el.play();
-    await sleep(2500);
-    const data = new Float32Array(analyser.fftSize);
-    analyser.getFloatTimeDomainData(data);
-    const rms = Math.sqrt(data.reduce((s, v) => s + v * v, 0) / data.length);
-    el.pause();
-    await ctx.close();
-    report('web-audio-memory', rms > 0.001, `rms ${rms.toFixed(4)}, ${(bytes.byteLength / 1e6).toFixed(1)} MB`);
-  } catch (e) {
-    report('web-audio-memory', false, String(e));
-  }
-  await wave().audio.play().catch(() => {});
+/** The native player (nativeAudio.ts): it plays, and its system equalizer takes the settings. */
+async function nativePlayer() {
+  const before = await OniPlayer.state();
+  await OniPlayer.setEq({ enabled: true, preamp: -3, gains: [6, 4, 2, 0, 0, 0, 0, 2, 3, 3] });
+  const on = await OniPlayer.state();
+  await OniPlayer.setEq({ enabled: false, preamp: 0, gains: [] });
+  report('native-player', before.playing && before.time > 1 && on.eq, JSON.stringify({ ...before, eq: on.eq }));
 }
+
+/** Does the page keep running while the app is in the background with the native player on? The
+ * workflow sends the app away for 25 s and back; a tick every 2 s shows whether this page ran. */
+function backgroundProbe() {
+  let hiddenAt = 0;
+  let timeAt = 0;
+  let ticks = 0;
+  setInterval(() => document.hidden && ticks++, 2000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      hiddenAt = Date.now();
+      timeAt = wave().audio.currentTime;
+      ticks = 0;
+      return;
+    }
+    const away = (Date.now() - hiddenAt) / 1000;
+    const played = wave().audio.currentTime - timeAt;
+    console.log(`SMOKE background-life ${played > away / 2 ? 'ok' : 'FAIL'} away ${away.toFixed(0)} s, music moved ${played.toFixed(0)} s, page ticks ${ticks}`);
+  });
+}
+
 
 /** Now Playing's seek bar: a tap in its middle (not on the thumb) takes the track there, once,
  * when the finger lifts (src/ui/touchRange.ts, SeekBar). */
@@ -250,7 +250,7 @@ export async function runSmoke() {
     await wave().playTracks([track], 0, 'smoke');
     const local = await until(() => wave().audio.src.startsWith('blob:') && !wave().audio.paused && wave().audio.currentTime > 1, 20000);
     report('offline-playback', local, wave().audio.src.slice(0, 5));
-    await webAudioFromMemory();
+    await nativePlayer();
     await backgroundDownload();
 
     // A shortcut's link. The page asks iOS to open it (Capacitor hands non-web addresses to the
@@ -269,5 +269,6 @@ export async function runSmoke() {
   } catch (e) {
     report('crash', false, String(e));
   }
+  backgroundProbe();
   console.log('SMOKE done');
 }

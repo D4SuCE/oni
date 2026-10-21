@@ -1,0 +1,172 @@
+// The iPhone's audio element: the OniPlayer plugin (ios/App/App/OniBridge.swift) behind the part
+// of HTMLAudioElement the player uses (src, play, pause, currentTime, duration, paused, ended and
+// its events), so the queue, the wave and history work as on the desktop. WebKit's own element
+// took the lock screen with -10 s / +10 s, and its Web Audio equalizer lagged behind seeks and
+// went silent with the screen locked (checked by the user on 1.5.4).
+
+import { registerPlugin } from '@capacitor/core';
+import { Directory, Filesystem } from '@capacitor/filesystem';
+import { toBase64 } from '../api/bytes.ts';
+
+interface PlayerPlugin {
+  open(options: { id: string; url?: string; file?: string; ext: string; keep: string[] }): Promise<{ duration: number }>;
+  fetch(options: { id: string; url: string; ext: string }): Promise<void>;
+  play(): Promise<void>;
+  pause(): Promise<void>;
+  seek(options: { time: number }): Promise<void>;
+  setEq(options: { enabled: boolean; preamp: number; gains: number[] }): Promise<void>;
+  setGain(options: { value: number }): Promise<void>;
+  state(): Promise<{ time: number; duration: number; playing: boolean; eq: boolean }>;
+  addListener(event: 'time', cb: (e: { time: number; duration: number; playing: boolean }) => void): Promise<unknown>;
+  addListener(event: 'ended', cb: () => void): Promise<unknown>;
+}
+
+export const OniPlayer = registerPlugin<PlayerPlugin>('OniPlayer');
+
+/** The file name ending AVAudioFile reads a codec by. */
+export function audioExt(codec: string) {
+  if (/mp4/.test(codec)) return 'm4a';
+  if (/flac/.test(codec)) return 'flac';
+  if (/aac/.test(codec)) return 'aac';
+  return 'mp3';
+}
+
+/** After a play or pause from here, the plugin's clock may still report the old state a moment. */
+const SETTLE_MS = 600;
+
+export class NativeAudio extends EventTarget {
+  preload = 'auto';
+  crossOrigin: string | null = null;
+  /** iOS's volume is the phone's (volume.ts); levelling goes through OniPlayer.setGain. */
+  volume = 1;
+  error: { message: string } | null = null;
+  /** What the next `src` is: the track's id, its file ending, and the ids whose files to keep. */
+  next = { id: '', ext: 'mp3', keep: [] as string[] };
+
+  private source = '';
+  private time = 0;
+  private at = 0;
+  private length = NaN;
+  private stopped = true;
+  private over = false;
+  private opening: Promise<void> = Promise.resolve();
+  private seq = 0;
+  private commandAt = 0;
+
+  constructor() {
+    super();
+    OniPlayer.addListener('time', (e) => {
+      this.time = e.time;
+      this.at = performance.now();
+      if (e.duration && e.duration !== this.length) {
+        this.length = e.duration;
+        this.emit('durationchange');
+      }
+      // A call or unplugged headphones paused it natively: the page shows it.
+      if (performance.now() - this.commandAt > SETTLE_MS && e.playing === this.stopped) {
+        this.stopped = !e.playing;
+        this.emit(e.playing ? 'playing' : 'pause');
+      }
+      this.emit('timeupdate');
+    });
+    OniPlayer.addListener('ended', () => {
+      this.stopped = true;
+      this.over = true;
+      this.time = this.length;
+      this.emit('pause');
+      this.emit('ended');
+    });
+  }
+
+  get src() {
+    return this.source;
+  }
+
+  set src(value: string) {
+    this.source = value;
+    this.stopped = true;
+    this.over = false;
+    this.time = 0;
+    this.length = NaN;
+    this.error = null;
+    const seq = ++this.seq;
+    this.emit('emptied');
+    this.emit('waiting');
+    this.opening = this.open(value, seq);
+    this.opening.catch(() => {});
+  }
+
+  private async open(value: string, seq: number) {
+    const { id, ext, keep } = this.next;
+    try {
+      let opened: { duration: number };
+      if (value.startsWith('blob:')) {
+        // A downloaded track, decrypted by the page: written where the player reads it.
+        const bytes = new Uint8Array(await (await fetch(value)).arrayBuffer());
+        const file = `${id}.${ext}`;
+        await Filesystem.writeFile({ path: `oni-play/${file}`, directory: Directory.Cache, data: toBase64(bytes), recursive: true });
+        opened = await OniPlayer.open({ id, file, ext, keep });
+      } else opened = await OniPlayer.open({ id, url: value, ext, keep });
+      if (seq !== this.seq) return;
+      this.length = opened.duration;
+      for (const e of ['durationchange', 'loadedmetadata', 'loadeddata', 'canplay']) this.emit(e);
+    } catch (e) {
+      if (seq !== this.seq) return;
+      this.error = { message: String(e) };
+      this.emit('error');
+      throw e;
+    }
+  }
+
+  get currentTime() {
+    if (this.stopped) return this.time;
+    return Math.min(this.time + (performance.now() - this.at) / 1000, Number.isFinite(this.length) ? this.length : Infinity);
+  }
+
+  set currentTime(value: number) {
+    this.time = value;
+    this.at = performance.now();
+    this.over = false;
+    this.emit('seeking');
+    this.opening
+      .then(() => OniPlayer.seek({ time: value }))
+      .then(() => this.emit('seeked'))
+      .catch(() => {});
+  }
+
+  get duration() {
+    return this.length;
+  }
+
+  get paused() {
+    return this.stopped;
+  }
+
+  get ended() {
+    return this.over;
+  }
+
+  async play() {
+    await this.opening;
+    this.commandAt = performance.now();
+    this.stopped = false;
+    this.over = false;
+    this.at = performance.now();
+    this.emit('play');
+    await OniPlayer.play();
+    this.emit('playing');
+  }
+
+  pause() {
+    if (this.stopped) return;
+    this.commandAt = performance.now();
+    this.time = this.currentTime;
+    this.stopped = true;
+    this.emit('pause');
+    OniPlayer.pause().catch(() => {});
+  }
+
+  private emit(type: string) {
+    this.dispatchEvent(new Event(type));
+  }
+}

@@ -13,6 +13,7 @@ class OniViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(RemotePlugin())
         bridge?.registerPluginInstance(VolumePlugin())
         bridge?.registerPluginInstance(DownloadsPlugin())
+        bridge?.registerPluginInstance(PlayerPlugin())
         #if DEBUG
         // Automated runs on the simulator (.github/workflows/ios.yml): sign in with the token the
         // runner passes, and tell the page it is a test (no listening signals to the account,
@@ -440,6 +441,353 @@ public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDel
         DispatchQueue.main.async {
             DownloadsPlugin.backgroundCompletion?()
             DownloadsPlugin.backgroundCompletion = nil
+        }
+    }
+}
+
+/// The iPhone's music player. WebKit's own (an <audio> element) took the lock screen with
+/// -10 s / +10 s, and its Web Audio equalizer lagged a second or two behind every seek and went
+/// silent when the screen locked. This plays in the app itself: AVAudioEngine, a player node and
+/// the system's 10-band equalizer. A track is fetched whole into Caches/oni-play first (the next
+/// ones ahead of time); downloaded tracks are written there decrypted by the page. The page sees
+/// it as an audio element: src/player/nativeAudio.ts. JS: registerPlugin('OniPlayer').
+@objc(PlayerPlugin)
+public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "PlayerPlugin"
+    public let jsName = "OniPlayer"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "open", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "fetch", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "play", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "pause", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "seek", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setEq", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setGain", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "state", returnType: CAPPluginReturnPromise),
+    ]
+
+    /// The equalizer's bands, as on the desktop (src/player/eq.ts).
+    static let bands: [Float] = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000]
+
+    private let engine = AVAudioEngine()
+    private let node = AVAudioPlayerNode()
+    private let eq = AVAudioUnitEQ(numberOfBands: 10)
+    private var file: AVAudioFile?
+    private var format: AVAudioFormat?
+    /// Where the current schedule starts, in frames; position = this + what the node has played.
+    private var startFrame: AVAudioFramePosition = 0
+    /// Bumped on every new schedule: the completion of an older one (stopped, replaced) is ignored.
+    private var generation = 0
+    private var playing = false
+    private var pausedAt: Double = 0
+    private var timer: Timer?
+    private var fetches: [String: [(Result<URL, Error>) -> Void]] = [:]
+    private let lock = NSLock()
+
+    static var folder: URL {
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("oni-play", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    override public func load() {
+        for (i, band) in eq.bands.enumerated() {
+            band.frequency = PlayerPlugin.bands[i]
+            band.filterType = i == 0 ? .lowShelf : (i == PlayerPlugin.bands.count - 1 ? .highShelf : .parametric)
+            band.bandwidth = 1.0
+            band.gain = 0
+            band.bypass = false
+        }
+        eq.bypass = true
+        engine.attach(node)
+        engine.attach(eq)
+        engine.connect(eq, to: engine.mainMixerNode, format: nil)
+        let center = NotificationCenter.default
+        center.addObserver(self, selector: #selector(interrupted(_:)), name: AVAudioSession.interruptionNotification, object: nil)
+        center.addObserver(self, selector: #selector(routeChanged(_:)), name: AVAudioSession.routeChangeNotification, object: nil)
+        center.addObserver(self, selector: #selector(configurationChanged(_:)), name: .AVAudioEngineConfigurationChange, object: engine)
+    }
+
+    // MARK: files
+
+    /// { id, url, ext } — fetches a track into the cache ahead of time (no-op if it is there).
+    @objc func fetch(_ call: CAPPluginCall) {
+        guard let id = call.getString("id"), let url = call.getString("url") else {
+            call.reject("id and url are required")
+            return
+        }
+        localFile(id: id, url: url, ext: call.getString("ext") ?? "mp3") { result in
+            switch result {
+            case .success: call.resolve()
+            case .failure(let error): call.reject(error.localizedDescription)
+            }
+        }
+    }
+
+    private func cached(_ id: String, _ ext: String) -> URL {
+        return PlayerPlugin.folder.appendingPathComponent(id + "." + ext)
+    }
+
+    /// The track's file: from the cache, or downloaded once however many ask meanwhile.
+    private func localFile(id: String, url: String, ext: String, done: @escaping (Result<URL, Error>) -> Void) {
+        let target = cached(id, ext)
+        if FileManager.default.fileExists(atPath: target.path) {
+            done(.success(target))
+            return
+        }
+        guard let remote = URL(string: url) else {
+            done(.failure(URLError(.badURL)))
+            return
+        }
+        lock.lock()
+        let first = fetches[id] == nil
+        fetches[id, default: []].append(done)
+        lock.unlock()
+        guard first else { return }
+        URLSession.shared.downloadTask(with: remote) { [weak self] location, response, error in
+            var result: Result<URL, Error>
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if let location = location, (200..<300).contains(status) {
+                try? FileManager.default.removeItem(at: target)
+                do {
+                    try FileManager.default.moveItem(at: location, to: target)
+                    result = .success(target)
+                } catch {
+                    result = .failure(error)
+                }
+            } else {
+                result = .failure(error ?? URLError(.badServerResponse))
+            }
+            guard let self = self else { return }
+            self.lock.lock()
+            let waiting = self.fetches.removeValue(forKey: id) ?? []
+            self.lock.unlock()
+            waiting.forEach { $0(result) }
+        }.resume()
+    }
+
+    /// Keeps the cache to the tracks the page still needs (the playing one and those ahead).
+    private func trim(keeping ids: [String]) {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: PlayerPlugin.folder.path)) ?? []
+        for name in names where !ids.contains(where: { name.hasPrefix($0 + ".") }) {
+            try? FileManager.default.removeItem(at: PlayerPlugin.folder.appendingPathComponent(name))
+        }
+    }
+
+    // MARK: playback
+
+    /// { id, url?, file?, ext, keep: [ids] } — opens a track (from a URL, or a file the page wrote
+    /// into the cache folder) at its start, paused; resolves { duration }.
+    @objc func open(_ call: CAPPluginCall) {
+        guard let id = call.getString("id") else {
+            call.reject("id is required")
+            return
+        }
+        let ext = call.getString("ext") ?? "mp3"
+        let keep = call.getArray("keep", String.self) ?? [id]
+        let opened: (Result<URL, Error>) -> Void = { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                switch result {
+                case .failure(let error):
+                    call.reject(error.localizedDescription)
+                case .success(let url):
+                    do {
+                        let file = try AVAudioFile(forReading: url)
+                        self.begin(file)
+                        self.trim(keeping: keep)
+                        call.resolve(["duration": Double(file.length) / file.processingFormat.sampleRate])
+                    } catch {
+                        call.reject("cannot open: " + error.localizedDescription)
+                    }
+                }
+            }
+        }
+        if let name = call.getString("file") {
+            opened(.success(PlayerPlugin.folder.appendingPathComponent(name)))
+        } else if let url = call.getString("url") {
+            localFile(id: id, url: url, ext: ext, done: opened)
+        } else {
+            call.reject("url or file is required")
+        }
+    }
+
+    private func begin(_ file: AVAudioFile) {
+        generation += 1
+        node.stop()
+        stopTimer()
+        playing = false
+        pausedAt = 0
+        if format != file.processingFormat {
+            engine.disconnectNodeOutput(node)
+            engine.connect(node, to: eq, format: file.processingFormat)
+            format = file.processingFormat
+        }
+        self.file = file
+        schedule(from: 0)
+    }
+
+    private func schedule(from frame: AVAudioFramePosition) {
+        guard let file = file else { return }
+        let from = max(0, min(frame, file.length))
+        startFrame = from
+        let count = AVAudioFrameCount(file.length - from)
+        let gen = generation
+        guard count > 0 else { return }
+        node.scheduleSegment(file, startingFrame: from, frameCount: count, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+            DispatchQueue.main.async {
+                guard let self = self, self.generation == gen else { return }
+                self.playing = false
+                self.pausedAt = self.duration
+                self.stopTimer()
+                self.notifyListeners("ended", data: [:])
+            }
+        }
+    }
+
+    private var duration: Double {
+        guard let file = file else { return 0 }
+        return Double(file.length) / file.processingFormat.sampleRate
+    }
+
+    private var position: Double {
+        guard let file = file else { return 0 }
+        guard playing, let last = node.lastRenderTime, let time = node.playerTime(forNodeTime: last) else { return pausedAt }
+        return min(duration, Double(startFrame + time.sampleTime) / file.processingFormat.sampleRate)
+    }
+
+    @objc func play(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            guard self.file != nil else {
+                call.reject("nothing open")
+                return
+            }
+            do {
+                try AVAudioSession.sharedInstance().setActive(true)
+                if !self.engine.isRunning { try self.engine.start() }
+            } catch {
+                call.reject("cannot start: " + error.localizedDescription)
+                return
+            }
+            self.node.play()
+            self.playing = true
+            self.startTimer()
+            self.tick()
+            call.resolve()
+        }
+    }
+
+    @objc func pause(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            self.halt()
+            call.resolve()
+        }
+    }
+
+    private func halt() {
+        guard playing else { return }
+        pausedAt = position
+        node.pause()
+        playing = false
+        stopTimer()
+        tick()
+    }
+
+    /// { time } in seconds; keeps playing if it was.
+    @objc func seek(_ call: CAPPluginCall) {
+        let time = call.getDouble("time") ?? 0
+        DispatchQueue.main.async {
+            guard let file = self.file else {
+                call.resolve()
+                return
+            }
+            let was = self.playing
+            self.generation += 1
+            self.node.stop()
+            self.schedule(from: AVAudioFramePosition(max(0, time) * file.processingFormat.sampleRate))
+            self.pausedAt = Double(self.startFrame) / file.processingFormat.sampleRate
+            if was { self.node.play() }
+            self.tick()
+            call.resolve()
+        }
+    }
+
+    /// { enabled, preamp, gains: [dB] } — the desktop's settings, on the system equalizer.
+    @objc func setEq(_ call: CAPPluginCall) {
+        let enabled = call.getBool("enabled") ?? false
+        let preamp = Float(call.getDouble("preamp") ?? 0)
+        let gains = call.getArray("gains", Double.self) ?? []
+        DispatchQueue.main.async {
+            self.eq.bypass = !enabled
+            self.eq.globalGain = enabled ? preamp : 0
+            for (i, band) in self.eq.bands.enumerated() {
+                band.gain = enabled && i < gains.count ? Float(gains[i]) : 0
+            }
+            call.resolve()
+        }
+    }
+
+    /// { value: 0…1 } — the loudness levelling; the volume itself is the phone's (OniVolume).
+    @objc func setGain(_ call: CAPPluginCall) {
+        let value = Float(call.getDouble("value") ?? 1)
+        DispatchQueue.main.async {
+            self.engine.mainMixerNode.outputVolume = value
+            call.resolve()
+        }
+    }
+
+    @objc func state(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            call.resolve(["time": self.position, "duration": self.duration, "playing": self.playing, "eq": !self.eq.bypass])
+        }
+    }
+
+    // MARK: clock and the system
+
+    private func startTimer() {
+        stopTimer()
+        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in self?.tick() }
+    }
+
+    private func stopTimer() {
+        timer?.invalidate()
+        timer = nil
+    }
+
+    private func tick() {
+        notifyListeners("time", data: ["time": position, "duration": duration, "playing": playing])
+    }
+
+    /// A call or another app took the sound: paused, and the page told (it shows paused).
+    @objc private func interrupted(_ note: Notification) {
+        guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              AVAudioSession.InterruptionType(rawValue: raw) == .began else { return }
+        DispatchQueue.main.async { self.halt() }
+    }
+
+    /// Headphones pulled out: pause, as every music app does.
+    @objc private func routeChanged(_ note: Notification) {
+        guard let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+              AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable else { return }
+        DispatchQueue.main.async { self.halt() }
+    }
+
+    /// The output changed under the engine (a route, a sample rate): restart it where it was.
+    @objc private func configurationChanged(_ note: Notification) {
+        DispatchQueue.main.async {
+            let at = self.position
+            let was = self.playing
+            self.generation += 1
+            self.node.stop()
+            if let format = self.format { self.engine.connect(self.node, to: self.eq, format: format) }
+            self.schedule(from: AVAudioFramePosition(at * (self.format?.sampleRate ?? 44100)))
+            self.pausedAt = at
+            if was, (try? self.engine.start()) != nil {
+                self.node.play()
+            } else {
+                self.playing = false
+            }
+            self.tick()
         }
     }
 }

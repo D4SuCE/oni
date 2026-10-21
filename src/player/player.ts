@@ -14,9 +14,8 @@ import { levellingGain } from './loudness.ts';
 import { OfflineLibrary } from './offline.ts';
 import { PlayStats, type Origin } from './stats.ts';
 import { isIos } from '../ui/platform.ts';
-import { keepInMemory, memoryUrl, processingOn } from './processing.ts';
 import { audio } from './audio.ts';
-import { routeThroughGraph, setOutputGain } from './eq.ts';
+import { audioExt, OniPlayer, type NativeAudio } from './nativeAudio.ts';
 
 export type Repeat = 'off' | 'all' | 'one';
 /** A wave without a station is My Wave; with one it is a radio seeded by a track, artist, album or playlist. */
@@ -160,21 +159,18 @@ async function streamUrl(t: Track) {
 function prefetchNext() {
   const s = get();
   const next = s.queue[s.index + 1];
-  if (processingOn) keepInMemory([s.queue[s.index]?.id, next?.id].filter(Boolean) as string[]);
   if (!next || offlineMode || offline?.has(next.id)) return;
-  // With processing (the iPhone) the next track is fetched whole now, so it starts without a wait.
-  if (processingOn) streamUrl(next).then((st) => memoryUrl(next.id, st.url, st.codec)).catch(() => {});
+  // The iPhone's player fetches a track whole before it plays: the next one is fetched now.
+  if (isIos) streamUrl(next).then((st) => OniPlayer.fetch({ id: String(next.id), url: st.url, ext: audioExt(st.codec) })).catch(() => {});
   else if (!prefetched.has(next.id)) streamUrl(next).catch(() => {});
 }
 
 function applyVolume() {
   const s = get();
   const gain = s.normalize ? levellingGain(current()?.r128?.i) : 1;
-  // On the iPhone the volume is the phone's (volume.ts): only the levelling is ours.
-  const volume = Math.max(0, Math.min(1, (isIos ? 1 : s.volume) * gain));
-  // iOS ignores audio.volume: with processing the graph's last stage sets it instead.
-  if (processingOn) setOutputGain(volume);
-  else audio.volume = volume;
+  // On the iPhone the volume is the phone's (volume.ts): only the levelling is ours, on its player.
+  if (isIos) OniPlayer.setGain({ value: Math.min(1, gain) }).catch(() => {});
+  else audio.volume = Math.max(0, Math.min(1, s.volume * gain));
 }
 
 async function loadAt(index: number, autoplay = true) {
@@ -192,10 +188,12 @@ async function loadAt(index: number, autoplay = true) {
     const local = offline?.has(t.id) ? await offline.open(t.id).catch(() => null) : null;
     const stream = local ? { url: '', codec: local.entry.codec, bitrate: local.entry.bitrate } : await streamUrl(t);
     if (seq !== loadSeq) return;
-    if (processingOn) routeThroughGraph();
-    const src = local ? setLocalAudio(local.blob)! : processingOn ? await memoryUrl(t.id, stream.url, stream.codec) : stream.url;
-    if (seq !== loadSeq) return;
-    audio.src = src;
+    if (isIos) {
+      // The native player is told which track it opens and which files to keep (this and the next).
+      const nextId = get().queue[index + 1]?.id;
+      (audio as unknown as NativeAudio).next = { id: String(t.id), ext: audioExt(local ? local.entry.codec : stream.codec), keep: [String(t.id), ...(nextId ? [String(nextId)] : [])] };
+    }
+    audio.src = local ? setLocalAudio(local.blob)! : stream.url;
     if (!local) setLocalAudio(null);
     set({ stream: { codec: stream.codec, bitrate: stream.bitrate } });
     applyVolume();

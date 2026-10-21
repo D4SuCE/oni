@@ -4,7 +4,7 @@
 
 import { usePulse } from '../ui/motion.ts';
 import { BeatTracker } from './beat.ts';
-import { canProcessAudio, tapAnalyser } from './eq.ts';
+import { canAnalyzeAudio, tapAnalyser } from './eq.ts';
 import { audio, usePlayer } from './player.ts';
 
 let analyser: AnalyserNode | null = null;
@@ -35,7 +35,7 @@ function frame(now: number) {
 }
 
 function update() {
-  const on = canProcessAudio() && usePulse.getState().enabled && usePlayer.getState().playing && !document.hidden;
+  const on = canAnalyzeAudio() && usePulse.getState().enabled && usePlayer.getState().playing && !document.hidden;
   if (on && !raf) {
     analyser ??= tapAnalyser();
     bins ??= new Uint8Array(analyser.frequencyBinCount);

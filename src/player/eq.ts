@@ -6,7 +6,8 @@
 import { create } from 'zustand';
 import { loadJson, storage, transport } from '../api/client.ts';
 import { audio } from './audio.ts';
-import { processingOn } from './processing.ts';
+import { isIos } from '../ui/platform.ts';
+import { OniPlayer } from './nativeAudio.ts';
 
 export const EQ_BANDS = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000];
 export const EQ_RANGE = 12;
@@ -44,17 +45,16 @@ let ctx: AudioContext | null = null;
 let source: MediaElementAudioSourceNode | null = null;
 let preamp: GainNode | null = null;
 let filters: BiquadFilterNode[] = [];
-/** The last stage: the volume, where the element's own cannot be set (iOS ignores audio.volume). */
-let output: GainNode | null = null;
 
-/** Without a same-origin stream Web Audio would only hear silence and mute the music: the desktop
- * shell arranges CORS; the iPhone plays from memory when processing is on (processing.ts). */
-export const canProcessAudio = () => Boolean(transport.canAnalyzeAudio) || processingOn;
+/** Web Audio hears the stream only where the desktop shell arranges CORS (the beat pulse needs it). */
+export const canAnalyzeAudio = () => Boolean(transport.canAnalyzeAudio);
+/** The equalizer: Web Audio on the desktop, the system's on the iPhone (its player is native). */
+export const canProcessAudio = () => canAnalyzeAudio() || isIos;
 
 function build() {
-  if (ctx || !canProcessAudio()) return;
+  if (ctx || !canAnalyzeAudio()) return;
   ctx = new AudioContext();
-  source = ctx.createMediaElementSource(audio);
+  source = ctx.createMediaElementSource(audio as HTMLMediaElement);
   preamp = ctx.createGain();
   filters = EQ_BANDS.map((frequency, i) => {
     const f = ctx!.createBiquadFilter();
@@ -63,44 +63,19 @@ function build() {
     f.Q.value = 1.1;
     return f;
   });
-  output = ctx.createGain();
   let node: AudioNode = source.connect(preamp);
   for (const f of filters) node = node.connect(f);
-  node.connect(output).connect(ctx.destination);
-}
-
-/** The iPhone with processing: the graph from the first track on, so its volume works. */
-export function routeThroughGraph() {
-  if (!ctx && processingOn) {
-    build();
-    // Woken and covered for when iOS suspends it in the background (background.ts).
-    import('./background.ts').then((m) => m.keepSoundInBackground());
-  }
-  build();
-  apply();
-}
-
-/** The graph's context, once built (background.ts watches it). */
-export const audioContext = () => ctx;
-
-let outputGain = 1;
-let graphMuted = false;
-
-/** Volume at the end of the graph (the iPhone); the desktop keeps using audio.volume. */
-export function setOutputGain(gain: number) {
-  outputGain = gain;
-  if (output) output.gain.value = graphMuted ? 0 : gain;
-}
-
-/** Silences the graph while another element plays for it (background.ts), keeping the volume. */
-export function muteGraph(on: boolean) {
-  graphMuted = on;
-  if (output) output.gain.value = on ? 0 : outputGain;
+  node.connect(ctx.destination);
 }
 
 function apply() {
   const s = useEq.getState();
-  if (!s.enabled && !ctx && !processingOn) return; // never switched on: leave the element untouched
+  // The iPhone: the same settings on the system equalizer of its native player.
+  if (isIos) {
+    OniPlayer.setEq({ enabled: s.enabled, preamp: s.preamp, gains: s.gains }).catch(() => {});
+    return;
+  }
+  if (!s.enabled && !ctx) return; // never switched on: leave the element untouched
   build();
   if (!ctx) return;
   // Switched off after being on: the graph stays (an element can't be detached), set flat.
@@ -108,7 +83,6 @@ function apply() {
   filters.forEach((f, i) => (f.gain.value = s.enabled ? (s.gains[i] ?? 0) : 0));
   if (ctx!.state === 'suspended') ctx!.resume().catch(() => {});
 }
-
 /**
  * An analyser on the raw music, before the equalizer (for the beat pulse). Builds the
  * audio graph if the equalizer never did; with the equalizer off the bands stay flat.

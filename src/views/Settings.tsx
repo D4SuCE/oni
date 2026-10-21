@@ -4,12 +4,12 @@ import { formatSize, useOfflineVersion } from '../ui/offline.ts';
 import { useEffect, useState } from 'react';
 import { Segmented } from '../components/Wave.tsx';
 import { LANGS, setLang, useLang, useT } from '../i18n.ts';
-import { canProcessAudio } from '../player/eq.ts';
+import { canAnalyzeAudio } from '../player/eq.ts';
 import { offline, recsFeedback, setNormalize, stats, usePlayer } from '../player/player.ts';
 import { logout, navigate, useApp } from '../store.ts';
 import { setMotion, setPulse, useMotion, usePulse } from '../ui/motion.ts';
 import { isIos } from '../ui/platform.ts';
-import { processingOn, setProcessingPrefs, useProcessing } from '../player/processing.ts';
+import { setPhoneSound, usePhoneSound } from '../player/phoneSound.ts';
 import { MAX_SEE_THROUGH, setSeeThrough, useSeeThrough } from '../ui/seeThrough.ts';
 import { useUpdate } from '../ui/update.ts';
 import { cx } from '../ui/util.ts';
@@ -61,7 +61,7 @@ export function SettingsView() {
           </div>
           <input type="checkbox" className="switch" checked={motion} onChange={(e) => setMotion(e.target.checked)} data-testid="live-covers" />
         </label>
-        {canProcessAudio() && (
+        {canAnalyzeAudio() && (
           <label className="toggle-row">
             <div>
               <div>{s.pulse}</div>
@@ -296,33 +296,18 @@ function UpdateRow() {
   );
 }
 
-/** The iPhone's equalizer (src/player/processing.ts: the route is fixed per run) and the volume
- * slider on Now Playing (the phone's own volume, src/player/volume.ts). */
+/** The iPhone's volume slider on Now Playing (the phone's own volume, src/player/volume.ts). */
 function PhoneSound() {
   const t = useT();
   const s = t.settings;
-  const { processing, volumeSlider } = useProcessing();
+  const volumeSlider = usePhoneSound((p) => p.volumeSlider);
   return (
-    <>
-      <label className="toggle-row">
-        <div>
-          <div>{s.processing}</div>
-          <div className="hint">{s.processingHint}</div>
-        </div>
-        <input type="checkbox" className="switch" checked={processing} onChange={(e) => setProcessingPrefs({ processing: e.target.checked })} data-testid="processing" />
-      </label>
-      {processing !== processingOn && (
-        <button className="btn primary" onClick={() => location.reload()} data-testid="processing-restart">
-          {s.restart}
-        </button>
-      )}
-      <label className="toggle-row">
-        <div>
-          <div>{s.volumeSlider}</div>
-          <div className="hint">{s.volumeSliderHint}</div>
-        </div>
-        <input type="checkbox" className="switch" checked={volumeSlider} onChange={(e) => setProcessingPrefs({ volumeSlider: e.target.checked })} data-testid="volume-slider" />
-      </label>
-    </>
+    <label className="toggle-row">
+      <div>
+        <div>{s.volumeSlider}</div>
+        <div className="hint">{s.volumeSliderHint}</div>
+      </div>
+      <input type="checkbox" className="switch" checked={volumeSlider} onChange={(e) => setPhoneSound({ volumeSlider: e.target.checked })} data-testid="volume-slider" />
+    </label>
   );
 }

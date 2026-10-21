@@ -10,7 +10,7 @@ import { useSwipeDown } from '../ui/swipe.ts';
 import { cx, useAsync } from '../ui/util.ts';
 import { ArtistLinks, Cover, Spinner } from './Common.tsx';
 import { LikeButton, SeekBar, Transport, VolumeControl } from './PlayerBar.tsx';
-import { processingOn, useProcessing } from '../player/processing.ts';
+import { usePhoneSound } from '../player/phoneSound.ts';
 import { isIos } from '../ui/platform.ts';
 import { BackgroundVideo, LiveCover, useCoverVideo } from './LiveCover.tsx';
 import { openMenu } from './Menu.tsx';
@@ -131,7 +131,7 @@ export function NowPlaying() {
   const close = useCallback(() => useApp.setState({ nowPlayingOpen: false }), []);
   const sheet = useRef<HTMLDivElement>(null);
   useSwipeDown(sheet, close);
-  const volumeSlider = useProcessing((s) => s.volumeSlider);
+  const volumeSlider = usePhoneSound((s) => s.volumeSlider);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
     window.addEventListener('keydown', onKey);
@@ -168,7 +168,7 @@ export function NowPlaying() {
                   )}
                   <LikeButton track={track} size={22} />
                   {/* The equalizer on the iPhone, where the player bar has no room for it. */}
-                  {isIos && processingOn && (
+                  {isIos && (
                     <button className="icon-btn" onClick={() => useApp.setState({ soundOpen: true })} title={t.sound.title} data-testid="np-sound">
                       <SlidersVertical size={21} />
                     </button>
