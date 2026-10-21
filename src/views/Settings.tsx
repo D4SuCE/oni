@@ -11,7 +11,7 @@ import { setMotion, setPulse, useMotion, usePulse } from '../ui/motion.ts';
 import { isIos } from '../ui/platform.ts';
 import { setPhoneSound, usePhoneSound } from '../player/phoneSound.ts';
 import { MAX_SEE_THROUGH, setSeeThrough, useSeeThrough } from '../ui/seeThrough.ts';
-import { checkIosUpdate, installIosUpdate, setAutoUpdate, useAutoUpdate } from '../ui/iosUpdate.ts';
+import { checkIosUpdate, installIosUpdate, setAutoUpdate, setUpdateViaShortcut, UPDATE_SHORTCUT, useAutoUpdate } from '../ui/iosUpdate.ts';
 import { useUpdate } from '../ui/update.ts';
 import { cx } from '../ui/util.ts';
 
@@ -316,17 +316,26 @@ function PhoneSound() {
   );
 }
 
-/** The iPhone's auto-update (src/ui/iosUpdate.ts). */
+/** The iPhone's auto-update and the shortcut it may go through (src/ui/iosUpdate.ts). */
 function AutoUpdateRow() {
   const u = useT().update;
-  const on = useAutoUpdate((s) => s.on);
+  const { on, shortcut } = useAutoUpdate();
   return (
-    <label className="toggle-row">
-      <div>
-        <div>{u.iosAuto}</div>
-        <div className="hint">{u.iosAutoHint}</div>
-      </div>
-      <input type="checkbox" className="switch" checked={on} onChange={(e) => setAutoUpdate(e.target.checked)} data-testid="auto-update" />
-    </label>
+    <>
+      <label className="toggle-row">
+        <div>
+          <div>{u.iosAuto}</div>
+          <div className="hint">{u.iosAutoHint}</div>
+        </div>
+        <input type="checkbox" className="switch" checked={on} onChange={(e) => setAutoUpdate(e.target.checked)} data-testid="auto-update" />
+      </label>
+      <label className="toggle-row">
+        <div>
+          <div>{u.iosShortcut(UPDATE_SHORTCUT)}</div>
+          <div className="hint">{u.iosShortcutHint}</div>
+        </div>
+        <input type="checkbox" className="switch" checked={shortcut} onChange={(e) => setUpdateViaShortcut(e.target.checked)} data-testid="update-shortcut" />
+      </label>
+    </>
   );
 }

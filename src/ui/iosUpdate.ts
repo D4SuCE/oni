@@ -18,11 +18,23 @@ const EVERY = 6 * 3600_000;
  * SideStore opens and off when it closes; Oni cannot set those up itself (iOS lets no app create
  * automations, nor share them). */
 const AUTO_KEY = 'update.auto';
-export const useAutoUpdate = create<{ on: boolean; opened: string }>(() => loadJson(AUTO_KEY, { on: false, opened: '' }));
+export const useAutoUpdate = create<{ on: boolean; opened: string; shortcut: boolean }>(() => ({
+  shortcut: false,
+  ...loadJson(AUTO_KEY, { on: false, opened: '' }),
+}));
+const saveAuto = () => storage.setItem(AUTO_KEY, JSON.stringify(useAutoUpdate.getState()));
 export function setAutoUpdate(on: boolean) {
   useAutoUpdate.setState({ on });
-  storage.setItem(AUTO_KEY, JSON.stringify(useAutoUpdate.getState()));
+  saveAuto();
   if (on) checkIosUpdate();
+}
+
+/** The Shortcuts shortcut that wraps SideStore with LocalDevVPN: on, open SideStore with the link
+ * it is given, wait, off (the user's own, 22.10.2026). Run by name with the SideStore link as input. */
+export const UPDATE_SHORTCUT = 'Oni - Update';
+export function setUpdateViaShortcut(shortcut: boolean) {
+  useAutoUpdate.setState({ shortcut });
+  saveAuto();
 }
 
 let checkedAt = 0;
@@ -52,7 +64,11 @@ export async function checkIosUpdate() {
 /** "Update": SideStore takes the file and installs it over this version (data stays). */
 export function installIosUpdate() {
   const url = useUpdate.getState().url;
-  if (url) location.href = `sidestore://install?url=${encodeURIComponent(url)}`;
+  if (!url) return;
+  const sidestore = `sidestore://install?url=${encodeURIComponent(url)}`;
+  location.href = useAutoUpdate.getState().shortcut
+    ? `shortcuts://run-shortcut?name=${encodeURIComponent(UPDATE_SHORTCUT)}&input=text&text=${encodeURIComponent(sidestore)}`
+    : sidestore;
 }
 
 /** At start, every few hours, and on return to the app if it has been a while. */
