@@ -13,6 +13,8 @@
 
 ## [Не выпущено]
 
+## [1.9.0] — 2026-10-22
+
 ### Изменено
 - iPhone: лайк через Siri — «Лайкни трек в Oni», «Поставь лайк в Oni», «Лайк в Oni» (фраза «Мне нравится в Oni»
   путалась с лайком Apple Music и не работала).
@@ -420,7 +422,8 @@
 - Фон-картина «Blood Moon Over Misty Pagodas», прозрачность окна (Acrylic).
 - Живые видеообложки Яндекса и пульсация обложек в такт музыке.
 
-[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.8.0...HEAD
+[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.9.0
 [1.8.0]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.8.0
 [1.7.0]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.7.0
 [1.6.1]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.6.1
