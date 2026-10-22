@@ -6,6 +6,7 @@ import { create } from 'zustand';
 import type { Album, Playlist, Track } from '../api/types.ts';
 import { ApiError, trackCover } from '../api/yandex.ts';
 import { saveList, savedList } from '../player/offlineLists.ts';
+import { api, storage } from '../api/client.ts';
 import { tr } from '../i18n.ts';
 import { iosBackgroundDownloads, showProgressInShade, useTrackProgress } from '../player/iosDownloads.ts';
 import { offline } from '../player/player.ts';
@@ -155,3 +156,43 @@ export function useCover(track: Track | undefined, size: number) {
   }, [offlineNow, id]);
   return offlineNow && local?.id === id ? local.url : trackCover(track, size);
 }
+
+/**
+ * "Download new likes", as in Yandex's app: a track liked (here or on another device) downloads by
+ * itself. Only those liked after switching it on: what was liked before downloads with Liked's
+ * own Download. The ids already seen are kept, so a restart does not take every like for new.
+ */
+const AUTO_KEY = 'downloads.autoLikes';
+const SEEN_KEY = 'downloads.autoLikes.seen';
+/** A plain JSON value (loadJson is for objects: it merges them into the fallback). */
+function readJson<T>(key: string, fallback: T): T {
+  try {
+    const raw = storage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+export const useAutoLikes = create<{ on: boolean }>(() => ({ on: readJson<boolean>(AUTO_KEY, false) === true }));
+const likedIds = () => useApp.getState().likedKeys.map((k) => k.split(':')[0]);
+const markSeen = (ids: string[]) => storage.setItem(SEEN_KEY, JSON.stringify(ids));
+
+export function setAutoLikes(on: boolean) {
+  useAutoLikes.setState({ on });
+  storage.setItem(AUTO_KEY, JSON.stringify(on));
+  if (on) markSeen(likedIds());
+}
+
+if (offline)
+  useApp.subscribe((s, was) => {
+    if (!useAutoLikes.getState().on || s.likedKeys === was.likedKeys || !s.libraryReady || s.offline) return;
+    const seen = new Set(readJson<string[]>(SEEN_KEY, []));
+    const fresh = s.likedKeys.filter((k) => !seen.has(k.split(':')[0]));
+    markSeen(likedIds());
+    const todo = fresh.filter((k) => !offline!.has(k.split(':')[0]));
+    if (!todo.length) return;
+    api
+      .tracks(todo)
+      .then((tracks) => tracks.forEach((t) => void downloadTrack(t)))
+      .catch((e) => console.warn('new likes: not downloaded', e));
+  });

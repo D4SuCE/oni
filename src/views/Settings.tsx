@@ -1,6 +1,6 @@
 import { Download, ExternalLink, FileText, HardDriveDownload, LogOut, RefreshCw, Trash2, Undo2 } from 'lucide-react';
 import { confirmDialog } from '../components/Dialog.tsx';
-import { formatSize, useOfflineVersion } from '../ui/offline.ts';
+import { formatSize, setAutoLikes, useAutoLikes, useOfflineVersion } from '../ui/offline.ts';
 import { useEffect, useState } from 'react';
 import { Segmented } from '../components/Wave.tsx';
 import { LANGS, setLang, useLang, useT } from '../i18n.ts';
@@ -226,6 +226,7 @@ function DownloadsPanel() {
   const t = useT();
   const d = t.downloads;
   useOfflineVersion((v) => v.v);
+  const autoLikes = useAutoLikes((s) => s.on);
   const count = offline?.entries().length ?? 0;
   return (
     <div className="panel glass">
@@ -252,6 +253,13 @@ function DownloadsPanel() {
           )}
         </div>
       </div>
+      <label className="toggle-row">
+        <div>
+          <div>{d.autoLikes}</div>
+          <div className="hint">{d.autoLikesHint}</div>
+        </div>
+        <input type="checkbox" className="switch" checked={autoLikes} onChange={(e) => setAutoLikes(e.target.checked)} data-testid="auto-likes" />
+      </label>
     </div>
   );
 }

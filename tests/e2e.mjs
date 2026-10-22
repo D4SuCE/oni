@@ -812,6 +812,33 @@ await step('settings page', async () => {
   await shot('11-settings');
 });
 
+await step('download new likes: a track liked downloads by itself (like and download reverted)', async () => {
+  // The user's wish (accepted proposals), as in Yandex's app.
+  await page.locator('label', { has: page.locator('[data-testid="auto-likes"]') }).click();
+  let id = null;
+  try {
+    id = await page.evaluate(async () => {
+      const w = window.__wave;
+      const liked = w.useApp.getState().liked;
+      const t = (await w.api.chart()).find((x) => x.available !== false && !liked.has(String(x.id)) && !w.offline.has(x.id));
+      await w.toggleLike(t);
+      return String(t.id);
+    });
+    await page.waitForFunction((id) => window.__wave.offline.has(id), id, { timeout: 60000 });
+  } finally {
+    await page.evaluate(async (id) => {
+      const w = window.__wave;
+      if (id && w.useApp.getState().liked.has(id)) {
+        const [t] = await w.api.tracks([id]);
+        await w.toggleLike(t);
+      }
+      if (id) await w.offline.remove(id);
+    }, id);
+    await page.locator('label', { has: page.locator('[data-testid="auto-likes"]') }).click();
+    await page.evaluate(() => document.activeElement?.blur());
+  }
+});
+
 await step('keyboard: space toggles playback', async () => {
   await page.mouse.click(700, 300);
   const before = await page.evaluate(() => window.__wave.audio.paused);

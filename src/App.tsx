@@ -220,4 +220,4 @@ export function App() {
 }
 
 // Handy for debugging and for the automated UI test.
-Object.assign(window, { __wave: { offline, usePlayer, useApp, audio, api, navigate, playTracks, setSleep, eqOutputLevel, pulseLevel, pulseTempo } });
+Object.assign(window, { __wave: { offline, usePlayer, useApp, audio, api, navigate, playTracks, setSleep, toggleLike, eqOutputLevel, pulseLevel, pulseTempo } });
