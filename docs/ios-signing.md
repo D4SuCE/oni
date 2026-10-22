@@ -35,6 +35,11 @@ entitlement, оно работает на обоих путях.
 > в D4SuCE/oni-releases и добавляет версию в источник
 > `https://raw.githubusercontent.com/D4SuCE/oni-releases/main/sidestore.json`. Инструкция для
 > пользователя — в README oni-releases, раздел «iPhone». Набросок ниже — исходный план.
+>
+> С 1.5.7 в IPA есть расширение `PlugIns/OniActivity.appex` (Live Activity скачивания, bundle id
+> `local.wave.player.OniActivity`). SideStore подписывает и расширения, но на бесплатном Apple ID
+> каждое — ещё один App ID (лимит — 10 за 7 дней). Если установка упрётся в лимит — подождать
+> или убрать расширение из сборки (цель `OniActivity` в `ios/App/App.xcodeproj`).
 
 Идея: CI каждый раз собирает IPA **без подписи**, а SideStore на телефоне
 подписывает его вашим Apple ID и сам продлевает подпись раз в 7 дней — без
