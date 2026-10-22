@@ -149,18 +149,22 @@ async function nativePlayer() {
 function backgroundProbe() {
   let hiddenAt = 0;
   let timeAt = 0;
+  let indexAt = 0;
   let ticks = 0;
   setInterval(() => document.hidden && ticks++, 2000);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       hiddenAt = Date.now();
       timeAt = wave().audio.currentTime;
+      indexAt = wave().usePlayer.getState().index;
       ticks = 0;
       return;
     }
     const away = (Date.now() - hiddenAt) / 1000;
     const played = wave().audio.currentTime - timeAt;
-    console.log(`SMOKE background-life ${played > away / 2 ? 'ok' : 'FAIL'} away ${away.toFixed(0)} s, music moved ${played.toFixed(0)} s, page ticks ${ticks}`);
+    // A short track may end while away: the next one playing is the music going on too.
+    const next = wave().usePlayer.getState().index > indexAt;
+    console.log(`SMOKE background-life ${played > away / 2 || next ? 'ok' : 'FAIL'} away ${away.toFixed(0)} s, music moved ${played.toFixed(0)} s${next ? ' (on to the next track)' : ''}, page ticks ${ticks}`);
   });
 }
 
@@ -315,7 +319,8 @@ export async function runSmoke() {
     report('mixes', mixes, String(document.querySelectorAll('[data-testid="mix-card"]').length));
 
     click('[data-testid="wave-play"]');
-    const playing = await until(() => !wave().audio.paused && wave().audio.currentTime > 2, 30000);
+    // The phone's player fetches a track whole before it plays: a slow CDN on the runner takes time.
+    const playing = await until(() => !wave().audio.paused && wave().audio.currentTime > 2, 60000);
     const { queue, index } = wave().usePlayer.getState();
     const title = queue[index]?.title ?? '';
     report('playback', playing, `"${title}" at ${wave().audio.currentTime.toFixed(1)} s`);
