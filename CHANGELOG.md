@@ -13,6 +13,8 @@
 
 ## [Не выпущено]
 
+## [1.6.1] — 2026-10-22
+
 ### Добавлено
 - iPhone: лёгкий тактильный отклик, когда трек подхвачен или поставлен на место и когда открывается
   меню долгим нажатием.
@@ -385,7 +387,8 @@
 - Фон-картина «Blood Moon Over Misty Pagodas», прозрачность окна (Acrylic).
 - Живые видеообложки Яндекса и пульсация обложек в такт музыке.
 
-[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.6.0...HEAD
+[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.6.1...HEAD
+[1.6.1]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.6.1
 [1.6.0]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.6.0
 [1.5.10]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.10
 [1.5.9]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.9
