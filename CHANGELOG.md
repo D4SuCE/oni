@@ -13,6 +13,8 @@
 
 ## [Не выпущено]
 
+## [1.10.0] — 2026-10-22
+
 ### Исправлено
 - Треки могли сами быстро переключаться: один не запустившийся трек переводил Oni в режим «без сети», и он
   пролистывал всё нескачанное. Теперь «без сети» — только когда сети правда нет.
@@ -438,7 +440,8 @@
 - Фон-картина «Blood Moon Over Misty Pagodas», прозрачность окна (Acrylic).
 - Живые видеообложки Яндекса и пульсация обложек в такт музыке.
 
-[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.9.0...HEAD
+[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.10.0...HEAD
+[1.10.0]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.10.0
 [1.9.0]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.9.0
 [1.8.0]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.8.0
 [1.7.0]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.7.0
