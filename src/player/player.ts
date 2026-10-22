@@ -5,7 +5,7 @@ import { create } from 'zustand';
 import type { Track } from '../api/types.ts';
 import { api, loadJson, storage, transport } from '../api/client.ts';
 import { tr } from '../i18n.ts';
-import { ApiError, artistNames, trackCover, type StreamQuality } from '../api/yandex.ts';
+import { artistNames, NetworkError, trackCover, type StreamQuality } from '../api/yandex.ts';
 import { DEFAULT_TUNING, WaveEngine, waveSeeds, type WaveStats, type WaveTuning } from '../wave/engine.ts';
 import { HEARD_SECONDS, ListenHistory } from '../wave/history.ts';
 import { PlayLog } from './playLog.ts';
@@ -142,7 +142,15 @@ export const onNetworkLost = (fn: () => void) => {
   networkLost = fn;
 };
 /** A request that never reached Yandex (no network, a timeout), not one Yandex answered with an error. */
-const isNetworkError = (e: unknown) => !(e instanceof ApiError) || (typeof navigator !== 'undefined' && navigator.onLine === false);
+/** The network is gone: a request that never reached Yandex, or the system says so. Any other
+ * error (a track that would not start: a stale address, a file it could not read) is not: taking
+ * it for one put the app offline, and it ran through every track not downloaded in a blink (a
+ * friend of the user's saw tracks switch by themselves, fast). */
+const isNetworkError = (e: unknown) => e instanceof NetworkError || (typeof navigator !== 'undefined' && navigator.onLine === false);
+/** Tracks in a row that would not start: at three the player stops rather than run on. */
+let failedInRow = 0;
+const MAX_FAILED_IN_ROW = 3;
+const errorMessage = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 80);
 
 /**
  * My Wave (or a station) whose network went away mid-play, as in Yandex's app: the downloaded
@@ -245,7 +253,13 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
   lastTime = 0;
   updateMediaSession(t);
   try {
-    if (offlineMode && !offline?.has(t.id)) throw new Error('not downloaded and no network');
+    if (offlineMode && !offline?.has(t.id)) {
+      // No network: straight to the next downloaded track, not through each one that is not.
+      const s = get();
+      const ahead = s.queue.findIndex((x, i) => i > index && offline?.has(x.id));
+      if (ahead >= 0 && s.source?.kind !== 'wave') return void loadAt(ahead, autoplay);
+      throw new Error('not downloaded and no network');
+    }
     // A downloaded copy plays first: it needs no network and no traffic. The iPhone's player opens
     // the sealed file itself with the key (decrypting it here and sending it over as text froze
     // the page on every downloaded track).
@@ -288,6 +302,13 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
     if (get().source?.kind === 'wave' && (offlineMode || isNetworkError(e)) && fallBackToDownloads()) return;
     // A list lost it: the app goes offline, so what is not downloaded is passed over at once.
     if (!offlineMode && isNetworkError(e)) networkLost();
+    // Several in a row would not start (Yandex refusing, say): it stops and says why.
+    if (!offlineMode && ++failedInRow >= MAX_FAILED_IN_ROW) {
+      failedInRow = 0;
+      audio.pause();
+      set({ loading: false, playing: false, error: tr().player.cantPlayMany(errorMessage(e)) });
+      return;
+    }
     set({ loading: false, error: tr().player.cantPlay(t.title) });
     setTimeout(() => seq === loadSeq && next(false), offlineMode ? 0 : 1500);
   }
@@ -722,7 +743,10 @@ async function fallAsleep() {
 
 // --------------------------------------------------------------- audio events
 
-audio.addEventListener('playing', () => set({ playing: true, loading: false }));
+audio.addEventListener('playing', () => {
+  failedInRow = 0;
+  set({ playing: true, loading: false });
+});
 audio.addEventListener('pause', () => set({ playing: false }));
 audio.addEventListener('waiting', () => set({ loading: true }));
 audio.addEventListener('canplay', () => set({ loading: false }));

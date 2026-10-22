@@ -986,6 +986,34 @@ await step('crossfade, the next track slow to load: the old one ends meanwhile, 
   }
 });
 
+await step('tracks that will not play: the player stops after a few, it does not run through the queue', async () => {
+  // A friend of the user's saw tracks switch by themselves, fast: each that fails to start is
+  // skipped after 1.5 s, and when none starts (Yandex refusing, "too many requests") the wave
+  // went on and on. Every stream address fails here.
+  // Tracks not played yet, so none has its address fetched ahead.
+  const fresh = await page.evaluate(async () => (await window.__wave.api.chart()).filter((t) => t.available !== false).slice(30, 38));
+  await page.evaluate(() => {
+    const w = window.__wave;
+    window.__asked = new Set();
+    w.api.stream = async (id) => {
+      window.__asked.add(String(id));
+      throw Object.assign(new Error('too-many-requests'), { status: 429 });
+    };
+  });
+  try {
+    await page.evaluate((tracks) => window.__wave.playTracks(tracks, 0, 'e2e refused'), fresh);
+    // Stopped with a message (a toast), not offline, nothing tried after.
+    await page.waitForSelector('.toast:has-text("не запускаются")', { timeout: 15000 });
+    const st = await page.evaluate(() => ({ tried: window.__asked.size, playing: !window.__wave.audio.paused, offline: window.__wave.useApp.getState().offline, error: document.querySelector('.toast')?.textContent }));
+    await page.waitForTimeout(4000);
+    const later = await page.evaluate(() => window.__asked.size);
+    if (st.tried > 4 || later !== st.tried || st.playing || st.offline) throw new Error(`kept skipping: ${JSON.stringify(st)}, then ${later} tried`);
+    console.log(`       stopped after ${st.tried} tracks: "${st.error}"`);
+  } finally {
+    await page.evaluate(() => delete window.__wave.api.stream);
+  }
+});
+
 await step('keyboard: space toggles playback', async () => {
   // Nothing focused (a click could land on a switch of the page open, and space would flip it).
   await page.evaluate(() => document.activeElement?.blur());

@@ -40,6 +40,10 @@ export class ApiError extends Error {
   }
 }
 
+/** A request that never reached Yandex (no network, or it dropped): the one error that means
+ * "offline". Anything else (a track that would not start, a refusal) is not. */
+export class NetworkError extends Error {}
+
 export function coverUrl(uri: string | undefined, size = 400): string | undefined {
   if (!uri) return undefined;
   return `https://${uri.replace('%%', `${size}x${size}`)}`;
@@ -122,7 +126,12 @@ export class YandexMusic {
     const external = path.startsWith('http');
     const url = external ? path : API + path;
     const headers = external ? req.headers : { 'Accept-Language': this.language, ...req.headers };
-    const resp = await this.transport.request({ ...req, url, headers });
+    let resp;
+    try {
+      resp = await this.transport.request({ ...req, url, headers });
+    } catch (e) {
+      throw new NetworkError(e instanceof Error ? e.message : String(e));
+    }
     if (!resp.ok) {
       const err = resp.data?.error;
       const msg = (typeof err === 'object' ? err?.message || err?.name : err) || `HTTP ${resp.status}`;
