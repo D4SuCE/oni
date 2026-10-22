@@ -2962,7 +2962,6 @@ kbd {
     order: 2;
   }
   html.ios [data-testid='nav-search'],
-  html.ios [data-testid='nav-downloads'],
   html.ios [data-testid='nav-settings'] {
     display: none;
   }

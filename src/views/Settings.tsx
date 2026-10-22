@@ -256,7 +256,7 @@ function DownloadsPanel() {
           <div className="hint">{d.settingsHint}</div>
         </div>
         <div className="update-actions">
-          <button className="btn ghost" onClick={() => navigate({ name: 'downloads' })}>
+          <button className="btn ghost" onClick={() => navigate({ name: 'library', tab: 'downloads' })}>
             <HardDriveDownload size={16} /> {d.open}
           </button>
           {count > 0 && (

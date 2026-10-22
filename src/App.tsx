@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { WifiOff } from 'lucide-react';
-import { DownloadsView } from './views/Downloads.tsx';
 import { useT } from './i18n.ts';
 import { api } from './api/client.ts';
 import { Spinner } from './components/Common.tsx';
@@ -138,8 +137,8 @@ function Main() {
       view = <MixView id={route.id} />;
       break;
     case 'downloads':
-      // The iPhone keeps the Collection's tabs above it (src/views/Library.tsx).
-      view = isIos ? <Library tab="downloads" /> : <DownloadsView />;
+      // A Library tab, its tabs above it (src/views/Library.tsx).
+      view = <Library tab="downloads" />;
       break;
     case 'settings':
       view = <SettingsView />;

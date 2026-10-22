@@ -262,8 +262,8 @@ export function Library({ tab = 'playlists' }: { tab?: LibraryTab }) {
             {t.common[id]}
           </button>
         ))}
-        {/* The iPhone's tab bar has no Downloads tab: it is one of the Collection's. */}
-        {isIos && offline && (
+        {/* Downloads is one of the Library's tabs (both platforms; the user's wish after 1.6.0). */}
+        {offline && (
           <button className={cx('tab', tab === 'downloads' && 'active')} onClick={() => navigate({ name: 'library', tab: 'downloads' })} data-testid="tab-downloads">
             {t.nav.downloads}
           </button>

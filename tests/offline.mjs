@@ -81,8 +81,15 @@ await step('download a track: encrypted on disk, then it plays from the file', a
   await shot(page, '20-downloaded-mark');
 });
 
-await step('the downloads page lists it', async () => {
-  await page.click('[data-testid="nav-downloads"]');
+// Downloads is a Library tab, as on the iPhone (the user's wish after 1.6.0): no item in the menu.
+const openDownloads = async () => {
+  await page.click('[data-testid="nav-library"]');
+  await page.click('[data-testid="tab-downloads"]');
+};
+
+await step('the downloads page lists it (a Library tab, not a menu item)', async () => {
+  if (await page.locator('[data-testid="nav-downloads"]').count()) throw new Error('Downloads still in the menu');
+  await openDownloads();
   await page.waitForSelector('.track-row');
   const titles = await page.locator('.track-row .tr-title').allInnerTexts();
   if (titles.length !== 1 || titles[0] !== title) throw new Error(`downloads: ${titles}`);
@@ -183,7 +190,7 @@ await step('no network: a playlist with a downloaded track opens and plays it', 
 });
 
 await step('no network: Downloads lists everything downloaded', async () => {
-  await page.click('[data-testid="nav-downloads"]');
+  await openDownloads();
   await page.waitForSelector('.track-row');
   const titles = await page.locator('.track-row .tr-title').allInnerTexts();
   if (titles.length !== 4 || !titles.includes(title)) throw new Error(`downloads offline: ${titles}`);

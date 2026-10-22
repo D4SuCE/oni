@@ -1,10 +1,9 @@
-import { HardDriveDownload, Heart, History, Home, Library, ListMusic, Menu, Plus, Search, Settings } from 'lucide-react';
+import { Heart, History, Home, Library, ListMusic, Menu, Plus, Search, Settings } from 'lucide-react';
 import { useState } from 'react';
 import { create } from 'zustand';
 import type { Playlist } from '../api/types.ts';
 import { useT } from '../i18n.ts';
 import { createPlaylist, isOwn, navigate, samePlaylist, useApp, type Route } from '../store.ts';
-import { offline } from '../player/player.ts';
 import { isIos } from '../ui/platform.ts';
 import { useUpdate } from '../ui/update.ts';
 import { cx } from '../ui/util.ts';
@@ -89,8 +88,8 @@ export function Sidebar() {
   const t = useT();
   const isActive = (r: Route) =>
     (route.name === r.name && !(r.name === 'library' && route.name === 'library' && route.tab === 'tracks')) ||
-    // On the iPhone Downloads is a Collection tab (src/views/Library.tsx).
-    (isIos && r.name === 'library' && route.name === 'downloads');
+    // Downloads is a Library tab (src/views/Library.tsx).
+    (r.name === 'library' && route.name === 'downloads');
   // Collapsed, the labels are hidden: show them as tooltips instead.
   const tip = (label: string) => (open ? undefined : label);
 
@@ -128,12 +127,6 @@ export function Sidebar() {
           <History size={19} />
           <span className="nav-label">{t.nav.history}</span>
         </button>
-        {offline && (
-          <button className={cx('nav-item', route.name === 'downloads' && 'active')} onClick={() => navigate({ name: 'downloads' })} data-testid="nav-downloads" title={tip(t.nav.downloads)}>
-            <HardDriveDownload size={19} />
-            <span className="nav-label">{t.nav.downloads}</span>
-          </button>
-        )}
       </div>
       <div className="nav-section">
         <span className="nav-label">{t.common.playlists}</span>
