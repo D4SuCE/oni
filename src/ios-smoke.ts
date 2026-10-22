@@ -188,6 +188,17 @@ async function crossfade() {
   }
 }
 
+/** Settings → Voice commands: a button per shared shortcut, each opening its iCloud page (not followed). */
+function voiceShortcuts() {
+  const app = (window as unknown as { __wave: { navigate(r: unknown): void } }).__wave;
+  app.navigate({ name: 'settings' });
+  return until(() => document.querySelectorAll('[data-testid="voice-shortcut"]').length, 5000).then((ok) => {
+    const n = document.querySelectorAll('[data-testid="voice-shortcut"]').length;
+    const over = [...document.querySelectorAll<HTMLElement>('[data-testid="voice-shortcut"]')].filter((b) => b.getBoundingClientRect().right > window.innerWidth + 1).length;
+    report('voice-shortcuts', Boolean(ok) && n === 2 && over === 0, `${n} buttons, ${over} off screen`);
+  });
+}
+
 /** History → Recap on the phone: the numbers and the tops are there, and nothing runs off the screen. */
 async function recap() {
   click('[data-testid="nav-history"]');
@@ -621,6 +632,7 @@ export async function runSmoke() {
     const tapped = await OniHaptics.tap({ kind: 'pick' }).then(() => '', (e) => String(e));
     report('haptics', !tapped, tapped);
     await recap();
+    await voiceShortcuts();
     await updateCheck();
   } catch (e) {
     report('crash', false, String(e));

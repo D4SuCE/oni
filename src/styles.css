@@ -2762,6 +2762,12 @@ html.ios .toast {
   }
 }
 
+/* Voice commands (Settings, the iPhone): a button per shortcut, one under another if they do not fit. */
+.voice-actions {
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
 /* Room for downloads (Settings → Downloads): how full, then the limit and the months unplayed. */
 .space-bar {
   max-width: 280px;

@@ -1,4 +1,4 @@
-import { Download, ExternalLink, FileText, HardDriveDownload, LogOut, RefreshCw, Trash2, Undo2 } from 'lucide-react';
+import { Download, ExternalLink, FileText, HardDriveDownload, LogOut, Mic, RefreshCw, Trash2, Undo2 } from 'lucide-react';
 import { confirmDialog } from '../components/Dialog.tsx';
 import { formatSize, setAutoLikes, useAutoLikes, useOfflineVersion } from '../ui/offline.ts';
 import { useEffect, useState } from 'react';
@@ -15,6 +15,7 @@ import { pushPresence } from '../player/shell.ts';
 import { MAX_SEE_THROUGH, setSeeThrough, useSeeThrough } from '../ui/seeThrough.ts';
 import { checkIosUpdate, installIosUpdate, installUpdateShortcut, setAutoUpdate, setUpdateViaShortcut, UPDATE_SHORTCUT, useAutoUpdate } from '../ui/iosUpdate.ts';
 import { useUpdate } from '../ui/update.ts';
+import { addVoiceShortcut, VOICE_SHORTCUTS } from '../ui/voice.ts';
 import { cx } from '../ui/util.ts';
 
 export function SettingsView() {
@@ -219,6 +220,20 @@ export function SettingsView() {
         )}
         <MixFeedback />
       </div>
+
+      {isIos && (
+        <div className="panel glass" data-testid="voice-panel">
+          <h3>{s.voice}</h3>
+          <div className="hint">{s.voiceHint}</div>
+          <div className="update-actions voice-actions">
+            {VOICE_SHORTCUTS.map((v) => (
+              <button key={v.link} className="btn ghost" onClick={() => addVoiceShortcut(v.link)} data-testid="voice-shortcut">
+                <Mic size={16} /> {s.voiceAdd(v.phrase)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {offline && <DownloadsPanel />}
 
