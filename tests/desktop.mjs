@@ -112,6 +112,36 @@ await step('taskbar commands drive the player', async () => {
   await page.evaluate(() => window.__wave.audio.pause());
 });
 
+await step('after a restart My Wave goes on: next keeps loading new tracks', async () => {
+  // The user: start the wave, restart Oni, play, skip a couple of tracks: nothing more came, and
+  // only "My Wave" brought it back. The restored queue was taken for a plain list.
+  await page.waitForTimeout(1500); // the queue is saved a second after a change
+  await app.close();
+  ({ app, page } = await launch());
+  await page.click('[data-testid="wave-play"]');
+  await page.waitForFunction(() => !window.__wave.audio.paused, null, { timeout: 30000 });
+  const state = () => page.evaluate(() => {
+    const s = window.__wave.usePlayer.getState();
+    return { index: s.index, queue: s.queue.length, source: s.source?.kind };
+  });
+  const start = await state();
+  for (let i = 0; i < 5; i++) {
+    const before = (await state()).index;
+    await page.click('[data-testid="next"]');
+    await page.waitForFunction((b) => window.__wave.usePlayer.getState().index > b, before, { timeout: 20000 }).catch(async () => {
+      throw new Error(`next ${i + 1} did not advance: ${JSON.stringify(await state())}, at the start ${JSON.stringify(start)}`);
+    });
+  }
+  // The wave tops itself up ahead of what plays.
+  await page.waitForFunction(() => {
+    const s = window.__wave.usePlayer.getState();
+    return s.queue.length - s.index - 1 >= 1;
+  }, null, { timeout: 20000 }).catch(() => {});
+  const end = await state();
+  if (end.source !== 'wave' || end.queue - end.index - 1 < 1) throw new Error(`after five skips: ${JSON.stringify(end)}, at the start ${JSON.stringify(start)}`);
+  await page.evaluate(() => window.__wave.audio.pause());
+});
+
 await step('mini player: remote for the main window in the tray', async () => {
   await page.evaluate(() => window.__wave.audio.play());
   await page.waitForFunction(() => !window.__wave.audio.paused, null, { timeout: 10000 });

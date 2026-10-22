@@ -237,8 +237,9 @@ async function playlistActions() {
   const box = (sel: string) => document.querySelector(sel)?.getBoundingClientRect();
   const search = box('[data-testid="list-search"]');
   const more = box('[data-testid="playlist-more"]');
-  const row = [...document.querySelectorAll<HTMLElement>('.page-actions > *')].filter((b) => b.offsetParent).map((b) => b.getBoundingClientRect().right);
-  const placed = Boolean(search && more && more.right >= Math.max(...row) - 1 && search.right < more.left);
+  // At the page's edge, with a gap after the other buttons (not just the last of the row).
+  const edge = document.querySelector('.page-header')!.getBoundingClientRect().right;
+  const placed = Boolean(search && more && more.right >= edge - 2 && more.left - search.right > 16);
   report('playlist-actions', over === 0 && placed && items.some((i) => /удалить|delete/i.test(i ?? '')), `${over} off screen; search ${placed ? 'before' : 'not before'} "…" at the edge; menu: ${items.join(', ')}`);
 }
 

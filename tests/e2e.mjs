@@ -686,6 +686,12 @@ await step('a big playlist opens at once, the rest of it comes in parts and join
   await page.waitForFunction((n) => window.__wave.usePlayer.getState().queue.length >= n, playable, { timeout: 5000 }).catch(() => {});
   const queue = await page.evaluate(() => window.__wave.usePlayer.getState().queue.length);
   console.log(`       ${big.n} tracks: first ${early} rows after ${first} ms, all ${rows} after ${all} ms; queue ${queue} of ${playable} playable`);
+  // Its search at the page's right edge, as on Liked (the user), not just after the last button.
+  const gap = await page.evaluate(() => {
+    const search = document.querySelector('[data-testid="list-search"]').getBoundingClientRect();
+    return document.querySelector('.page-header').getBoundingClientRect().right - search.right;
+  });
+  if (gap > 2) throw new Error(`the search button is ${gap}px short of the right edge`);
   if (first > 1200) throw new Error(`the first rows took ${first} ms`);
   if (rows < big.n * 0.9 || queue < playable) throw new Error(`${rows} rows, queue ${queue} of ${playable}`);
   await page.evaluate(() => window.__wave.audio.pause());

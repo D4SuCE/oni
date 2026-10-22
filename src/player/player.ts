@@ -720,9 +720,12 @@ function persistSoon() {
     const s = get();
     if (!s.queue.length) return;
     const from = Math.max(0, s.index - 20);
+    // The wave (My Wave or a station) is kept as such: restored as a plain list it ran dry after
+    // the few tracks it had ahead (the user).
+    const wave = s.source?.kind === 'wave' ? s.source : undefined;
     storage.setItem(
       'player.session',
-      JSON.stringify({ queue: s.queue.slice(from, from + 200), index: s.index - from, title: sourceTitle(s.source) }),
+      JSON.stringify({ queue: s.queue.slice(from, from + 200), index: s.index - from, title: sourceTitle(s.source), wave }),
     );
   }, 1000);
 }
@@ -732,9 +735,13 @@ export function restoreSession() {
   try {
     const raw = storage.getItem('player.session');
     if (!raw) return;
-    const { queue, index, title } = JSON.parse(raw);
+    const { queue, index, title, wave } = JSON.parse(raw);
     if (!Array.isArray(queue) || !queue[index]) return;
-    set({ queue, index, source: { kind: 'list', title }, duration: (queue[index].durationMs || 0) / 1000 });
+    if (wave?.kind === 'wave') {
+      // The wave goes on from where it was: a new session with Yandex starts with the next fill.
+      engine = new WaveEngine(waveApi, history, get().tuning, (id) => isDisliked(id), wave.station ? [wave.station.seed] : null);
+      set({ queue, index, source: wave, duration: (queue[index].durationMs || 0) / 1000 });
+    } else set({ queue, index, source: { kind: 'list', title }, duration: (queue[index].durationMs || 0) / 1000 });
     updateMediaSession(queue[index]);
   } catch {
     /* ignore */
