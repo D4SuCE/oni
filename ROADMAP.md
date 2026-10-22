@@ -84,8 +84,8 @@ Activity), «остров» при скачивании, скачивание с
   iPhone, статус в Discord — **ждём от пользователя Application ID** (discord.com/developers →
   New Application; по желанию картинка `oni` в Rich Presence → Art Assets).
 - Перед выпуском: весь `npm run check` и `npm run test:e2e`, облачная проверка iPhone
-  (`gh workflow run ios.yml --ref <ветка>`), затем порядок из CLAUDE.md («Выпуск»). Следующая версия — 1.5.11
-  .
+  (`gh workflow run ios.yml --ref <ветка>`), затем порядок из CLAUDE.md («Выпуск»). Следующая версия —
+  1.7.0, если будут новые возможности, или 1.6.1 — если только исправления.
 - Мелочи, замеченные по ходу: шаг e2e «a playing list says so…» иногда падает (есть подробности в
   сообщении об ошибке); сеть Яндекса временами отвечает `ERR_TIMED_OUT` — тогда перезапустить.
 
