@@ -139,6 +139,15 @@ export class BackgroundDownloads {
     await this.send();
   }
 
+  /** Stops every list (the room for downloads is full). */
+  async cancelAll() {
+    const ids = Object.keys(this.pending);
+    this.pending = {};
+    this.lists = {};
+    this.changed();
+    await this.deps.native.cancel(ids);
+  }
+
   /** Stops a list: iOS cancels what it has, the rest is forgotten. */
   async cancel(list: string) {
     const ids = Object.keys(this.pending).filter((id) => this.pending[id].list === list);

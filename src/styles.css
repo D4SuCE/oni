@@ -2627,6 +2627,29 @@ html.ios .toast {
   justify-content: space-between;
   gap: 16px;
 }
+/* Room for downloads (Settings → Downloads): how full, then the limit and the months unplayed. */
+.space-bar {
+  max-width: 280px;
+  height: 4px;
+  margin: 8px 0 4px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.space-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--gold);
+}
+.space-row {
+  flex-wrap: wrap;
+  margin-top: 14px;
+  row-gap: 8px;
+}
+.space-hint {
+  margin: 8px 0 4px;
+}
 .stats-hint {
   margin-bottom: 12px;
 }

@@ -125,7 +125,9 @@ export const offline =
         },
       })
     : null;
-offline?.reconcile();
+// The room rules (Settings → Downloads) once the files are counted; the track playing is kept.
+offline?.reconcile().then(() => offline!.sweep()).catch(() => {});
+if (offline) offline.pin = (id) => String(current()?.id) === id;
 
 /** No network (set by the app store): only downloaded tracks can play, the rest are skipped at once. */
 let offlineMode = false;
@@ -244,6 +246,8 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
     // the sealed file itself with the key (decrypting it here and sending it over as text froze
     // the page on every downloaded track).
     const saved = offline?.entry(t.id);
+    // Played now: the last to go when room is made.
+    if (saved) offline!.touch(t.id);
     const sealedKey = isIos && saved ? await offline!.rawKey() : null;
     const local = saved && !sealedKey ? await offline!.open(t.id).catch(() => null) : null;
     const stream = saved && (sealedKey || local) ? { url: '', codec: saved.codec, bitrate: saved.bitrate } : await streamUrl(t);

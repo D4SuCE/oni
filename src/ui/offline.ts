@@ -40,6 +40,16 @@ background?.subscribe(() => {
     }
 });
 
+/** Downloads came to the limit with nothing left to make room from: the iPhone's lists in the
+ * background stop there (the desktop's stop by themselves, downloadAll). */
+const fullToast = () => toast(tr().downloads.full(formatSize(offline!.space().limit)));
+offline?.subscribe(() => {
+  if (!offline!.full || !background?.progress().total) return;
+  watched.clear();
+  void background.cancelAll();
+  fullToast();
+});
+
 /** Whole-list downloads in progress, by list ("playlist:<uid>:<kind>", "album:<id>", …). */
 export const useBatches = create<Record<string, { done: number; total: number }>>(() => ({}));
 
@@ -60,6 +70,7 @@ export async function downloadTrack(t: Track) {
   }
   try {
     await offline?.download(t);
+    if (offline?.full) fullToast();
   } catch (e) {
     toast(tr().downloads.failedOne(errorText(e)));
   }
@@ -100,12 +111,13 @@ export async function downloadList(key: string, tracks: Track[], title = '') {
     const { [key]: _, ...rest } = s;
     return rest;
   }, true);
+  if (!stopped && offline.full) return fullToast();
   toast(stopped ? tr().downloads.cancelled : failed ? tr().downloads.failedSome(failed) : tr().downloads.listDone(tracks.length));
 }
 
 export function formatSize(bytes: number) {
   const mb = bytes / (1024 * 1024);
-  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} ${tr().downloads.gb}` : `${Math.round(mb)} ${tr().downloads.mb}`;
+  return mb >= 1024 ? `${(mb / 1024).toFixed(1).replace(/\.0$/, '')} ${tr().downloads.gb}` : `${Math.round(mb)} ${tr().downloads.mb}`;
 }
 
 /**

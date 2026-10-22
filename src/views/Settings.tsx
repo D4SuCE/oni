@@ -6,6 +6,7 @@ import { Segmented } from '../components/Wave.tsx';
 import { LANGS, setLang, useLang, useT } from '../i18n.ts';
 import { canAnalyzeAudio } from '../player/eq.ts';
 import { offline, recsFeedback, setCrossfade, setNormalize, stats, usePlayer } from '../player/player.ts';
+import type { SpaceRules } from '../player/offline.ts';
 import { logout, navigate, useApp } from '../store.ts';
 import { setMotion, setPulse, useMotion, usePulse } from '../ui/motion.ts';
 import { isIos } from '../ui/platform.ts';
@@ -241,18 +242,40 @@ export function SettingsView() {
 }
 
 /** How much the downloads take, a way to them and to free the space. */
+/** The room rules' choices (Settings → Downloads): a limit in GB, months unplayed. */
+const LIMITS_GB = [0, 2, 5, 10, 20];
+const FORGET_MONTHS = [0, 1, 3, 6];
+const GB = 1024 * 1024 * 1024;
+
 function DownloadsPanel() {
   const t = useT();
   const d = t.downloads;
   useOfflineVersion((v) => v.v);
   const autoLikes = useAutoLikes((s) => s.on);
   const count = offline?.entries().length ?? 0;
+  const [rules, setRules] = useState(() => offline?.space() ?? { limit: 0, forgetDays: 0 });
+  const used = offline?.totalSize() ?? 0;
+  // New rules: what they would remove is asked first, then they apply.
+  const apply = async (next: SpaceRules) => {
+    if (!offline) return;
+    const out = offline.plan(next);
+    if (out.length && !(await confirmDialog(d.trimTitle, d.trimMessage(t.count.tracks(out.length), formatSize(out.reduce((n, e) => n + e.size, 0))), d.trimOk))) return;
+    await offline.setSpace(next);
+    setRules(next);
+  };
   return (
     <div className="panel glass">
       <h3>{t.nav.downloads}</h3>
       <div className="settings-row" data-testid="downloads-settings">
         <div>
-          <div>{count ? `${t.count.tracks(count)} · ${formatSize(offline?.totalSize() ?? 0)}` : d.none}</div>
+          <div data-testid="downloads-used">
+            {count ? `${t.count.tracks(count)} · ${rules.limit ? d.used(formatSize(used), formatSize(rules.limit)) : formatSize(used)}` : d.none}
+          </div>
+          {rules.limit > 0 && (
+            <div className="space-bar" data-testid="space-bar">
+              <i style={{ width: `${Math.min(100, (used / rules.limit) * 100)}%` }} />
+            </div>
+          )}
           <div className="hint">{d.settingsHint}</div>
         </div>
         <div className="update-actions">
@@ -272,6 +295,23 @@ function DownloadsPanel() {
           )}
         </div>
       </div>
+      <div className="settings-row space-row" data-testid="space-limit">
+        <div>{d.limit}</div>
+        <Segmented
+          options={LIMITS_GB.map((n) => [String(n), n ? `${n} ${d.gb}` : d.off] as [string, string])}
+          value={String(Math.round(rules.limit / GB))}
+          onChange={(v) => apply({ ...rules, limit: Number(v) * GB })}
+        />
+      </div>
+      <div className="settings-row space-row" data-testid="space-forget">
+        <div>{d.forget}</div>
+        <Segmented
+          options={FORGET_MONTHS.map((n) => [String(n), n ? d.months(n) : d.off] as [string, string])}
+          value={String(Math.round(rules.forgetDays / 30))}
+          onChange={(v) => apply({ ...rules, forgetDays: Number(v) * 30 })}
+        />
+      </div>
+      <div className="hint space-hint">{d.spaceHint}</div>
       <label className="toggle-row">
         <div>
           <div>{d.autoLikes}</div>

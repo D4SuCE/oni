@@ -26,6 +26,18 @@ export interface OfflineDeps {
   crypto: Crypto;
   /** The track's cover (one size, ~30 KB), kept beside it so it shows with no network too. */
   fetchCover?(track: Track): Promise<ArrayBuffer | null>;
+  /** The clock (tests run their own). */
+  now?(): number;
+}
+
+/**
+ * Room for downloads (Settings → Downloads): at most `limit` bytes (0: no limit), and what has
+ * not played for `forgetDays` days goes (0: never). Making room, the tracks played longest ago
+ * (or downloaded, if never played) go first; the one playing and this session's downloads stay.
+ */
+export interface SpaceRules {
+  limit: number;
+  forgetDays: number;
 }
 
 export interface OfflineEntry {
@@ -38,10 +50,17 @@ export interface OfflineEntry {
   bitrate: number;
   /** Its cover is kept too (`<id>.jpg`). */
   cover?: boolean;
+  /** ms epoch when it last played (room is made from those played longest ago). */
+  played?: number;
 }
 
 const INDEX = 'offline.index.v1';
 const KEY = 'offline.key.v1';
+const SPACE = 'offline.space.v1';
+const DAY = 24 * 60 * 60 * 1000;
+/** Downloads closer together than this are one session: making room never takes from it (a list
+ * bigger than the limit stops instead of eating its own start). */
+const SESSION_GAP = 10 * 60 * 1000;
 const IV = 12;
 
 const fileName = (id: string | number) => `${id}.oni`;
@@ -66,6 +85,12 @@ export class OfflineLibrary {
   /** Tracks someone else is putting in place (the iPhone's background downloads): their files are
    * not leftovers, even before they are in the index. */
   protect: (id: string) => boolean = () => false;
+  /** Tracks to keep whatever the rules say (the one playing). */
+  pin: (id: string) => boolean = () => false;
+  /** The last download found no room within the limit (a list stops there). */
+  full = false;
+  private sessionStart = 0;
+  private lastAdd = 0;
 
   constructor(deps: OfflineDeps) {
     this.deps = deps;
@@ -74,6 +99,10 @@ export class OfflineLibrary {
     } catch {
       this.index = {};
     }
+  }
+
+  private now() {
+    return this.deps.now?.() ?? Date.now();
   }
 
   private changed() {
@@ -120,9 +149,10 @@ export class OfflineLibrary {
   /** A file already sealed with this key and put in place by someone else (the iPhone's native
    * side): only its index entry is new. */
   adopt(track: Track, size: number, codec: string, bitrate: number) {
-    this.index[String(track.id)] = { track: trimTrack(track), size, at: Date.now(), codec, bitrate };
+    this.index[String(track.id)] = { track: trimTrack(track), size, at: this.now(), codec, bitrate };
     this.changed();
     void this.saveCover(track);
+    void this.added();
   }
 
   isDownloading(id: string | number) {
@@ -211,7 +241,77 @@ export class OfflineLibrary {
     file.set(iv);
     file.set(sealed, IV);
     await this.deps.files.write(fileName(id), file.buffer);
-    this.index[id] = { track: trimTrack(track), size: file.length, at: Date.now(), codec, bitrate };
+    this.index[id] = { track: trimTrack(track), size: file.length, at: this.now(), codec, bitrate };
+    await this.added();
+  }
+
+  // ------------------------------------------------------------------ room
+
+  space(): SpaceRules {
+    try {
+      return { limit: 0, forgetDays: 0, ...JSON.parse(this.deps.store.getItem(SPACE) || '{}') };
+    } catch {
+      return { limit: 0, forgetDays: 0 };
+    }
+  }
+
+  /** It played now: the last to go when room is made. */
+  touch(id: string | number) {
+    const e = this.index[String(id)];
+    if (!e) return;
+    e.played = this.now();
+    this.deps.store.setItem(INDEX, JSON.stringify(this.index));
+  }
+
+  private kept(e: OfflineEntry) {
+    const id = String(e.track.id);
+    return this.pin(id) || this.protect(id) || this.busy.has(id) || (this.sessionStart > 0 && e.at >= this.sessionStart);
+  }
+
+  /** What `rules` would remove now: the long unplayed, then the longest unplayed down to the limit. */
+  plan(rules: SpaceRules): OfflineEntry[] {
+    const lastUse = (e: OfflineEntry) => e.played ?? e.at;
+    const free = Object.values(this.index)
+      .filter((e) => !this.kept(e))
+      .sort((a, b) => lastUse(a) - lastUse(b));
+    const cutoff = this.now() - rules.forgetDays * DAY;
+    const out = rules.forgetDays ? free.filter((e) => lastUse(e) < cutoff) : [];
+    if (rules.limit) {
+      let total = this.totalSize() - out.reduce((n, e) => n + e.size, 0);
+      for (const e of free) {
+        if (total <= rules.limit) break;
+        if (out.includes(e)) continue;
+        out.push(e);
+        total -= e.size;
+      }
+    }
+    return out;
+  }
+
+  /** New rules, applied at once; resolves how many tracks went. */
+  async setSpace(rules: SpaceRules) {
+    this.deps.store.setItem(SPACE, JSON.stringify(rules));
+    return this.sweep();
+  }
+
+  /** The rules applied (on start, and after each download); resolves how many tracks went. */
+  async sweep() {
+    const rules = this.space();
+    const out = this.plan(rules);
+    for (const e of out) await this.remove(e.track.id);
+    const was = this.full;
+    this.full = Boolean(rules.limit) && this.totalSize() > rules.limit;
+    // Told when it comes to the limit (the iPhone's background lists stop then).
+    if (this.full !== was) this.changed();
+    return out.length;
+  }
+
+  /** A track came in: it belongs to the session, and room is made for it. */
+  private async added() {
+    const now = this.now();
+    if (!this.sessionStart || now - this.lastAdd > SESSION_GAP) this.sessionStart = now;
+    this.lastAdd = now;
+    await this.sweep();
   }
 
   /**
@@ -222,11 +322,13 @@ export class OfflineLibrary {
   async downloadAll(tracks: Track[], progress?: (done: number, total: number) => void, parallel = 2, stop?: () => boolean): Promise<number> {
     const playable = tracks.filter((t) => t.available !== false);
     const todo = playable.filter((t) => !this.has(t.id));
+    this.full = false;
     let done = playable.length - todo.length;
     let failed = 0;
     let next = 0;
     const worker = async () => {
-      while (next < todo.length && !stop?.()) {
+      // At the limit with nothing left to make room from: the list stops there.
+      while (next < todo.length && !stop?.() && !this.full) {
         const t = todo[next++];
         try {
           await this.download(t);

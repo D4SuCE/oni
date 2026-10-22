@@ -186,6 +186,82 @@ await test('covers: kept beside a download, read back, removed with it, kept by 
   assert(disk.has('51.jpg') && again.entry('51')?.cover, 'filled in');
 });
 
+// ------------------------------------------------ room for downloads (the limit, forgetting)
+
+/** A library on a clock of its own: `clock.now` moves on as the test says. */
+function timed() {
+  const clock = { now: Date.UTC(2026, 9, 1) };
+  const env = setup();
+  const lib = new OfflineLibrary({ ...env.deps, now: () => clock.now });
+  return { ...env, lib, clock };
+}
+const DAY = 24 * 60 * 60 * 1000;
+
+await test('room: over the limit, the tracks played longest ago go first; the playing one and this session stay', async () => {
+  const { lib, clock } = timed();
+  for (const id of ['a', 'b', 'c']) {
+    await lib.download(track(id));
+    clock.now += DAY;
+  }
+  const one = lib.entry('a')!.size;
+  // "a" was played lately, "b" long ago (downloaded and never played), "c" is the one playing now.
+  clock.now += 30 * DAY;
+  lib.touch('a');
+  lib.touch('c');
+  lib.pin = (id) => id === 'c';
+  await lib.setSpace({ limit: one * 3.5, forgetDays: 0 });
+  // A new session: two more. Room for 3.5: "b" goes first, then nothing else may (a is older but
+  // played, c is pinned, d and e are this session's) — so the second stops at the limit.
+  clock.now += DAY;
+  await lib.download(track('d'));
+  assert(!lib.has('b') && lib.has('a') && lib.has('c') && lib.has('d') && !lib.full, `after d: ${lib.entries().map((e) => e.track.id)}`);
+  await lib.download(track('e'));
+  assert(lib.has('e') && !lib.has('a') && lib.has('c') && lib.has('d'), `after e, a (played longest ago) gives way: ${lib.entries().map((e) => e.track.id)}`);
+  assert(!lib.full, 'room found');
+  await lib.download(track('f'));
+  assert(lib.full, 'only the pinned and this session left: full');
+});
+
+await test('room: a list stops at the limit instead of eating its own start', async () => {
+  const { lib, clock } = timed();
+  await lib.download(track('x'));
+  const one = lib.entry('x')!.size;
+  await lib.remove('x');
+  await lib.setSpace({ limit: one * 2.5, forgetDays: 0 });
+  clock.now += DAY;
+  const failed = await lib.downloadAll(['1', '2', '3', '4', '5'].map((id) => track(id)), undefined, 1);
+  const ids = lib.entries().map((e) => e.track.id).sort();
+  assert(lib.full && ids.join() === '1,2,3' && failed === 0, `stopped at the limit with the list's start kept: ${ids}, failed ${failed}`);
+  // A new download later starts afresh and makes room from what was there (the played one stays).
+  clock.now += 2 * DAY;
+  lib.touch('3');
+  await lib.download(track('6'));
+  const later = lib.entries().map((e) => e.track.id).sort().join();
+  assert(later === '3,6' && !lib.full, `later: ${later}`);
+});
+
+await test('room: forgetting what has not played for a while, the playing one kept; a plan before the rules change', async () => {
+  const { lib, clock } = timed();
+  for (const id of ['old', 'played', 'new', 'now']) await lib.download(track(id));
+  clock.now += 100 * DAY;
+  lib.touch('played');
+  await lib.download(track('new2'));
+  lib.pin = (id) => id === 'now';
+  const plan = lib.plan({ limit: 0, forgetDays: 90 });
+  assert(plan.map((e) => e.track.id).sort().join() === 'new,old', `plan: ${plan.map((e) => e.track.id)}`);
+  assert(lib.has('old'), 'a plan removes nothing');
+  const removed = await lib.setSpace({ limit: 0, forgetDays: 90 });
+  assert(removed === 2 && !lib.has('old') && !lib.has('new') && lib.has('played') && lib.has('now') && lib.has('new2'), `forgot: ${lib.entries().map((e) => e.track.id)}`);
+  assert(lib.space().forgetDays === 90, 'kept');
+  // Kept across a restart, and applied on the next start (sweep).
+  const again = new OfflineLibrary({ ...lib['deps'], now: () => clock.now + 91 * DAY } as OfflineDeps);
+  again.pin = (id) => id === 'now';
+  assert(again.space().forgetDays === 90, 'rules kept');
+  // 91 days on: "played" and "new2" (downloaded, never played) are past 90 days; "now" plays.
+  const swept = await again.sweep();
+  assert(swept === 2 && again.entries().map((e) => e.track.id).join() === 'now', `sweep ${swept}: ${again.entries().map((e) => e.track.id)}`);
+});
+
 await test('audio type by codec', () => {
   assert(audioType('mp3') === 'audio/mpeg' && audioType('aac-mp4') === 'audio/mp4' && audioType('flac-mp4') === 'audio/mp4' && audioType('he-aac') === 'audio/aac', 'types');
 });

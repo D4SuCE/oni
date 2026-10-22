@@ -206,8 +206,41 @@ await step('the network is back: the app goes online again', async () => {
   await page.waitForSelector('.wave-hero', { timeout: 15000 });
 });
 
-await step('remove all from Settings frees the space', async () => {
+await step('room for downloads: a limit shows how full; forgetting asks first, then removes the long unplayed', async () => {
   await page.click('[data-testid="nav-settings"]');
+  const pick = (row, label) => page.locator(`[data-testid="${row}"] .segmented button`, { hasText: label }).click();
+  await pick('space-limit', '2 ГБ');
+  await page.waitForSelector('[data-testid="space-bar"]', { timeout: 3000 });
+  const used = await page.locator('[data-testid="downloads-used"]').innerText();
+  if (!/из 2 ГБ/.test(used)) throw new Error(`used: ${used}`);
+  await pick('space-limit', 'Нет');
+  // Two of the four downloaded 40 days ago and not played since (this run's are its session, and
+  // were played above: both would keep them).
+  const before = await page.evaluate(() => {
+    const all = window.__wave.offline.entries();
+    const s = window.__wave.usePlayer.getState();
+    const playing = String(s.queue[s.index]?.id);
+    for (const e of all.filter((x) => String(x.track.id) !== playing).slice(0, 2)) {
+      e.at = Date.now() - 40 * 24 * 3600 * 1000;
+      delete e.played;
+    }
+    return all.length;
+  });
+  await pick('space-forget', '1 мес.');
+  await page.waitForSelector('.dialog', { timeout: 3000 });
+  const asked = await page.locator('.dialog').innerText();
+  await page.locator('.dialog button:not(.danger)').first().click();
+  const kept = await page.evaluate(() => ({ n: window.__wave.offline.entries().length, days: window.__wave.offline.space().forgetDays }));
+  if (!/2 трека/.test(asked) || kept.n !== before || kept.days !== 0) throw new Error(`cancel: ${asked} / ${JSON.stringify(kept)}`);
+  await pick('space-forget', '1 мес.');
+  await page.locator('.dialog button.danger').click();
+  await page.waitForFunction((n) => window.__wave.offline.entries().length === n - 2, before, { timeout: 5000 });
+  const files = fs.readdirSync(offlineDir).filter((f) => f.endsWith('.oni')).length;
+  if (files !== before - 2) throw new Error(`files ${files}, want ${before - 2}`);
+  await pick('space-forget', 'Нет');
+});
+
+await step('remove all from Settings frees the space', async () => {
   await page.click('[data-testid="downloads-remove-all"]');
   await page.locator('.dialog button.danger').click();
   await page.waitForSelector('[data-testid="downloads-remove-all"]', { state: 'detached', timeout: 5000 });
