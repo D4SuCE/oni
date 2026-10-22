@@ -660,15 +660,28 @@ public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDel
         }
     }
 
-    /// { done, total, title } — the lists' count, as their buttons show it.
+    /// { done, total, title } — the lists' count, as their buttons show it; a total of 0 (all
+    /// cancelled) takes the Live Activity and the notification away.
     @objc func progress(_ call: CAPPluginCall) {
         let me = DownloadsPlugin.shared
         DispatchQueue.main.async {
             me.done = call.getInt("done") ?? me.done
             me.total = call.getInt("total") ?? me.total
             me.title = call.getString("title") ?? me.title
-            me.show()
+            if me.total > 0 { me.show() } else { me.clear() }
             call.resolve()
+        }
+    }
+
+    /// Nothing to download any more (cancelled): the count goes from the island, the lock screen
+    /// and the shade at once (the user: they kept the old numbers). On main.
+    private func clear() {
+        done = 0
+        shownAt = .distantPast
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["oni-downloads"])
+        if #available(iOS 16.2, *), let running = activity as? Activity<DownloadAttributes> {
+            activity = nil
+            Task { await running.end(nil, dismissalPolicy: .immediate) }
         }
     }
 

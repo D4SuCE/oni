@@ -170,6 +170,19 @@ await test('progress counts the lists as their buttons do, keeps finished ones t
   assert(p.done === 0 && p.total === 2 && p.title === 'Album', `anew: ${JSON.stringify(p)}`);
 });
 
+await test('a cancelled list leaves the count: nothing left, nothing to show', async () => {
+  // The user: after cancelling, the Dynamic Island kept the old numbers.
+  const { bg } = setup();
+  await bg.add('liked', [track('1'), track('2')], 'Liked');
+  await bg.add('album:9', [track('3')], 'Album');
+  await bg.cancel('album:9');
+  let p = bg.progress();
+  assert(p.total === 2 && p.title === 'Liked', `one left: ${JSON.stringify(p)}`);
+  await bg.cancel('liked');
+  p = bg.progress();
+  assert(p.total === 0 && p.done === 0, `none left: ${JSON.stringify(p)}`);
+});
+
 await test('the count survives a restart', async () => {
   const { bg, deps } = setup();
   await bg.add('liked', [track('1'), track('2')], 'Liked');

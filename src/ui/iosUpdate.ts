@@ -61,7 +61,10 @@ export async function checkIosUpdate(current = __APP_VERSION__) {
       if (auto.on && auto.opened !== latest.version && !document.hidden) {
         useAutoUpdate.setState({ opened: latest.version });
         storage.setItem(AUTO_KEY, JSON.stringify(useAutoUpdate.getState()));
-        installIosUpdate();
+        // Said first, then SideStore (the user: it opened with no word of why). There the update is
+        // one tap on "Update": SideStore starts no install by itself.
+        toast(tr().update.iosOpening(latest.version));
+        setTimeout(installIosUpdate, 2000);
         // toast(), not the state itself: put there straight, the message never went away.
       } else if (was.version !== latest.version) toast(tr().update.iosToast(latest.version));
     } else useUpdate.setState({ status: 'latest' }, true);

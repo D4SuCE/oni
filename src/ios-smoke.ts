@@ -207,6 +207,13 @@ async function backgroundDownload() {
   report('background-download', kept && !plain, `${((Date.now() - started) / 1000).toFixed(1)} s, pending ${bg.pendingFor('smoke')}, unencrypted left ${plain}, ring up to ${ring.toFixed(2)}`);
   // The Dynamic Island / lock screen: a Live Activity, where the simulator allows them.
   report('live-activity', Boolean(live) && state.total === 1, JSON.stringify(state));
+  // Cancelled: the island and the lock screen let go of the count (they kept the old numbers).
+  const more = chart.filter((t) => t.available !== false && !wave().offline!.has(String(t.id)) && String(t.id) !== String(track.id)).slice(0, 2);
+  await bg.add('smoke-cancel', more, 'Cancel');
+  await until(async () => (await OniDownloads.state()).activity, 5000);
+  await bg.cancel('smoke-cancel');
+  const gone = await until(async () => !(await OniDownloads.state()).activity, 5000);
+  report('live-activity-cancel', Boolean(gone) && more.length === 2, JSON.stringify(await OniDownloads.state()));
   await wave().playTracks([track], 0, 'smoke');
   const played = await until(() => wave().audio.src.startsWith('oni-sealed:') && !wave().audio.paused && wave().audio.currentTime > 1, 20000);
   report('native-sealed-playback', played, wave().audio.src.slice(0, 12));

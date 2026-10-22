@@ -89,13 +89,14 @@ export function iosBackgroundDownloads() {
     bg.dropped(id);
   });
   OniDownloads.addListener('progress', ({ id, written, total }) => total > 0 && useTrackProgress.setState({ [id]: Math.min(1, written / total) }));
-  // The count goes to the native side whenever it changes (the Live Activity, the notification).
+  // The count goes to the native side whenever it changes (the Live Activity, the notification),
+  // "nothing left" too: a cancelled download closes them (they kept the old numbers).
   let last = '';
   bg.subscribe(() => {
     const p = bg.progress();
     const key = `${p.done}/${p.total}/${p.title}`;
-    if (key === last || !p.total) return;
-    last = key;
+    if (key === last || (!p.total && !last)) return;
+    last = p.total ? key : '';
     OniDownloads.progress({ ...p, title: p.title || tr().downloads.shadeTitle }).catch(() => {});
   });
   document.addEventListener('visibilitychange', () => !document.hidden && bg.resume());

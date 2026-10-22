@@ -40,6 +40,13 @@ entitlement, оно работает на обоих путях.
 > `local.wave.player.OniActivity`). SideStore подписывает и расширения, но на бесплатном Apple ID
 > каждое — ещё один App ID (лимит — 10 за 7 дней). Если установка упрётся в лимит — подождать
 > или убрать расширение из сборки (цель `OniActivity` в `ios/App/App.xcodeproj`).
+>
+> При каждом обновлении SideStore спрашивает, что делать с расширением («App Contains Extensions»).
+> Лучший ответ — **Keep App Extensions (Use Main Profile)**: расширение подписывается профилем самого
+> Oni и App ID не тратит. Запомнить его: SideStore → Settings → Advanced Settings → User Customizations
+> → Customize Extensions → **Use Main Profile** (в старых версиях — переключатель «Prompt AppExtns
+> Customization»). Ссылка `sidestore://install?url=…` установку сама не запускает — в SideStore нужно
+> нажать «Update».
 
 Идея: CI каждый раз собирает IPA **без подписи**, а SideStore на телефоне
 подписывает его вашим Apple ID и сам продлевает подпись раз в 7 дней — без
