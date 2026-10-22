@@ -2914,10 +2914,6 @@ kbd {
   }
 }
 
-.dl-short {
-  display: none;
-}
-
 /* Search inside a playlist or Liked (src/components/ListSearch.tsx). */
 .list-search {
   display: flex;
@@ -3009,9 +3005,8 @@ kbd {
     gap: 8px;
     margin-bottom: 20px;
   }
-  /* (not while downloading: then the button shows how many are done) */
-  html.ios .lib-actions .btn:not(.primary):not(.busy),
-  html.ios .page-actions .btn:not(.primary):not(.busy) {
+  html.ios .lib-actions .btn:not(.primary),
+  html.ios .page-actions .btn:not(.primary) {
     flex: none;
     width: 42px;
     height: 42px;
@@ -3020,14 +3015,19 @@ kbd {
     font-size: 0;
     border-radius: 50%;
   }
-  /* Downloading: the short count, and no list size beside it to run off the screen. */
-  html.ios .btn.busy .dl-full,
-  html.ios .lib-actions:has(.busy) .muted,
-  html.ios .page-actions:has(.busy) .muted {
-    display: none;
+  /* Downloading: a ring filling around the cross, in the round button (DownloadButton.tsx). */
+  html.ios .btn.dl-round {
+    position: relative;
   }
-  html.ios .btn.busy .dl-short {
-    display: inline;
+  html.ios .btn.dl-round .dl-ring {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  html.ios .btn.dl-round svg:not(.dl-ring) {
+    width: 14px;
+    height: 14px;
   }
   html.ios .lib-actions .muted,
   html.ios .page-actions .muted {
@@ -3056,9 +3056,6 @@ kbd {
   /* Liked: its size before "…" takes the free space (both at the right). */
   html.ios .lib-actions:has(.muted) [data-testid='liked-more'] {
     margin-left: 0;
-  }
-  html.ios .lib-actions:has(.busy) [data-testid='liked-more'] {
-    margin-left: auto;
   }
   /* Menus: a sheet along the bottom, the full width, as iOS's own; a submenu lies over it. */
   html.ios .menu {

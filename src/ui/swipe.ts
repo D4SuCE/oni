@@ -2,6 +2,11 @@
 
 import { useEffect, type RefObject } from 'react';
 
+/** Where a drag is something else's: sliders, rows dragged into order (a handle, a list in
+ * "Reorder"), the queue's sheet over Now Playing (its own scroll and handles). Dragging a track
+ * down there pulled the whole screen down instead (the user on 1.6.1). */
+const NOT_A_SWIPE = 'input, .drag-handle, .reordering, .q-sheet';
+
 /** Far enough down, or a quick flick, closes; anything less springs back. */
 const CLOSE_AT = 120;
 const FLICK = 0.6; // px per ms
@@ -20,8 +25,8 @@ export function useSwipeDown(ref: RefObject<HTMLElement | null>, onClose: () => 
       if (close) setTimeout(onClose, 200);
     };
     const down = (e: PointerEvent) => {
-      // Sliders keep their drag; the queue and lyrics column (wide screens) scrolls on its own.
-      if (e.pointerType !== 'touch' || (e.target as Element).closest('input, .np-side')) return;
+      // Sliders and dragged rows keep their drag; the queue and lyrics column (wide screens) scrolls on its own.
+      if (e.pointerType !== 'touch' || (e.target as Element).closest(`${NOT_A_SWIPE}, .np-side`)) return;
       start = { id: e.pointerId, y: e.clientY, t: e.timeStamp };
       dy = 0;
     };
@@ -71,8 +76,8 @@ export function useSwipeBack(scroller: RefObject<HTMLElement | null>, page: () =
     };
     const down = (e: TouchEvent) => {
       const touch = e.touches[0];
-      // One finger, from the top, not on a slider.
-      start = e.touches.length === 1 && box.scrollTop <= 0 && !(e.target as Element).closest('input') ? { y: touch.clientY, x: touch.clientX, t: e.timeStamp } : null;
+      // One finger, from the top, not on a slider or a track being dragged into order.
+      start = e.touches.length === 1 && box.scrollTop <= 0 && !(e.target as Element).closest(NOT_A_SWIPE) ? { y: touch.clientY, x: touch.clientX, t: e.timeStamp } : null;
       pulling = false;
       dy = 0;
     };
