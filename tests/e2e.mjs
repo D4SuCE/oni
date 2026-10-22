@@ -1188,6 +1188,36 @@ await step('recap: the month summed up from the plays (here and, for the last da
   console.log(`       ${minutes} min, ${tracks} tracks, ${artists} artists; saved "${made[0].title}" (${made[0].count}), removed`);
 });
 
+await step('recap as stories: cards one after another, the summary copied as a 1080×1920 picture', async () => {
+  // The user's pick after 1.9.0. Recap is open from the step above.
+  await page.click('[data-testid="recap-stories-open"]');
+  await page.waitForSelector('[data-testid="recap-stories"]');
+  const seen = [];
+  for (let i = 0; i < 12; i++) {
+    const card = await page.locator('[data-testid="story-card"]').getAttribute('data-card');
+    if (!seen.includes(card)) {
+      seen.push(card);
+      await shot(`story-${card}`);
+    }
+    if (card === 'summary') break;
+    await page.click('[data-testid="story-next"]');
+    await page.waitForTimeout(450);
+  }
+  if (seen[0] !== 'intro' || seen.at(-1) !== 'summary' || !seen.includes('minutes')) throw new Error(`cards: ${seen}`);
+  await page.click('[data-testid="story-copy"]');
+  await page.waitForSelector('.toast', { timeout: 15000 });
+  // Read back through the page (this Electron's clipboard in the main process has no images).
+  const size = await page.evaluate(async () => {
+    const items = await navigator.clipboard.read();
+    const bitmap = await createImageBitmap(await items[0].getType('image/png'));
+    return { width: bitmap.width, height: bitmap.height };
+  });
+  if (size.width !== 1080 || size.height !== 1920) throw new Error(`picture ${JSON.stringify(size)}`);
+  await page.click('[data-testid="stories-close"]');
+  await page.waitForSelector('[data-testid="recap-stories"]', { state: 'detached' });
+  console.log(`       cards: ${seen.join(', ')}`);
+});
+
 await step('english interface has no Russian left', async () => {
   // Only the app's own chrome: titles, tabs, buttons, tooltips. Yandex data stays as it is
   // (also in the Home banner: the playing track, its artists, where it plays from).

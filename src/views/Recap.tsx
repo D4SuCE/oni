@@ -2,7 +2,7 @@
 // (player/playLog.ts): minutes, the top artists, tracks and genres, as music services do at the
 // year's end. Other devices' plays of the last days come in from Yandex's history when it opens.
 
-import { ListPlus, Play } from 'lucide-react';
+import { BookOpen, ListPlus, Play } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client.ts';
 import { trackCover } from '../api/yandex.ts';
@@ -13,6 +13,7 @@ import { useLang, useT } from '../i18n.ts';
 import { playLog, playTracks } from '../player/player.ts';
 import { errorText, navigate, refreshPlaylists, toast } from '../store.ts';
 import { isIos } from '../ui/platform.ts';
+import { RecapStories } from './RecapStories.tsx';
 
 type Period = 'month' | 'last' | 'year';
 
@@ -39,6 +40,7 @@ export function RecapView() {
   const lang = useLang((s) => s.lang);
   const genreTitles = useGenreTitles();
   const [period, setPeriod] = useState<Period>('month');
+  const [stories, setStories] = useState(false);
   // Bumped once other devices' days are in.
   const [version, setVersion] = useState(0);
   useEffect(() => {
@@ -107,10 +109,14 @@ export function RecapView() {
             <button className="btn primary" onClick={() => playTracks(top, 0, title)} data-testid="recap-play">
               <Play size={16} fill="currentColor" /> {r$.play}
             </button>
+            <button className="btn glass-btn" onClick={() => setStories(true)} data-testid="recap-stories-open">
+              <BookOpen size={16} /> {r$.storiesButton}
+            </button>
             <button className="btn glass-btn" onClick={save} data-testid="recap-save">
               <ListPlus size={16} /> {r$.save}
             </button>
           </div>
+          {stories && <RecapStories recap={recap} period={name} genreTitles={genreTitles} onClose={() => setStories(false)} />}
 
           <section className="section">
             <div className="section-head">
