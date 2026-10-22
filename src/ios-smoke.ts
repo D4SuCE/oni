@@ -241,6 +241,23 @@ async function fastStart() {
   }
 }
 
+/**
+ * Siri and Shortcuts (OniIntents.swift): their commands go the lock screen's way (RemotePlugin.press),
+ * pressed here: next moves the queue on, My Wave starts the wave (the actions themselves need Siri
+ * or the Shortcuts app, which the simulator run has not).
+ */
+async function intents() {
+  const st = () => wave().usePlayer.getState() as unknown as { index: number; queue: unknown[]; source?: { kind: string; station?: unknown } };
+  const chart = (await (wave() as unknown as { api: { chart(): Promise<Track[]> } }).api.chart().catch(() => [] as Track[])).filter((t) => t.available !== false).slice(0, 3);
+  await wave().playTracks(chart, 0, 'smoke intents');
+  await until(() => !wave().audio.paused, 30000);
+  await OniRemote.press({ name: 'next' });
+  const moved = await until(() => st().index === 1, 10000);
+  await OniRemote.press({ name: 'wave' });
+  const waved = await until(() => st().source?.kind === 'wave' && !st().source?.station && !wave().audio.paused, 30000);
+  report('intents', moved && waved, `next ${moved ? 'moved' : 'did not move'}, My Wave ${waved ? 'playing' : `not playing (${st().source?.kind})`}`);
+}
+
 /** Does the page keep running while the app is in the background with the native player on? The
  * workflow sends the app away for 25 s and back; a tick every 2 s shows whether this page ran. */
 function backgroundProbe() {
@@ -580,6 +597,7 @@ export async function runSmoke() {
     await nativePlayer();
     await crossfade();
     await fastStart();
+    await intents();
     await backgroundDownload();
 
     // A shortcut's link. The page asks iOS to open it (Capacitor hands non-web addresses to the

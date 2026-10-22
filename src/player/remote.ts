@@ -6,7 +6,7 @@
 import { registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 import { artistNames, trackCover } from '../api/yandex.ts';
 import { toggleLike, useApp } from '../store.ts';
-import { audio, next, prev, seek, toggle, usePlayer } from './player.ts';
+import { audio, next, playWave, prev, seek, toggle, usePlayer } from './player.ts';
 
 interface NowPlaying {
   title: string;
@@ -35,6 +35,18 @@ const current = () => {
   return s.queue[s.index];
 };
 
+/** Resolves once the account is there (a command can come with the app only starting). */
+function signedIn() {
+  return new Promise<void>((resolve) => {
+    if (useApp.getState().account) return resolve();
+    const stop = useApp.subscribe((s) => {
+      if (!s.account) return;
+      stop();
+      resolve();
+    });
+  });
+}
+
 export function connectRemote() {
   const push = () => {
     const t = current();
@@ -60,6 +72,8 @@ export function connectRemote() {
     else if (name === 'prev') prev();
     else if (name === 'seek' && position !== undefined) seek(position);
     else if (name === 'like' && t) toggleLike(t);
+    // Siri and Shortcuts' My Wave (OniIntents.swift): it may open the app, so it waits for the sign-in.
+    else if (name === 'wave') void signedIn().then(() => playWave());
   });
 
   usePlayer.subscribe((s, was) => {

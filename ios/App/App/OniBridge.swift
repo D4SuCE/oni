@@ -229,8 +229,24 @@ public class RemotePlugin: CAPPlugin, CAPBridgedPlugin {
     private var artworkURL: String?
     private var artwork: MPMediaItemArtwork?
 
+    /// The plugin, for Siri and Shortcuts (OniIntents.swift); what they asked before it loaded.
+    private static weak var shared: RemotePlugin?
+    private static var pending: [String] = []
+
     override public func load() {
-        DispatchQueue.main.async { self.setUpCommands() }
+        RemotePlugin.shared = self
+        DispatchQueue.main.async {
+            self.setUpCommands()
+            let waiting = RemotePlugin.pending
+            RemotePlugin.pending = []
+            waiting.forEach { self.handle($0) }
+        }
+    }
+
+    /// A command from Siri or Shortcuts, as if its lock-screen button was pressed (main thread):
+    /// play, pause, toggle, next, prev, like, and wave (My Wave, the page starts it).
+    static func press(_ name: String) {
+        if let plugin = shared { plugin.handle(name) } else { pending.append(name) }
     }
 
     private func setUpCommands() {
@@ -323,7 +339,8 @@ public class RemotePlugin: CAPPlugin, CAPBridgedPlugin {
         case "toggle": done = (player?.isPlaying ?? false) ? player?.pauseNow() ?? false : player?.resume() ?? false
         default: done = false
         }
-        guard done, let player = player else { return notifyListeners("command", data: ["name": name]) }
+        // Kept until the page listens: a command that opened the app comes before the page is up.
+        guard done, let player = player else { return notifyListeners("command", data: ["name": name], retainUntilConsumed: true) }
         // The lock screen shows it at once, the page asleep or not.
         var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = player.currentTime
