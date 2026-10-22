@@ -259,7 +259,8 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
     if (isIos) {
       // The native player is told which track it opens and which files to keep (this and the next).
       const nextId = get().queue[index + 1]?.id;
-      (audio as unknown as NativeAudio).next = { id: String(t.id), ext: audioExt(stream.codec), keep: [String(t.id), ...(nextId ? [String(nextId)] : [])], key: sealedKey ?? undefined };
+      // Its length too: a track played while it still arrives (fast start) has no length of its own yet.
+      (audio as unknown as NativeAudio).next = { id: String(t.id), ext: audioExt(stream.codec), keep: [String(t.id), ...(nextId ? [String(nextId)] : [])], key: sealedKey ?? undefined, duration: (t.durationMs || 0) / 1000 || undefined };
     }
     if (fade > 0 && autoplay && !audio.paused && canCrossfade()) {
       // The next one starts while this one fades out; this one's downloaded copy is freed once silent.

@@ -199,6 +199,48 @@ async function recap() {
   report('recap', Boolean(shown) && over === 0, `${tracks} tracks, ${document.querySelectorAll('[data-testid="recap-artist"]').length} artists, ${over} off screen`);
 }
 
+/**
+ * Fast start: a track not in the cache plays after a few seconds of it, not after the whole file
+ * (the user's wish after 1.7.0). The download is held to ~200 KB/s, so the whole of it would take
+ * half a minute: it starts within seconds, plays on without a stall (the network is faster than
+ * the music), and a seek far ahead waits for the download, then plays from there.
+ */
+async function fastStart() {
+  const chart = (await (wave() as unknown as { api: { chart(): Promise<Track[]> } }).api.chart().catch(() => [] as Track[]))
+    .filter((t) => t.available !== false && (t.durationMs ?? 0) > 150000 && !wave().offline!.has(String(t.id)))
+    .slice(12, 13);
+  if (!chart.length) return report('fast-start', false, 'no track to try');
+  await OniPlayer.testThrottle({ bytesPerSecond: 200_000 });
+  try {
+    const t0 = Date.now();
+    await wave().playTracks(chart, 0, 'smoke fast start');
+    const audio = wave().audio;
+    const started = await until(() => !audio.paused && audio.currentTime > 0.5, 30000);
+    const startedIn = (Date.now() - t0) / 1000;
+    const first = await OniPlayer.state();
+    await sleep(8000);
+    const later = await OniPlayer.state();
+    const steady = later.playing && !later.waiting && later.time - first.time > 6;
+    // Far ahead: past what has come; it waits, then plays from there.
+    const target = audio.duration * 0.7;
+    audio.currentTime = target;
+    await sleep(1500);
+    const waited = await OniPlayer.state();
+    const resumed = await until(async () => {
+      const st = await OniPlayer.state();
+      return st.playing && !st.waiting && st.time > target + 1;
+    }, 90000);
+    const end = await OniPlayer.state();
+    report(
+      'fast-start',
+      started && startedIn < 8 && Boolean(first.streaming) && (first.received ?? 0) < (first.expected ?? 0) && steady && resumed,
+      `started in ${startedIn.toFixed(1)} s with ${Math.round((first.received ?? 0) / 1024)} of ${Math.round((first.expected ?? 0) / 1024)} KB; 8 s later ${later.time.toFixed(1)} s${later.waiting ? ' (waiting)' : ''}; seek to ${target.toFixed(0)} s: ${waited.waiting ? 'waited' : 'no wait'}, then ${end.time.toFixed(1)} s`,
+    );
+  } finally {
+    await OniPlayer.testThrottle({ bytesPerSecond: 0 });
+  }
+}
+
 /** Does the page keep running while the app is in the background with the native player on? The
  * workflow sends the app away for 25 s and back; a tick every 2 s shows whether this page ran. */
 function backgroundProbe() {
@@ -537,6 +579,7 @@ export async function runSmoke() {
     report('offline-playback', local, wave().audio.src.slice(0, 12));
     await nativePlayer();
     await crossfade();
+    await fastStart();
     await backgroundDownload();
 
     // A shortcut's link. The page asks iOS to open it (Capacitor hands non-web addresses to the

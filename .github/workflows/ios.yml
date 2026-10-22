@@ -76,7 +76,8 @@ jobs:
           shot playing.png
           for i in $(seq 1 60); do grep -q "SMOKE offline-playback" console.log && break; sleep 1; done
           shot now-playing.png
-          for i in $(seq 1 60); do grep -q "SMOKE done" console.log && break; sleep 1; done
+          # Up to 5 min: the fast-start step plays on a held-back network for a minute or two.
+          for i in $(seq 1 300); do grep -q "SMOKE done" console.log && break; sleep 1; done
           shot search-link.png
           # The native player in the background: away to Settings for 25 s, then back
           # (src/ios-smoke.ts, backgroundProbe, reports whether the music and the page ran).

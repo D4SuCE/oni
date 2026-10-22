@@ -11,15 +11,18 @@ import { toBase64 } from '../api/bytes.ts';
 interface PlayerPlugin {
   /** `sealed`: a downloaded track, opened from the library with this key (base64). `fade` (ms): with
    * music playing, it starts at once and the playing track fades out into it (a crossfade). */
-  open(options: { id: string; url?: string; file?: string; sealed?: string; ext: string; keep: string[]; fade?: number }): Promise<{ duration: number }>;
+  open(options: { id: string; url?: string; file?: string; sealed?: string; ext: string; keep: string[]; fade?: number; duration?: number }): Promise<{ duration: number }>;
   fetch(options: { id: string; url: string; ext: string }): Promise<void>;
   play(): Promise<void>;
   pause(): Promise<void>;
   seek(options: { time: number }): Promise<void>;
   setEq(options: { enabled: boolean; preamp: number; gains: number[] }): Promise<void>;
   setGain(options: { value: number }): Promise<void>;
-  state(): Promise<{ time: number; duration: number; playing: boolean; eq: boolean; engine?: boolean; crossing?: boolean }>;
-  addListener(event: 'time', cb: (e: { time: number; duration: number; playing: boolean }) => void): Promise<unknown>;
+  state(): Promise<{ time: number; duration: number; playing: boolean; eq: boolean; engine?: boolean; crossing?: boolean; streaming?: boolean; waiting?: boolean; received?: number; expected?: number }>;
+  /** For the simulator run: downloads held to a slow network's pace (0: off). */
+  testThrottle(options: { bytesPerSecond: number }): Promise<void>;
+  /** `waiting`: playing, but the track (still arriving) ran short: it goes on when more comes. */
+  addListener(event: 'time', cb: (e: { time: number; duration: number; playing: boolean; waiting?: boolean }) => void): Promise<unknown>;
   addListener(event: 'ended', cb: () => void): Promise<unknown>;
 }
 
@@ -44,7 +47,7 @@ export class NativeAudio extends EventTarget {
   error: { message: string } | null = null;
   /** What the next `src` is: the track's id, its file ending, the ids whose files to keep, and
    * for a downloaded track (src `oni-sealed:<id>`) the key its file opens with. */
-  next: { id: string; ext: string; keep: string[]; key?: string } = { id: '', ext: 'mp3', keep: [] };
+  next: { id: string; ext: string; keep: string[]; key?: string; duration?: number } = { id: '', ext: 'mp3', keep: [] };
 
   private source = '';
   private time = 0;
@@ -59,6 +62,8 @@ export class NativeAudio extends EventTarget {
    * are the old track's, not this one's (a slow track would let the old one end, and its end
    * would skip this one). */
   private crossing = false;
+  /** The player waits for more of a track still arriving (fast start): its clock stands. */
+  private short = false;
 
   constructor() {
     super();
@@ -66,6 +71,10 @@ export class NativeAudio extends EventTarget {
       if (this.crossing) return;
       this.time = e.time;
       this.at = performance.now();
+      if (Boolean(e.waiting) !== this.short) {
+        this.short = Boolean(e.waiting);
+        this.emit(this.short ? 'waiting' : 'playing');
+      }
       if (e.duration && e.duration !== this.length) {
         this.length = e.duration;
         this.emit('durationchange');
@@ -93,6 +102,7 @@ export class NativeAudio extends EventTarget {
 
   set src(value: string) {
     this.crossing = false;
+    this.short = false;
     this.source = value;
     this.stopped = true;
     this.over = false;
@@ -134,7 +144,7 @@ export class NativeAudio extends EventTarget {
   }
 
   private async open(value: string, seq: number, fade = 0) {
-    const { id, ext, keep, key } = this.next;
+    const { id, ext, keep, key, duration } = this.next;
     try {
       let opened: { duration: number };
       if (value.startsWith('oni-sealed:') && key) opened = await OniPlayer.open({ id, sealed: key, ext, keep, fade });
@@ -144,7 +154,7 @@ export class NativeAudio extends EventTarget {
         const file = `${id}.${ext}`;
         await Filesystem.writeFile({ path: `oni-play/${file}`, directory: Directory.Cache, data: toBase64(bytes), recursive: true });
         opened = await OniPlayer.open({ id, file, ext, keep, fade });
-      } else opened = await OniPlayer.open({ id, url: value, ext, keep, fade });
+      } else opened = await OniPlayer.open({ id, url: value, ext, keep, fade, duration });
       if (seq !== this.seq) return;
       this.length = opened.duration;
       for (const e of ['durationchange', 'loadedmetadata', 'loadeddata', 'canplay']) this.emit(e);
@@ -157,7 +167,7 @@ export class NativeAudio extends EventTarget {
   }
 
   get currentTime() {
-    if (this.stopped) return this.time;
+    if (this.stopped || this.short) return this.time;
     return Math.min(this.time + (performance.now() - this.at) / 1000, Number.isFinite(this.length) ? this.length : Infinity);
   }
 

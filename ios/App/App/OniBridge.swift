@@ -4,6 +4,7 @@ import Security
 import WebKit
 import MediaPlayer
 import AVFoundation
+import AudioToolbox
 import UserNotifications
 import CryptoKit
 import ActivityKit
@@ -818,6 +819,113 @@ public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDel
     }
 }
 
+/// A track on its way from the network into the player's cache, written as it arrives
+/// (`<id>.<ext>.part`, renamed to `<id>.<ext>` once whole) with its MP3 frames counted as they
+/// come (AudioFileStream), so the player can start it after a few seconds of audio instead of the
+/// whole file (the user's wish after 1.7.0) and give it more as more arrives.
+final class TrackFetch {
+    let id: String
+    let target: URL
+    var part: URL { target.appendingPathExtension("part") }
+    var task: URLSessionDataTask?
+    /// Called once it is whole (or failed): the prefetch and those who wait for the whole file.
+    var waiters: [(Result<URL, Error>) -> Void] = []
+
+    private let lock = NSLock()
+    private var handle: FileHandle?
+    private var parser: AudioFileStreamID?
+    // Written by the parser's callbacks (on the session's queue, inside parse), read under the lock.
+    fileprivate var packetsRaw: Int64 = 0
+    fileprivate var framesPerPacketRaw: UInt32 = 1152
+    fileprivate var sampleRateRaw: Double = 0
+
+    private var _received: Int64 = 0
+    private var _expected: Int64 = -1
+    private var _done = false
+    private var _failed: Error?
+
+    init(id: String, target: URL) {
+        self.id = id
+        self.target = target
+    }
+
+    struct State {
+        var received: Int64
+        var expected: Int64
+        var done: Bool
+        var failed: Error?
+        /// Frames of audio arrived whole, and their rate (0 until the first frame is seen).
+        var frames: AVAudioFramePosition
+        var sampleRate: Double
+    }
+
+    var state: State {
+        lock.lock()
+        defer { lock.unlock() }
+        return State(received: _received, expected: _expected, done: _done, failed: _failed, frames: AVAudioFramePosition(packetsRaw) * AVAudioFramePosition(framesPerPacketRaw), sampleRate: sampleRateRaw)
+    }
+
+    /// The response came: the file is started, the parser opened (MP3 only: other codecs are not counted).
+    func begin(expected: Int64, mp3: Bool) throws {
+        try? FileManager.default.removeItem(at: part)
+        FileManager.default.createFile(atPath: part.path, contents: nil)
+        handle = try FileHandle(forWritingTo: part)
+        lock.lock()
+        _expected = expected
+        lock.unlock()
+        guard mp3 else { return }
+        let me = Unmanaged.passUnretained(self).toOpaque()
+        AudioFileStreamOpen(me, { client, stream, property, _ in
+            guard property == kAudioFileStreamProperty_DataFormat else { return }
+            let fetch = Unmanaged<TrackFetch>.fromOpaque(client).takeUnretainedValue()
+            var format = AudioStreamBasicDescription()
+            var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+            if AudioFileStreamGetProperty(stream, property, &size, &format) == noErr {
+                fetch.sampleRateRaw = format.mSampleRate
+                if format.mFramesPerPacket > 0 { fetch.framesPerPacketRaw = format.mFramesPerPacket }
+            }
+        }, { client, _, packets, _, _ in
+            let fetch = Unmanaged<TrackFetch>.fromOpaque(client).takeUnretainedValue()
+            fetch.packetsRaw += Int64(packets)
+        }, kAudioFileMP3Type, &parser)
+    }
+
+    /// More bytes: written, counted. Throws when the file cannot be written (it was trimmed away).
+    func append(_ data: Data) throws {
+        try handle?.write(contentsOf: data)
+        lock.lock()
+        if let parser = parser {
+            data.withUnsafeBytes { raw in
+                _ = AudioFileStreamParseBytes(parser, UInt32(raw.count), raw.baseAddress, [])
+            }
+        }
+        _received += Int64(data.count)
+        lock.unlock()
+    }
+
+    /// The download is over: whole (renamed into place) or failed.
+    func finish(_ error: Error?) {
+        try? handle?.close()
+        handle = nil
+        lock.lock()
+        if let parser = parser { AudioFileStreamClose(parser) }
+        parser = nil
+        if let error = error {
+            _failed = error
+            try? FileManager.default.removeItem(at: part)
+        } else {
+            try? FileManager.default.removeItem(at: target)
+            do {
+                try FileManager.default.moveItem(at: part, to: target)
+                _done = true
+            } catch {
+                _failed = error
+            }
+        }
+        lock.unlock()
+    }
+}
+
 /// The iPhone's music player. WebKit's own (an <audio> element) took the lock screen with
 /// -10 s / +10 s, and its Web Audio equalizer lagged a second or two behind every seek and went
 /// silent when the screen locked. This plays in the app itself: AVAudioEngine, a player node and
@@ -827,7 +935,7 @@ public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDel
 /// Two player nodes into one mixer, for crossfades: the next track starts on the other node while
 /// this one fades out (`open` with `fade`), and from then on the other is the one.
 @objc(PlayerPlugin)
-public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
+public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     public let identifier = "PlayerPlugin"
     public let jsName = "OniPlayer"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -839,6 +947,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "setEq", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setGain", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "state", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "testThrottle", returnType: CAPPluginReturnPromise),
     ]
 
     /// The equalizer's bands, as on the desktop (src/player/eq.ts).
@@ -866,8 +975,38 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
     private var playing = false
     private var pausedAt: Double = 0
     private var timer: Timer?
-    private var fetches: [String: [(Result<URL, Error>) -> Void]] = [:]
     private let lock = NSLock()
+
+    // Fast start: a track plays once START seconds of it have come; the rest is given to the node
+    // in pieces as it arrives (`extend`). Running short, the node stops and waits ("stalled",
+    // shown as loading) rather than play silence that would move the clock on.
+    private static let START: Double = 8
+    /// Frames kept back from the newest end (a frame being written), and the smallest piece given.
+    private static let MARGIN: AVAudioFramePosition = 4608
+    private static let PIECE: AVAudioFramePosition = 44100
+    /// Downloads under way by track id (written under `lock`), on a session of their own.
+    private var fetching: [String: TrackFetch] = [:]
+    private var byTask: [Int: TrackFetch] = [:]
+    private lazy var session: URLSession = {
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 1
+        return URLSession(configuration: .default, delegate: self, delegateQueue: queue)
+    }()
+    /// Those waiting to start a track as soon as enough of it is in (main thread).
+    private var starters: [String: [() -> Void]] = [:]
+    /// Bumped by every open: a track that comes in after a newer one was asked for is not played
+    /// (quick skips: the old one, arriving last, began over the new).
+    private var opens = 0
+    /// The track playing, while it is still arriving (nil once whole, or for a file from disk).
+    private var stream: TrackFetch?
+    /// Its length as the page knows it (the file's own is only known once whole).
+    private var durationHint: Double = 0
+    /// Frames handed to the node so far, pieces not yet played, and whether it waits for data.
+    private var scheduledEnd: AVAudioFramePosition = 0
+    private var outstanding = 0
+    private var stalled = false
+    /// For the simulator run: downloads held to this many bytes a second (0: as fast as they come).
+    static var throttle: Double = 0
 
     /// The one player, for the lock screen's play and pause (RemotePlugin).
     static weak var shared: PlayerPlugin?
@@ -919,42 +1058,86 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
         return PlayerPlugin.folder.appendingPathComponent(id + "." + ext)
     }
 
-    /// The track's file: from the cache, or downloaded once however many ask meanwhile.
+    /// The track's file, whole: from the cache, or once its download is over (however many ask).
     private func localFile(id: String, url: String, ext: String, done: @escaping (Result<URL, Error>) -> Void) {
         let target = cached(id, ext)
         if FileManager.default.fileExists(atPath: target.path) {
             done(.success(target))
             return
         }
-        guard let remote = URL(string: url) else {
+        guard let fetch = fetchFor(id: id, url: url, ext: ext) else {
             done(.failure(URLError(.badURL)))
             return
         }
         lock.lock()
-        let first = fetches[id] == nil
-        fetches[id, default: []].append(done)
+        fetch.waiters.append(done)
         lock.unlock()
-        guard first else { return }
-        URLSession.shared.downloadTask(with: remote) { [weak self] location, response, error in
-            var result: Result<URL, Error>
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            if let location = location, (200..<300).contains(status) {
-                try? FileManager.default.removeItem(at: target)
-                do {
-                    try FileManager.default.moveItem(at: location, to: target)
-                    result = .success(target)
-                } catch {
-                    result = .failure(error)
-                }
-            } else {
-                result = .failure(error ?? URLError(.badServerResponse))
-            }
-            guard let self = self else { return }
-            self.lock.lock()
-            let waiting = self.fetches.removeValue(forKey: id) ?? []
-            self.lock.unlock()
-            waiting.forEach { $0(result) }
-        }.resume()
+    }
+
+    /// The download of a track: the one under way, or a new one.
+    private func fetchFor(id: String, url: String, ext: String) -> TrackFetch? {
+        lock.lock()
+        defer { lock.unlock() }
+        if let running = fetching[id] { return running }
+        guard let remote = URL(string: url) else { return nil }
+        let fetch = TrackFetch(id: id, target: cached(id, ext))
+        let task = session.dataTask(with: remote)
+        fetch.task = task
+        fetching[id] = fetch
+        byTask[task.taskIdentifier] = fetch
+        task.resume()
+        return fetch
+    }
+
+    private func fetchOf(_ task: URLSessionTask) -> TrackFetch? {
+        lock.lock()
+        defer { lock.unlock() }
+        return byTask[task.taskIdentifier]
+    }
+
+    public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard let fetch = fetchOf(dataTask), (200..<300).contains(status) else { return completionHandler(.cancel) }
+        do {
+            try fetch.begin(expected: response.expectedContentLength, mp3: fetch.target.pathExtension == "mp3")
+            completionHandler(.allow)
+        } catch {
+            completionHandler(.cancel)
+        }
+    }
+
+    public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        guard let fetch = fetchOf(dataTask) else { return }
+        if PlayerPlugin.throttle > 0 { Thread.sleep(forTimeInterval: Double(data.count) / PlayerPlugin.throttle) }
+        do {
+            try fetch.append(data)
+        } catch {
+            return dataTask.cancel()
+        }
+        DispatchQueue.main.async { self.arrived(fetch) }
+    }
+
+    public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard let fetch = fetchOf(task) else { return }
+        let status = (task.response as? HTTPURLResponse)?.statusCode ?? 0
+        fetch.finish(error ?? ((200..<300).contains(status) ? nil : URLError(.badServerResponse)))
+        lock.lock()
+        fetching.removeValue(forKey: fetch.id)
+        byTask.removeValue(forKey: task.taskIdentifier)
+        let waiting = fetch.waiters
+        fetch.waiters = []
+        lock.unlock()
+        let result: Result<URL, Error> = fetch.state.done ? .success(fetch.target) : .failure(fetch.state.failed ?? URLError(.unknown))
+        waiting.forEach { $0(result) }
+        DispatchQueue.main.async { self.arrived(fetch) }
+    }
+
+    /// More of a track came (main thread): a start waiting for it goes, the one playing gets more.
+    private func arrived(_ fetch: TrackFetch) {
+        let st = fetch.state
+        let enough = st.done || st.failed != nil || (st.sampleRate > 0 && Double(st.frames) >= PlayerPlugin.START * st.sampleRate)
+        if enough, let waiting = starters.removeValue(forKey: fetch.id) { waiting.forEach { $0() } }
+        if stream === fetch { extend() }
     }
 
     /// Keeps the cache to the tracks the page still needs (the playing one and those ahead).
@@ -978,18 +1161,32 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
         let ext = call.getString("ext") ?? "mp3"
         let keep = call.getArray("keep", String.self) ?? [id]
         let fade = call.getDouble("fade") ?? 0
+        let hint = call.getDouble("duration") ?? 0
+        lock.lock()
+        opens += 1
+        let mine = opens
+        lock.unlock()
+        /// Plays `file`; `fetch` while it is still arriving (main thread).
+        let play: (AVAudioFile, TrackFetch?) -> Void = { file, fetch in
+            self.lock.lock()
+            let newest = self.opens == mine
+            self.lock.unlock()
+            guard newest else { return call.reject("superseded") }
+            self.stream = fetch
+            self.durationHint = hint
+            if fade > 0 && self.playing { self.cross(into: file, seconds: fade / 1000) } else { self.begin(file) }
+            self.trim(keeping: keep)
+            call.resolve(["duration": self.duration])
+        }
         let opened: (Result<URL, Error>) -> Void = { [weak self] result in
             DispatchQueue.main.async {
-                guard let self = self else { return }
+                guard self != nil else { return }
                 switch result {
                 case .failure(let error):
                     call.reject(error.localizedDescription)
                 case .success(let url):
                     do {
-                        let file = try AVAudioFile(forReading: url)
-                        if fade > 0 && self.playing { self.cross(into: file, seconds: fade / 1000) } else { self.begin(file) }
-                        self.trim(keeping: keep)
-                        call.resolve(["duration": Double(file.length) / file.processingFormat.sampleRate])
+                        play(try AVAudioFile(forReading: url), nil)
                     } catch {
                         call.reject("cannot open: " + error.localizedDescription)
                     }
@@ -1013,6 +1210,21 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
             }
         } else if let name = call.getString("file") {
             opened(.success(PlayerPlugin.folder.appendingPathComponent(name)))
+        } else if let url = call.getString("url"), ext == "mp3", !FileManager.default.fileExists(atPath: cached(id, ext).path), let fetch = fetchFor(id: id, url: url, ext: ext) {
+            // Fast start: once a few seconds of it are in, it plays from what has come so far.
+            let go = { [weak self] in
+                guard let self = self else { return }
+                let st = fetch.state
+                if let error = st.failed { return call.reject(error.localizedDescription) }
+                if st.done { return opened(.success(fetch.target)) }
+                guard let file = try? AVAudioFile(forReading: fetch.part) else { return opened(.failure(URLError(.cannotDecodeContentData))) }
+                play(file, fetch)
+            }
+            DispatchQueue.main.async {
+                // Only the newest open waits to start (an older one, of any track, is dropped).
+                self.starters = [id: [go]]
+                self.arrived(fetch)
+            }
         } else if let url = call.getString("url") {
             localFile(id: id, url: url, ext: ext, done: opened)
         } else {
@@ -1060,7 +1272,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
         self.file = file
         pausedAt = 0
         schedule(from: 0)
-        node.play()
+        if !stalled { node.play() }
         tail = old
         let start = Date()
         crossing = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
@@ -1084,32 +1296,99 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
         node.volume = 1
     }
 
+    /// Hands the node the track from `frame`: all of it, or (still arriving) what has come so far.
     private func schedule(from frame: AVAudioFramePosition) {
         guard let file = file else { return }
-        let from = max(0, min(frame, file.length))
+        let from = max(0, frame)
         startFrame = from
-        let count = AVAudioFrameCount(file.length - from)
+        scheduledEnd = from
+        outstanding = 0
+        stalled = false
+        guard stream != nil else {
+            let end = file.length
+            guard end > from else { return }
+            give(file, upTo: end)
+            return
+        }
+        // Nothing there yet (a seek ahead of the download): it waits, and plays once it comes.
+        stalled = true
+        extend()
+    }
+
+    /// A piece of the track to the node, `scheduledEnd` up to `end`.
+    private func give(_ file: AVAudioFile, upTo end: AVAudioFramePosition) {
+        let from = scheduledEnd
+        scheduledEnd = end
+        outstanding += 1
         let gen = generation
-        guard count > 0 else { return }
-        node.scheduleSegment(file, startingFrame: from, frameCount: count, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+        node.scheduleSegment(file, startingFrame: from, frameCount: AVAudioFrameCount(end - from), at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
             DispatchQueue.main.async {
                 guard let self = self, self.generation == gen else { return }
-                self.playing = false
-                self.pausedAt = self.duration
-                self.stopTimer()
-                self.notifyListeners("ended", data: [:])
+                self.outstanding -= 1
+                if self.outstanding == 0 { self.drained() }
             }
         }
     }
 
+    /// More of the track arriving: what has come since is given to the node (a second or more at
+    /// a time); once whole, the rest, and the whole file becomes the one to seek in.
+    private func extend() {
+        guard let fetch = stream, file != nil else { return }
+        let st = fetch.state
+        if st.failed != nil { return }
+        // The newest view of it: what has arrived so far, or the whole file.
+        guard let view = try? AVAudioFile(forReading: st.done ? fetch.target : fetch.part) else { return }
+        let available = st.done ? view.length : min(view.length, st.frames) - PlayerPlugin.MARGIN
+        if available > scheduledEnd && (st.done || outstanding == 0 || available - scheduledEnd >= PlayerPlugin.PIECE) {
+            give(view, upTo: available)
+            file = view
+            if stalled {
+                stalled = false
+                if playing { node.play() }
+                tick()
+            }
+        }
+        if st.done {
+            file = view
+            stream = nil
+        }
+    }
+
+    /// Everything given has played: the end, or (still arriving) a wait for more.
+    private func drained() {
+        if stream == nil {
+            playing = false
+            pausedAt = duration
+            stopTimer()
+            notifyListeners("ended", data: [:])
+            return
+        }
+        // Ran short: the node stops (its clock with it) and starts again from here when more comes.
+        pausedAt = Double(scheduledEnd) / (format?.sampleRate ?? 44100)
+        generation += 1
+        node.stop()
+        startFrame = scheduledEnd
+        outstanding = 0
+        stalled = true
+        tick()
+        extend()
+    }
+
     private var duration: Double {
         guard let file = file else { return 0 }
-        return Double(file.length) / file.processingFormat.sampleRate
+        let rate = file.processingFormat.sampleRate
+        // Still arriving: the page's length (the file's own counts only what has come).
+        if let fetch = stream {
+            if durationHint > 0 { return durationHint }
+            let st = fetch.state
+            if st.expected > 0 && st.received > 0 { return Double(st.frames) * Double(st.expected) / Double(st.received) / rate }
+        }
+        return Double(file.length) / rate
     }
 
     private var position: Double {
         guard let file = file else { return 0 }
-        guard playing, let last = node.lastRenderTime, let time = node.playerTime(forNodeTime: last) else { return pausedAt }
+        guard playing, !stalled, let last = node.lastRenderTime, let time = node.playerTime(forNodeTime: last) else { return pausedAt }
         return min(duration, Double(startFrame + time.sampleTime) / file.processingFormat.sampleRate)
     }
 
@@ -1137,7 +1416,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
         if tail == nil { node.volume = 1 }
         // What plays elsewhere already (a sound kept on by some app) is not a reason to stop.
         othersPlaying = AVAudioSession.sharedInstance().isOtherAudioPlaying
-        node.play()
+        // Waiting for more of the track: it plays once that comes (extend).
+        if !stalled { node.play() }
         playing = true
         startTimer()
         tick()
@@ -1149,7 +1429,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
     /// The lock screen's play (main thread): false when there is nothing open to play (or the
     /// track has ended), so the page is asked instead.
     func resume() -> Bool {
-        guard let file = file, playing || pausedAt < Double(file.length) / file.processingFormat.sampleRate - 0.05 else { return false }
+        guard file != nil, playing || pausedAt < duration - 0.05 else { return false }
         if playing { return true }
         return (try? start()) != nil
     }
@@ -1195,7 +1475,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
             self.node.stop()
             self.schedule(from: AVAudioFramePosition(max(0, time) * file.processingFormat.sampleRate))
             self.pausedAt = Double(self.startFrame) / file.processingFormat.sampleRate
-            if was { self.node.play() }
+            if was && !self.stalled { self.node.play() }
             self.tick()
             call.resolve()
         }
@@ -1227,8 +1507,19 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func state(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
-            call.resolve(["time": self.position, "duration": self.duration, "playing": self.playing, "eq": !self.eq.bypass, "engine": self.engine.isRunning, "crossing": self.tail != nil])
+            let st = self.stream?.state
+            call.resolve([
+                "time": self.position, "duration": self.duration, "playing": self.playing, "eq": !self.eq.bypass, "engine": self.engine.isRunning,
+                "crossing": self.tail != nil, "streaming": self.stream != nil, "waiting": self.stalled,
+                "received": st?.received ?? 0, "expected": st?.expected ?? 0,
+            ])
         }
+    }
+
+    /// { bytesPerSecond } — for the simulator run: downloads held to a slow network's pace (0: off).
+    @objc func testThrottle(_ call: CAPPluginCall) {
+        PlayerPlugin.throttle = call.getDouble("bytesPerSecond") ?? 0
+        call.resolve()
     }
 
     // MARK: clock and the system
@@ -1244,7 +1535,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func tick() {
-        notifyListeners("time", data: ["time": position, "duration": duration, "playing": playing])
+        notifyListeners("time", data: ["time": position, "duration": duration, "playing": playing, "waiting": playing && stalled])
         if playing && fading == nil && tail == nil { watchOthers() }
     }
 
@@ -1301,7 +1592,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
             self.schedule(from: AVAudioFramePosition(at * (self.format?.sampleRate ?? 44100)))
             self.pausedAt = at
             if was, (try? self.engine.start()) != nil {
-                self.node.play()
+                if !self.stalled { self.node.play() }
             } else {
                 self.playing = false
             }
