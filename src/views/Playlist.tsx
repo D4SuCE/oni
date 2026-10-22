@@ -1,6 +1,6 @@
 import { Heart, MoreHorizontal, Pencil, Radio, Shuffle, Trash2, Upload } from 'lucide-react';
 import { DownloadButton } from '../components/DownloadButton.tsx';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { api, transport } from '../api/client.ts';
 import type { Playlist } from '../api/types.ts';
 import { playlistCover } from '../api/yandex.ts';
@@ -16,20 +16,27 @@ import { back, errorText, isOwn, refreshPlaylists, samePlaylist, toast, togglePl
 import { isIos } from '../ui/platform.ts';
 import { cx, fmtTotal, useAsync } from '../ui/util.ts';
 import { useListSearch } from '../components/ListSearch.tsx';
+import { savedPlaylist } from '../player/offlineLists.ts';
+import { loadOrKept, useKeepForOffline } from '../ui/offline.ts';
 
 export function PlaylistView({ uid, kind }: { uid: number | string; kind: number | string }) {
   // An upload renamed from the track menu: show the new name.
   const edits = useTrackEdits((s) => s.version);
-  const { data: pl, loading, error, reload, setData } = useAsync(() => api.playlist(uid, kind), [uid, kind, edits]);
+  // With no network: the playlist as kept when last seen (its downloaded tracks play).
+  const offlineNow = useApp((s) => s.offline);
+  const key = `playlist:${uid}:${kind}`;
+  const { data: pl, loading, error, reload, setData } = useAsync(() => loadOrKept(() => api.playlist(uid, kind), () => savedPlaylist(key)), [uid, kind, edits, offlineNow]);
   const [uploading, setUploading] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const t = useT();
   const likedPlaylists = useApp((s) => s.likedPlaylists);
   const search = useListSearch();
+  const listTracks = useMemo(() => (pl?.tracks || []).map((x) => x.track!).filter(Boolean), [pl]);
+  useKeepForOffline(key, pl?.title ?? '', pl ? listTracks : null, pl);
 
   if (loading && !pl) return <Spinner />;
   if (error || !pl) return <ErrorBox error={error} onRetry={reload} />;
-  const tracks = (pl.tracks || []).map((x) => x.track!).filter(Boolean);
+  const tracks = listTracks;
   const own = isOwn(pl);
   const from = { playlist: `${pl.uid}:${pl.kind}` };
   const saved = likedPlaylists.some((p) => samePlaylist(p, pl));

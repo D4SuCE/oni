@@ -15,6 +15,8 @@ import { offline, playRadio, playShuffled, playTracks } from '../player/player.t
 import { createPlaylist, navigate, useApp, type LibraryTab } from '../store.ts';
 import { cx, useAsync } from '../ui/util.ts';
 import { useListSearch } from '../components/ListSearch.tsx';
+import { savedList, useKeepForOffline } from '../ui/offline.ts';
+import { ApiError } from '../api/yandex.ts';
 
 /** "tracks" (liked songs) is its own page, reached from the sidebar or the Liked Songs card. */
 const TABS = ['playlists', 'albums', 'artists'] as const;
@@ -30,8 +32,16 @@ function LikedTracks() {
   const uid = useApp((s) => s.account?.uid);
   const from = { playlist: `${uid}:3` };
 
+  const offlineNow = useApp((s) => s.offline);
   useEffect(() => {
     let alive = true;
+    // With no network: Liked as kept when last seen; its downloaded tracks play in its order.
+    const kept = savedList('liked')?.tracks;
+    if (offlineNow) {
+      if (kept) setTracks(kept);
+      else setError(new Error(t.downloads.notSaved));
+      return;
+    }
     (async () => {
       try {
         const first = await api.tracks(keys.slice(0, FIRST_PAGE));
@@ -42,15 +52,20 @@ function LikedTracks() {
           if (alive) setTracks([...first, ...rest]);
         }
       } catch (e) {
-        if (alive) setError(e);
+        if (!alive) return;
+        if (kept && !(e instanceof ApiError)) setTracks(kept);
+        else setError(e);
       }
     })();
     return () => {
       alive = false;
     };
-  }, [keys]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keys, offlineNow]);
 
   const search = useListSearch();
+  // Kept whole only: the first page alone is not Liked.
+  useKeepForOffline('liked', t.common.liked, tracks && tracks.length >= keys.length ? tracks : null);
   const radio = () => playRadio(`playlist:${from.playlist}`, t.common.liked);
   if (error) return <ErrorBox error={error} />;
   if (!tracks) return <Spinner label={t.library.loadingLikes} />;

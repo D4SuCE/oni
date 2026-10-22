@@ -5,7 +5,7 @@ import { create } from 'zustand';
 import type { Track } from '../api/types.ts';
 import { api, loadJson, storage, transport } from '../api/client.ts';
 import { tr } from '../i18n.ts';
-import { artistNames, trackCover, type StreamQuality } from '../api/yandex.ts';
+import { ApiError, artistNames, trackCover, type StreamQuality } from '../api/yandex.ts';
 import { DEFAULT_TUNING, WaveEngine, waveSeeds, type WaveStats, type WaveTuning } from '../wave/engine.ts';
 import { ListenHistory } from '../wave/history.ts';
 import { playOutcome, RecsFeedback } from '../recs/feedback.ts';
@@ -124,6 +124,31 @@ export const setOfflineMode = (on: boolean) => {
   offlineMode = on;
 };
 
+/** Tells the app store the network is gone (it shows so and waits for it to come back). */
+let networkLost: () => void = () => {};
+export const onNetworkLost = (fn: () => void) => {
+  networkLost = fn;
+};
+/** A request that never reached Yandex (no network, a timeout), not one Yandex answered with an error. */
+const isNetworkError = (e: unknown) => !(e instanceof ApiError) || (typeof navigator !== 'undefined' && navigator.onLine === false);
+
+/**
+ * My Wave (or a station) whose network went away mid-play, as in Yandex's app: the downloaded
+ * tracks play shuffled meanwhile, and the wave comes back with the network, at the end of the
+ * track playing then (not cut off in the middle).
+ */
+let waveToResume: (Source & { kind: 'wave' }) | null = null;
+
+function fallBackToDownloads() {
+  const source = get().source;
+  const saved = offline?.entries().map((e) => e.track) ?? [];
+  if (source?.kind !== 'wave' || !saved.length) return false;
+  waveToResume = source;
+  networkLost();
+  startList(shuffleArray(saved), 0, tr().nav.downloads, undefined, { list: 'downloads' });
+  return true;
+}
+
 /** The object URL of the downloaded track playing now; freed when the next one loads. */
 let localUrl: string | null = null;
 function setLocalAudio(blob: Blob | null) {
@@ -214,6 +239,10 @@ async function loadAt(index: number, autoplay = true) {
     if (get().source?.kind === 'wave') fillWave();
   } catch (e: any) {
     if (seq !== loadSeq || e?.name === 'AbortError') return;
+    // The wave lost the network: the downloads play instead of skipping through its queue.
+    if (get().source?.kind === 'wave' && (offlineMode || isNetworkError(e)) && fallBackToDownloads()) return;
+    // A list lost it: the app goes offline, so what is not downloaded is passed over at once.
+    if (!offlineMode && isNetworkError(e)) networkLost();
     set({ loading: false, error: tr().player.cantPlay(t.title) });
     setTimeout(() => seq === loadSeq && next(false), offlineMode ? 0 : 1500);
   }
@@ -272,6 +301,8 @@ function reportPlay(t: Track, ended: boolean) {
  * one's request, which could hang and leave "next" with nothing to play. */
 let filling: { engine: WaveEngine; done: Promise<void>; at: number; id: number } | null = null;
 let fills = 0;
+/** The last fill ended without reaching Yandex. */
+let fillLostNetwork = false;
 /** A wave request that has not answered by then is given up (the phone in the background could
  * hold one for good, and "next" waited on it even after the screen was unlocked). */
 const FILL_TIMEOUT = 15_000;
@@ -287,6 +318,7 @@ function fillWave(min = WAVE_AHEAD): Promise<void> {
   if (filling?.engine === mine && Date.now() - filling.at < FILL_TIMEOUT) return filling.done;
   const id = ++fills;
   const done = (async () => {
+    fillLostNetwork = false;
     try {
       while (engine === mine && get().source?.kind === 'wave' && get().queue.length - get().index - 1 < min) {
         const t = await withTimeout(mine.next());
@@ -297,6 +329,7 @@ function fillWave(min = WAVE_AHEAD): Promise<void> {
       if (engine === mine) prefetchNext();
     } catch (e) {
       console.warn('wave fill failed', e);
+      fillLostNetwork = isNetworkError(e);
     } finally {
       if (filling?.id === id) filling = null;
     }
@@ -350,7 +383,10 @@ async function startWave(source: Source & { kind: 'wave' }) {
     set({ queue: [first], waveStats: { ...mine.stats } });
     await loadAt(0);
   } catch (e: any) {
-    if (start === waveStarts) set({ error: tr().player.waveFailed(String(e?.message || e)) });
+    if (start !== waveStarts) return;
+    // Started with no network: the downloads, until it is back.
+    if ((offlineMode || isNetworkError(e)) && fallBackToDownloads()) return;
+    set({ error: tr().player.waveFailed(String(e?.message || e)) });
   } finally {
     if (start === waveStarts) set({ waveBusy: false });
   }
@@ -389,11 +425,24 @@ export function waveFeedback(type: 'like' | 'dislike', t: Track) {
 // ------------------------------------------------------------------ controls
 
 export async function playTracks(tracks: Track[], start = 0, title = tr().common.list, from?: PlayContext, extra: PlayExtra = {}) {
+  // Picked by the user: the wave lost to the network does not come back over it.
+  waveToResume = null;
+  await startList(tracks, start, title, from, extra);
+}
+
+async function startList(tracks: Track[], start: number, title: string, from?: PlayContext, extra: PlayExtra = {}) {
+  // With no network only the downloaded ones, in the list's order; a pick that is not downloaded
+  // starts the next one that is.
+  const canPlay = (t: Track) => t.available !== false && (!offlineMode || Boolean(offline?.has(t.id)));
+  const playable = tracks.filter(canPlay);
+  if (!playable.length) {
+    set({ error: offlineMode ? tr().downloads.nothingHere : tr().player.cantPlay(title) });
+    return;
+  }
   finishCurrent(false);
   engine = null;
-  const playable = tracks.filter((t) => t.available !== false);
-  const startTrack = tracks[start];
-  const index = Math.max(0, playable.indexOf(startTrack));
+  const startTrack = tracks.slice(start).find(canPlay);
+  const index = Math.max(0, startTrack ? playable.indexOf(startTrack) : 0);
   unshuffled = null;
   set({ queue: playable, source: { kind: 'list', title, from, ...extra }, shuffle: false, waveStats: null });
   await loadAt(index);
@@ -415,11 +464,19 @@ export function toggle() {
 export async function next(user = true) {
   const s = get();
   if (!s.queue.length) return;
+  // The network is back: the wave it took away plays again, from this track's end on.
+  if (waveToResume && !offlineMode) {
+    const wave = waveToResume;
+    waveToResume = null;
+    return startWave(wave);
+  }
   finishCurrent(!user);
   if (s.index + 1 < s.queue.length) return loadAt(s.index + 1);
   if (s.source?.kind === 'wave') {
     await fillWave(1);
     if (get().index + 1 < get().queue.length) return loadAt(get().index + 1);
+    // Nothing more came: with no network the downloads play instead.
+    if (offlineMode || fillLostNetwork) fallBackToDownloads();
     return;
   }
   if (s.repeat === 'all') return loadAt(0);

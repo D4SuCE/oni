@@ -92,10 +92,12 @@ interface RowProps {
   onRemove?: (index: number) => void;
   rowMenu?: (t: Track, index: number) => MenuItem[];
   saved: OfflineState;
+  /** No network and not downloaded: shown dimmed, as Yandex's app does, and not playable. */
+  off?: boolean;
 }
 
-const TrackRow = memo(function TrackRow({ track: t, index, active, playing, liked, showAlbum, onPlay, onRemove, rowMenu, saved }: RowProps) {
-  const unavailable = t.available === false;
+const TrackRow = memo(function TrackRow({ track: t, index, active, playing, liked, showAlbum, onPlay, onRemove, rowMenu, saved, off }: RowProps) {
+  const unavailable = t.available === false || Boolean(off);
   const tx = useT();
   const menu = (e: React.MouseEvent) =>
     openMenu(
@@ -189,6 +191,7 @@ export function TrackList({
   const currentId = usePlayer((s) => s.queue[s.index]?.id);
   const playing = usePlayer((s) => s.playing);
   const liked = useApp((s) => s.liked);
+  const offlineNow = useApp((s) => s.offline);
   useOfflineVersion((s) => s.v);
   return (
     <div className={cx('track-list', !showAlbum && 'no-album')}>
@@ -206,6 +209,7 @@ export function TrackList({
             onRemove={onRemove}
             rowMenu={rowMenu}
             saved={offlineState(t.id)}
+            off={offlineNow && !offline?.has(t.id)}
           />
         ),
       )}

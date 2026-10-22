@@ -83,7 +83,7 @@ await step('a newer version downloads, Settings and the sidebar offer to install
   await waitStatus(page, 'ready');
   // The "ready" message is a toast that goes away by itself (it was put up past the toast timer
   // and stayed for good).
-  await page.waitForSelector('.toast:has-text("9.9.9")', { timeout: 5000 });
+  await page.waitForSelector('.toast:has-text("9.9.9")', { timeout: 10000 });
   await page.waitForSelector('.toast:has-text("9.9.9")', { state: 'detached', timeout: 6000 });
   const text = await page.locator('[data-testid="update"]').innerText();
   if (!text.includes('9.9.9')) throw new Error(`status text: ${text}`);

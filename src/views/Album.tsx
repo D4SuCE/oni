@@ -7,13 +7,22 @@ import { TrackList } from '../components/TrackList.tsx';
 import { useT } from '../i18n.ts';
 import { playRadio, playShuffled, playTracks } from '../player/player.ts';
 import { fmtTotal, useAsync } from '../ui/util.ts';
+import { useMemo } from 'react';
+import { useApp } from '../store.ts';
+import { savedList } from '../player/offlineLists.ts';
+import { loadOrKept, useKeepForOffline } from '../ui/offline.ts';
+import type { Album } from '../api/types.ts';
 
 export function AlbumView({ id }: { id: number | string }) {
-  const { data: album, loading, error, reload } = useAsync(() => api.album(id), [id]);
+  // With no network: the album as kept when last seen, if some of it is downloaded.
+  const offlineNow = useApp((s) => s.offline);
+  const key = `album:${id}`;
+  const { data: album, loading, error, reload } = useAsync(() => loadOrKept(() => api.album(id), () => keptAlbum(key)), [id, offlineNow]);
   const t = useT();
+  const tracks = useMemo(() => (album?.volumes || []).flat(), [album]);
+  useKeepForOffline(key, album?.title ?? '', album ? tracks : null, album ?? undefined);
   if (loading) return <Spinner />;
   if (error || !album) return <ErrorBox error={error} onRetry={reload} />;
-  const tracks = (album.volumes || []).flat();
   const from = { album: album.id };
   const total = tracks.reduce((s, t) => s + (t.durationMs || 0), 0);
   const kind = album.type === 'single' ? t.common.single : album.type === 'compilation' ? t.common.compilation : t.common.album;
@@ -47,4 +56,10 @@ export function AlbumView({ id }: { id: number | string }) {
       <TrackList tracks={tracks} showAlbum={false} onPlay={(i) => playTracks(tracks, i, album.title, from)} />
     </div>
   );
+}
+
+/** The album as kept for the offline mode (its header and its tracks in one volume). */
+function keptAlbum(key: string): Album | null {
+  const l = savedList(key);
+  return l?.header ? ({ ...(l.header as Album), volumes: [l.tracks] } as Album) : null;
 }

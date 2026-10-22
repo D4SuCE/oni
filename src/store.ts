@@ -5,7 +5,7 @@ import type { Account, Playlist, Track } from './api/types.ts';
 import { api, loadJson, storage, transport } from './api/client.ts';
 import { ApiError, trackKey } from './api/yandex.ts';
 import { tr, useLang } from './i18n.ts';
-import { dropFromQueue, setDislikedCheck, setOfflineMode, waveFeedback } from './player/player.ts';
+import { dropFromQueue, onNetworkLost, setDislikedCheck, setOfflineMode, waveFeedback } from './player/player.ts';
 
 export type Route =
   | { name: 'home' }
@@ -155,7 +155,8 @@ function goOffline(account: Account) {
     auth: 'ready',
     offline: true,
     libraryReady: true,
-    route: { name: 'downloads' },
+    // Liked, as in Yandex's app: its downloaded tracks play there in its order (Downloads stays a page).
+    route: { name: 'library', tab: 'tracks' },
     ...(lib && {
       likedKeys: lib.likedKeys,
       liked: new Set(lib.likedKeys.map((k) => k.split(':')[0])),
@@ -165,11 +166,27 @@ function goOffline(account: Account) {
     }),
   });
   setOfflineMode(true);
-  // Back online: the network event where there is one, and a retry every 20 s anyway.
+  waitForNetwork();
+}
+
+/** Back online: the network event where there is one, and a retry every 20 s anyway. */
+function waitForNetwork() {
   clearInterval(reconnecting);
   reconnecting = setInterval(reconnect, RECONNECT);
   window.addEventListener('online', reconnect);
 }
+
+/** The network went away while the app runs (a request that never reached Yandex, or the system
+ * says so): offline as at a start without one, on the page the user is on. */
+function lostNetwork() {
+  if (get().auth !== 'ready' || get().offline) return;
+  set({ offline: true });
+  setOfflineMode(true);
+  toast(tr().downloads.lostNetwork);
+  waitForNetwork();
+}
+onNetworkLost(lostNetwork);
+if (typeof window !== 'undefined') window.addEventListener('offline', lostNetwork);
 
 async function reconnect() {
   if (!get().offline) return;

@@ -1,12 +1,15 @@
 // The interface side of downloads (src/player/offline.ts): re-rendering on changes, the
 // "Download" actions with their progress, sizes for people.
 
+import { useEffect } from 'react';
 import { create } from 'zustand';
-import type { Track } from '../api/types.ts';
+import type { Album, Playlist, Track } from '../api/types.ts';
+import { ApiError } from '../api/yandex.ts';
+import { saveList, savedList } from '../player/offlineLists.ts';
 import { tr } from '../i18n.ts';
 import { iosBackgroundDownloads, showProgressInShade } from '../player/iosDownloads.ts';
 import { offline } from '../player/player.ts';
-import { errorText, toast } from '../store.ts';
+import { errorText, toast, useApp } from '../store.ts';
 import { isIos } from './platform.ts';
 
 /** Bumped on every change to the downloads; components read it to re-render. */
@@ -84,3 +87,33 @@ export function formatSize(bytes: number) {
   const mb = bytes / (1024 * 1024);
   return mb >= 1024 ? `${(mb / 1024).toFixed(1)} ${tr().downloads.gb}` : `${Math.round(mb)} ${tr().downloads.mb}`;
 }
+
+/**
+ * Keeps a list for the offline mode (player/offlineLists.ts) when seen online: Liked always,
+ * others once some of their tracks are downloaded or on their way.
+ */
+export function useKeepForOffline(key: string, title: string, tracks: Track[] | null | undefined, header?: Playlist | Album) {
+  useOfflineVersion((s) => s.v);
+  const kept = Boolean(tracks?.length) && (key === 'liked' || tracks!.some((t) => offline?.has(t.id)) || Boolean(background?.pendingFor(key)));
+  useEffect(() => {
+    if (kept && tracks && !useApp.getState().offline) saveList(key, title, tracks, header);
+  }, [kept, tracks, key, title, header]);
+}
+
+/** Loads a list, or with no network (or no answer) gives the kept one; none kept: says why. */
+export async function loadOrKept<T>(load: () => Promise<T>, kept: () => T | null | undefined): Promise<T> {
+  const fromKept = () => {
+    const k = kept();
+    if (k) return k;
+    throw new Error(tr().downloads.notSaved);
+  };
+  if (useApp.getState().offline) return fromKept();
+  try {
+    return await load();
+  } catch (e) {
+    if (e instanceof ApiError || !kept()) throw e;
+    return fromKept();
+  }
+}
+
+export { savedList };
