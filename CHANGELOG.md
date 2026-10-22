@@ -13,7 +13,11 @@
 
 ## [Не выпущено]
 
+## [1.5.9] — 2026-10-22
+
 ### Добавлено
+- «Дымка от обложки» (Настройки → Оформление): фон окрашивается в цвета обложки играющего трека,
+  и при прозрачном окне тоже.
 - Windows: плейлисты в боковой панели можно перетаскивать мышью в свой порядок, он запоминается.
 
 ### Исправлено
@@ -340,7 +344,8 @@
 - Фон-картина «Blood Moon Over Misty Pagodas», прозрачность окна (Acrylic).
 - Живые видеообложки Яндекса и пульсация обложек в такт музыке.
 
-[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.5.8...HEAD
+[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.5.9...HEAD
+[1.5.9]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.9
 [1.5.8]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.8
 [1.5.7]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.7
 [1.5.6]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.6

@@ -33,3 +33,35 @@ export function setSeeThrough(value: number) {
     /* storage unavailable */
   }
 }
+
+/**
+ * "Cover haze": the blurred cover of the playing track tints the window in its colours (yellow,
+ * violet, blue…), also through the transparency, which otherwise fades it with the rest of the
+ * background (the user liked it in the test runs, where the transparency is at its default).
+ */
+const HAZE_KEY = 'ui.coverHaze';
+
+function initialHaze() {
+  try {
+    return localStorage.getItem(HAZE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export const useCoverHaze = create<{ enabled: boolean }>(() => ({ enabled: initialHaze() }));
+
+const applyHaze = (on: boolean) => {
+  if (typeof document !== 'undefined') document.documentElement.classList.toggle('haze', on);
+};
+applyHaze(useCoverHaze.getState().enabled);
+
+export function setCoverHaze(enabled: boolean) {
+  useCoverHaze.setState({ enabled });
+  applyHaze(enabled);
+  try {
+    localStorage.setItem(HAZE_KEY, enabled ? '1' : '0');
+  } catch {
+    /* storage unavailable */
+  }
+}

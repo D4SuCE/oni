@@ -10,7 +10,7 @@ import { logout, navigate, useApp } from '../store.ts';
 import { setMotion, setPulse, useMotion, usePulse } from '../ui/motion.ts';
 import { isIos } from '../ui/platform.ts';
 import { setPhoneSound, usePhoneSound } from '../player/phoneSound.ts';
-import { MAX_SEE_THROUGH, setSeeThrough, useSeeThrough } from '../ui/seeThrough.ts';
+import { MAX_SEE_THROUGH, setCoverHaze, setSeeThrough, useCoverHaze, useSeeThrough } from '../ui/seeThrough.ts';
 import { checkIosUpdate, installIosUpdate, installUpdateShortcut, setAutoUpdate, setUpdateViaShortcut, UPDATE_SHORTCUT, useAutoUpdate } from '../ui/iosUpdate.ts';
 import { useUpdate } from '../ui/update.ts';
 import { cx } from '../ui/util.ts';
@@ -22,6 +22,7 @@ export function SettingsView() {
   const motion = useMotion((s) => s.enabled);
   const pulse = usePulse((s) => s.enabled);
   const seeThrough = useSeeThrough((s) => s.value);
+  const haze = useCoverHaze((s) => s.enabled);
   const summary = stats.summary(30);
   const [closeToTray, setCloseToTrayState] = useState(() => window.wave?.shellPrefs?.().closeToTray ?? false);
   const t = useT();
@@ -71,6 +72,13 @@ export function SettingsView() {
             <input type="checkbox" className="switch" checked={pulse} onChange={(e) => setPulse(e.target.checked)} data-testid="pulse" />
           </label>
         )}
+        <label className="toggle-row">
+          <div>
+            <div>{s.coverHaze}</div>
+            <div className="hint">{s.coverHazeHint}</div>
+          </div>
+          <input type="checkbox" className="switch" checked={haze} onChange={(e) => setCoverHaze(e.target.checked)} data-testid="cover-haze" />
+        </label>
         {window.wave?.platform === 'electron' && (
           <div className="slider-row">
             <div className="slider-head">
