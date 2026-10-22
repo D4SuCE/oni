@@ -1,8 +1,10 @@
 // Auto-update from GitHub Releases (build.publish in package.json). The installed app
 // checks on start and every few hours, downloads in the background and installs on the
-// next quit, or right away from Settings. The portable exe can't replace itself: it only
+// next quit (then starts again), or right away from Settings. The portable exe can't replace itself: it only
 // reports itself as such, and the page links to the releases.
 const { app, ipcMain, shell } = require('electron');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const RELEASES_URL = 'https://github.com/D4SuCE/oni-releases/releases';
 // Soon after start, so a version out since shows right away (the user's wish); later rounds
@@ -14,6 +16,8 @@ const RECHECK = 6 * 60 * 60 * 1000;
 let state = { status: 'off' };
 let send = () => {};
 let updater = null;
+/** The installer is on its way (from Settings, or on quit). */
+let installing = false;
 
 function set(next) {
   state = next;
@@ -42,8 +46,16 @@ function init(log, broadcast) {
   updater.logger = { info: (m) => log('info', m), warn: (m) => log('warn', m), error: (m) => log('error', m), debug: () => {} };
   updater.autoDownload = true;
   updater.disableWebInstaller = true;
-  // A test feed serves a dummy file: never run it.
-  updater.autoInstallOnAppQuit = !testConfig;
+  // Installing on quit is ours (below): electron-updater's own runs the installer with "do not
+  // start the app after", so Oni stayed closed after an update (the user reopened it by hand).
+  updater.autoInstallOnAppQuit = false;
+  app.once('quit', () => {
+    if (state.status !== 'ready' || installing) return;
+    installing = true;
+    // A test feed serves a dummy file: never run it, say what would run instead.
+    if (testConfig) fs.writeFileSync(path.join(app.getPath('userData'), 'update-on-quit.json'), JSON.stringify({ silent: true, runAfter: true }));
+    else updater.install(true, true);
+  });
   if (testConfig) {
     updater.forceDevUpdateConfig = true;
     updater.updateConfigPath = testConfig;
@@ -66,7 +78,9 @@ ipcMain.on('wave:update:state', (e) => (e.returnValue = state));
 ipcMain.on('wave:update:check', check);
 ipcMain.on('wave:update:install', () => {
   // Silent install, then start the new version.
-  if (state.status === 'ready') updater.quitAndInstall(true, true);
+  if (state.status !== 'ready' || installing) return;
+  installing = true;
+  updater.quitAndInstall(true, true);
 });
 ipcMain.on('wave:update:releases', () => shell.openExternal(RELEASES_URL));
 

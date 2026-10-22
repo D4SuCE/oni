@@ -94,7 +94,15 @@ await step('a newer version downloads, Settings and the sidebar offer to install
   await page.screenshot({ path: path.join(root, 'tests/screenshots/update-ready.png') });
 });
 
-await app.close();
+await step('quitting with an update ready installs it and starts Oni again (it stayed closed)', async () => {
+  // The test feed's file is a dummy: the app writes what it would run instead of running it.
+  const marker = path.join(userData, 'update-on-quit.json');
+  fs.rmSync(marker, { force: true });
+  await app.close();
+  const asked = fs.existsSync(marker) ? JSON.parse(fs.readFileSync(marker, 'utf8')) : null;
+  if (!asked || asked.silent !== true || asked.runAfter !== true) throw new Error(`install on quit: ${JSON.stringify(asked)}`);
+});
+
 feedVersion = current;
 ({ app, page } = await launch());
 
