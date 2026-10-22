@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { WifiOff } from 'lucide-react';
 import { DownloadsView } from './views/Downloads.tsx';
 import { useT } from './i18n.ts';
@@ -18,7 +18,7 @@ import { pulseLevel, pulseTempo } from './player/pulse.ts';
 import { cx } from './ui/util.ts';
 import { TuningPanel } from './components/Wave.tsx';
 import { audio, current, next, offline, playTracks, prev, restoreSession, setVolume, toggle, usePlayer } from './player/player.ts';
-import { historyStep, init, navigate, toast, toggleLike, useApp } from './store.ts';
+import { back, historyStep, init, navigate, toast, toggleLike, useApp } from './store.ts';
 import { AlbumView } from './views/Album.tsx';
 import { ArtistView } from './views/Artist.tsx';
 import { HistoryView } from './views/History.tsx';
@@ -30,6 +30,7 @@ import { PlaylistView } from './views/Playlist.tsx';
 import { Search } from './views/Search.tsx';
 import { SettingsView } from './views/Settings.tsx';
 import { isIos } from './ui/platform.ts';
+import { useSwipeBack } from './ui/swipe.ts';
 
 /** Blurred cover of the current track behind everything, cross-faded between tracks. */
 function Backdrop() {
@@ -106,6 +107,10 @@ function Main() {
   useEffect(() => {
     ref.current?.scrollTo({ top: 0 });
   }, [route]);
+  // The iPhone: a page opened from somewhere (a playlist, an album, a mix, an artist) goes back
+  // with a pull down from its top. The tabs' own pages have nowhere to go back to.
+  const view$ = useCallback(() => ref.current?.querySelector<HTMLElement>('.view-enter') ?? null, []);
+  useSwipeBack(ref, view$, back, isIos && ['playlist', 'album', 'mix', 'artist'].includes(route.name));
   let view;
   switch (route.name) {
     case 'home':

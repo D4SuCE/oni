@@ -210,6 +210,32 @@ async function playlistActions() {
   report('playlist-actions', over === 0 && items.some((i) => /удалить|delete/i.test(i ?? '')), `${over} off screen; menu: ${items.join(', ')}`);
 }
 
+/** On a page opened from somewhere (the own playlist above), a pull down from its top goes back
+ * (src/ui/swipe.ts, useSwipeBack); a page scrolled down only scrolls. Then Liked's "…" has Radio. */
+async function swipeBack() {
+  const app = (window as unknown as { __wave: { useApp: { getState(): { route: { name: string } } } } }).__wave;
+  const main = document.querySelector<HTMLElement>('.main')!;
+  main.scrollTop = 0;
+  const pull = (target: Element, ys: number[]) => {
+    const touch = (y: number) => new Touch({ identifier: 3, target, clientX: 180, clientY: y });
+    target.dispatchEvent(new TouchEvent('touchstart', { touches: [touch(ys[0])], changedTouches: [touch(ys[0])], bubbles: true, cancelable: true }));
+    for (const y of ys.slice(1)) target.dispatchEvent(new TouchEvent('touchmove', { touches: [touch(y)], changedTouches: [touch(y)], bubbles: true, cancelable: true }));
+    const last = ys[ys.length - 1];
+    target.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [touch(last)], bubbles: true, cancelable: true }));
+  };
+  const from = document.querySelector('.page-header') ?? main;
+  pull(from, [260, 300, 360, 440, 520]);
+  const left = await until(() => app.useApp.getState().route.name !== 'playlist', 3000);
+  report('swipe-back', left, `route ${app.useApp.getState().route.name}`);
+  click('[data-testid="nav-liked"]');
+  await until(() => document.querySelector('[data-testid="liked-more"]'), 20000);
+  click('[data-testid="liked-more"]');
+  await until(() => document.querySelector('.menu'), 3000);
+  const items = [...document.querySelectorAll('.menu .menu-item')].map((i) => i.textContent?.trim());
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  report('liked-radio', items.some((i) => /радио|radio/i.test(i ?? '')), items.join(', '));
+}
+
 /** The update check reads the SideStore source (iosUpdate.ts): latest, or a newer one offered. */
 async function updateCheck() {
   const { checkIosUpdate } = await import('./ui/iosUpdate.ts');
@@ -275,6 +301,7 @@ export async function runSmoke() {
     await tapToPlay();
     await uploadForm();
     await playlistActions();
+    await swipeBack();
     await updateCheck();
   } catch (e) {
     report('crash', false, String(e));

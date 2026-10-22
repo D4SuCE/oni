@@ -1,10 +1,10 @@
-import { Heart, MoreHorizontal, Pencil, Play, Radio, Shuffle, Trash2, Upload } from 'lucide-react';
+import { Heart, MoreHorizontal, Pencil, Radio, Shuffle, Trash2, Upload } from 'lucide-react';
 import { DownloadButton } from '../components/DownloadButton.tsx';
 import { useRef, useState } from 'react';
 import { api, transport } from '../api/client.ts';
 import type { Playlist } from '../api/types.ts';
 import { playlistCover } from '../api/yandex.ts';
-import { ErrorBox, PageHeader, Spinner } from '../components/Common.tsx';
+import { ErrorBox, ListPlayButton, PageHeader, Spinner } from '../components/Common.tsx';
 import { askText, confirmDialog } from '../components/Dialog.tsx';
 import { openMenu, type MenuItem } from '../components/Menu.tsx';
 import { useTrackEdits } from '../components/TrackSheet.tsx';
@@ -118,9 +118,7 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
         }
         actions={
           <>
-            <button className="btn primary" onClick={() => playTracks(tracks, 0, pl.title, from)} disabled={!tracks.length}>
-              <Play size={16} fill="currentColor" /> {t.common.play}
-            </button>
+            <ListPlayButton list={`playlist:${from.playlist}`} onPlay={() => playTracks(tracks, 0, pl.title, from)} disabled={!tracks.length} />
             <button className="btn glass-btn" onClick={() => playShuffled(tracks, pl.title, from)} disabled={!tracks.length}>
               <Shuffle size={16} /> {t.common.shuffle}
             </button>

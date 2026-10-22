@@ -31,11 +31,22 @@ export type Source =
    * `suggested`: ids Smart Shuffle added to the list (shown with ✦ in the queue);
    * `origin`: which recommendation it came from, for the stats in Settings.
    */
-  | { kind: 'list'; title: string; from?: PlayContext; suggested?: string[]; origin?: Origin };
+  | { kind: 'list'; title: string; from?: PlayContext; suggested?: string[]; origin?: Origin; list?: string };
 
 export interface PlayExtra {
   suggested?: string[];
   origin?: Origin;
+  /** Which list this is, where `from` does not say (a mix, Downloads): its page shows it playing. */
+  list?: string;
+}
+
+/** The list playing, as its page names it: "playlist:<uid>:<kind>", "album:<id>", "mix:<id>", … */
+export function listKeyOf(source: Source | null) {
+  if (source?.kind !== 'list') return undefined;
+  if (source.list) return source.list;
+  if (source.from?.playlist) return `playlist:${source.from.playlist}`;
+  if (source.from?.album !== undefined) return `album:${source.from.album}`;
+  return undefined;
 }
 
 export function sourceTitle(source: Source | null) {

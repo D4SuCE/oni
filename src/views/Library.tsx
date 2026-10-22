@@ -1,16 +1,17 @@
-import { Heart, Library as LibraryIcon, Play, Plus, Shuffle } from 'lucide-react';
+import { Heart, Library as LibraryIcon, MoreHorizontal, Plus, Radio, Shuffle } from 'lucide-react';
+import { openMenu } from '../components/Menu.tsx';
 import { isIos } from '../ui/platform.ts';
 import { DownloadButton } from '../components/DownloadButton.tsx';
 import { DownloadsView } from './Downloads.tsx';
 import { useEffect, useState } from 'react';
 import { api } from '../api/client.ts';
 import type { Track } from '../api/types.ts';
-import { AlbumCard, ArtistCard, ErrorBox, PlaylistCard, Section, Spinner } from '../components/Common.tsx';
+import { AlbumCard, ArtistCard, ErrorBox, ListPlayButton, PlaylistCard, Section, Spinner } from '../components/Common.tsx';
 import { askText } from '../components/Dialog.tsx';
 import { SmartShuffleButton } from '../components/SmartShuffle.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { useT } from '../i18n.ts';
-import { offline, playShuffled, playTracks } from '../player/player.ts';
+import { offline, playRadio, playShuffled, playTracks } from '../player/player.ts';
 import { createPlaylist, navigate, useApp, type LibraryTab } from '../store.ts';
 import { cx, useAsync } from '../ui/util.ts';
 import { useListSearch } from '../components/ListSearch.tsx';
@@ -50,14 +51,13 @@ function LikedTracks() {
   }, [keys]);
 
   const search = useListSearch();
+  const radio = () => playRadio(`playlist:${from.playlist}`, t.common.liked);
   if (error) return <ErrorBox error={error} />;
   if (!tracks) return <Spinner label={t.library.loadingLikes} />;
   return (
     <>
       <div className="lib-actions">
-        <button className="btn primary" onClick={() => playTracks(tracks, 0, t.common.liked, from)} disabled={!tracks.length}>
-          <Play size={16} fill="currentColor" /> {t.common.play}
-        </button>
+        <ListPlayButton list={`playlist:${from.playlist}`} onPlay={() => playTracks(tracks, 0, t.common.liked, from)} disabled={!tracks.length} />
         <button className="btn glass-btn" onClick={() => playShuffled(tracks, t.common.liked, from)} disabled={!tracks.length}>
           <Shuffle size={16} /> {t.common.shuffle}
         </button>
@@ -65,6 +65,18 @@ function LikedTracks() {
         {/* Only the whole list: the first page alone would download the newest hundred. */}
         {tracks.length >= keys.length && <DownloadButton listKey="liked" tracks={tracks} />}
         {tracks.length > 0 && search.button}
+        {/* Radio by the liked tracks, as a playlist's (the user: playlists had it, Liked did not);
+            on the iPhone in "…", as on a playlist's page. */}
+        {tracks.length > 0 &&
+          (isIos ? (
+            <button className="btn glass-btn" onClick={(e) => openMenu(e, [{ label: t.common.radio, icon: <Radio size={15} />, onClick: radio }])} title={t.common.more} data-testid="liked-more">
+              <MoreHorizontal size={18} />
+            </button>
+          ) : (
+            <button className="btn glass-btn" onClick={radio} data-testid="radio">
+              <Radio size={16} /> {t.common.radio}
+            </button>
+          ))}
         <span className="muted">{t.count.tracks(keys.length)}</span>
       </div>
       {search.field}

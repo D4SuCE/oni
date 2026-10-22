@@ -1,8 +1,8 @@
-import { Play, Radio, Shuffle } from 'lucide-react';
+import { Radio, Shuffle } from 'lucide-react';
 import { DownloadButton } from '../components/DownloadButton.tsx';
 import { api } from '../api/client.ts';
 import { coverUrl } from '../api/yandex.ts';
-import { ArtistLinks, ErrorBox, PageHeader, Spinner } from '../components/Common.tsx';
+import { ArtistLinks, ErrorBox, ListPlayButton, PageHeader, Spinner } from '../components/Common.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { useT } from '../i18n.ts';
 import { playRadio, playShuffled, playTracks } from '../player/player.ts';
@@ -33,9 +33,7 @@ export function AlbumView({ id }: { id: number | string }) {
         }
         actions={
           <>
-            <button className="btn primary" onClick={() => playTracks(tracks, 0, album.title, from)}>
-              <Play size={16} fill="currentColor" /> {t.common.play}
-            </button>
+            <ListPlayButton list={`album:${album.id}`} onPlay={() => playTracks(tracks, 0, album.title, from)} />
             <button className="btn glass-btn" onClick={() => playShuffled(tracks, album.title, from)}>
               <Shuffle size={16} /> {t.common.shuffle}
             </button>

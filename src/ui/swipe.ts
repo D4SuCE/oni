@@ -49,3 +49,71 @@ export function useSwipeDown(ref: RefObject<HTMLElement | null>, onClose: () => 
     };
   }, [ref, onClose, handle, enabled]);
 }
+
+/**
+ * A page that scrolls (a playlist, an album) goes back with a pull down from its very top, as
+ * sheets close (the user asked for it on the iPhone). Touch events, not pointer ones: iOS cancels
+ * a pointer as soon as it scrolls or bounces, and a pull from the top is one. Higher up the page
+ * scrolls as ever; once a pull starts, the page follows the finger instead of bouncing.
+ */
+export function useSwipeBack(scroller: RefObject<HTMLElement | null>, page: () => HTMLElement | null, onBack: () => void, enabled: boolean) {
+  useEffect(() => {
+    const box = scroller.current;
+    if (!box || !enabled) return;
+    let start: { y: number; x: number; t: number } | null = null;
+    let pulling = false;
+    let dy = 0;
+    const move = (y: number) => {
+      const el = page();
+      if (!el) return;
+      el.style.transition = y ? 'none' : 'transform 0.22s ease';
+      el.style.transform = y ? `translateY(${y}px)` : '';
+    };
+    const down = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      // One finger, from the top, not on a slider.
+      start = e.touches.length === 1 && box.scrollTop <= 0 && !(e.target as Element).closest('input') ? { y: touch.clientY, x: touch.clientX, t: e.timeStamp } : null;
+      pulling = false;
+      dy = 0;
+    };
+    const drag = (e: TouchEvent) => {
+      if (!start) return;
+      const touch = e.touches[0];
+      const d = touch.clientY - start.y;
+      if (!pulling) {
+        // Up or sideways first: an ordinary scroll (or a slider), not a pull.
+        if (d < 0 || Math.abs(touch.clientX - start.x) > Math.abs(d)) return void (start = null);
+        if (d < 8) return;
+        pulling = true;
+      }
+      e.preventDefault();
+      dy = Math.max(0, d);
+      move(dy);
+    };
+    const up = (e: TouchEvent) => {
+      if (!start) return;
+      const fast = dy / Math.max(1, e.timeStamp - start.t) > FLICK;
+      const back = pulling && e.type === 'touchend' && (dy > CLOSE_AT || (fast && dy > 40));
+      start = null;
+      pulling = false;
+      if (!back) return move(0);
+      const el = page();
+      if (el) {
+        el.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
+        el.style.transform = 'translateY(40%)';
+        el.style.opacity = '0';
+      }
+      setTimeout(onBack, 180);
+    };
+    box.addEventListener('touchstart', down, { passive: true });
+    box.addEventListener('touchmove', drag, { passive: false });
+    box.addEventListener('touchend', up);
+    box.addEventListener('touchcancel', up);
+    return () => {
+      box.removeEventListener('touchstart', down);
+      box.removeEventListener('touchmove', drag);
+      box.removeEventListener('touchend', up);
+      box.removeEventListener('touchcancel', up);
+    };
+  }, [scroller, page, onBack, enabled]);
+}

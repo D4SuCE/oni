@@ -1,4 +1,5 @@
-import { HardDriveDownload, Play, Shuffle } from 'lucide-react';
+import { HardDriveDownload, Shuffle } from 'lucide-react';
+import { ListPlayButton } from '../components/Common.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { useT } from '../i18n.ts';
 import { offline, playShuffled, playTracks } from '../player/player.ts';
@@ -14,10 +15,12 @@ export function DownloadsView({ embedded }: { embedded?: boolean }) {
   const entries = offline?.entries() ?? [];
   const tracks = entries.map((e) => e.track);
   const total = tracks.reduce((n, x) => n + (x.durationMs || 0), 0);
-  const play = () => playTracks(tracks, 0, t.nav.downloads);
-  const shuffle = () => playShuffled(tracks, t.nav.downloads);
+  const extra = { list: 'downloads' };
+  const play = () => playTracks(tracks, 0, t.nav.downloads, undefined, extra);
+  const shuffle = () => playShuffled(tracks, t.nav.downloads, undefined, extra);
+  const playButton = <ListPlayButton list={extra.list} onPlay={play} disabled={!tracks.length} testId="downloads-play" />;
   const list = tracks.length ? (
-    <TrackList tracks={tracks} onPlay={(i) => playTracks(tracks, i, t.nav.downloads)} />
+    <TrackList tracks={tracks} onPlay={(i) => playTracks(tracks, i, t.nav.downloads, undefined, extra)} />
   ) : (
     <div className="empty-hint" data-testid="downloads-empty">
       {s.empty}
@@ -27,9 +30,7 @@ export function DownloadsView({ embedded }: { embedded?: boolean }) {
     return (
       <>
         <div className="lib-actions">
-          <button className="btn primary" onClick={play} disabled={!tracks.length} data-testid="downloads-play">
-            <Play size={16} fill="currentColor" /> {t.common.play}
-          </button>
+          {playButton}
           <button className="btn glass-btn" onClick={shuffle} disabled={!tracks.length} title={t.common.shuffle}>
             <Shuffle size={16} /> {t.common.shuffle}
           </button>
@@ -55,9 +56,7 @@ export function DownloadsView({ embedded }: { embedded?: boolean }) {
             {tracks.length > 0 && `, ${fmtTotal(total)} · ${formatSize(offline?.totalSize() ?? 0)}`}
           </div>
           <div className="page-actions">
-            <button className="btn primary" onClick={play} disabled={!tracks.length} data-testid="downloads-play">
-              <Play size={16} fill="currentColor" /> {t.common.play}
-            </button>
+            {playButton}
             <button className="btn glass-btn" onClick={shuffle} disabled={!tracks.length}>
               <Shuffle size={16} /> {t.common.shuffle}
             </button>

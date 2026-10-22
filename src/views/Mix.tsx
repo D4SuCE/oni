@@ -1,4 +1,5 @@
-import { EyeOff, Play, Shuffle } from 'lucide-react';
+import { EyeOff, Shuffle } from 'lucide-react';
+import { ListPlayButton } from '../components/Common.tsx';
 import { DownloadButton } from '../components/DownloadButton.tsx';
 import { MixArt, mixSubtitle, mixTitle, useGenreTitles } from '../components/Mixes.tsx';
 import { TrackList } from '../components/TrackList.tsx';
@@ -14,7 +15,7 @@ export function MixView({ id }: { id: string }) {
   const genres = useGenreTitles();
   if (!mix) return <div className="empty-hint">{t.recs.gone}</div>;
   const title = mixTitle(mix, genres);
-  const extra = { origin: mix.kind };
+  const extra = { origin: mix.kind, list: `mix:${mix.id}` };
   const total = mix.tracks.reduce((s, x) => s + (x.durationMs || 0), 0);
   return (
     <div className="page">
@@ -33,9 +34,7 @@ export function MixView({ id }: { id: string }) {
             </div>
           </div>
           <div className="page-actions">
-            <button className="btn primary" onClick={() => playTracks(mix.tracks, 0, title, undefined, extra)} data-testid="mix-play">
-              <Play size={16} fill="currentColor" /> {t.common.play}
-            </button>
+            <ListPlayButton list={extra.list} onPlay={() => playTracks(mix.tracks, 0, title, undefined, extra)} testId="mix-play" />
             <button className="btn glass-btn" onClick={() => playShuffled(mix.tracks, title, undefined, extra)}>
               <Shuffle size={16} /> {t.common.shuffle}
             </button>

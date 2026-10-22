@@ -606,6 +606,44 @@ await step('search inside Liked: the list narrows, and a found track plays the w
   await page.click('[data-testid="list-search"]');
 });
 
+await step('a playing list says so on its page: Play turns Pause, then Resume, without starting over', async () => {
+  // The user: a playlist started from its page did not show there that it plays.
+  const button = page.locator('[data-testid="list-play"]');
+  const state = () => page.evaluate(() => {
+    const s = window.__wave.usePlayer.getState();
+    return { index: s.index, id: s.queue[s.index]?.id, paused: window.__wave.audio.paused };
+  });
+  // Liked plays already (the search step started it from a found track): its button is Pause.
+  await page.waitForSelector('[data-testid="list-play"][data-playing]', { timeout: 10000 });
+  if (!(await button.innerText()).includes('Пауза')) throw new Error(`label "${await button.innerText()}"`);
+  const before = await state();
+  await button.click();
+  await page.waitForFunction(() => window.__wave.audio.paused);
+  if (!(await button.innerText()).includes('Продолжить')) throw new Error(`paused label "${await button.innerText()}"`);
+  await button.click();
+  await page.waitForFunction(() => !window.__wave.audio.paused);
+  const after = await state();
+  if (after.id !== before.id || after.index !== before.index) throw new Error(`started over: ${JSON.stringify(before)} -> ${JSON.stringify(after)}`);
+  // Another list's page offers Play as ever.
+  await page.evaluate(async () => {
+    const pl = (await window.__wave.api.playlists())[0];
+    window.__wave.navigate({ name: 'playlist', uid: pl.uid, kind: pl.kind });
+  });
+  await page.waitForSelector('[data-testid="list-play"]', { timeout: 15000 });
+  if (await page.locator('[data-testid="list-play"][data-playing]').count()) throw new Error('another playlist shows as playing');
+  await page.click('[data-testid="nav-liked"]');
+  await page.waitForSelector('[data-testid="list-play"][data-playing]', { timeout: 15000 });
+});
+
+await step('Liked has a radio, as playlists do', async () => {
+  await page.click('[data-testid="radio"]');
+  await page.waitForFunction(() => {
+    const s = window.__wave.usePlayer.getState();
+    return /^playlist:\d+:3$/.test(s.source?.station?.seed ?? '') && !s.waveBusy && !window.__wave.audio.paused;
+  }, null, { timeout: 30000 });
+  if (await page.locator('[data-testid="list-play"][data-playing]').count()) throw new Error('Liked still shows as playing during its radio');
+});
+
 await step('library: own and liked playlists', async () => {
   await page.click('[data-testid="nav-library"]');
   await page.waitForSelector('[data-testid="liked-card"]');

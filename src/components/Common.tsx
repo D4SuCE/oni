@@ -1,8 +1,9 @@
 import { useState, type ReactNode } from 'react';
-import { Disc3, Loader2, Music2, Play, User } from 'lucide-react';
+import { Disc3, Loader2, Music2, Pause, Play, User } from 'lucide-react';
 import type { Album, Artist, Playlist } from '../api/types.ts';
 import { artistCover, coverUrl, playlistCover } from '../api/yandex.ts';
 import { useT } from '../i18n.ts';
+import { listKeyOf, toggle, usePlayer } from '../player/player.ts';
 import { isOwn, navigate } from '../store.ts';
 import { cx } from '../ui/util.ts';
 
@@ -141,5 +142,19 @@ export function PageHeader({ cover, round, kicker, title, meta, actions, icon }:
         {actions && <div className="page-actions">{actions}</div>}
       </div>
     </header>
+  );
+}
+
+/** "Play" on a list's page. While that list plays it is "Pause", and "Resume" when paused, as in
+ * Yandex's app: pressed then, it pauses or goes on instead of starting the list over. */
+export function ListPlayButton({ list, onPlay, disabled, testId }: { list: string; onPlay: () => void; disabled?: boolean; testId?: string }) {
+  const t = useT();
+  const mine = usePlayer((s) => s.index >= 0 && listKeyOf(s.source) === list);
+  const playing = usePlayer((s) => s.playing);
+  const active = mine && playing;
+  return (
+    <button className="btn primary" onClick={() => (mine ? toggle() : onPlay())} disabled={disabled} data-testid={testId ?? 'list-play'} data-playing={active || undefined}>
+      {active ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />} {active ? t.player.pause : mine ? t.wave.resume : t.common.play}
+    </button>
   );
 }
