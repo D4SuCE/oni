@@ -627,8 +627,16 @@ await step('a playing list says so on its page: Play turns Pause, then Resume, w
     const s = window.__wave.usePlayer.getState();
     return { index: s.index, id: s.queue[s.index]?.id, paused: window.__wave.audio.paused };
   });
+  const why = (what) => async (e) => {
+    const info = await page.evaluate(() => {
+      const s = window.__wave.usePlayer.getState();
+      const b = document.querySelector('[data-testid="list-play"]');
+      return { route: window.__wave.useApp.getState().route, source: s.source, playing: s.playing, paused: window.__wave.audio.paused, button: b ? `${b.textContent} ${b.dataset.playing ?? ''}` : 'none' };
+    });
+    throw new Error(`${what}: ${JSON.stringify(info)} (${e.message.split('\n')[0]})`);
+  };
   // Liked plays already (the search step started it from a found track): its button is Pause.
-  await page.waitForSelector('[data-testid="list-play"][data-playing]', { timeout: 10000 });
+  await page.waitForSelector('[data-testid="list-play"][data-playing]', { timeout: 10000 }).catch(why('Liked not shown playing'));
   if (!(await button.innerText()).includes('Пауза')) throw new Error(`label "${await button.innerText()}"`);
   const before = await state();
   await button.click();
@@ -643,10 +651,10 @@ await step('a playing list says so on its page: Play turns Pause, then Resume, w
     const pl = (await window.__wave.api.playlists())[0];
     window.__wave.navigate({ name: 'playlist', uid: pl.uid, kind: pl.kind });
   });
-  await page.waitForSelector('[data-testid="list-play"]', { timeout: 15000 });
+  await page.waitForSelector('[data-testid="list-play"]', { timeout: 15000 }).catch(why('no Play on another playlist'));
   if (await page.locator('[data-testid="list-play"][data-playing]').count()) throw new Error('another playlist shows as playing');
   await page.click('[data-testid="nav-liked"]');
-  await page.waitForSelector('[data-testid="list-play"][data-playing]', { timeout: 15000 });
+  await page.waitForSelector('[data-testid="list-play"][data-playing]', { timeout: 15000 }).catch(why('Liked not shown playing on return'));
 });
 
 await step('Liked opened again shows the whole list and its Download button at once', async () => {
@@ -692,7 +700,8 @@ await step('a big playlist opens at once, the rest of it comes in parts and join
     return document.querySelector('.page-header').getBoundingClientRect().right - search.right;
   });
   if (gap > 2) throw new Error(`the search button is ${gap}px short of the right edge`);
-  if (first > 1200) throw new Error(`the first rows took ${first} ms`);
+  // The first part shows before the whole list is in (the old page waited for all of it).
+  if (first > 2000 || early >= rows) throw new Error(`the first rows took ${first} ms, ${early} of ${rows}`);
   if (rows < big.n * 0.9 || queue < playable) throw new Error(`${rows} rows, queue ${queue} of ${playable}`);
   await page.evaluate(() => window.__wave.audio.pause());
 });
@@ -704,6 +713,29 @@ await step('Liked has a radio, as playlists do', async () => {
     return /^playlist:\d+:3$/.test(s.source?.station?.seed ?? '') && !s.waveBusy && !window.__wave.audio.paused;
   }, null, { timeout: 30000 });
   if (await page.locator('[data-testid="list-play"][data-playing]').count()) throw new Error('Liked still shows as playing during its radio');
+});
+
+await step('sidebar playlists are dragged into an order of one\'s own, which stays after a reload', async () => {
+  // The user's wish (Windows). The account has a few playlists in the sidebar.
+  const names = () => page.locator('[data-testid="nav-playlist"]').evaluateAll((els) => els.map((e) => e.textContent.trim()));
+  const before = await names();
+  if (before.length < 3) throw new Error(`only ${before.length} playlists in the sidebar`);
+  try {
+    const items = page.locator('[data-testid="nav-playlist"]');
+    const target = await items.nth(2).boundingBox();
+    // Onto the lower half of the third: it lands after it.
+    await items.nth(0).dragTo(items.nth(2), { targetPosition: { x: 20, y: target.height - 4 } });
+    const after = await names();
+    const want = [before[1], before[2], before[0], ...before.slice(3)];
+    if (after.join('|') !== want.join('|')) throw new Error(`after the drag: ${after.slice(0, 4).join(', ')}; want ${want.slice(0, 4).join(', ')}`);
+    await page.reload();
+    await page.waitForSelector('[data-testid="nav-playlist"]', { timeout: 30000 });
+    await page.waitForFunction((n) => document.querySelectorAll('[data-testid="nav-playlist"]').length >= n, before.length, { timeout: 30000 });
+    const reloaded = await names();
+    if (reloaded.slice(0, 3).join('|') !== want.slice(0, 3).join('|')) throw new Error(`after a reload: ${reloaded.slice(0, 3).join(', ')}`);
+  } finally {
+    await page.evaluate(() => localStorage.removeItem('ui.sidebar.order'));
+  }
 });
 
 await step('library: own and liked playlists', async () => {

@@ -389,6 +389,16 @@ html.acrylic .backdrop {
   font-weight: 500;
   font-size: 13.5px;
 }
+/* Dragging a playlist into the user's own order: a red line where it would land. */
+.nav-item.small.dragging {
+  opacity: 0.45;
+}
+.nav-item.small.drop-before {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.nav-item.small.drop-after {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
 .nav-item svg {
   flex-shrink: 0;
 }

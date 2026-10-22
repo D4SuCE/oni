@@ -1,5 +1,7 @@
 import { HardDriveDownload, Heart, History, Home, Library, ListMusic, Menu, Plus, Search, Settings } from 'lucide-react';
+import { useState } from 'react';
 import { create } from 'zustand';
+import type { Playlist } from '../api/types.ts';
 import { useT } from '../i18n.ts';
 import { createPlaylist, isOwn, navigate, samePlaylist, useApp, type Route } from '../store.ts';
 import { offline } from '../player/player.ts';
@@ -26,6 +28,42 @@ const stored = () => {
 /** Collapsed (icons only) by default; ☰ opens the labels. Remembered between runs. */
 export const useSidebar = create<{ open: boolean }>(() => ({ open: stored() }));
 
+/**
+ * The playlists' own order, dragged by the user (Windows): Yandex keeps no order of its own one can
+ * set, so it is this device's. Playlists not placed yet (new ones) come after the placed ones.
+ */
+const ORDER_KEY = 'ui.sidebar.order';
+const playlistKey = (p: { uid: number | string; kind: number | string }) => `${p.uid}:${p.kind}`;
+export const useSidebarOrder = create<{ order: string[] }>(() => {
+  try {
+    return { order: JSON.parse(localStorage.getItem(ORDER_KEY) || '[]') };
+  } catch {
+    return { order: [] };
+  }
+});
+
+function inOrder(list: Playlist[], order: string[]) {
+  const place = new Map(order.map((k, i) => [k, i]));
+  return list
+    .map((p, i) => ({ p, i, at: place.get(playlistKey(p)) }))
+    .sort((a, b) => (a.at ?? Infinity) - (b.at ?? Infinity) || a.i - b.i)
+    .map((x) => x.p);
+}
+
+/** Moves `from` before or after `to` and keeps the whole order as it is now on screen. */
+function movePlaylist(list: Playlist[], from: string, to: string, after: boolean) {
+  const keys = list.map(playlistKey).filter((k) => k !== from);
+  const at = keys.indexOf(to);
+  if (at < 0 || from === to) return;
+  keys.splice(after ? at + 1 : at, 0, from);
+  useSidebarOrder.setState({ order: keys });
+  try {
+    localStorage.setItem(ORDER_KEY, JSON.stringify(keys));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 function toggleSidebar() {
   const open = !useSidebar.getState().open;
   useSidebar.setState({ open });
@@ -43,6 +81,11 @@ export function Sidebar() {
   const open = useSidebar((s) => s.open);
   const updateReady = useUpdate((s) => s.status === 'ready');
   const own = playlists.filter((p) => isOwn(p));
+  const order = useSidebarOrder((s) => s.order);
+  const listed = inOrder([...own, ...likedPlaylists], order);
+  // Dragging (not on the iPhone, which has no sidebar): which one, and where it would land.
+  const [dragged, setDragged] = useState<string | null>(null);
+  const [drop, setDrop] = useState<{ key: string; after: boolean } | null>(null);
   const t = useT();
   const isActive = (r: Route) =>
     (route.name === r.name && !(r.name === 'library' && route.name === 'library' && route.tab === 'tracks')) ||
@@ -109,11 +152,41 @@ export function Sidebar() {
         </button>
       </div>
       <div className="nav-playlists">
-        {[...own, ...likedPlaylists].map((p) => (
+        {listed.map((p) => (
           <button
             key={`${p.uid}-${p.kind}`}
-            className={cx('nav-item small', route.name === 'playlist' && samePlaylist(route, p) && 'active')}
+            className={cx(
+              'nav-item small',
+              route.name === 'playlist' && samePlaylist(route, p) && 'active',
+              dragged === playlistKey(p) && 'dragging',
+              drop?.key === playlistKey(p) && (drop.after ? 'drop-after' : 'drop-before'),
+            )}
             onClick={() => navigate({ name: 'playlist', uid: p.uid, kind: p.kind })}
+            draggable={!isIos}
+            onDragStart={(e) => {
+              setDragged(playlistKey(p));
+              e.dataTransfer.effectAllowed = 'move';
+              e.dataTransfer.setData('text/plain', playlistKey(p));
+            }}
+            onDragOver={(e) => {
+              if (!dragged) return;
+              e.preventDefault();
+              const box = e.currentTarget.getBoundingClientRect();
+              const after = e.clientY > box.top + box.height / 2;
+              if (drop?.key !== playlistKey(p) || drop.after !== after) setDrop({ key: playlistKey(p), after });
+            }}
+            onDragLeave={() => drop?.key === playlistKey(p) && setDrop(null)}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (dragged && drop) movePlaylist(listed, dragged, drop.key, drop.after);
+              setDragged(null);
+              setDrop(null);
+            }}
+            onDragEnd={() => {
+              setDragged(null);
+              setDrop(null);
+            }}
+            data-testid="nav-playlist"
             title={isOwn(p) ? p.title : `${p.title} · ${p.owner?.name || p.owner?.login || ''}`}
           >
             <ListMusic size={16} />
