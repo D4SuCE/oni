@@ -9,15 +9,16 @@ import { Directory, Filesystem } from '@capacitor/filesystem';
 import { toBase64 } from '../api/bytes.ts';
 
 interface PlayerPlugin {
-  /** `sealed`: a downloaded track, opened from the library with this key (base64). */
-  open(options: { id: string; url?: string; file?: string; sealed?: string; ext: string; keep: string[] }): Promise<{ duration: number }>;
+  /** `sealed`: a downloaded track, opened from the library with this key (base64). `fade` (ms): with
+   * music playing, it starts at once and the playing track fades out into it (a crossfade). */
+  open(options: { id: string; url?: string; file?: string; sealed?: string; ext: string; keep: string[]; fade?: number }): Promise<{ duration: number }>;
   fetch(options: { id: string; url: string; ext: string }): Promise<void>;
   play(): Promise<void>;
   pause(): Promise<void>;
   seek(options: { time: number }): Promise<void>;
   setEq(options: { enabled: boolean; preamp: number; gains: number[] }): Promise<void>;
   setGain(options: { value: number }): Promise<void>;
-  state(): Promise<{ time: number; duration: number; playing: boolean; eq: boolean; engine?: boolean }>;
+  state(): Promise<{ time: number; duration: number; playing: boolean; eq: boolean; engine?: boolean; crossing?: boolean }>;
   addListener(event: 'time', cb: (e: { time: number; duration: number; playing: boolean }) => void): Promise<unknown>;
   addListener(event: 'ended', cb: () => void): Promise<unknown>;
 }
@@ -54,10 +55,15 @@ export class NativeAudio extends EventTarget {
   private opening: Promise<void> = Promise.resolve();
   private seq = 0;
   private commandAt = 0;
+  /** A crossfade's next track is being opened: the clock and the end the player reports meanwhile
+   * are the old track's, not this one's (a slow track would let the old one end, and its end
+   * would skip this one). */
+  private crossing = false;
 
   constructor() {
     super();
     OniPlayer.addListener('time', (e) => {
+      if (this.crossing) return;
       this.time = e.time;
       this.at = performance.now();
       if (e.duration && e.duration !== this.length) {
@@ -72,6 +78,7 @@ export class NativeAudio extends EventTarget {
       this.emit('timeupdate');
     });
     OniPlayer.addListener('ended', () => {
+      if (this.crossing) return;
       this.stopped = true;
       this.over = true;
       this.time = this.length;
@@ -85,6 +92,7 @@ export class NativeAudio extends EventTarget {
   }
 
   set src(value: string) {
+    this.crossing = false;
     this.source = value;
     this.stopped = true;
     this.over = false;
@@ -98,18 +106,45 @@ export class NativeAudio extends EventTarget {
     this.opening.catch(() => {});
   }
 
-  private async open(value: string, seq: number) {
+  /**
+   * The crossfade (see dualAudio.ts on the desktop): `url` starts while the track playing fades
+   * out into it over `ms`. Resolves when it plays; `ended` is called once the old one is silent.
+   */
+  async crossfade(url: string, ms: number, ended: () => void = () => {}) {
+    this.source = url;
+    this.over = false;
+    this.time = 0;
+    this.at = performance.now();
+    this.length = NaN;
+    this.error = null;
+    const seq = ++this.seq;
+    this.crossing = true;
+    this.emit('emptied');
+    this.opening = this.open(url, seq, ms);
+    try {
+      await this.opening;
+    } finally {
+      if (seq === this.seq) this.crossing = false;
+    }
+    if (seq !== this.seq) return;
+    setTimeout(ended, ms);
+    // Already playing when it crossed; if the old track ended meanwhile, this starts it. A pause
+    // meanwhile is kept.
+    if (!this.stopped) await this.play();
+  }
+
+  private async open(value: string, seq: number, fade = 0) {
     const { id, ext, keep, key } = this.next;
     try {
       let opened: { duration: number };
-      if (value.startsWith('oni-sealed:') && key) opened = await OniPlayer.open({ id, sealed: key, ext, keep });
+      if (value.startsWith('oni-sealed:') && key) opened = await OniPlayer.open({ id, sealed: key, ext, keep, fade });
       else if (value.startsWith('blob:')) {
         // A downloaded track, decrypted by the page: written where the player reads it.
         const bytes = new Uint8Array(await (await fetch(value)).arrayBuffer());
         const file = `${id}.${ext}`;
         await Filesystem.writeFile({ path: `oni-play/${file}`, directory: Directory.Cache, data: toBase64(bytes), recursive: true });
-        opened = await OniPlayer.open({ id, file, ext, keep });
-      } else opened = await OniPlayer.open({ id, url: value, ext, keep });
+        opened = await OniPlayer.open({ id, file, ext, keep, fade });
+      } else opened = await OniPlayer.open({ id, url: value, ext, keep, fade });
       if (seq !== this.seq) return;
       this.length = opened.duration;
       for (const e of ['durationchange', 'loadedmetadata', 'loadeddata', 'canplay']) this.emit(e);

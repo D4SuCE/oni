@@ -223,6 +223,9 @@ type Crossfading = { crossfade(url: string, ms: number, ended?: () => void): Pro
 const canCrossfade = () => typeof (audio as unknown as Partial<Crossfading>).crossfade === 'function';
 /** This track's crossfade has begun (it is set off once, near its end). */
 let crossStarted = false;
+/** The crossfade's next track is still loading (a slow address or file): the old track plays on
+ * meanwhile, and its clock and its end are not the next one's — its end would skip the next. */
+let crossLoading = false;
 
 /** `fade`: seconds to cross into this track from the one playing (the crossfade setting). */
 async function loadAt(index: number, autoplay = true, fade = 0) {
@@ -717,6 +720,7 @@ audio.addEventListener('loadedmetadata', () => {
   if (Number.isFinite(audio.duration)) set({ duration: audio.duration });
 });
 audio.addEventListener('timeupdate', () => {
+  if (crossLoading) return;
   const t = audio.currentTime;
   const delta = t - lastTime;
   if (!audio.paused && delta > 0 && delta < 2) listened += delta;
@@ -728,7 +732,8 @@ audio.addEventListener('timeupdate', () => {
   const d = audio.duration;
   if (fade > 0 && !crossStarted && !audio.paused && canCrossfade() && Number.isFinite(d) && d > fade * 3 && d - t <= fade && get().repeat !== 'one' && !get().sleep.afterTrack) {
     crossStarted = true;
-    void next(false, fade);
+    crossLoading = true;
+    void next(false, fade).finally(() => (crossLoading = false));
   }
   if ('setPositionState' in navigator.mediaSession && Number.isFinite(audio.duration)) {
     try {
@@ -739,6 +744,8 @@ audio.addEventListener('timeupdate', () => {
   }
 });
 audio.addEventListener('ended', () => {
+  // The old track of a crossfade ended before the next one loaded: that one plays when it has.
+  if (crossLoading) return;
   // "At the end of this track": it ends, and nothing comes after it.
   if (get().sleep.afterTrack) {
     finishCurrent(true);

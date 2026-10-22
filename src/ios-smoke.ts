@@ -153,6 +153,29 @@ async function nativePlayer() {
   report('pause-stops-engine', !paused.playing && paused.engine === false && resumed.playing && resumed.engine === true && resumed.time >= paused.time, JSON.stringify({ paused, resumed }));
 }
 
+/** Crossfade on the native player: near the end the next track starts on the other node while
+ * this one fades out; then the new one plays alone. */
+async function crossfade() {
+  const { setCrossfade } = await import('./player/player.ts');
+  const chart = (await (wave() as unknown as { api: { chart(): Promise<Track[]> } }).api.chart().catch(() => [] as Track[])).filter((t) => t.available !== false && (t.durationMs ?? 0) > 60000).slice(0, 2);
+  if (chart.length < 2) return report('crossfade', false, 'no tracks to try');
+  setCrossfade(4);
+  try {
+    await wave().playTracks(chart, 0, 'smoke crossfade');
+    const audio = wave().audio;
+    await until(() => !audio.paused && audio.currentTime > 1 && Number.isFinite(audio.duration), 60000);
+    audio.currentTime = audio.duration - 6;
+    const crossed = await until(async () => wave().usePlayer.getState().index === 1 && (await OniPlayer.state()).crossing, 30000);
+    const alone = await until(async () => {
+      const st = await OniPlayer.state();
+      return !st.crossing && st.playing && st.time > 4;
+    }, 20000);
+    report('crossfade', crossed && alone, `${crossed ? 'crossed' : 'no crossing'}; ${JSON.stringify(await OniPlayer.state())}`);
+  } finally {
+    setCrossfade(0);
+  }
+}
+
 /** Does the page keep running while the app is in the background with the native player on? The
  * workflow sends the app away for 25 s and back; a tick every 2 s shows whether this page ran. */
 function backgroundProbe() {
@@ -422,6 +445,7 @@ export async function runSmoke() {
     const local = await until(() => wave().audio.src.startsWith('oni-sealed:') && !wave().audio.paused && wave().audio.currentTime > 1, 20000);
     report('offline-playback', local, wave().audio.src.slice(0, 12));
     await nativePlayer();
+    await crossfade();
     await backgroundDownload();
 
     // A shortcut's link. The page asks iOS to open it (Capacitor hands non-web addresses to the

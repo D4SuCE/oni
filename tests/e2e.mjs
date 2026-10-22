@@ -947,6 +947,45 @@ await step('crossfade: the next track starts before this one ends, both sound fo
   }
 });
 
+await step('crossfade, the next track slow to load: the old one ends meanwhile, and the next still plays (not skipped)', async () => {
+  // The user's worry: tracks often load slowly. The crossing starts 4 s before the end, the next
+  // track's address takes 5 s, so the old one ends first; its end must not count as a skip. Its
+  // early fetch (prefetchNext) fails, so the crossing asks again and waits. Other tracks than the
+  // step above (each left half played counts as a skip, and two demote the artist).
+  await page.locator('[data-testid="crossfade"]').fill('4');
+  try {
+    const want = await page.evaluate(async () => {
+      const w = window.__wave;
+      const chart = (await w.api.chart()).filter((t) => t.available !== false && t.durationMs > 60000).slice(4, 7);
+      const slow = String(chart[1].id);
+      const stream = w.api.stream.bind(w.api);
+      w.api.stream = async (id, ...rest) => {
+        if (String(id) === slow && !window.__slowArmed) throw new Error('not yet');
+        if (String(id) === slow) await new Promise((r) => setTimeout(r, 5000));
+        return stream(id, ...rest);
+      };
+      window.__restoreStream = () => delete w.api.stream;
+      await w.playTracks(chart, 0, 'e2e crossfade slow');
+      return slow;
+    });
+    await waitPlaying(0.5);
+    await page.waitForFunction(() => Number.isFinite(window.__wave.audio.duration), null, { timeout: 10000 });
+    await page.evaluate(() => {
+      window.__slowArmed = true;
+      window.__wave.audio.currentTime = window.__wave.audio.duration - 4.5;
+    });
+    await page.waitForFunction(() => !window.__wave.audio.paused && window.__wave.audio.currentTime > 1 && window.__wave.usePlayer.getState().index > 0, null, { timeout: 20000 });
+    await page.waitForTimeout(1500);
+    const now = await page.evaluate(() => { const s = window.__wave.usePlayer.getState(); return { index: s.index, id: String(s.queue[s.index]?.id), playing: !window.__wave.audio.paused }; });
+    if (now.index !== 1 || now.id !== want || !now.playing) throw new Error(`skipped past the slow track: ${JSON.stringify(now)}`);
+  } finally {
+    await page.evaluate(() => window.__restoreStream?.());
+    await page.locator('[data-testid="crossfade"]').fill('0');
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.evaluate(() => window.__wave.audio.pause());
+  }
+});
+
 await step('keyboard: space toggles playback', async () => {
   // Nothing focused (a click could land on a switch of the page open, and space would flip it).
   await page.evaluate(() => document.activeElement?.blur());

@@ -761,6 +761,8 @@ public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDel
 /// the system's 10-band equalizer. A track is fetched whole into Caches/oni-play first (the next
 /// ones ahead of time); downloaded tracks are written there decrypted by the page. The page sees
 /// it as an audio element: src/player/nativeAudio.ts. JS: registerPlugin('OniPlayer').
+/// Two player nodes into one mixer, for crossfades: the next track starts on the other node while
+/// this one fades out (`open` with `fade`), and from then on the other is the one.
 @objc(PlayerPlugin)
 public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "PlayerPlugin"
@@ -780,10 +782,20 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
     static let bands: [Float] = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000]
 
     private let engine = AVAudioEngine()
-    private let node = AVAudioPlayerNode()
+    private let nodes = [AVAudioPlayerNode(), AVAudioPlayerNode()]
+    /// Which of `nodes` plays the track now.
+    private var active = 0
+    private var node: AVAudioPlayerNode { nodes[active] }
+    /// Both nodes meet here (each on a bus of its own), before the equalizer.
+    private let mix = AVAudioMixerNode()
     private let eq = AVAudioUnitEQ(numberOfBands: 10)
     private var file: AVAudioFile?
-    private var format: AVAudioFormat?
+    /// The format each node is connected with (its file's).
+    private var formats: [AVAudioFormat?] = [nil, nil]
+    private var format: AVAudioFormat? { formats[active] }
+    /// A crossfade under way: the old track's node, fading out, and the clock of the fade.
+    private var tail: AVAudioPlayerNode?
+    private var crossing: Timer?
     /// Where the current schedule starts, in frames; position = this + what the node has played.
     private var startFrame: AVAudioFramePosition = 0
     /// Bumped on every new schedule: the completion of an older one (stopped, replaced) is ignored.
@@ -809,8 +821,10 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
             band.bypass = false
         }
         eq.bypass = true
-        engine.attach(node)
+        for n in nodes { engine.attach(n) }
+        engine.attach(mix)
         engine.attach(eq)
+        engine.connect(mix, to: eq, format: nil)
         engine.connect(eq, to: engine.mainMixerNode, format: nil)
         let center = NotificationCenter.default
         center.addObserver(self, selector: #selector(interrupted(_:)), name: AVAudioSession.interruptionNotification, object: nil)
@@ -886,8 +900,9 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
 
     // MARK: playback
 
-    /// { id, url?, file?, ext, keep: [ids] } — opens a track (from a URL, or a file the page wrote
-    /// into the cache folder) at its start, paused; resolves { duration }.
+    /// { id, url?, file?, ext, keep: [ids], fade? } — opens a track (from a URL, or a file the page
+    /// wrote into the cache folder) at its start, paused; resolves { duration }. With `fade` (ms) and
+    /// music playing, it starts at once and the playing track fades out into it (a crossfade).
     @objc func open(_ call: CAPPluginCall) {
         guard let id = call.getString("id") else {
             call.reject("id is required")
@@ -895,6 +910,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
         }
         let ext = call.getString("ext") ?? "mp3"
         let keep = call.getArray("keep", String.self) ?? [id]
+        let fade = call.getDouble("fade") ?? 0
         let opened: (Result<URL, Error>) -> Void = { [weak self] result in
             DispatchQueue.main.async {
                 guard let self = self else { return }
@@ -904,7 +920,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
                 case .success(let url):
                     do {
                         let file = try AVAudioFile(forReading: url)
-                        self.begin(file)
+                        if fade > 0 && self.playing { self.cross(into: file, seconds: fade / 1000) } else { self.begin(file) }
                         self.trim(keeping: keep)
                         call.resolve(["duration": Double(file.length) / file.processingFormat.sampleRate])
                     } catch {
@@ -938,7 +954,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func begin(_ file: AVAudioFile) {
-        // A new track: a fade of the old one (another app's sound) is over.
+        // A new track: a fade of the old one (another app's sound) is over, and so is a crossfade.
+        endCross()
         fading?.invalidate()
         fading = nil
         node.volume = 1
@@ -947,13 +964,57 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
         stopTimer()
         playing = false
         pausedAt = 0
-        if format != file.processingFormat {
-            engine.disconnectNodeOutput(node)
-            engine.connect(node, to: eq, format: file.processingFormat)
-            format = file.processingFormat
-        }
+        connect(file)
         self.file = file
         schedule(from: 0)
+    }
+
+    /// The active node, connected with this file's format.
+    private func connect(_ file: AVAudioFile) {
+        guard formats[active] != file.processingFormat else { return }
+        engine.disconnectNodeOutput(node)
+        engine.connect(node, to: mix, fromBus: 0, toBus: active, format: file.processingFormat)
+        formats[active] = file.processingFormat
+    }
+
+    /// The crossfade: `file` starts on the other node at silence and rises while the playing one
+    /// falls (equal power: as loud through the middle), then the old node stops.
+    private func cross(into file: AVAudioFile, seconds: Double) {
+        endCross()
+        fading?.invalidate()
+        fading = nil
+        let old = node
+        // The old track's end is no longer the end of what plays.
+        generation += 1
+        active = 1 - active
+        node.stop()
+        node.volume = 0
+        connect(file)
+        self.file = file
+        pausedAt = 0
+        schedule(from: 0)
+        node.play()
+        tail = old
+        let start = Date()
+        crossing = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            let p = min(1, Date().timeIntervalSince(start) / max(0.1, seconds))
+            old.volume = Float(cos(p * .pi / 2))
+            self.node.volume = Float(sin(p * .pi / 2))
+            if p >= 1 { self.endCross() }
+        }
+        tick()
+    }
+
+    /// A crossfade still running is done now: the old track stops, the new one at full volume.
+    private func endCross() {
+        crossing?.invalidate()
+        crossing = nil
+        guard let old = tail else { return }
+        tail = nil
+        old.stop()
+        old.volume = 1
+        node.volume = 1
     }
 
     private func schedule(from frame: AVAudioFramePosition) {
@@ -998,10 +1059,10 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.reject("cannot start: " + error.localizedDescription)
                 return
             }
-            // A fade under way (another app's sound) gives way to the user's play.
+            // A fade under way (another app's sound) gives way to the user's play; a crossfade goes on.
             self.fading?.invalidate()
             self.fading = nil
-            self.node.volume = 1
+            if self.tail == nil { self.node.volume = 1 }
             // What plays elsewhere already (a sound kept on by some app) is not a reason to stop.
             self.othersPlaying = AVAudioSession.sharedInstance().isOtherAudioPlaying
             self.node.play()
@@ -1021,6 +1082,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
 
     private func halt() {
         guard playing else { return }
+        // A pause mid-crossfade ends it: what comes back is the new track alone.
+        endCross()
         pausedAt = position
         node.pause()
         // The engine too: running, it fed the output silence, and iOS took the app for playing, so
@@ -1077,7 +1140,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func state(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
-            call.resolve(["time": self.position, "duration": self.duration, "playing": self.playing, "eq": !self.eq.bypass, "engine": self.engine.isRunning])
+            call.resolve(["time": self.position, "duration": self.duration, "playing": self.playing, "eq": !self.eq.bypass, "engine": self.engine.isRunning, "crossing": self.tail != nil])
         }
     }
 
@@ -1095,7 +1158,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
 
     private func tick() {
         notifyListeners("time", data: ["time": position, "duration": duration, "playing": playing])
-        if playing && fading == nil { watchOthers() }
+        if playing && fading == nil && tail == nil { watchOthers() }
     }
 
     /// Whether another app played the last time the clock looked.
@@ -1142,11 +1205,12 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
     /// The output changed under the engine (a route, a sample rate): restart it where it was.
     @objc private func configurationChanged(_ note: Notification) {
         DispatchQueue.main.async {
+            self.endCross()
             let at = self.position
             let was = self.playing
             self.generation += 1
             self.node.stop()
-            if let format = self.format { self.engine.connect(self.node, to: self.eq, format: format) }
+            if let format = self.format { self.engine.connect(self.node, to: self.mix, fromBus: 0, toBus: self.active, format: format) }
             self.schedule(from: AVAudioFramePosition(at * (self.format?.sampleRate ?? 44100)))
             self.pausedAt = at
             if was, (try? self.engine.start()) != nil {
