@@ -24,7 +24,7 @@ const track = (id: string, extra: Partial<Track> = {}): Track => ({ id, title: `
 /** A fake mp3: an ID3 header and some bytes that depend on the id. */
 const audioOf = (id: string) => new TextEncoder().encode(`ID3 fake audio of track ${id} `.repeat(200)).buffer;
 
-function setup(opts: { failFetch?: Set<string> } = {}) {
+function setup(opts: { failFetch?: Set<string>; covers?: boolean } = {}) {
   const disk = new Map<string, Uint8Array>();
   const kv = new Map<string, string>();
   let fetches = 0;
@@ -49,6 +49,7 @@ function setup(opts: { failFetch?: Set<string> } = {}) {
     stream: async (id) => ({ url: `https://cdn.test/${id}`, codec: 'mp3', bitrate: 192 }),
     store: { getItem: (k) => kv.get(k) ?? null, setItem: (k, v) => void kv.set(k, v) },
     crypto: globalThis.crypto,
+    ...(opts.covers && { fetchCover: async (t: Track) => new TextEncoder().encode(`JPEG of ${t.id}`).buffer }),
   };
   return { lib: new OfflineLibrary(deps), deps, disk, kv, fetches: () => fetches };
 }
@@ -164,6 +165,25 @@ await test('reconcile: forgets entries without a file, deletes files without an 
   lib.subscribe(() => told++);
   await lib.reconcile();
   assert(!lib.has('12') && lib.has('13') && !disk.has('99.oni') && told === 1, 'cleaned up');
+});
+
+await test('covers: kept beside a download, read back, removed with it, kept by reconcile, filled in for older ones', async () => {
+  const { lib, disk, deps } = setup({ covers: true });
+  await lib.download(track('50'));
+  assert(disk.has('50.jpg') && lib.entry('50')?.cover, 'kept with the download');
+  const url = await lib.coverUrl('50');
+  assert(url?.startsWith('blob:') && (await (await fetch(url!)).text()) === 'JPEG of 50', `read back: ${url}`);
+  await lib.reconcile();
+  assert(disk.has('50.jpg'), 'reconcile keeps it');
+  await lib.remove('50');
+  assert(!disk.has('50.jpg'), 'removed with the track');
+  // Downloaded before covers were kept: filled in later.
+  const old = new OfflineLibrary({ ...deps, fetchCover: undefined });
+  await old.download(track('51'));
+  assert(!disk.has('51.jpg'), 'none at first');
+  const again = new OfflineLibrary(deps);
+  await again.fillCovers();
+  assert(disk.has('51.jpg') && again.entry('51')?.cover, 'filled in');
 });
 
 await test('audio type by codec', () => {

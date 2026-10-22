@@ -326,8 +326,9 @@ export class YandexMusic {
     await this.call(`/users/${await this.uid()}/likes/playlists/${action}`, { method: 'POST', form: { 'playlist-ids': `${pl.uid}:${pl.kind}` } });
   }
 
-  playlist(uid: number | string, kind: number | string) {
-    return this.call<Playlist>(`/users/${uid}/playlists/${kind}`, { query: { 'rich-tracks': true } });
+  /** `rich`: with every track in it; without, ids only (a big list's tracks then come by `tracks`). */
+  playlist(uid: number | string, kind: number | string, rich = true) {
+    return this.call<Playlist>(`/users/${uid}/playlists/${kind}`, { query: { 'rich-tracks': rich } });
   }
 
   async createPlaylist(title: string): Promise<Playlist> {

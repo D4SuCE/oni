@@ -222,7 +222,13 @@ async function playlistActions() {
   await until(() => document.querySelector('.menu'), 3000);
   const items = [...document.querySelectorAll('.menu .menu-item')].map((i) => i.textContent?.trim());
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-  report('playlist-actions', over === 0 && items.some((i) => /удалить|delete/i.test(i ?? '')), `${over} off screen; menu: ${items.join(', ')}`);
+  // Search right after the other buttons, "…" at the right edge (the user's wish).
+  const box = (sel: string) => document.querySelector(sel)?.getBoundingClientRect();
+  const search = box('[data-testid="list-search"]');
+  const more = box('[data-testid="playlist-more"]');
+  const row = [...document.querySelectorAll<HTMLElement>('.page-actions > *')].filter((b) => b.offsetParent).map((b) => b.getBoundingClientRect().right);
+  const placed = Boolean(search && more && more.right >= Math.max(...row) - 1 && search.right < more.left);
+  report('playlist-actions', over === 0 && placed && items.some((i) => /удалить|delete/i.test(i ?? '')), `${over} off screen; search ${placed ? 'before' : 'not before'} "…" at the edge; menu: ${items.join(', ')}`);
 }
 
 /** On a page opened from somewhere (the own playlist above), a pull down from its top goes back
@@ -249,6 +255,32 @@ async function swipeBack() {
   const items = [...document.querySelectorAll('.menu .menu-item')].map((i) => i.textContent?.trim());
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
   report('liked-radio', items.some((i) => /радио|radio/i.test(i ?? '')), items.join(', '));
+}
+
+/** The phone's top: the offline banner sits below the status bar and the Dynamic Island (it was
+ * under them), and the "For you" cards have no unseen Play button (a tap there played the list). */
+async function phoneTop() {
+  const app = (window as unknown as { __wave: { useApp: { getState(): { offline: boolean }; setState(s: { offline: boolean }): void } } }).__wave.useApp;
+  const probe = Object.assign(document.createElement('div'), { style: 'position:fixed;top:0;height:env(safe-area-inset-top)' });
+  document.body.append(probe);
+  const safeTop = probe.getBoundingClientRect().height;
+  probe.remove();
+  click('[data-testid="nav-home"]');
+  await until(() => document.querySelector('[data-testid="mix-card"]'), 15000);
+  const play = document.querySelector('[data-testid="mix-card"] .card-play');
+  const unseen = play ? getComputedStyle(play).display !== 'none' : false;
+  const was = app.getState().offline;
+  app.setState({ offline: true });
+  const banner = await until(() => document.querySelector('[data-testid="offline-banner"]'), 3000);
+  const top = document.querySelector('[data-testid="offline-banner"]')?.getBoundingClientRect().top ?? -1;
+  app.setState({ offline: was });
+  report('phone-top', Boolean(banner) && top >= safeTop && !unseen, `banner at ${top}, status bar ${safeTop}; card play button ${unseen ? 'there' : 'gone'}`);
+  // No endless motion under the glass (heat): the backdrop and the banner's glow stand still.
+  const endless = document.getAnimations().filter((a) => {
+    const target = (a.effect as KeyframeEffect | null)?.target as Element | null;
+    return a.playState === 'running' && a.effect?.getTiming().iterations === Infinity && target?.closest('.backdrop-img, .wave-blobs');
+  });
+  report('no-endless-backdrop', !endless.length, `${endless.length} running`);
 }
 
 /** The update check reads the SideStore source (iosUpdate.ts): latest, or a newer one offered. */
@@ -331,6 +363,7 @@ export async function runSmoke() {
     await uploadForm();
     await playlistActions();
     await swipeBack();
+    await phoneTop();
     await updateCheck();
   } catch (e) {
     report('crash', false, String(e));

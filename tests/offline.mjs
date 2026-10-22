@@ -68,9 +68,11 @@ await step('download a track: encrypted on disk, then it plays from the file', a
   await page.locator('.menu-item', { hasText: 'Скачать' }).click();
   await row.locator('[data-testid="saved-mark"]').waitFor({ timeout: 60000 });
 
-  const files = fs.readdirSync(offlineDir);
-  if (files.length !== 1 || !files[0].endsWith('.oni')) throw new Error(`files: ${files}`);
-  const head = fs.readFileSync(path.join(offlineDir, files[0])).subarray(0, 4096);
+  // The track, encrypted, and its cover beside it.
+  await page.waitForFunction(() => window.__wave.offline.entries()[0]?.cover, null, { timeout: 15000 });
+  const files = fs.readdirSync(offlineDir).sort();
+  if (files.length !== 2 || !files[0].endsWith('.jpg') || !files[1].endsWith('.oni')) throw new Error(`files: ${files}`);
+  const head = fs.readFileSync(path.join(offlineDir, files[1])).subarray(0, 4096);
   // Not an mp3 anyone can open: no ID3 tag, no MPEG frame sync at the start.
   if (head.includes(Buffer.from('ID3')) || (head[0] === 0xff && (head[1] & 0xe0) === 0xe0)) throw new Error('the file on disk is plain audio');
 
@@ -163,6 +165,10 @@ await step('no network: the app starts on Liked, kept whole; the downloaded trac
   await playingFromFile(page);
   const queue = await page.evaluate(() => window.__wave.usePlayer.getState().queue.map((t) => String(t.id)));
   if (queue.join() !== likedIds.join()) throw new Error(`queue ${queue}, want ${likedIds}`);
+  // Their covers show though nothing loads from the network (the user: the picture was missing).
+  await page.waitForFunction((ids) => ids.every((id) => document.querySelector(`.track-row[data-track-id="${id}"] img`)?.src.startsWith('blob:')), likedIds, { timeout: 5000 }).catch(async () => {
+    throw new Error(`covers: ${await page.evaluate((ids) => ids.map((id) => document.querySelector(`.track-row[data-track-id="${id}"] img`)?.src ?? 'none').join(', '), likedIds)}`);
+  });
   await shot(page, '22-offline');
 });
 

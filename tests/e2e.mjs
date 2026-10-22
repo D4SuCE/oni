@@ -263,6 +263,14 @@ await step('a playback error shows as a toast that goes away by itself', async (
   await page.evaluate(() => window.__wave.usePlayer.setState({ error: 'e2e: could not play' }));
   await page.waitForSelector('.toast:has-text("e2e: could not play")', { timeout: 3000 });
   await page.waitForSelector('.toast:has-text("e2e: could not play")', { state: 'detached', timeout: 6000 });
+  // At the top, out of the player's way, and a click puts it away at once (the user's wish).
+  await page.evaluate(() => window.__wave.usePlayer.setState({ error: 'e2e: tap me away' }));
+  const toast = page.locator('[data-testid="toast"]');
+  await toast.waitFor({ timeout: 3000 });
+  const box = await toast.boundingBox();
+  if (box.y > 120) throw new Error(`the toast is at y=${box.y}, not at the top`);
+  await toast.click();
+  await page.waitForSelector('[data-testid="toast"]', { state: 'detached', timeout: 1000 });
 });
 
 await step('"…" pressed again closes its menu instead of opening it anew', async () => {
@@ -588,6 +596,12 @@ await step('liked tracks page', async () => {
 });
 
 await step('search inside Liked: the list narrows, and a found track plays the whole list from it', async () => {
+  // Its button at the right edge of the row of buttons (the user's wish, as on the iPhone).
+  const edge = await page.evaluate(() => {
+    const row = [...document.querySelectorAll('.lib-actions > *')].map((b) => b.getBoundingClientRect().right);
+    return document.querySelector('[data-testid="list-search"]').getBoundingClientRect().right >= Math.max(...row) - 1;
+  });
+  if (!edge) throw new Error('the search button is not at the right edge');
   const total = await page.locator('.track-row').count();
   const word = (await page.locator('.track-row .tr-title').nth(2).innerText()).split(/\s+/).find((w) => w.length >= 3) ?? '';
   await page.click('[data-testid="list-search"]');
@@ -633,6 +647,48 @@ await step('a playing list says so on its page: Play turns Pause, then Resume, w
   if (await page.locator('[data-testid="list-play"][data-playing]').count()) throw new Error('another playlist shows as playing');
   await page.click('[data-testid="nav-liked"]');
   await page.waitForSelector('[data-testid="list-play"][data-playing]', { timeout: 15000 });
+});
+
+await step('Liked opened again shows the whole list and its Download button at once', async () => {
+  // The user: Download came up late on Liked (it waited for the rest of the list after the first
+  // hundred). Seen once, the list is kept and shows right away; the fresh one replaces it quietly.
+  await page.click('[data-testid="nav-home"]');
+  await page.waitForSelector('.wave-hero');
+  const t0 = Date.now();
+  await page.click('[data-testid="nav-liked"]');
+  await page.waitForSelector('[data-testid="download-all"]', { timeout: 15000 });
+  const ms = Date.now() - t0;
+  const rows = await page.locator('.track-row').count();
+  const keys = await page.evaluate(() => window.__wave.useApp.getState().likedKeys.length);
+  console.log(`       Download after ${ms} ms, ${rows} of ${keys} rows`);
+  if (ms > 500 || rows < keys) throw new Error(`Download after ${ms} ms, ${rows} of ${keys} rows`);
+});
+
+await step('a big playlist opens at once, the rest of it comes in parts and joins a queue started early', async () => {
+  // The user: a friend's 1,600-track playlist took seconds to open. That one (pavel_hope's Liked,
+  // saved by the user), or the account's own Liked as a playlist if it is gone.
+  const big = await page.evaluate(() => {
+    const s = window.__wave.useApp.getState();
+    const theirs = s.likedPlaylists.find((p) => p.owner?.login === 'pavel_hope') ?? [...s.likedPlaylists].sort((a, b) => b.trackCount - a.trackCount)[0];
+    return theirs && theirs.trackCount > 1000 ? { uid: theirs.uid, kind: theirs.kind, n: theirs.trackCount } : { uid: s.account.uid, kind: 3, n: s.likedKeys.length };
+  });
+  const t0 = Date.now();
+  await page.evaluate(({ uid, kind }) => window.__wave.navigate({ name: 'playlist', uid, kind }), big);
+  await page.waitForSelector('.track-row', { timeout: 15000 });
+  const first = Date.now() - t0;
+  const early = await page.locator('.track-row').count();
+  // Started before the rest is in: the queue grows to the whole list as it comes.
+  await page.locator('.track-row').first().locator('.tr-play').click();
+  await page.waitForSelector('[data-testid="list-loading"]', { state: 'detached', timeout: 60000 });
+  const all = Date.now() - t0;
+  const rows = await page.locator('.track-row').count();
+  const playable = await page.locator('.track-row:not(.unavailable)').count();
+  await page.waitForFunction((n) => window.__wave.usePlayer.getState().queue.length >= n, playable, { timeout: 5000 }).catch(() => {});
+  const queue = await page.evaluate(() => window.__wave.usePlayer.getState().queue.length);
+  console.log(`       ${big.n} tracks: first ${early} rows after ${first} ms, all ${rows} after ${all} ms; queue ${queue} of ${playable} playable`);
+  if (first > 1200) throw new Error(`the first rows took ${first} ms`);
+  if (rows < big.n * 0.9 || queue < playable) throw new Error(`${rows} rows, queue ${queue} of ${playable}`);
+  await page.evaluate(() => window.__wave.audio.pause());
 });
 
 await step('Liked has a radio, as playlists do', async () => {

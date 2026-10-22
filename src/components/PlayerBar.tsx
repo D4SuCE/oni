@@ -1,7 +1,7 @@
+import { useCover } from '../ui/offline.ts';
 import { Ban, Heart, ListMusic, Loader2, Maximize2, MoreHorizontal, Pause, PictureInPicture2, Play, Repeat, Repeat1, Shuffle, SlidersVertical, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Waves } from 'lucide-react';
 import { useRef, useState } from 'react';
 import type { Track } from '../api/types.ts';
-import { trackCover } from '../api/yandex.ts';
 import { useLang, useT } from '../i18n.ts';
 import { cycleRepeat, next, prev, seek, setVolume, sourceTitle, toggle, toggleShuffle, usePlayer } from '../player/player.ts';
 import { dislike, toggleLike, useApp } from '../store.ts';
@@ -128,6 +128,7 @@ export function VolumeControl({ className }: { className?: string }) {
 
 export function PlayerBar() {
   const track = usePlayer((s) => s.queue[s.index]);
+  const cover = useCover(track, 200);
   const isWave = usePlayer((s) => s.source?.kind === 'wave');
   const t = useT();
   useLang((s) => s.lang); // the source title is localized
@@ -143,7 +144,7 @@ export function PlayerBar() {
         {track ? (
           <>
             <button className="pb-cover" onClick={openNow} title={t.player.expand}>
-              <Cover src={trackCover(track, 200)} size={56} />
+              <Cover src={cover} size={56} />
             </button>
             <div className="pb-meta">
               <div className="pb-title" title={track.title} data-testid="now-title">

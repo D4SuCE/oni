@@ -114,6 +114,10 @@ export const offline =
         stream: (id) => api.stream(id, get().quality),
         store: storage,
         crypto,
+        fetchCover: async (t) => {
+          const url = trackCover(t, 400);
+          return url ? transport.fetchBytes!(url) : null;
+        },
       })
     : null;
 offline?.reconcile();
@@ -434,10 +438,26 @@ export async function playTracks(tracks: Track[], start = 0, title = tr().common
   await startList(tracks, start, title, from, extra);
 }
 
+/** Playable now: available, and with no network downloaded. */
+const canPlay = (t: Track) => t.available !== false && (!offlineMode || Boolean(offline?.has(t.id)));
+
+/** A list still coming in parts (a big playlist, ui/listLoader.ts): its later tracks join the
+ * queue as they come, if it is what plays, in its order (not shuffled). */
+export function extendList(list: string, tracks: Track[]) {
+  const s = get();
+  if (listKeyOf(s.source) !== list || s.shuffle) return;
+  const queue = tracks.filter(canPlay);
+  if (queue.length <= s.queue.length) return;
+  const cur = s.queue[s.index];
+  const index = cur ? queue.findIndex((t) => String(t.id) === String(cur.id)) : s.index;
+  if (index < 0) return;
+  set({ queue, index });
+  prefetchNext();
+}
+
 async function startList(tracks: Track[], start: number, title: string, from?: PlayContext, extra: PlayExtra = {}) {
   // With no network only the downloaded ones, in the list's order; a pick that is not downloaded
   // starts the next one that is.
-  const canPlay = (t: Track) => t.available !== false && (!offlineMode || Boolean(offline?.has(t.id)));
   const playable = tracks.filter(canPlay);
   if (!playable.length) {
     set({ error: offlineMode ? tr().downloads.nothingHere : tr().player.cantPlay(title) });

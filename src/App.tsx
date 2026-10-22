@@ -3,7 +3,6 @@ import { WifiOff } from 'lucide-react';
 import { DownloadsView } from './views/Downloads.tsx';
 import { useT } from './i18n.ts';
 import { api } from './api/client.ts';
-import { trackCover } from './api/yandex.ts';
 import { Spinner } from './components/Common.tsx';
 import { DialogHost } from './components/Dialog.tsx';
 import { TrackSheetHost } from './components/TrackSheet.tsx';
@@ -31,11 +30,12 @@ import { Search } from './views/Search.tsx';
 import { SettingsView } from './views/Settings.tsx';
 import { isIos } from './ui/platform.ts';
 import { useSwipeBack } from './ui/swipe.ts';
+import { useCover } from './ui/offline.ts';
 
 /** Blurred cover of the current track behind everything, cross-faded between tracks. */
 function Backdrop() {
   const track = usePlayer((s) => s.queue[s.index]);
-  const url = trackCover(track, 200);
+  const url = useCover(track, 200);
   const [layers, setLayers] = useState<{ url: string; id: number }[]>([]);
   const seq = useRef(0);
   useEffect(() => {
@@ -211,7 +211,7 @@ export function App() {
       <DialogHost />
       <TrackSheetHost />
       {toastMsg && (
-        <div key={toastMsg.id} className="toast glass">
+        <div key={toastMsg.id} className="toast glass" onClick={() => useApp.setState({ toast: null })} data-testid="toast">
           {toastMsg.text}
         </div>
       )}

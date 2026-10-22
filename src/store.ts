@@ -5,7 +5,7 @@ import type { Account, Playlist, Track } from './api/types.ts';
 import { api, loadJson, storage, transport } from './api/client.ts';
 import { ApiError, trackKey } from './api/yandex.ts';
 import { tr, useLang } from './i18n.ts';
-import { dropFromQueue, onNetworkLost, setDislikedCheck, setOfflineMode, waveFeedback } from './player/player.ts';
+import { dropFromQueue, offline, onNetworkLost, setDislikedCheck, setOfflineMode, waveFeedback } from './player/player.ts';
 
 export type Route =
   | { name: 'home' }
@@ -227,6 +227,8 @@ export async function refreshLibrary() {
     api.playlists().catch(() => get().playlists),
     api.likedPlaylists().catch(() => get().likedPlaylists),
   ]);
+  // Covers for tracks downloaded before they were kept (in the background, once there is a network).
+  offline?.fillCovers().catch(() => {});
   set({
     libraryReady: true,
     likedPlaylists,

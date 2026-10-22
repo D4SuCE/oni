@@ -1,6 +1,6 @@
 import { Heart, MoreHorizontal, Pencil, Radio, Shuffle, Trash2, Upload } from 'lucide-react';
 import { DownloadButton } from '../components/DownloadButton.tsx';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, transport } from '../api/client.ts';
 import type { Playlist } from '../api/types.ts';
 import { playlistCover } from '../api/yandex.ts';
@@ -11,13 +11,18 @@ import { useTrackEdits } from '../components/TrackSheet.tsx';
 import { SmartShuffleButton } from '../components/SmartShuffle.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { useT } from '../i18n.ts';
-import { playRadio, playShuffled, playTracks } from '../player/player.ts';
+import { extendList, playRadio, playShuffled, playTracks } from '../player/player.ts';
 import { back, errorText, isOwn, refreshPlaylists, samePlaylist, toast, togglePlaylistLike, useApp } from '../store.ts';
 import { isIos } from '../ui/platform.ts';
 import { cx, fmtTotal, useAsync } from '../ui/util.ts';
 import { useListSearch } from '../components/ListSearch.tsx';
 import { savedPlaylist } from '../player/offlineLists.ts';
 import { loadOrKept, useKeepForOffline } from '../ui/offline.ts';
+import { useListTracks } from '../ui/listLoader.ts';
+import { Loader2 } from 'lucide-react';
+
+/** Up to this many tracks a playlist comes whole in one request; a bigger one in parts. */
+const WHOLE = 300;
 
 export function PlaylistView({ uid, kind }: { uid: number | string; kind: number | string }) {
   // An upload renamed from the track menu: show the new name.
@@ -25,14 +30,24 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
   // With no network: the playlist as kept when last seen (its downloaded tracks play).
   const offlineNow = useApp((s) => s.offline);
   const key = `playlist:${uid}:${kind}`;
-  const { data: pl, loading, error, reload, setData } = useAsync(() => loadOrKept(() => api.playlist(uid, kind), () => savedPlaylist(key)), [uid, kind, edits, offlineNow]);
+  // A small playlist (by its count in the library) comes whole; a big or unknown one as ids, its
+  // tracks in parts (the user: a friend's 1,600 tracks took seconds to open).
+  const known = () => [...useApp.getState().playlists, ...useApp.getState().likedPlaylists].find((p) => samePlaylist(p, { uid, kind }))?.trackCount;
+  const { data: pl, loading, error, reload, setData } = useAsync(
+    () => loadOrKept(() => api.playlist(uid, kind, (known() ?? Infinity) <= WHOLE), () => savedPlaylist(key)),
+    [uid, kind, edits, offlineNow],
+  );
   const [uploading, setUploading] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const t = useT();
   const likedPlaylists = useApp((s) => s.likedPlaylists);
   const search = useListSearch();
-  const listTracks = useMemo(() => (pl?.tracks || []).map((x) => x.track!).filter(Boolean), [pl]);
-  useKeepForOffline(key, pl?.title ?? '', pl ? listTracks : null, pl);
+  const { tracks: listTracks, total: listTotal, complete } = useListTracks(pl);
+  useKeepForOffline(key, pl?.title ?? '', pl && complete ? listTracks : null, pl);
+  // Playing while the rest comes: it joins the queue.
+  useEffect(() => {
+    if (listTracks.length) extendList(key, listTracks);
+  }, [listTracks, key]);
 
   if (loading && !pl) return <Spinner />;
   if (error || !pl) return <ErrorBox error={error} onRetry={reload} />;
@@ -119,18 +134,19 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
         meta={
           <>
             {t.count.tracks(pl.trackCount)}
-            {total > 0 && `, ${fmtTotal(total)}`}
+            {complete && total > 0 && `, ${fmtTotal(total)}`}
             {pl.description && <div className="muted desc">{pl.description}</div>}
           </>
         }
         actions={
           <>
             <ListPlayButton list={`playlist:${from.playlist}`} onPlay={() => playTracks(tracks, 0, pl.title, from)} disabled={!tracks.length} />
-            <button className="btn glass-btn" onClick={() => playShuffled(tracks, pl.title, from)} disabled={!tracks.length}>
+            {/* These take the whole list: once it is all in. */}
+            <button className="btn glass-btn" onClick={() => playShuffled(tracks, pl.title, from)} disabled={!tracks.length || !complete}>
               <Shuffle size={16} /> {t.common.shuffle}
             </button>
-            <SmartShuffleButton tracks={tracks} title={pl.title} from={from} />
-            <DownloadButton listKey={`playlist:${pl.uid}:${pl.kind}`} tracks={tracks} title={pl.title} />
+            <SmartShuffleButton tracks={complete ? tracks : []} title={pl.title} from={from} />
+            {complete && <DownloadButton listKey={`playlist:${pl.uid}:${pl.kind}`} tracks={tracks} title={pl.title} />}
             {tracks.length > 0 && search.button}
             {/* On the iPhone the rest lives in "…": one row of buttons fits its screen. */}
             {isIos ? (
@@ -176,8 +192,13 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
       {search.field}
       {tracks.length ? (
         <TrackList tracks={tracks} filter={search.query} onPlay={(i) => playTracks(tracks, i, pl.title, from)} onRemove={own ? remove : undefined} />
-      ) : (
+      ) : complete ? (
         <div className="empty-hint">{own ? t.playlist.emptyOwn : t.playlist.empty}</div>
+      ) : null}
+      {!complete && (
+        <div className="list-loading" data-testid="list-loading">
+          <Loader2 size={16} className="spin" /> {t.playlist.loadingMore(tracks.length, listTotal)}
+        </div>
       )}
     </div>
   );

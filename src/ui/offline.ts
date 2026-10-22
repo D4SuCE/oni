@@ -1,10 +1,10 @@
 // The interface side of downloads (src/player/offline.ts): re-rendering on changes, the
 // "Download" actions with their progress, sizes for people.
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import type { Album, Playlist, Track } from '../api/types.ts';
-import { ApiError } from '../api/yandex.ts';
+import { ApiError, trackCover } from '../api/yandex.ts';
 import { saveList, savedList } from '../player/offlineLists.ts';
 import { tr } from '../i18n.ts';
 import { iosBackgroundDownloads, showProgressInShade, useTrackProgress } from '../player/iosDownloads.ts';
@@ -12,9 +12,16 @@ import { offline } from '../player/player.ts';
 import { errorText, toast, useApp } from '../store.ts';
 import { isIos } from './platform.ts';
 
-/** Bumped on every change to the downloads; components read it to re-render. */
+/** Bumped on changes to the downloads; components read it to re-render. At most a few times a
+ * second: a list of 500 downloading redrew on every file and every hand-over (heat on the phone). */
 export const useOfflineVersion = create<{ v: number }>(() => ({ v: 0 }));
-const bump = () => useOfflineVersion.setState((s) => ({ v: s.v + 1 }));
+let bumping: ReturnType<typeof setTimeout> | null = null;
+const bump = () => {
+  bumping ??= setTimeout(() => {
+    bumping = null;
+    useOfflineVersion.setState((s) => ({ v: s.v + 1 }));
+  }, 300);
+};
 offline?.subscribe(bump);
 
 /** The iPhone downloads lists in the background, through iOS (player/iosDownloads.ts). */
@@ -129,3 +136,22 @@ export async function loadOrKept<T>(load: () => Promise<T>, kept: () => T | null
 }
 
 export { savedList };
+
+/**
+ * A track's cover: Yandex's, or with no network the one kept with its download (the user: the song
+ * played but its picture was missing). One kept size serves every place.
+ */
+export function useCover(track: Track | undefined, size: number) {
+  const offlineNow = useApp((s) => s.offline);
+  const id = track ? String(track.id) : '';
+  const [local, setLocal] = useState<{ id: string; url: string } | null>(null);
+  useEffect(() => {
+    if (!offlineNow || !id || !offline?.entry(id)?.cover) return;
+    let alive = true;
+    offline.coverUrl(id).then((url) => alive && url && setLocal({ id, url }));
+    return () => {
+      alive = false;
+    };
+  }, [offlineNow, id]);
+  return offlineNow && local?.id === id ? local.url : trackCover(track, size);
+}

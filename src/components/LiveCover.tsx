@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Track } from '../api/types.ts';
-import { trackCover } from '../api/yandex.ts';
 import { usePlayer } from '../player/player.ts';
 import { useMotion } from '../ui/motion.ts';
 import { cx } from '../ui/util.ts';
+import { useCover } from '../ui/offline.ts';
 import { Cover } from './Common.tsx';
 
 /** The track's looping cover video, if it has one and live covers are on. */
@@ -41,5 +41,6 @@ export function BackgroundVideo({ src, poster }: { src: string; poster?: string 
 export function LiveCover({ track, className }: { track?: Track; className?: string }) {
   const motion = useMotion((s) => s.enabled);
   const playing = usePlayer((s) => s.playing);
-  return <Cover src={trackCover(track, 1000)} className={cx(className, motion && 'drift', motion && !playing && 'paused')} />;
+  const cover = useCover(track, 1000);
+  return <Cover src={cover} className={cx(className, motion && 'drift', motion && !playing && 'paused')} />;
 }

@@ -1,11 +1,11 @@
 import { memo } from 'react';
 import { ArrowDownToLine, ArrowUp, Ban, CircleCheck, Disc3, Download, Info, Loader2, Pencil, Heart, Link, ListEnd, ListPlus, ListStart, MoreHorizontal, Play, Plus, Radio, Share, Trash2, User } from 'lucide-react';
 import type { Track } from '../api/types.ts';
-import { artistNames, trackCover } from '../api/yandex.ts';
+import { artistNames } from '../api/yandex.ts';
 import { tr, useT } from '../i18n.ts';
 import { enqueue, offline, playNext, playRadio, toggle, usePlayer } from '../player/player.ts';
 import { addToPlaylist, createPlaylist, dislike, isOwn, navigate, toggleLike, useApp } from '../store.ts';
-import { downloadTrack, offlineState, useDownloadProgress, useOfflineVersion, type OfflineState } from '../ui/offline.ts';
+import { downloadTrack, offlineState, useCover, useDownloadProgress, useOfflineVersion, type OfflineState } from '../ui/offline.ts';
 import { isIos } from '../ui/platform.ts';
 import { shareTrack } from '../ui/share.ts';
 import { cx, fmtTime } from '../ui/util.ts';
@@ -99,6 +99,7 @@ interface RowProps {
 const TrackRow = memo(function TrackRow({ track: t, index, active, playing, liked, showAlbum, onPlay, onRemove, rowMenu, saved, off }: RowProps) {
   const unavailable = t.available === false || Boolean(off);
   const tx = useT();
+  const cover = useCover(t, 100);
   const menu = (e: React.MouseEvent) =>
     openMenu(
       e,
@@ -130,7 +131,7 @@ const TrackRow = memo(function TrackRow({ track: t, index, active, playing, like
           <Play size={14} fill="currentColor" />
         </button>
       </div>
-      <Cover src={trackCover(t, 100)} size={40} />
+      <Cover src={cover} size={40} />
       <div className="tr-main">
         <div className="tr-title">
           {/* In front of the title: a long one cuts off its end, and the mark must stay visible. */}

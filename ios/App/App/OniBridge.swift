@@ -420,6 +420,8 @@ public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDel
         let config = URLSessionConfiguration.background(withIdentifier: "oni.downloads")
         config.sessionSendsLaunchEvents = true
         config.isDiscretionary = false
+        // Once the whole queue is with iOS (the app left the screen), still a few at a time.
+        config.httpMaximumConnectionsPerHost = DownloadsPlugin.parallel
         return URLSession(configuration: config, delegate: DownloadsPlugin.shared, delegateQueue: nil)
     }()
 
@@ -429,6 +431,12 @@ public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDel
     private var waiting: [[String: String]] = []
     private var active = Set<String>()
     private var restored = false
+    /// On screen. Off it, iOS treats a transfer started then as discretionary (it may wait for
+    /// Wi-Fi and a charger): the user saw downloads stop once Oni was put away, because the next
+    /// ones were started from the background. So leaving the screen hands iOS the whole queue.
+    private var onScreen = true
+    /// The screen notifications are subscribed to (on main; restore may be called twice).
+    private var observing = false
 
     /// The count (from the page; moved on here for each file while the page sleeps) and its texts.
     private var labels: [String: String] = [:]
@@ -451,6 +459,14 @@ public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDel
     /// The queue from disk and what iOS still fetches from before (a relaunch).
     func restore() {
         _ = session // made here, on the main thread, before any other thread asks for it
+        if !observing {
+            observing = true
+            let center = NotificationCenter.default
+            center.addObserver(self, selector: #selector(leaving), name: UIApplication.willResignActiveNotification, object: nil)
+            center.addObserver(self, selector: #selector(leaving), name: UIApplication.didEnterBackgroundNotification, object: nil)
+            center.addObserver(self, selector: #selector(returning), name: UIApplication.didBecomeActiveNotification, object: nil)
+            onScreen = UIApplication.shared.applicationState == .active
+        }
         ledger.async {
             guard !self.restored else { return }
             self.restored = true
@@ -480,17 +496,59 @@ public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDel
 
     // MARK: the queue
 
-    /// Starts the next ones while fewer than `parallel` are fetched. On `ledger`.
+    /// Starts the next ones while fewer than `parallel` are fetched; off screen, all of them
+    /// (`leaving`). On `ledger`.
     private func pump() {
-        while active.count < DownloadsPlugin.parallel, !waiting.isEmpty {
+        let all = !onScreenNow
+        let count = waiting.count
+        var n = 0
+        while (all || active.count < DownloadsPlugin.parallel), !waiting.isEmpty {
             let item = waiting.removeFirst()
             guard let id = item["id"], let address = item["url"], let url = URL(string: address), !active.contains(id) else { continue }
             let task = session.downloadTask(with: url)
             task.taskDescription = id
+            // The list's order as a hint to iOS, which picks among what it holds: the top first.
+            if all { task.priority = max(0.05, 0.9 - 0.85 * Float(n) / Float(max(count, 1))) }
+            n += 1
             active.insert(id)
             task.resume()
         }
         UserDefaults.standard.set(waiting, forKey: DownloadsPlugin.waitingKey)
+    }
+
+    /// `onScreen` as seen from `ledger` (set on main, read here).
+    private var onScreenNow: Bool {
+        screenLock.lock()
+        defer { screenLock.unlock() }
+        return onScreen
+    }
+    private let screenLock = NSLock()
+
+    /// Off the screen: everything queued goes to iOS now, while the app may still start transfers
+    /// that are not discretionary. A short background task covers the hand-over.
+    @objc private func leaving() {
+        screenLock.lock()
+        onScreen = false
+        screenLock.unlock()
+        var task: UIBackgroundTaskIdentifier = .invalid
+        task = UIApplication.shared.beginBackgroundTask(withName: "oni.downloads") {
+            UIApplication.shared.endBackgroundTask(task)
+            task = .invalid
+        }
+        ledger.async {
+            self.pump()
+            DispatchQueue.main.async {
+                guard task != .invalid else { return }
+                UIApplication.shared.endBackgroundTask(task)
+                task = .invalid
+            }
+        }
+    }
+
+    @objc private func returning() {
+        screenLock.lock()
+        onScreen = true
+        screenLock.unlock()
     }
 
     /// { items: [{ id, url }] } — queued in this order behind what is queued already.

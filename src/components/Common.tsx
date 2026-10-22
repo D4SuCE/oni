@@ -8,12 +8,14 @@ import { isOwn, navigate } from '../store.ts';
 import { cx } from '../ui/util.ts';
 
 export function Cover({ src, size, round, icon = 'music', className }: { src?: string; size?: number; round?: boolean; icon?: 'music' | 'user' | 'disc'; className?: string }) {
-  const [failed, setFailed] = useState(false);
+  // Failed for this address only: the kept cover that takes over with no network shows.
+  const [failedSrc, setFailedSrc] = useState<string>();
+  const failed = Boolean(src) && failedSrc === src;
   const Icon = icon === 'user' ? User : icon === 'disc' ? Disc3 : Music2;
   const style = size ? { width: size, height: size } : undefined;
   return (
     <div className={cx('cover', round && 'round', className)} style={style}>
-      {src && !failed ? <img src={src} alt="" loading="lazy" draggable={false} onError={() => setFailed(true)} /> : <Icon className="cover-icon" />}
+      {src && !failed ? <img src={src} alt="" loading="lazy" draggable={false} onError={() => setFailedSrc(src)} /> : <Icon className="cover-icon" />}
     </div>
   );
 }

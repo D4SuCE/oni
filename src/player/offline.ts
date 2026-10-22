@@ -24,6 +24,8 @@ export interface OfflineDeps {
   stream(trackId: string): Promise<{ url: string; codec: string; bitrate: number }>;
   store: KeyValueStore;
   crypto: Crypto;
+  /** The track's cover (one size, ~30 KB), kept beside it so it shows with no network too. */
+  fetchCover?(track: Track): Promise<ArrayBuffer | null>;
 }
 
 export interface OfflineEntry {
@@ -34,6 +36,8 @@ export interface OfflineEntry {
   at: number;
   codec: string;
   bitrate: number;
+  /** Its cover is kept too (`<id>.jpg`). */
+  cover?: boolean;
 }
 
 const INDEX = 'offline.index.v1';
@@ -41,6 +45,7 @@ const KEY = 'offline.key.v1';
 const IV = 12;
 
 const fileName = (id: string | number) => `${id}.oni`;
+const coverName = (id: string | number) => `${id}.jpg`;
 
 /** The type the <audio> element gets for a codec Yandex names. */
 export function audioType(codec: string) {
@@ -56,6 +61,8 @@ export class OfflineLibrary {
   private busy = new Map<string, Promise<void>>();
   private listeners = new Set<() => void>();
   private deps: OfflineDeps;
+  /** Covers read back for the offline mode, by id: object URLs, made once. */
+  private covers = new Map<string, Promise<string | null>>();
   /** Tracks someone else is putting in place (the iPhone's background downloads): their files are
    * not leftovers, even before they are in the index. */
   protect: (id: string) => boolean = () => false;
@@ -115,6 +122,7 @@ export class OfflineLibrary {
   adopt(track: Track, size: number, codec: string, bitrate: number) {
     this.index[String(track.id)] = { track: trimTrack(track), size, at: Date.now(), codec, bitrate };
     this.changed();
+    void this.saveCover(track);
   }
 
   isDownloading(id: string | number) {
@@ -139,6 +147,7 @@ export class OfflineLibrary {
     const job = (async () => {
       const { url, codec, bitrate } = await this.deps.stream(id);
       await this.seal(track, await this.deps.fetchBytes(url), codec, bitrate);
+      await this.saveCover(track);
     })().finally(() => {
       this.busy.delete(id);
       this.changed();
@@ -155,6 +164,43 @@ export class OfflineLibrary {
   async keep(track: Track, audio: ArrayBuffer, codec: string, bitrate: number) {
     await this.seal(track, audio, codec, bitrate);
     this.changed();
+    await this.saveCover(track);
+  }
+
+  /** Keeps the track's cover beside it; without one (or with no network) it simply has none. */
+  private async saveCover(track: Track) {
+    const id = String(track.id);
+    if (!this.deps.fetchCover || !this.index[id] || this.index[id].cover) return;
+    const data = await this.deps.fetchCover(track).catch(() => null);
+    if (!data || !this.index[id]) return;
+    await this.deps.files.write(coverName(id), data);
+    this.index[id].cover = true;
+    this.changed();
+  }
+
+  /** Covers for tracks downloaded before covers were kept, a few at a time (with a network). */
+  async fillCovers(parallel = 3) {
+    const todo = Object.values(this.index).filter((e) => !e.cover).map((e) => e.track);
+    let next = 0;
+    const worker = async () => {
+      while (next < todo.length) await this.saveCover(todo[next++]).catch(() => {});
+    };
+    await Promise.all(Array.from({ length: Math.min(parallel, todo.length) }, worker));
+  }
+
+  /** The kept cover, for an <img>; null where there is none. */
+  coverUrl(id: string | number): Promise<string | null> {
+    const key = String(id);
+    if (!this.index[key]?.cover) return Promise.resolve(null);
+    let url = this.covers.get(key);
+    if (!url) {
+      url = this.deps.files
+        .read(coverName(key))
+        .then((data) => URL.createObjectURL(new Blob([data], { type: 'image/jpeg' })))
+        .catch(() => null);
+      this.covers.set(key, url);
+    }
+    return url;
   }
 
   private async seal(track: Track, audio: ArrayBuffer, codec: string, bitrate: number) {
@@ -205,16 +251,20 @@ export class OfflineLibrary {
 
   async remove(id: string | number) {
     if (!this.index[String(id)]) return;
+    const cover = this.index[String(id)].cover;
     delete this.index[String(id)];
     this.changed();
     await this.deps.files.remove(fileName(id)).catch(() => {});
+    if (cover) await this.deps.files.remove(coverName(id)).catch(() => {});
   }
 
   async removeAll() {
     const ids = Object.keys(this.index);
+    const covers = ids.filter((id) => this.index[id].cover);
     this.index = {};
     this.changed();
     await Promise.all(ids.map((id) => this.deps.files.remove(fileName(id)).catch(() => {})));
+    await Promise.all(covers.map((id) => this.deps.files.remove(coverName(id)).catch(() => {})));
   }
 
   /** Drops index entries whose file is gone, and files nothing points to (an interrupted download). */
@@ -227,10 +277,13 @@ export class OfflineLibrary {
       if (!onDisk.has(fileName(id))) {
         delete this.index[id];
         changed = true;
+      } else if (this.index[id].cover && !onDisk.has(coverName(id))) {
+        this.index[id].cover = false;
+        changed = true;
       }
     }
     for (const f of files) {
-      const id = f.name.replace(/\.oni$/, '');
+      const id = f.name.replace(/\.(oni|jpg)$/, '');
       if (!this.index[id] && !this.busy.has(id) && !this.protect(id)) await this.deps.files.remove(f.name).catch(() => {});
     }
     if (changed) this.changed();

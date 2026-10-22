@@ -215,8 +215,9 @@ function allowAudioAnalysis() {
 // Downloaded tracks (src/player/offline.ts): encrypted by the page, kept here.
 const offlineDir = () => path.join(app.getPath('userData'), 'offline');
 function offlinePath(name) {
-  // Only our own "<track id>.oni" files: nothing like "../x" gets out of the folder.
-  if (!/^[\w-]+\.oni$/.test(String(name))) throw new Error('bad file name');
+  // Only our own "<track id>.oni" files and their covers ("<track id>.jpg"): nothing like "../x"
+  // gets out of the folder.
+  if (!/^[\w-]+\.(oni|jpg)$/.test(String(name))) throw new Error('bad file name');
   return path.join(offlineDir(), name);
 }
 

@@ -910,6 +910,11 @@ html.acrylic .backdrop {
   transform: translateY(8px);
   transition: opacity 0.2s, transform 0.2s;
 }
+/* The iPhone has no hover: an unseen button there played the list where a tap meant to open it
+   (the user). A tap opens the card; Play is on its page. */
+html.ios .card-play {
+  display: none;
+}
 /* Hover reveals only with a mouse: on a touch screen iOS spends the first tap on showing it. */
 @media (hover: hover) {
   .card:hover .card-play {
@@ -1112,6 +1117,19 @@ html.acrylic .backdrop {
   padding: 0 10px;
   border-radius: 10px;
   transition: background 0.12s;
+  /* Rows off screen are skipped by layout and paint: a list of 1,600 costs what a screenful does. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 58px;
+}
+/* A big playlist's tracks still coming in parts (ui/listLoader.ts). */
+.list-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 18px;
+  color: var(--text-3);
+  font-size: 13px;
 }
 .no-album .track-row {
   grid-template-columns: 34px 40px minmax(0, 1fr) 32px 46px 32px;
@@ -2038,6 +2056,15 @@ html.motion .backdrop-img {
     backdrop-in 1.6s ease forwards,
     backdrop-drift 48s ease-in-out 1.6s infinite alternate;
 }
+/* The iPhone: no endless motion under the glass. Every frame of it made the GPU blur all the glass
+   panels again for as long as Oni was on screen: heat and battery (the user: the phone got hot).
+   The backdrop fades in and stays; the wave banner's glow stands still. */
+html.ios.motion .backdrop-img {
+  animation: backdrop-in 1.6s ease forwards;
+}
+html.ios .wave-blobs i {
+  animation: none;
+}
 @keyframes backdrop-drift {
   from {
     transform: scale(1) rotate(0deg);
@@ -2340,6 +2367,11 @@ html.motion .backdrop-img {
   color: var(--text);
   font-size: 13px;
 }
+/* Below the status bar and the Dynamic Island, which covered it. */
+html.ios .offline-banner {
+  top: env(safe-area-inset-top);
+  margin: calc(env(safe-area-inset-top) + 6px) 16px 0;
+}
 .downloads-cover {
   display: grid;
   place-items: center;
@@ -2381,10 +2413,11 @@ html.motion .backdrop-img {
   margin-top: 18px;
 }
 
+/* Messages at the top, out of the player's way; a tap or click puts one away (the user's wish). */
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 104px;
+  top: 44px;
   z-index: 120;
   transform: translateX(-50%);
   max-width: min(560px, calc(100% - 32px));
@@ -2392,12 +2425,16 @@ html.motion .backdrop-img {
   border-radius: 14px;
   background: rgba(33, 24, 22, 0.88);
   font-weight: 550;
+  cursor: pointer;
   animation: toast-in 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+html.ios .toast {
+  top: calc(env(safe-area-inset-top) + 8px);
 }
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translate(-50%, 12px);
+    transform: translate(-50%, -12px);
   }
 }
 
@@ -2534,6 +2571,12 @@ html.motion .backdrop-img {
   align-items: center;
   gap: 10px;
   margin-bottom: 16px;
+}
+/* Search in a list: at the right edge of its row of buttons (the user's wish, as on the iPhone). */
+.page-actions [data-testid='list-search'],
+.lib-actions [data-testid='list-search'] {
+  order: 10;
+  margin-left: auto;
 }
 .notice {
   margin-bottom: 14px;
@@ -2953,14 +2996,26 @@ kbd {
     font-size: 12.5px;
     white-space: nowrap;
   }
-  /* Search sits at the right edge (after the list size where there is one). */
+  /* Search right after the other buttons, "…" at the right edge (the user's wish); the list size
+     where there is one sits between them. */
   html.ios .lib-actions .muted {
     order: 9;
   }
-  html.ios [data-testid='list-search'] {
-    order: 10;
+  html.ios .page-actions [data-testid='list-search'],
+  html.ios .lib-actions [data-testid='list-search'] {
+    order: 8;
+    margin-left: 0;
   }
-  html.ios .page-actions [data-testid='list-search'] {
+  html.ios [data-testid='playlist-more'],
+  html.ios [data-testid='liked-more'] {
+    order: 11;
+    margin-left: auto;
+  }
+  /* Liked: its size before "…" takes the free space (both at the right). */
+  html.ios .lib-actions:has(.muted) [data-testid='liked-more'] {
+    margin-left: 0;
+  }
+  html.ios .lib-actions:has(.busy) [data-testid='liked-more'] {
     margin-left: auto;
   }
   /* Menus: a sheet along the bottom, the full width, as iOS's own; a submenu lies over it. */

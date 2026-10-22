@@ -42,17 +42,23 @@ function LikedTracks() {
       else setError(new Error(t.downloads.notSaved));
       return;
     }
+    // Seen before: the kept list shows at once, its Download button with it (the user: it came up
+    // late, after the rest of the list), and the fresh one replaces it when it is in.
+    const byId = new Map((kept ?? []).map((x) => [String(x.id), x]));
+    const quick = keys.map((k) => byId.get(k.split(':')[0])).filter((x): x is Track => Boolean(x));
+    const shown = quick.length === keys.length && keys.length > 0;
+    if (shown) setTracks(quick);
     (async () => {
       try {
         const first = await api.tracks(keys.slice(0, FIRST_PAGE));
         if (!alive) return;
-        setTracks(first);
+        if (!shown) setTracks(first);
         if (keys.length > FIRST_PAGE) {
           const rest = await api.tracks(keys.slice(FIRST_PAGE));
           if (alive) setTracks([...first, ...rest]);
-        }
+        } else if (shown) setTracks(first);
       } catch (e) {
-        if (!alive) return;
+        if (!alive || shown) return;
         if (kept && !(e instanceof ApiError)) setTracks(kept);
         else setError(e);
       }

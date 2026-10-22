@@ -94,14 +94,31 @@ struct DownloadActivity: Widget {
                     }
                 }
             } compactLeading: {
-                Image(systemName: context.state.finished ? "checkmark.circle.fill" : "arrow.down.circle.fill")
-                    .foregroundColor(Palette.red)
-            } compactTrailing: {
-                Text("\(context.state.done)/\(context.state.total)")
-                    .font(.caption2.monospacedDigit())
-                    .foregroundColor(Palette.gold)
-            } minimal: {
                 Ring(state: context.state, size: 22, width: 2.5)
+            } compactTrailing: {
+                // How many of how many, as the user asked: "57/502".
+                Text("\(context.state.done)/\(context.state.total)")
+                    .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                    .foregroundColor(Palette.gold)
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+            } minimal: {
+                // Shared with another activity (music playing): a small circle, so the count of
+                // those in sits inside the ring.
+                ZStack {
+                    Circle().stroke(Palette.line, lineWidth: 2.5)
+                    Circle()
+                        .trim(from: 0, to: context.state.fraction)
+                        .stroke(Palette.red, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    Text(context.state.finished ? "✓" : "\(context.state.done)")
+                        .font(.system(size: 9, weight: .bold).monospacedDigit())
+                        .foregroundColor(Palette.gold)
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(1)
+                        .padding(3)
+                }
+                .frame(width: 24, height: 24)
             }
             .keylineTint(Palette.red)
         }
