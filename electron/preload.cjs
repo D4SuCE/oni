@@ -24,6 +24,8 @@ contextBridge.exposeInMainWorld('wave', {
   shellPrefs: () => ipcRenderer.sendSync('wave:shell:prefs'),
   setCloseToTray: (enabled) => ipcRenderer.send('wave:shell:close-to-tray', enabled),
   setAutostart: (enabled) => ipcRenderer.send('wave:shell:autostart', enabled),
+  setDiscord: (enabled) => ipcRenderer.send('wave:shell:discord', enabled),
+  setPresence: (track) => ipcRenderer.send('wave:discord', track),
   setProgress: (p) => ipcRenderer.send('wave:progress', p),
   openMini: () => ipcRenderer.send('wave:mini:open'),
   updateState: () => ipcRenderer.sendSync('wave:update:state'),

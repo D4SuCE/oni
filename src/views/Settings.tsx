@@ -11,6 +11,7 @@ import { logout, navigate, useApp } from '../store.ts';
 import { setMotion, setPulse, useMotion, usePulse } from '../ui/motion.ts';
 import { isIos } from '../ui/platform.ts';
 import { setPhoneSound, usePhoneSound } from '../player/phoneSound.ts';
+import { pushPresence } from '../player/shell.ts';
 import { MAX_SEE_THROUGH, setSeeThrough, useSeeThrough } from '../ui/seeThrough.ts';
 import { checkIosUpdate, installIosUpdate, installUpdateShortcut, setAutoUpdate, setUpdateViaShortcut, UPDATE_SHORTCUT, useAutoUpdate } from '../ui/iosUpdate.ts';
 import { useUpdate } from '../ui/update.ts';
@@ -27,6 +28,7 @@ export function SettingsView() {
   const summary = stats.summary(30);
   const [closeToTray, setCloseToTrayState] = useState(() => window.wave?.shellPrefs?.().closeToTray ?? false);
   const [autostart, setAutostartState] = useState(() => window.wave?.shellPrefs?.().autostart ?? false);
+  const [discordOn, setDiscordState] = useState(() => window.wave?.shellPrefs?.().discord ?? true);
   const t = useT();
   const s = t.settings;
   return (
@@ -160,6 +162,25 @@ export function SettingsView() {
                   setAutostartState(e.target.checked);
                 }}
                 data-testid="autostart"
+              />
+            </label>
+          )}
+          {window.wave?.setDiscord && (
+            <label className="toggle-row">
+              <div>
+                <div>{s.discord}</div>
+                <div className="hint">{s.discordHint}</div>
+              </div>
+              <input
+                type="checkbox"
+                className="switch"
+                checked={discordOn}
+                onChange={(e) => {
+                  window.wave?.setDiscord?.(e.target.checked);
+                  setDiscordState(e.target.checked);
+                  if (e.target.checked) pushPresence(true);
+                }}
+                data-testid="discord"
               />
             </label>
           )}

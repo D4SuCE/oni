@@ -3,6 +3,7 @@
 // Run: npm run test:e2e (runs after e2e.mjs)
 import { _electron as electron } from 'playwright-core';
 import fs from 'node:fs';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -11,8 +12,8 @@ const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'wave-desktop-'));
 let passed = 0;
 let failed = 0;
 
-async function launch() {
-  const app = await electron.launch({ args: [root], cwd: root, env: { ...process.env, WAVE_E2E: '1', WAVE_USER_DATA: userData } });
+async function launch(env = {}) {
+  const app = await electron.launch({ args: [root], cwd: root, env: { ...process.env, WAVE_E2E: '1', WAVE_USER_DATA: userData, ...env } });
   const page = await app.firstWindow();
   await page.waitForSelector('.wave-hero', { timeout: 30000 });
   return { app, page };
@@ -245,7 +246,81 @@ await step('close-to-tray hides the window, and closing quits without it', async
   if (!(await Promise.race([exited, new Promise((r) => setTimeout(() => r(false), 8000))]))) throw new Error('app did not quit');
 });
 
+// ------------------------------------------------------------- Discord status
+// A stand-in for Discord's desktop app on a pipe of its own (electron/discord.cjs takes its name
+// from ONI_DISCORD_PIPE): the handshake is answered READY, each command is kept.
+const pipe = `\\\\?\\pipe\\oni-test-discord-${process.pid}-`;
+const got = [];
+const discord = net.createServer((sock) => {
+  let buf = Buffer.alloc(0);
+  const send = (op, msg) => {
+    const json = Buffer.from(JSON.stringify(msg));
+    const head = Buffer.alloc(8);
+    head.writeInt32LE(op, 0);
+    head.writeInt32LE(json.length, 4);
+    sock.write(Buffer.concat([head, json]));
+  };
+  sock.on('data', (chunk) => {
+    buf = Buffer.concat([buf, chunk]);
+    while (buf.length >= 8 && buf.length >= 8 + buf.readInt32LE(4)) {
+      const op = buf.readInt32LE(0);
+      const len = buf.readInt32LE(4);
+      const msg = JSON.parse(buf.subarray(8, 8 + len).toString());
+      buf = buf.subarray(8 + len);
+      got.push({ op, msg });
+      if (op === 0) send(1, { cmd: 'DISPATCH', evt: 'READY', data: { v: 1 } });
+      else send(1, { cmd: msg.cmd, nonce: msg.nonce, evt: null, data: {} });
+    }
+  });
+  sock.on('error', () => {});
+});
+await new Promise((r) => discord.listen(pipe + '0', r));
 await app.close().catch(() => {});
+({ app, page } = await launch({ ONI_DISCORD_PIPE: pipe }));
+const activities = () => got.filter((f) => f.op === 1 && f.msg.cmd === 'SET_ACTIVITY').map((f) => f.msg.args.activity ?? null);
+const until = async (what, ms, why) => {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (what()) return;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  throw new Error(`${why}: ${JSON.stringify(got.slice(-3))}`);
+};
+
+await step('Discord status: Oni introduces itself, and the track playing shows (listening, artists, time, cover)', async () => {
+  const title = await page.evaluate(async () => {
+    const chart = (await window.__wave.api.chart()).filter((t) => t.available !== false).slice(0, 2);
+    await window.__wave.playTracks(chart, 0, 'e2e discord');
+    return chart[0].title;
+  });
+  await until(() => got.some((f) => f.op === 0), 15000, 'no handshake');
+  const hello = got.find((f) => f.op === 0).msg;
+  if (hello.client_id !== '1562889548793516082' || hello.v !== 1) throw new Error(`handshake ${JSON.stringify(hello)}`);
+  await until(() => activities().some((a) => a?.details?.startsWith(title)), 20000, 'no activity for the track');
+  const a = activities().filter(Boolean).pop();
+  if (a.type !== 2 || !a.state || !(a.timestamps?.end > a.timestamps?.start) || !a.assets?.large_image?.startsWith('http') || !a.buttons?.[0]?.url?.includes('music.yandex.ru')) throw new Error(`activity ${JSON.stringify(a)}`);
+});
+
+await step('Discord status: gone on a pause; the switch in Settings turns it off and on again', async () => {
+  await page.evaluate(() => window.__wave.audio.pause());
+  await until(() => activities().at(-1) === null, 8000, 'still shown on a pause');
+  await page.evaluate(() => window.__wave.audio.play());
+  await until(() => activities().at(-1) !== null, 8000, 'not back on play');
+  await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
+  await page.locator('[data-testid="discord"]').uncheck();
+  await until(() => activities().at(-1) === null, 8000, 'still shown when turned off');
+  const n = activities().length;
+  await page.evaluate(() => window.__wave.audio.pause());
+  await page.evaluate(() => window.__wave.audio.play());
+  await page.waitForTimeout(3000);
+  if (activities().length !== n) throw new Error('sent while off');
+  await page.locator('[data-testid="discord"]').check();
+  await until(() => activities().at(-1) !== null, 20000, 'not back when turned on');
+  await page.evaluate(() => window.__wave.audio.pause());
+});
+
+await app.close().catch(() => {});
+discord.close();
 fs.rmSync(userData, { recursive: true, force: true });
 console.log(`\n${passed} passed, ${failed} failed.`);
 if (failed) process.exit(1);

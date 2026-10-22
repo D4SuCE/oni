@@ -3,11 +3,12 @@
 const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, screen } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
+const discord = require('./discord.cjs');
 
 const asset = (name) => path.join(__dirname, 'assets', name);
 const prefsFile = () => path.join(app.getPath('userData'), 'shell.json');
 
-/** { bounds, maximized, closeToTray } */
+/** { bounds, maximized, closeToTray, discord } */
 let prefs = {};
 let win = null;
 let tray = null;
@@ -264,7 +265,27 @@ ipcMain.on('wave:playback', (_e, s) => {
   toMini('wave:playback', state);
 });
 ipcMain.on('wave:shell:prefs', (e) => {
-  e.returnValue = { closeToTray: Boolean(prefs.closeToTray), autostart: app.getLoginItemSettings(LOGIN).openAtLogin };
+  e.returnValue = { closeToTray: Boolean(prefs.closeToTray), autostart: app.getLoginItemSettings(LOGIN).openAtLogin, discord: prefs.discord !== false };
+});
+
+// Discord's status (discord.cjs): on unless turned off in Settings. The page sends what plays.
+// Tests talk to it only through a pipe of their own (not to the user's Discord).
+const discordOn = () => prefs.discord !== false && (!process.env.WAVE_E2E || Boolean(process.env.ONI_DISCORD_PIPE));
+let discordStarted = false;
+const startDiscord = () => {
+  if (discordStarted || !discordOn()) return;
+  discordStarted = true;
+  discord.init(log, true);
+};
+ipcMain.on('wave:discord', (_e, track) => {
+  if (!discordOn()) return;
+  startDiscord();
+  discord.setTrack(track);
+});
+ipcMain.on('wave:shell:discord', (_e, enabled) => {
+  prefs.discord = Boolean(enabled);
+  savePrefs();
+  if (discordStarted) discord.setEnabled(discordOn());
 });
 // "Start with Windows": a login item that opens Oni in the tray (the user's wish).
 ipcMain.on('wave:shell:autostart', (_e, enabled) => {

@@ -56,9 +56,12 @@ export interface Transport {
   // Desktop shell (taskbar buttons, tray); absent on platforms without one.
   onCommand?(cb: (cmd: ShellCommand) => void): void;
   setPlayback?(state: ShellPlayback): void;
-  shellPrefs?(): { closeToTray: boolean; autostart?: boolean };
+  shellPrefs?(): { closeToTray: boolean; autostart?: boolean; discord?: boolean };
   setCloseToTray?(enabled: boolean): void;
   setAutostart?(enabled: boolean): void;
+  /** Discord's status (electron/discord.cjs): on or off, and what plays (null: nothing). */
+  setDiscord?(enabled: boolean): void;
+  setPresence?(track: Presence | null): void;
   setProgress?(p: ShellProgress): void;
   openMini?(): void;
   // auto-update (installed desktop app)
@@ -87,6 +90,17 @@ export interface UpdateState {
 }
 
 export type MiniCommand = 'toggle' | 'next' | 'prev' | 'like' | 'expand' | 'close';
+
+/** What Discord shows: times in ms epoch (the start, as if played from the top, and the end). */
+export interface Presence {
+  title: string;
+  artists: string;
+  album?: string;
+  cover?: string;
+  url?: string;
+  start: number;
+  end: number;
+}
 
 export interface ShellProgress {
   position: number;
