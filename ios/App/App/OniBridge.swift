@@ -843,6 +843,13 @@ public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDel
 final class TrackFetch {
     let id: String
     let target: URL
+    let url: URL
+    /// Times the connection broke and the download went on from where it stopped (a server drops a
+    /// slow reader; a weak network drops anyone): bytes already there are not asked for again.
+    var retries = 0
+    /// Bytes to drop from a response that ignored the range asked for (it starts from the top).
+    var skip: Int64 = 0
+    var began: Bool { handle != nil }
     var part: URL { target.appendingPathExtension("part") }
     var task: URLSessionDataTask?
     /// Called once it is whole (or failed): the prefetch and those who wait for the whole file.
@@ -861,9 +868,10 @@ final class TrackFetch {
     private var _done = false
     private var _failed: Error?
 
-    init(id: String, target: URL) {
+    init(id: String, target: URL, url: URL) {
         self.id = id
         self.target = target
+        self.url = url
     }
 
     struct State {
@@ -909,6 +917,13 @@ final class TrackFetch {
 
     /// More bytes: written, counted. Throws when the file cannot be written (it was trimmed away).
     func append(_ data: Data) throws {
+        var data = data
+        if skip > 0 {
+            let drop = min(skip, Int64(data.count))
+            skip -= drop
+            data = data.subdata(in: Int(drop)..<data.count)
+            if data.isEmpty { return }
+        }
         try handle?.write(contentsOf: data)
         lock.lock()
         if let parser = parser {
@@ -1099,7 +1114,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         defer { lock.unlock() }
         if let running = fetching[id] { return running }
         guard let remote = URL(string: url) else { return nil }
-        let fetch = TrackFetch(id: id, target: cached(id, ext))
+        let fetch = TrackFetch(id: id, target: cached(id, ext), url: remote)
         let task = session.dataTask(with: remote)
         fetch.task = task
         fetching[id] = fetch
@@ -1117,6 +1132,11 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard let fetch = fetchOf(dataTask), (200..<300).contains(status) else { return completionHandler(.cancel) }
+        // Going on after a break: the rest of it (206), or all of it again, its start dropped (200).
+        if fetch.began {
+            if status == 200 { fetch.skip = fetch.state.received }
+            return completionHandler(.allow)
+        }
         do {
             try fetch.begin(expected: response.expectedContentLength, mp3: fetch.target.pathExtension == "mp3")
             completionHandler(.allow)
@@ -1139,7 +1159,22 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         guard let fetch = fetchOf(task) else { return }
         let status = (task.response as? HTTPURLResponse)?.statusCode ?? 0
-        fetch.finish(error ?? ((200..<300).contains(status) ? nil : URLError(.badServerResponse)))
+        let failure = error ?? ((200..<300).contains(status) ? nil : URLError(.badServerResponse))
+        // The connection broke midway (not cancelled here): on from the byte it stopped at.
+        if let failure = failure, (failure as? URLError)?.code != .cancelled, fetch.began, fetch.retries < 4 {
+            fetch.retries += 1
+            var request = URLRequest(url: fetch.url)
+            request.setValue("bytes=\(fetch.state.received)-", forHTTPHeaderField: "Range")
+            let next = session.dataTask(with: request)
+            lock.lock()
+            byTask.removeValue(forKey: task.taskIdentifier)
+            byTask[next.taskIdentifier] = fetch
+            fetch.task = next
+            lock.unlock()
+            next.resume()
+            return
+        }
+        fetch.finish(failure)
         lock.lock()
         fetching.removeValue(forKey: fetch.id)
         byTask.removeValue(forKey: task.taskIdentifier)
@@ -1156,7 +1191,16 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         let st = fetch.state
         let enough = st.done || st.failed != nil || (st.sampleRate > 0 && Double(st.frames) >= PlayerPlugin.START * st.sampleRate)
         if enough, let waiting = starters.removeValue(forKey: fetch.id) { waiting.forEach { $0() } }
-        if stream === fetch { extend() }
+        guard stream === fetch else { return }
+        // It broke for good while playing: the page asks for it again (a fresh address) and seeks
+        // back to where it was, instead of waiting for ever.
+        if let error = st.failed {
+            stream = nil
+            trace["failed"] = String(describing: error)
+            return notifyListeners("error", data: ["message": error.localizedDescription])
+        }
+        trace["retries"] = fetch.retries
+        extend()
     }
 
     /// Keeps the cache to the tracks the page still needs (the playing one and those ahead).

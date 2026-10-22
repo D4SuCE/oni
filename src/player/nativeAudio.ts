@@ -24,6 +24,8 @@ interface PlayerPlugin {
   /** `waiting`: playing, but the track (still arriving) ran short: it goes on when more comes. */
   addListener(event: 'time', cb: (e: { time: number; duration: number; playing: boolean; waiting?: boolean }) => void): Promise<unknown>;
   addListener(event: 'ended', cb: () => void): Promise<unknown>;
+  /** A track playing while it arrived could not be fetched to its end. */
+  addListener(event: 'error', cb: (e: { message: string }) => void): Promise<unknown>;
 }
 
 export const OniPlayer = registerPlugin<PlayerPlugin>('OniPlayer');
@@ -85,6 +87,11 @@ export class NativeAudio extends EventTarget {
         this.emit(e.playing ? 'playing' : 'pause');
       }
       this.emit('timeupdate');
+    });
+    OniPlayer.addListener('error', ({ message }) => {
+      this.short = false;
+      this.error = { message };
+      this.emit('error');
     });
     OniPlayer.addListener('ended', () => {
       if (this.crossing) return;
