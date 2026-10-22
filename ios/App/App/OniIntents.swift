@@ -116,7 +116,10 @@ struct OniShortcuts: AppShortcutsProvider {
         )
         AppShortcut(
             intent: LikeIntent(),
-            phrases: ["Мне нравится в \(.applicationName)", "Лайкни трек в \(.applicationName)", "Добавь в любимое в \(.applicationName)"],
+            // Not "Мне нравится в …": Siri takes it for its own like (Apple Music's, SiriKit), which
+            // a free signing cannot have, and answers it cannot (the user on 1.8.0). A plain "like
+            // the track" without the app's name: a personal shortcut of that name (see ROADMAP).
+            phrases: ["Лайкни трек в \(.applicationName)", "Поставь лайк в \(.applicationName)", "Лайк в \(.applicationName)", "Добавь трек в любимое в \(.applicationName)"],
             shortTitle: "Мне нравится",
             systemImageName: "heart.fill"
         )
