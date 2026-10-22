@@ -1668,9 +1668,6 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     private var hopFill = 0
     private var hopEnergy: Float = 0
     private var level: Float = 0
-    private var pulseAt: [Double] = []
-    private var pulseFlux: [Double] = []
-    private var pulseSent = Date()
 
     /// { on } — listen to the bass for the page's beat pulse, or stop (it costs a little power).
     @objc func pulse(_ call: CAPPluginCall) {
@@ -1739,15 +1736,11 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
             }
         }
         lowState = st
+        // Sent with each buffer (~20 a second): held back to ten a second, most came after they
+        // were heard and the cover throbbed late (the simulator run's trace).
         DispatchQueue.main.async {
-            guard self.pulseOn else { return }
-            self.pulseAt += at
-            self.pulseFlux += flux
-            guard Date().timeIntervalSince(self.pulseSent) >= 0.09 else { return }
-            self.pulseSent = Date()
-            self.notifyListeners("beat", data: ["at": self.pulseAt, "flux": self.pulseFlux])
-            self.pulseAt = []
-            self.pulseFlux = []
+            guard self.pulseOn, !at.isEmpty else { return }
+            self.notifyListeners("beat", data: ["at": at, "flux": flux])
         }
     }
 
