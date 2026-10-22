@@ -209,7 +209,8 @@ export function PlayerBar() {
       <div className="pb-right">
         {track && (
           <span className="pb-source" title={t.player.source}>
-            {isWave && <Waves size={14} />} {sourceTitle(source)}
+            {isWave && <Waves size={14} />}
+            <span className="pb-source-text">{sourceTitle(source)}</span>
           </span>
         )}
         <SleepButton />

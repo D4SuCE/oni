@@ -996,6 +996,41 @@ await step('keyboard: space toggles playback', async () => {
   await page.waitForFunction((b) => window.__wave.audio.paused === b, before);
 });
 
+await step('player bar, a narrow window: the source label does not run under the buttons', async () => {
+  // The user's screenshot: "Radio: Li" under the moon at a smaller window. From the narrowest
+  // window Windows allows (960) up: the right side's items side by side, the label cut short or hidden.
+  const win = await app.browserWindow(page);
+  const size = await win.evaluate((w) => w.getSize());
+  try {
+    await page.evaluate(() => window.__wave.usePlayer.setState({ source: { kind: 'list', title: 'Радио: Мне нравится, очень длинное название' } }));
+    for (const width of [960, 1040, 1120, 1280, 1400]) {
+      await win.evaluate((w, x) => w.setSize(x, 800), width);
+      await page.waitForTimeout(250);
+      const bad = await page.evaluate(() => {
+        const right = document.querySelector('.pb-right');
+        const bar = document.querySelector('.playerbar').getBoundingClientRect();
+        const items = [...right.children].map((el) => ({ el, r: el.getBoundingClientRect() })).filter(({ r }) => r.width > 0);
+        const out = [];
+        for (let i = 1; i < items.length; i++) if (items[i].r.left < items[i - 1].r.right - 0.5) out.push(`${items[i - 1].el.className} overlaps ${items[i].el.className}`);
+        for (const { el, r } of items) if (r.right > bar.right + 0.5) out.push(`${el.className} past the bar`);
+        // Cut short, it ends in "…" (a flex box clips its text mid-letter instead); too short, it is gone.
+        const label = right.querySelector('.pb-source');
+        const width = label ? label.getBoundingClientRect().width : 0;
+        if (width > 0) {
+          const holder = [label, ...label.querySelectorAll('*')].find((el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()));
+          const css = getComputedStyle(holder);
+          if (holder.scrollWidth > holder.clientWidth + 1 && (css.textOverflow !== 'ellipsis' || css.display.includes('flex'))) out.push('label cut mid-letter, no "…"');
+          if (width < 40) out.push(`label squeezed to ${width.toFixed(0)}px`);
+        }
+        return out;
+      });
+      if (bad.length) throw new Error(`${width}px: ${bad.join('; ')}`);
+    }
+  } finally {
+    await win.evaluate((w, [x, y]) => w.setSize(x, y), size);
+  }
+});
+
 await step('narrow (phone) layout renders', async () => {
   const win = await app.browserWindow(page);
   await win.evaluate((w) => {

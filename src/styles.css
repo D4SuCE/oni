@@ -743,6 +743,8 @@ html.acrylic .backdrop {
   justify-content: flex-end;
   gap: 4px;
   min-width: 0;
+  /* Its width decides whether the source label fits (below). */
+  container-type: inline-size;
 }
 .pb-source {
   display: inline-flex;
@@ -751,10 +753,20 @@ html.acrylic .backdrop {
   margin-right: 6px;
   color: var(--text-3);
   font-size: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+}
+/* The text in a box of its own: a flex box clips its text mid-letter, without "…". */
+.pb-source-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+/* The buttons take ~330px: with less than ~50px left for it, the label goes (a narrow window). */
+@container (max-width: 380px) {
+  .pb-source {
+    display: none;
+  }
 }
 
 .transport {
