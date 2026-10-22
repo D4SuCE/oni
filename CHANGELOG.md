@@ -13,6 +13,8 @@
 
 ## [Не выпущено]
 
+## [1.5.7] — 2026-10-22
+
 ### Добавлено
 - На странице играющего списка — плейлиста, «Мне нравится», альбома, подборки, «Скачанного» — кнопка
   «Играть» становится «Пауза», а на паузе — «Продолжить»: нажатие не запускает список заново.
@@ -302,7 +304,8 @@
 - Фон-картина «Blood Moon Over Misty Pagodas», прозрачность окна (Acrylic).
 - Живые видеообложки Яндекса и пульсация обложек в такт музыке.
 
-[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.5.6...HEAD
+[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.5.7...HEAD
+[1.5.7]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.7
 [1.5.6]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.6
 [1.5.5]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.5
 [1.5.4]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.4
