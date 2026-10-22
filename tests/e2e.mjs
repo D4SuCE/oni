@@ -345,13 +345,13 @@ await step('hide a track from the mixes, then bring it back from Settings', asyn
   await page.locator('[data-testid="mix-card"]').first().click();
   await page.waitForSelector('.track-row');
   const row = page.locator('.track-row').first();
-  const title = await row.locator('.tr-title').innerText();
+  // By its id: rows off screen are drawn lazily (content-visibility), their text empty until then.
+  const id = await row.getAttribute('data-track-id');
   const before = await page.locator('.track-row').count();
   await row.click({ button: 'right' });
   await page.getByText('Скрыть из подборок', { exact: true }).click();
   await page.waitForFunction((n) => document.querySelectorAll('.track-row').length === n - 1, before, { timeout: 5000 });
-  const titles = await page.locator('.track-row .tr-title').allInnerTexts();
-  if (titles.includes(title)) throw new Error(`"${title}" is still in the mix`);
+  if (await page.locator(`.track-row[data-track-id="${id}"]`).count()) throw new Error(`track ${id} is still in the mix`);
   await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
   const note = await page.locator('[data-testid="mix-feedback"]').innerText();
   if (!/Скрыто из подборок: 1 трек/.test(note)) throw new Error(`settings: ${note}`);
@@ -667,7 +667,10 @@ await step('a playing list says so on its page: Play turns Pause, then Resume, w
   const before = await state();
   await button.click();
   await page.waitForFunction(() => window.__wave.audio.paused);
-  if (!(await button.innerText()).includes('Продолжить')) throw new Error(`paused label "${await button.innerText()}"`);
+  // The label follows the player's state a moment after the audio (read at once, it failed now and then).
+  await page.waitForFunction(() => document.querySelector('[data-testid="list-play"]')?.textContent.includes('Продолжить'), null, { timeout: 5000 }).catch(async () => {
+    throw new Error(`paused label "${await button.innerText()}"`);
+  });
   await button.click();
   await page.waitForFunction(() => !window.__wave.audio.paused);
   const after = await state();
@@ -986,31 +989,68 @@ await step('crossfade, the next track slow to load: the old one ends meanwhile, 
   }
 });
 
-await step('tracks that will not play: the player stops after a few, it does not run through the queue', async () => {
-  // A friend of the user's saw tracks switch by themselves, fast: each that fails to start is
-  // skipped after 1.5 s, and when none starts (Yandex refusing, "too many requests") the wave
-  // went on and on. Every stream address fails here.
-  // Tracks not played yet, so none has its address fetched ahead.
+await step('tracks that will not play: the downloads stand in, and the list comes back where it stopped', async () => {
+  // A friend of the user's saw tracks switch by themselves, fast: one that would not start put
+  // the app "offline" and it ran through the queue. Now three in a row that will not start (Yandex
+  // refusing here) hand over to the downloads (the user's wish), and once Yandex gives the track
+  // again, the list comes back at it after the downloaded track.
   const fresh = await page.evaluate(async () => (await window.__wave.api.chart()).filter((t) => t.available !== false).slice(30, 38));
-  await page.evaluate(() => {
-    const w = window.__wave;
-    window.__asked = new Set();
-    w.api.stream = async (id) => {
-      window.__asked.add(String(id));
-      throw Object.assign(new Error('too-many-requests'), { status: 429 });
-    };
+  const standIn = await page.evaluate(async () => {
+    const t = (await window.__wave.api.chart()).filter((x) => x.available !== false)[40];
+    await window.__wave.offline.download(t);
+    return String(t.id);
   });
+  const refuse = () =>
+    page.evaluate(() => {
+      window.__asked = new Set();
+      window.__wave.api.stream = async (id) => {
+        window.__asked.add(String(id));
+        throw Object.assign(new Error('too-many-requests'), { status: 429 });
+      };
+    });
+  const give = () => page.evaluate(() => delete window.__wave.api.stream);
+  const where = (why) => async () => {
+    throw new Error(`${why}: ${JSON.stringify(await page.evaluate(() => { const s = window.__wave.usePlayer.getState(); return { title: s.source?.title, list: s.source?.list, index: s.index, id: String(s.queue[s.index]?.id), q: s.queue.length, paused: window.__wave.audio.paused, offline: window.__wave.useApp.getState().offline, toast: document.querySelector('.toast')?.textContent }; }))}`);
+  };
   try {
+    await refuse();
     await page.evaluate((tracks) => window.__wave.playTracks(tracks, 0, 'e2e refused'), fresh);
-    // Stopped with a message (a toast), not offline, nothing tried after.
-    await page.waitForSelector('.toast:has-text("не запускаются")', { timeout: 15000 });
-    const st = await page.evaluate(() => ({ tried: window.__asked.size, playing: !window.__wave.audio.paused, offline: window.__wave.useApp.getState().offline, error: document.querySelector('.toast')?.textContent }));
-    await page.waitForTimeout(4000);
-    const later = await page.evaluate(() => window.__asked.size);
-    if (st.tried > 4 || later !== st.tried || st.playing || st.offline) throw new Error(`kept skipping: ${JSON.stringify(st)}, then ${later} tried`);
-    console.log(`       stopped after ${st.tried} tracks: "${st.error}"`);
+    await page.waitForSelector('.toast:has-text("пока играет скачанное")', { timeout: 15000 });
+    await page.waitForFunction(() => window.__wave.usePlayer.getState().source?.list === 'downloads' && !window.__wave.audio.paused, null, { timeout: 15000 }).catch(where('no downloads playing'));
+    const st = await page.evaluate(() => ({ tried: window.__asked.size, offline: window.__wave.useApp.getState().offline, id: String(window.__wave.usePlayer.getState().queue[window.__wave.usePlayer.getState().index]?.id) }));
+    if (st.tried > 4 || st.offline) throw new Error(`stand-in: ${JSON.stringify(st)}`);
+    // Yandex gives tracks again, but not the first one (broken for good, the user asked about
+    // it): the probe goes on to the next; at the downloaded track's end, the list at that one.
+    await page.evaluate((broken) => {
+      const real = Object.getPrototypeOf(window.__wave.api).stream.bind(window.__wave.api);
+      window.__wave.api.stream = async (id, ...rest) => {
+        if (String(id) === broken) throw Object.assign(new Error('not available'), { status: 404 });
+        return real(id, ...rest);
+      };
+    }, String(fresh[0].id));
+    await page.waitForTimeout(4500);
+    await page.evaluate(() => window.__wave.audio.dispatchEvent(new Event('ended')));
+    await page.waitForFunction((second) => { const s = window.__wave.usePlayer.getState(); return s.source?.title === 'e2e refused' && String(s.queue[s.index]?.id) === second; }, String(fresh[1].id), { timeout: 15000 }).catch(where('not back to the list at the next track'));
+    await give();
+    // Nothing downloaded: it waits with a message, and the music goes on by itself.
+    await page.evaluate(() => {
+      window.__entries = window.__wave.offline.entries;
+      window.__wave.offline.entries = () => [];
+    });
+    await refuse();
+    await page.evaluate((tracks) => window.__wave.playTracks(tracks, 0, 'e2e refused'), fresh.slice(4));
+    await page.waitForSelector('.toast:has-text("скачанного нет")', { timeout: 15000 });
+    if (!(await page.evaluate(() => window.__wave.audio.paused))) throw new Error('playing with nothing to play');
+    await give();
+    await page.waitForFunction(() => !window.__wave.audio.paused && window.__wave.usePlayer.getState().source?.title === 'e2e refused', null, { timeout: 20000 }).catch(where('did not go on by itself'));
+    console.log(`       stand-in ${st.id === standIn ? 'the downloaded track' : st.id}, back to the list; with nothing downloaded it waited and went on`);
   } finally {
-    await page.evaluate(() => delete window.__wave.api.stream);
+    await page.evaluate(() => {
+      delete window.__wave.api.stream;
+      if (window.__entries) window.__wave.offline.entries = window.__entries;
+      window.__wave.audio.pause();
+    });
+    await page.evaluate((id) => window.__wave.offline.remove(id), standIn);
   }
 });
 
@@ -1136,7 +1176,10 @@ await step('beat pulse follows the music', async () => {
         setTimeout(() => (clearInterval(t), r(m)), 4000);
       }),
   );
-  if (max < 0.2) throw new Error(`no beats detected (max ${max})`);
+  if (max < 0.2) {
+    const info = await page.evaluate(() => { const a = window.__wave.audio; const s = window.__wave.usePlayer.getState(); return { src: a.src.slice(0, 40), t: a.currentTime, paused: a.paused, title: s.queue[s.index]?.title, source: s.source?.title, eq: window.__wave.eqOutputLevel?.() }; });
+    throw new Error(`no beats detected (max ${max}) ${JSON.stringify(info)}`);
+  }
   // The covers throb, and only they get the beat: set on the page's root it restyled every
   // element each frame (the user: the app stutters; Liked fell from ~180 to ~35 frames a second).
   const cover = await page.evaluate(() => Number(document.querySelector('.pb-cover .cover')?.style.getPropertyValue('--beat') || -1));

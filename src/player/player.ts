@@ -147,8 +147,10 @@ export const onNetworkLost = (fn: () => void) => {
  * it for one put the app offline, and it ran through every track not downloaded in a blink (a
  * friend of the user's saw tracks switch by themselves, fast). */
 const isNetworkError = (e: unknown) => e instanceof NetworkError || (typeof navigator !== 'undefined' && navigator.onLine === false);
-/** Tracks in a row that would not start: at three the player stops rather than run on. */
+/** Tracks in a row that would not start: at three the downloads stand in rather than run on. */
 let failedInRow = 0;
+/** Where that run of failures began: the list comes back there (none of them was heard). */
+let failedFrom = 0;
 const MAX_FAILED_IN_ROW = 3;
 const errorMessage = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 80);
 
@@ -158,6 +160,111 @@ const errorMessage = (e: unknown) => (e instanceof Error ? e.message : String(e)
  * track playing then (not cut off in the middle).
  */
 let waveToResume: (Source & { kind: 'wave' }) | null = null;
+/** A list whose tracks would not start (Yandex refusing), to come back to at that track. */
+let listToResume: { source: Source; queue: Track[]; index: number } | null = null;
+/** The tracks Yandex refused and those after them: asked for again now and then, the first that
+ * comes is where the music comes back (a track broken for good is passed over, the user asked:
+ * waiting for it alone, the downloads would play for ever). Until one comes, no coming back. */
+let refusedTrack: Track | null = null;
+let probeTracks: Track[] = [];
+/** Stopped by itself to wait (nothing downloaded to stand in): the only pause that ends by itself.
+ * A pause of the user's stays one (the music had started again behind it). */
+let waitingForYandex = false;
+let probing: ReturnType<typeof setInterval> | null = null;
+const PROBE_MS = transport.testMode ? 3000 : 20_000;
+
+function stopProbe() {
+  if (probing) clearInterval(probing);
+  probing = null;
+}
+
+/** The user picked something else: what stood in for is not come back to. */
+function forgetResume() {
+  waveToResume = null;
+  listToResume = null;
+  refusedTrack = null;
+  probeTracks = [];
+  waitingForYandex = false;
+  stopProbe();
+}
+
+const canResume = () => Boolean(waveToResume || listToResume) && !offlineMode && !refusedTrack;
+
+/** Back to the wave or the list the downloads stood in for (`ended`: the downloaded track ended). */
+function resumeNow(ended = false) {
+  if (waveToResume) {
+    const wave = waveToResume;
+    waveToResume = null;
+    return startWave(wave);
+  }
+  if (listToResume) {
+    const r = listToResume;
+    listToResume = null;
+    finishCurrent(ended);
+    engine = null;
+    unshuffled = null;
+    set({ queue: r.queue, source: r.source, shuffle: false, waveStats: null });
+    return loadAt(r.index);
+  }
+}
+
+/** Asks Yandex for the refused track now and then; once it answers, the music may come back. */
+function probe() {
+  stopProbe();
+  probing = setInterval(async () => {
+    if (!refusedTrack) return stopProbe();
+    if (offlineMode) return;
+    let found = -1;
+    for (let k = 0; k < probeTracks.length && found < 0; k++) {
+      const t = probeTracks[k];
+      try {
+        const s = await api.stream(String(t.id), get().quality);
+        prefetched.set(t.id, { url: s.url, at: Date.now(), codec: s.codec, bitrate: s.bitrate });
+        found = k;
+      } catch {
+        /* this one not yet (or never): the next */
+      }
+    }
+    if (found < 0 || !refusedTrack) return;
+    // The list comes back at the first track Yandex gives (those before it passed over).
+    if (listToResume) listToResume = { ...listToResume, index: listToResume.index + found };
+    refusedTrack = null;
+    probeTracks = [];
+    stopProbe();
+    // Nothing stood in (no downloads): the music goes on by itself; else at the end of the track.
+    if (waitingForYandex && audio.paused) {
+      waitingForYandex = false;
+      void resumeNow();
+    }
+  }, PROBE_MS);
+}
+
+/**
+ * Tracks of the wave or the list would not start, several in a row (Yandex refusing, not the
+ * network): the downloads stand in, as with no network (the user's wish), the list's own first,
+ * from after the track that failed; and it comes back once Yandex gives that track again. With
+ * nothing downloaded the player waits, and goes on by itself then.
+ */
+function standIn(t: Track, index: number, e: unknown) {
+  const s = get();
+  refusedTrack = t;
+  // It and the four after it (the wave's too: any track it gives means Yandex gives again).
+  probeTracks = [t, ...s.queue.slice(index + 1, index + 5)];
+  if (s.source?.kind === 'wave') waveToResume = s.source;
+  else if (s.source) listToResume = { source: s.source, queue: s.queue, index };
+  probe();
+  const saved = offline?.entries().map((x) => x.track) ?? [];
+  const has = new Set(saved.map((x) => String(x.id)));
+  const own = s.source?.kind === 'list' ? [...s.queue.slice(index + 1), ...s.queue.slice(0, index)].filter((x) => has.has(String(x.id))) : [];
+  const why = errorMessage(e);
+  if (!own.length && !saved.length) {
+    waitingForYandex = true;
+    audio.pause();
+    set({ loading: false, playing: false, error: tr().player.waitingForYandex(why) });
+    return;
+  }
+  void startList(own.length ? own : shuffleArray(saved), 0, tr().nav.downloads, undefined, { list: 'downloads' }).then(() => set({ error: tr().player.standIn(why) }));
+}
 
 function fallBackToDownloads() {
   const source = get().source;
@@ -302,12 +409,18 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
     if (get().source?.kind === 'wave' && (offlineMode || isNetworkError(e)) && fallBackToDownloads()) return;
     // A list lost it: the app goes offline, so what is not downloaded is passed over at once.
     if (!offlineMode && isNetworkError(e)) networkLost();
-    // Several in a row would not start (Yandex refusing, say): it stops and says why.
+    // Several in a row would not start (Yandex refusing, say): the downloads stand in until it
+    // gives them again; the downloads themselves failing, it stops and says why.
+    if (!offlineMode && failedInRow === 0) failedFrom = index;
     if (!offlineMode && ++failedInRow >= MAX_FAILED_IN_ROW) {
       failedInRow = 0;
-      audio.pause();
-      set({ loading: false, playing: false, error: tr().player.cantPlayMany(errorMessage(e)) });
-      return;
+      if (get().source?.kind === 'list' && (get().source as { list?: string }).list === 'downloads') {
+        audio.pause();
+        set({ loading: false, playing: false, error: tr().player.cantPlayMany(errorMessage(e)) });
+        return;
+      }
+      const from = Math.min(failedFrom, index);
+      return standIn(get().queue[from] ?? t, from, e);
     }
     set({ loading: false, error: tr().player.cantPlay(t.title) });
     setTimeout(() => seq === loadSeq && next(false), offlineMode ? 0 : 1500);
@@ -411,12 +524,14 @@ function fillWave(min = WAVE_AHEAD): Promise<void> {
 }
 
 export async function playWave(tuning?: Partial<WaveTuning>) {
+  forgetResume();
   if (tuning) saveTuning(tuning);
   await startWave({ kind: 'wave' });
 }
 
 /** Endless radio from one seed, e.g. `track:123`, `artist:45`, `album:67`, `playlist:<uid>:<kind>`. Repeat filters apply. */
 export async function playRadio(seed: string, title: string) {
+  forgetResume();
   await startWave({ kind: 'wave', station: { seed, title } });
 }
 
@@ -497,8 +612,8 @@ export function waveFeedback(type: 'like' | 'dislike', t: Track) {
 // ------------------------------------------------------------------ controls
 
 export async function playTracks(tracks: Track[], start = 0, title = tr().common.list, from?: PlayContext, extra: PlayExtra = {}) {
-  // Picked by the user: the wave lost to the network does not come back over it.
-  waveToResume = null;
+  // Picked by the user: the wave (or list) the downloads stood in for does not come back over it.
+  forgetResume();
   await startList(tracks, start, title, from, extra);
 }
 
@@ -543,6 +658,8 @@ export async function playShuffled(tracks: Track[], title = tr().common.list, fr
 
 export function toggle() {
   if (!current()) return;
+  // The user's own play or pause: no longer a wait that ends by itself.
+  waitingForYandex = false;
   if (audio.paused) {
     if (!audio.src) loadAt(get().index);
     else audio.play().catch(() => {});
@@ -553,12 +670,9 @@ export function toggle() {
 export async function next(user = true, fade = 0) {
   const s = get();
   if (!s.queue.length) return;
-  // The network is back: the wave it took away plays again, from this track's end on.
-  if (waveToResume && !offlineMode) {
-    const wave = waveToResume;
-    waveToResume = null;
-    return startWave(wave);
-  }
+  // The network is back (or Yandex gives the tracks again): the wave or list the downloads stood
+  // in for plays again, from this track's end on.
+  if (canResume()) return resumeNow(!user);
   finishCurrent(!user);
   if (s.index + 1 < s.queue.length) return loadAt(s.index + 1, true, fade);
   if (s.source?.kind === 'wave') {

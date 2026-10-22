@@ -88,6 +88,9 @@ await step('download a track: encrypted on disk, then it plays from the file', a
 const openDownloads = async () => {
   await page.click('[data-testid="nav-library"]');
   await page.click('[data-testid="tab-downloads"]');
+  // Rows are drawn lazily (content-visibility) as the page fades in: their text is empty until
+  // then, and reading it at once failed now and then.
+  await page.waitForFunction(() => document.querySelector('.track-row .tr-title')?.innerText.trim(), null, { timeout: 10000 });
 };
 
 await step('the downloads page lists it (a Library tab, not a menu item)', async () => {
