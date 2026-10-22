@@ -13,6 +13,8 @@
 
 ## [Не выпущено]
 
+## [1.5.10] — 2026-10-22
+
 ### Исправлено
 - iPhone: у треков снова видно скачивание — кружок, пока качается, и стрелка, когда скачан (слева от «…»).
 - После нескольких быстрых пропусков в «Моей волне» «следующий» мог ничего не делать — теперь треки
@@ -353,7 +355,8 @@
 - Фон-картина «Blood Moon Over Misty Pagodas», прозрачность окна (Acrylic).
 - Живые видеообложки Яндекса и пульсация обложек в такт музыке.
 
-[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.5.9...HEAD
+[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.5.10...HEAD
+[1.5.10]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.10
 [1.5.9]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.9
 [1.5.8]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.8
 [1.5.7]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.7
