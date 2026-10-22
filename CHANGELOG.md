@@ -13,6 +13,8 @@
 
 ## [Не выпущено]
 
+## [1.5.8] — 2026-10-22
+
 ### Добавлено
 - Обложки скачанных треков видны и без интернета (для скачанных раньше докачаются сами при подключении).
 - iPhone: в «острове» видно «скачано/всего», а когда рядом играет музыка — число скачанных в кружке.
@@ -321,7 +323,8 @@
 - Фон-картина «Blood Moon Over Misty Pagodas», прозрачность окна (Acrylic).
 - Живые видеообложки Яндекса и пульсация обложек в такт музыке.
 
-[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.5.7...HEAD
+[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.5.8...HEAD
+[1.5.8]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.8
 [1.5.7]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.7
 [1.5.6]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.6
 [1.5.5]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.5
