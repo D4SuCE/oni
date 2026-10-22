@@ -56,8 +56,9 @@ export interface Transport {
   // Desktop shell (taskbar buttons, tray); absent on platforms without one.
   onCommand?(cb: (cmd: ShellCommand) => void): void;
   setPlayback?(state: ShellPlayback): void;
-  shellPrefs?(): { closeToTray: boolean };
+  shellPrefs?(): { closeToTray: boolean; autostart?: boolean };
   setCloseToTray?(enabled: boolean): void;
+  setAutostart?(enabled: boolean): void;
   setProgress?(p: ShellProgress): void;
   openMini?(): void;
   // auto-update (installed desktop app)

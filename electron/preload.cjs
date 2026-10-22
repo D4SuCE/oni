@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('wave', {
   setPlayback: (state) => ipcRenderer.send('wave:playback', state),
   shellPrefs: () => ipcRenderer.sendSync('wave:shell:prefs'),
   setCloseToTray: (enabled) => ipcRenderer.send('wave:shell:close-to-tray', enabled),
+  setAutostart: (enabled) => ipcRenderer.send('wave:shell:autostart', enabled),
   setProgress: (p) => ipcRenderer.send('wave:progress', p),
   openMini: () => ipcRenderer.send('wave:mini:open'),
   updateState: () => ipcRenderer.sendSync('wave:update:state'),

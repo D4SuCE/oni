@@ -105,7 +105,13 @@ function updateTray() {
 }
 
 /** The tray icon is there with "close to tray" on, and always while the mini player is open. */
-const syncTray = () => setTray(Boolean(prefs.closeToTray) || Boolean(mini && !mini.isDestroyed()));
+const syncTray = () => setTray(Boolean(prefs.closeToTray) || Boolean(mini && !mini.isDestroyed()) || startedHidden);
+
+/** Started with Windows (--hidden): the window waits in the tray, so the tray icon is there all
+ * the session, as the way to it. */
+const startedHidden = process.argv.includes('--hidden');
+/** Started with Windows: the same exe, told to stay in the tray. */
+const LOGIN = { args: ['--hidden'] };
 
 function setTray(enabled) {
   if (enabled && !tray) {
@@ -258,7 +264,11 @@ ipcMain.on('wave:playback', (_e, s) => {
   toMini('wave:playback', state);
 });
 ipcMain.on('wave:shell:prefs', (e) => {
-  e.returnValue = { closeToTray: Boolean(prefs.closeToTray) };
+  e.returnValue = { closeToTray: Boolean(prefs.closeToTray), autostart: app.getLoginItemSettings(LOGIN).openAtLogin };
+});
+// "Start with Windows": a login item that opens Oni in the tray (the user's wish).
+ipcMain.on('wave:shell:autostart', (_e, enabled) => {
+  app.setLoginItemSettings({ ...LOGIN, openAtLogin: Boolean(enabled) });
 });
 ipcMain.on('wave:shell:close-to-tray', (_e, enabled) => {
   prefs.closeToTray = Boolean(enabled);
@@ -269,4 +279,4 @@ ipcMain.on('wave:shell:close-to-tray', (_e, enabled) => {
 /** For tests: whether the tray icon is there. */
 const hasTray = () => Boolean(tray);
 
-module.exports = { windowBounds, attachWindow, showWindow, openMini, asset, setLogger, hasTray };
+module.exports = { windowBounds, attachWindow, showWindow, openMini, asset, setLogger, hasTray, startedHidden };

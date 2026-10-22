@@ -199,6 +199,37 @@ await step('mini player: remote for the main window in the tray', async () => {
   if (!(await mainShown())) throw new Error('main window should come back');
 });
 
+await step('start with Windows: a login item that opens Oni in the tray (reverted)', async () => {
+  // The user's wish. The switch registers a login item with --hidden; started so, the window
+  // stays in the tray, the tray icon there to open it.
+  const login = () => app.evaluate(({ app }) => app.getLoginItemSettings({ args: ['--hidden'] }).openAtLogin);
+  try {
+    await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
+    await page.locator('label', { has: page.locator('[data-testid="autostart"]') }).click();
+    await page.waitForTimeout(300);
+    if (!(await login())) throw new Error('no login item after switching it on');
+    await page.locator('label', { has: page.locator('[data-testid="autostart"]') }).click();
+    await page.waitForTimeout(300);
+    if (await login()) throw new Error('the login item stayed after switching it off');
+  } finally {
+    await app.evaluate(({ app }) => app.setLoginItemSettings({ args: ['--hidden'], openAtLogin: false }));
+  }
+  await app.close();
+  const hidden = await electron.launch({ args: [root, '--hidden'], cwd: root, env: { ...process.env, WAVE_E2E: '1', WAVE_USER_DATA: userData } });
+  try {
+    const hp = await hidden.firstWindow();
+    await hp.waitForSelector('.wave-hero', { timeout: 30000 });
+    await hp.waitForTimeout(800);
+    const visible = await win(hidden, (w) => w.isVisible());
+    const tray = await hidden.evaluate((_e, file) => process.mainModule.require(file).hasTray(), shellModule);
+    if (visible) throw new Error('the window showed on a start with Windows');
+    if (!tray) throw new Error('no tray icon to open it');
+  } finally {
+    await hidden.close();
+  }
+  ({ app, page } = await launch());
+});
+
 await step('close-to-tray hides the window, and closing quits without it', async () => {
   await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
   await page.locator('[data-testid="close-to-tray"]').check();

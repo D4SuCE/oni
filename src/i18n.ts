@@ -383,6 +383,8 @@ const ru = {
     window: 'Окно',
     closeToTray: 'Сворачивать в трей при закрытии',
     closeToTrayHint: 'Значок Oni появится в области уведомлений, музыка продолжит играть. Выйти — через меню значка.',
+    autostart: 'Запускать вместе с Windows',
+    autostartHint: 'Oni открывается при входе в Windows — свёрнутым в трей, музыка не начинается сама',
   },
   wave: {
     kicker: (days: number) => `Без повторов · фильтр ${days ? `${days} дн.` : 'выкл.'}`,
@@ -855,6 +857,8 @@ const en: Dict = {
     window: 'Window',
     closeToTray: 'Minimize to tray on close',
     closeToTrayHint: 'The Oni icon appears in the notification area and music keeps playing. Quit from the icon menu.',
+    autostart: 'Start with Windows',
+    autostartHint: 'Oni opens when you sign in to Windows — in the tray, without starting the music',
   },
   wave: {
     kicker: (days) => `No repeats · filter ${days ? `${days} d` : 'off'}`,

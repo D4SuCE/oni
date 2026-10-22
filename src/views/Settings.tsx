@@ -24,6 +24,7 @@ export function SettingsView() {
   const seeThrough = useSeeThrough((s) => s.value);
   const summary = stats.summary(30);
   const [closeToTray, setCloseToTrayState] = useState(() => window.wave?.shellPrefs?.().closeToTray ?? false);
+  const [autostart, setAutostartState] = useState(() => window.wave?.shellPrefs?.().autostart ?? false);
   const t = useT();
   const s = t.settings;
   return (
@@ -124,6 +125,24 @@ export function SettingsView() {
               data-testid="close-to-tray"
             />
           </label>
+          {window.wave?.setAutostart && (
+            <label className="toggle-row">
+              <div>
+                <div>{s.autostart}</div>
+                <div className="hint">{s.autostartHint}</div>
+              </div>
+              <input
+                type="checkbox"
+                className="switch"
+                checked={autostart}
+                onChange={(e) => {
+                  window.wave?.setAutostart?.(e.target.checked);
+                  setAutostartState(e.target.checked);
+                }}
+                data-testid="autostart"
+              />
+            </label>
+          )}
         </div>
       )}
 

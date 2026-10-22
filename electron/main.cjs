@@ -181,7 +181,8 @@ function createWindow() {
     },
   });
   desktop.attachWindow(mainWindow);
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  // Started with Windows: it stays in the tray until opened from there.
+  mainWindow.once('ready-to-show', () => !desktop.startedHidden && mainWindow.show());
   // A crashed renderer leaves an empty see-through window: log it and load the page again.
   mainWindow.webContents.on('render-process-gone', (_e, details) => {
     writeLog('error', 'renderer', `process gone: ${details.reason} (exit ${details.exitCode})`);
