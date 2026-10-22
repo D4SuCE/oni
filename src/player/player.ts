@@ -7,7 +7,8 @@ import { api, loadJson, storage, transport } from '../api/client.ts';
 import { tr } from '../i18n.ts';
 import { ApiError, artistNames, trackCover, type StreamQuality } from '../api/yandex.ts';
 import { DEFAULT_TUNING, WaveEngine, waveSeeds, type WaveStats, type WaveTuning } from '../wave/engine.ts';
-import { ListenHistory } from '../wave/history.ts';
+import { HEARD_SECONDS, ListenHistory } from '../wave/history.ts';
+import { PlayLog } from './playLog.ts';
 import { playOutcome, RecsFeedback } from '../recs/feedback.ts';
 import { RecentPlays } from './recent.ts';
 import { levellingGain } from './loudness.ts';
@@ -168,6 +169,9 @@ function setLocalAudio(blob: Blob | null) {
   return localUrl;
 }
 export const recentPlays = new RecentPlays(storage);
+/** Every play heard, with its date and length: "Recap" (History). Filled once from the recent plays. */
+export const playLog = new PlayLog(storage);
+playLog.seed(recentPlays.list());
 export const stats = new PlayStats(storage);
 /** Bumped on every new entry so the History page re-reads the list. */
 export const useRecent = create<{ version: number }>(() => ({ version: 0 }));
@@ -294,6 +298,7 @@ function finishCurrent(ended: boolean) {
   const t = current();
   if (!t || (listened < 1 && !ended)) return;
   history.record(t, listened, ended);
+  if (ended || listened >= HEARD_SECONDS) playLog.record(t, play.startedAt.getTime(), listened);
   stats.record(originOf(t), listened, (t.durationMs || 0) / 1000, ended);
   recsFeedback.recordPlay(t, playOutcome(listened, (t.durationMs || 0) / 1000, ended), Date.now());
   reportPlay(t, ended);

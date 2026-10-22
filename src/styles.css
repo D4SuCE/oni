@@ -2627,6 +2627,141 @@ html.ios .toast {
   justify-content: space-between;
   gap: 16px;
 }
+/* Recap (History → Recap, src/views/Recap.tsx): big numbers, the top artists in a row, the top
+   tracks ranked, genres as chips. */
+.recap-head {
+  margin-bottom: 18px;
+}
+.recap-head .segmented {
+  display: inline-flex;
+}
+.recap-head .segmented button {
+  padding: 0 18px;
+}
+.recap-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.recap-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--glass);
+}
+.recap-stat b {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--gold);
+}
+.recap-stat span {
+  color: var(--text-2);
+  font-size: 13px;
+}
+.recap-artists {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+.recap-artist {
+  position: relative;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 112px;
+  padding: 10px 4px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text);
+  text-align: center;
+  cursor: pointer;
+}
+.recap-artist:hover {
+  background: var(--hover);
+}
+.recap-artist .recap-name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recap-artist .muted {
+  font-size: 12px;
+}
+.recap-artist .recap-rank {
+  position: absolute;
+  top: 8px;
+  left: 14px;
+}
+.recap-rank {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 11px;
+  background: var(--accent-deep);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+.recap-tracks {
+  display: flex;
+  flex-direction: column;
+}
+.recap-track {
+  display: grid;
+  grid-template-columns: 26px 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.recap-track:hover {
+  background: var(--hover);
+}
+.recap-track .recap-rank {
+  background: transparent;
+  color: var(--text-2);
+}
+.recap-track .muted {
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.recap-genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.recap-genre {
+  padding: 7px 13px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--glass);
+  font-size: 13.5px;
+}
+.recap-hint {
+  margin-top: 18px;
+}
+@media (max-width: 760px) {
+  .recap-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* Room for downloads (Settings → Downloads): how full, then the limit and the months unplayed. */
 .space-bar {
   max-width: 280px;

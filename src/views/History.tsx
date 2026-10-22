@@ -9,6 +9,7 @@ import { playTracks, recentPlays, useRecent } from '../player/player.ts';
 import type { RecentPlay } from '../player/recent.ts';
 import { navigate, samePlaylist, useApp } from '../store.ts';
 import { cx, useAsync } from '../ui/util.ts';
+import { RecapView } from './Recap.tsx';
 
 function dayTitle(date: string, lang: string) {
   const t = tr();
@@ -164,7 +165,7 @@ function FromYandex() {
 
 export function HistoryView() {
   const t = useT();
-  const [tab, setTab] = useState<'app' | 'yandex'>('app');
+  const [tab, setTab] = useState<'app' | 'yandex' | 'recap'>('app');
   return (
     <div className="page">
       <h1 className="page-title">
@@ -177,8 +178,11 @@ export function HistoryView() {
         <button className={cx('tab', tab === 'yandex' && 'active')} onClick={() => setTab('yandex')} data-testid="history-yandex">
           {t.history.allDevices}
         </button>
+        <button className={cx('tab', tab === 'recap' && 'active')} onClick={() => setTab('recap')} data-testid="history-recap">
+          {t.recap.tab}
+        </button>
       </div>
-      {tab === 'app' ? <InThisApp /> : <FromYandex />}
+      {tab === 'app' ? <InThisApp /> : tab === 'yandex' ? <FromYandex /> : <RecapView />}
     </div>
   );
 }

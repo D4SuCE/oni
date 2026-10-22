@@ -1161,6 +1161,33 @@ await step('history: this app and all devices', async () => {
   await shot('13-history');
 });
 
+await step('recap: the month summed up from the plays (here and, for the last days, everywhere); play it, save it as a playlist (removed again)', async () => {
+  await page.click('[data-testid="history-recap"]');
+  await page.waitForSelector('[data-testid="recap-track"]', { timeout: 30000 });
+  const minutes = await page.locator('[data-testid="recap-minutes"] b').innerText();
+  const tracks = await page.locator('[data-testid="recap-track"]').count();
+  const artists = await page.locator('[data-testid="recap-artist"]').count();
+  if (!tracks || !artists || !/^[\d\s ]+$/.test(minutes)) throw new Error(`recap: ${minutes} min, ${tracks} tracks, ${artists} artists`);
+  // "Play" plays the top in its order.
+  await page.click('[data-testid="recap-play"]');
+  await page.waitForFunction(() => { const s = window.__wave.usePlayer.getState(); return s.source?.title?.startsWith('Итоги') && s.queue.length > 0; }, null, { timeout: 15000 });
+  await page.evaluate(() => window.__wave.audio.pause());
+  // Saved as a playlist "Recap: <month>", then deleted (the account stays as it was, whatever
+  // happens): only the one this step made, not a recap the user saved before.
+  const kinds = await page.evaluate(async () => (await window.__wave.api.playlists()).map((p) => p.kind));
+  const saved = () => page.evaluate(async (old) => (await window.__wave.api.playlists()).filter((p) => !old.includes(p.kind) && p.title?.startsWith('Итоги:')).map((p) => ({ kind: p.kind, title: p.title, count: p.trackCount })), kinds);
+  let made = [];
+  try {
+    await page.click('[data-testid="recap-save"]');
+    await page.waitForSelector('.toast:has-text("Итоги:")', { timeout: 15000 });
+    made = await saved();
+  } finally {
+    for (const p of await saved()) await page.evaluate((kind) => window.__wave.api.deletePlaylist(kind), p.kind);
+  }
+  if (!made.length || !made[0].count) throw new Error(`saved: ${JSON.stringify(made)}`);
+  console.log(`       ${minutes} min, ${tracks} tracks, ${artists} artists; saved "${made[0].title}" (${made[0].count}), removed`);
+});
+
 await step('english interface has no Russian left', async () => {
   // Only the app's own chrome: titles, tabs, buttons, tooltips. Yandex data stays as it is
   // (also in the Home banner: the playing track, its artists, where it plays from).
