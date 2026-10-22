@@ -6,7 +6,7 @@
 import { create } from 'zustand';
 import { loadJson, storage, transport } from '../api/client.ts';
 import { tr } from '../i18n.ts';
-import { useApp } from '../store.ts';
+import { toast } from '../store.ts';
 import { useUpdate } from './update.ts';
 import { isNewer } from './version.ts';
 
@@ -46,7 +46,8 @@ export function setUpdateViaShortcut(shortcut: boolean) {
 
 let checkedAt = 0;
 
-export async function checkIosUpdate() {
+/** `current`: the version to compare with; the smoke test passes an old one to see a new version offered. */
+export async function checkIosUpdate(current = __APP_VERSION__) {
   checkedAt = Date.now();
   const was = useUpdate.getState();
   if (was.status !== 'ready') useUpdate.setState({ status: 'checking' }, true);
@@ -54,14 +55,15 @@ export async function checkIosUpdate() {
     const r = await transport.request<{ apps?: { versions?: { version: string; downloadURL: string }[] }[] }>({ url: `${SOURCE}?t=${Date.now()}` });
     const latest = r.data?.apps?.[0]?.versions?.[0];
     if (!r.ok || !latest) throw new Error(`HTTP ${r.status}`);
-    if (isNewer(latest.version, __APP_VERSION__)) {
+    if (isNewer(latest.version, current)) {
       useUpdate.setState({ status: 'ready', version: latest.version, url: latest.downloadURL }, true);
       const auto = useAutoUpdate.getState();
       if (auto.on && auto.opened !== latest.version && !document.hidden) {
         useAutoUpdate.setState({ opened: latest.version });
         storage.setItem(AUTO_KEY, JSON.stringify(useAutoUpdate.getState()));
         installIosUpdate();
-      } else if (was.version !== latest.version) useApp.setState({ toast: { id: Date.now(), text: tr().update.iosToast(latest.version) } });
+        // toast(), not the state itself: put there straight, the message never went away.
+      } else if (was.version !== latest.version) toast(tr().update.iosToast(latest.version));
     } else useUpdate.setState({ status: 'latest' }, true);
   } catch (e) {
     if (was.status !== 'ready') useUpdate.setState({ status: 'error', error: e instanceof Error ? e.message : String(e) }, true);
@@ -70,17 +72,25 @@ export async function checkIosUpdate() {
 
 /** "Update": SideStore takes the file and installs it over this version (data stays). */
 export function installIosUpdate() {
+  const link = updateLink();
+  if (link) location.href = link;
+}
+
+/** Where "Update" goes: SideStore with the new IPA, or the shortcut that wraps SideStore with it. */
+export function updateLink() {
   const url = useUpdate.getState().url;
-  if (!url) return;
+  if (!url) return null;
   const sidestore = `sidestore://install?url=${encodeURIComponent(url)}`;
-  location.href = useAutoUpdate.getState().shortcut
+  return useAutoUpdate.getState().shortcut
     ? `shortcuts://run-shortcut?name=${encodeURIComponent(UPDATE_SHORTCUT)}&input=text&text=${encodeURIComponent(sidestore)}`
     : sidestore;
 }
 
-/** At start, every few hours, and on return to the app if it has been a while. */
+/** At start, every few hours, and every time Oni is opened again (the user: as soon as it is
+ * opened, a new version should show; iOS mostly keeps the app, so opening it is a return).
+ * The source is a small file; a check under way is not repeated. */
 export function watchIosUpdates() {
   checkIosUpdate();
   setInterval(checkIosUpdate, EVERY);
-  document.addEventListener('visibilitychange', () => !document.hidden && Date.now() - checkedAt > 3600_000 && checkIosUpdate());
+  document.addEventListener('visibilitychange', () => !document.hidden && Date.now() - checkedAt > 5_000 && checkIosUpdate());
 }

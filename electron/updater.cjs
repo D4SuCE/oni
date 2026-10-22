@@ -5,7 +5,9 @@
 const { app, ipcMain, shell } = require('electron');
 
 const RELEASES_URL = 'https://github.com/D4SuCE/oni-releases/releases';
-const FIRST_CHECK = 10 * 1000;
+// Soon after start, so a version out since shows right away (the user's wish); later rounds
+// also when the window is opened again (src/ui/update.ts asks).
+const FIRST_CHECK = 2 * 1000;
 const RECHECK = 6 * 60 * 60 * 1000;
 
 /** { status: 'off' | 'portable' | 'idle' | 'checking' | 'latest' | 'downloading' | 'ready' | 'error', version?, percent?, error? } */

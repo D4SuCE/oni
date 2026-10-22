@@ -781,8 +781,28 @@ await step('beat pulse follows the music', async () => {
       }),
   );
   if (max < 0.2) throw new Error(`no beats detected (max ${max})`);
+  // The covers throb, and only they get the beat: set on the page's root it restyled every
+  // element each frame (the user: the app stutters; Liked fell from ~180 to ~35 frames a second).
+  const cover = await page.evaluate(() => Number(document.querySelector('.pb-cover .cover')?.style.getPropertyValue('--beat') || -1));
+  if (cover < 0) throw new Error('the player cover has no beat');
+  if (await page.evaluate(() => document.documentElement.style.getPropertyValue('--beat'))) throw new Error('the beat is set on the page root');
+  await page.click('[data-testid="nav-liked"]');
+  await page.waitForSelector('.track-row', { timeout: 20000 });
+  await page.waitForTimeout(1500);
+  const frame = await page.evaluate(async () => {
+    const gaps = [];
+    let last = performance.now();
+    const end = last + 3000;
+    await new Promise((done) => {
+      const f = (t) => (gaps.push(t - last), (last = t), t < end ? requestAnimationFrame(f) : done());
+      requestAnimationFrame(f);
+    });
+    return gaps.sort((x, y) => x - y)[gaps.length >> 1];
+  });
+  console.log(`       ${await page.locator('.track-row').count()} rows with the pulse on: a frame takes ${frame.toFixed(1)} ms`);
+  if (frame > 25) throw new Error(`a long list with the pulse stutters: ${frame.toFixed(1)} ms a frame`);
   await page.evaluate(() => window.__wave.audio.pause());
-  await page.waitForFunction(() => document.documentElement.style.getPropertyValue('--beat') === '0', null, { timeout: 3000 });
+  await page.waitForFunction(() => document.querySelector('.pb-cover .cover')?.style.getPropertyValue('--beat') === '0', null, { timeout: 3000 });
 });
 
 await step('sound settings: equalizer hears the music', async () => {

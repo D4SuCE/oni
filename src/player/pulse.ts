@@ -14,7 +14,13 @@ let raf = 0;
 let beat = 0;
 const tracker = new BeatTracker();
 
-const root = () => document.documentElement.style;
+/** What throbs (styles.css, "Beat pulse"). --beat is set on these alone: set on the page's root,
+ * it made the browser restyle every element 60 times a second, and a long list (Liked, ~500 rows)
+ * fell from ~180 to ~35 frames a second (the user: the app often stutters). */
+const PULSING = '.np-cover, .pb-cover .cover, .wave-hero.active .wave-mask';
+function setBeat(value: string) {
+  for (const el of document.querySelectorAll<HTMLElement>(PULSING)) el.style.setProperty('--beat', value);
+}
 
 /**
  * Low-band spectral flux per frame (the rise of 45–190 Hz energy), fed to the beat tracker,
@@ -30,7 +36,7 @@ function frame(now: number) {
   const hit = tracker.push(now, flux);
   if (hit) beat = Math.max(beat, hit.strength);
   beat *= 0.86;
-  root().setProperty('--beat', beat.toFixed(3));
+  setBeat(beat.toFixed(3));
   raf = requestAnimationFrame(frame);
 }
 
@@ -45,7 +51,7 @@ function update() {
     cancelAnimationFrame(raf);
     raf = 0;
     beat = 0;
-    root().setProperty('--beat', '0');
+    setBeat('0');
   }
 }
 

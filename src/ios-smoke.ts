@@ -243,6 +243,19 @@ async function updateCheck() {
   await checkIosUpdate();
   const u = useUpdate.getState();
   report('update-check', u.status === 'latest' || (u.status === 'ready' && Boolean(u.url)), `${u.status} ${u.version ?? ''} ${u.error ?? ''}`);
+  // As an old version would: the newest one is offered, with a message that goes away by itself,
+  // and "Update" opens SideStore with its IPA (installing is SideStore's, with the Apple ID).
+  const { updateLink, useAutoUpdate } = await import('./ui/iosUpdate.ts');
+  useAutoUpdate.setState({ on: false, shortcut: false });
+  useUpdate.setState({ status: 'off', version: undefined, url: undefined }, true);
+  await checkIosUpdate('0.0.1');
+  const old = useUpdate.getState();
+  const shown = await until(() => document.querySelector('.toast')?.textContent?.includes(old.version ?? '?'), 3000);
+  const gone = shown && (await until(() => !document.querySelector('.toast')?.textContent?.includes(old.version ?? '?'), 6000));
+  const link = updateLink() ?? '';
+  const ipa = decodeURIComponent(link.replace('sidestore://install?url=', ''));
+  report('update-offer', old.status === 'ready' && Boolean(shown) && Boolean(gone) && link.startsWith('sidestore://install?url=') && ipa.endsWith('.ipa') && ipa === old.url, `${old.status} ${old.version}; toast ${shown ? 'shown' : 'not shown'}${gone ? ', gone' : ''}; ${link}`);
+  await checkIosUpdate();
 }
 
 export async function runSmoke() {
