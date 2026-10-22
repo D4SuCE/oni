@@ -191,6 +191,8 @@ const ru = {
     downloading: 'Скачивается…',
     downloaded: 'Скачан',
     removeDownload: 'Удалить с устройства',
+    move: 'Переместить',
+    moveHint: 'Перетаскивайте треки за ≡',
   },
   downloads: {
     kicker: 'Играет без интернета',
@@ -315,6 +317,7 @@ const ru = {
   playlist: {
     yours: 'Ваш плейлист',
     byOwner: (owner: string) => `Плейлист · ${owner}`,
+    moveFailed: (msg: string) => `Не удалось переместить трек: ${msg}`,
     removeFailed: (msg: string) => `Не удалось удалить: ${msg}`,
     renameTitle: 'Переименовать плейлист',
     rename: 'Переименовать',
@@ -667,6 +670,8 @@ const en: Dict = {
     downloading: 'Downloading…',
     downloaded: 'Downloaded',
     removeDownload: 'Remove from device',
+    move: 'Move',
+    moveHint: 'Drag tracks by ≡',
   },
   downloads: {
     kicker: 'Plays without internet',
@@ -791,6 +796,7 @@ const en: Dict = {
   playlist: {
     yours: 'Your playlist',
     byOwner: (owner) => `Playlist · ${owner}`,
+    moveFailed: (msg) => `Couldn't move the track: ${msg}`,
     removeFailed: (msg) => `Couldn't remove: ${msg}`,
     renameTitle: 'Rename playlist',
     rename: 'Rename',

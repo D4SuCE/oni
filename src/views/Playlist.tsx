@@ -2,7 +2,7 @@ import { Heart, MoreHorizontal, Pencil, Radio, Shuffle, Trash2, Upload } from 'l
 import { DownloadButton } from '../components/DownloadButton.tsx';
 import { useEffect, useRef, useState } from 'react';
 import { api, transport } from '../api/client.ts';
-import type { Playlist } from '../api/types.ts';
+import type { Playlist, Track } from '../api/types.ts';
 import { playlistCover } from '../api/yandex.ts';
 import { ErrorBox, ListPlayButton, PageHeader, Spinner } from '../components/Common.tsx';
 import { askText, confirmDialog } from '../components/Dialog.tsx';
@@ -19,6 +19,7 @@ import { useListSearch } from '../components/ListSearch.tsx';
 import { savedPlaylist } from '../player/offlineLists.ts';
 import { loadOrKept, useKeepForOffline } from '../ui/offline.ts';
 import { useListTracks } from '../ui/listLoader.ts';
+import { moved } from '../ui/dragSort.ts';
 import { Loader2 } from 'lucide-react';
 
 /** Up to this many tracks a playlist comes whole in one request; a bigger one in parts. */
@@ -42,7 +43,11 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
   const t = useT();
   const likedPlaylists = useApp((s) => s.likedPlaylists);
   const search = useListSearch();
-  const { tracks: listTracks, total: listTotal, complete } = useListTracks(pl);
+  const { tracks: loadedTracks, total: listTotal, complete } = useListTracks(pl);
+  // Tracks moved by the user show in their new order at once, while Yandex is told (reset with
+  // every load of the playlist, which then has that order itself).
+  const [movedTracks, setMovedTracks] = useState<{ pl: typeof pl; tracks: Track[] } | null>(null);
+  const listTracks = movedTracks && movedTracks.pl === pl ? movedTracks.tracks : loadedTracks;
   useKeepForOffline(key, pl?.title ?? '', pl && complete ? listTracks : null, pl);
   // Playing while the rest comes: it joins the queue.
   useEffect(() => {
@@ -56,6 +61,21 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
   const from = { playlist: `${pl.uid}:${pl.kind}` };
   const saved = likedPlaylists.some((p) => samePlaylist(p, pl));
   const total = tracks.reduce((s, t) => s + (t.durationMs || 0), 0);
+
+  // Own playlists, whole: a track dragged to another place (held mouse button; "Move" on the iPhone).
+  const move = async (from: number, to: number) => {
+    setMovedTracks({ pl, tracks: moved(tracks, from, to) });
+    try {
+      const fresh = await api.playlist(pl.uid, pl.kind, false);
+      if (String(fresh.tracks?.[from]?.id) !== String(tracks[from]?.id)) throw new Error('the playlist changed meanwhile');
+      await api.moveInPlaylist(fresh, from, to);
+      refreshPlaylists();
+    } catch (e) {
+      toast(t.playlist.moveFailed(errorText(e)));
+      setMovedTracks(null);
+      reload();
+    }
+  };
 
   const remove = async (index: number) => {
     try {
@@ -191,7 +211,13 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
       )}
       {search.field}
       {tracks.length ? (
-        <TrackList tracks={tracks} filter={search.query} onPlay={(i) => playTracks(tracks, i, pl.title, from)} onRemove={own ? remove : undefined} />
+        <TrackList
+          tracks={tracks}
+          filter={search.query}
+          onPlay={(i) => playTracks(tracks, i, pl.title, from)}
+          onRemove={own ? remove : undefined}
+          onMove={own && complete ? move : undefined}
+        />
       ) : complete ? (
         <div className="empty-hint">{own ? t.playlist.emptyOwn : t.playlist.empty}</div>
       ) : null}

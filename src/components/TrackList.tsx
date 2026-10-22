@@ -1,5 +1,6 @@
-import { memo } from 'react';
-import { ArrowDownToLine, ArrowUp, Ban, CircleCheck, Disc3, Download, Info, Loader2, Pencil, Heart, Link, ListEnd, ListPlus, ListStart, MoreHorizontal, Play, Plus, Radio, Share, Trash2, User } from 'lucide-react';
+import { memo, useCallback, useRef, useState } from 'react';
+import { useDragSort } from '../ui/dragSort.ts';
+import { ArrowDownToLine, ArrowUp, ArrowUpDown, Ban, GripVertical, CircleCheck, Disc3, Download, Info, Loader2, Pencil, Heart, Link, ListEnd, ListPlus, ListStart, MoreHorizontal, Play, Plus, Radio, Share, Trash2, User } from 'lucide-react';
 import type { Track } from '../api/types.ts';
 import { artistNames } from '../api/yandex.ts';
 import { tr, useT } from '../i18n.ts';
@@ -94,9 +95,13 @@ interface RowProps {
   saved: OfflineState;
   /** No network and not downloaded: shown dimmed, as Yandex's app does, and not playable. */
   off?: boolean;
+  /** Can be dragged into another place (ui/dragSort.ts). */
+  sortable?: boolean;
+  /** The iPhone's "Move" mode: a handle to drag by, in place of "…". */
+  handle?: boolean;
 }
 
-const TrackRow = memo(function TrackRow({ track: t, index, active, playing, liked, showAlbum, onPlay, onRemove, rowMenu, saved, off }: RowProps) {
+const TrackRow = memo(function TrackRow({ track: t, index, active, playing, liked, showAlbum, onPlay, onRemove, rowMenu, saved, off, sortable, handle }: RowProps) {
   const unavailable = t.available === false || Boolean(off);
   const tx = useT();
   const cover = useCover(t, 100);
@@ -116,6 +121,7 @@ const TrackRow = memo(function TrackRow({ track: t, index, active, playing, like
       onClick={isIos ? (e) => !unavailable && !(e.target as Element).closest('button, a') && (active ? toggle() : onPlay(index)) : undefined}
       onContextMenu={menu}
       data-track-id={t.id}
+      data-sort-index={sortable ? index : undefined}
     >
       <div className="tr-num">
         {active && playing ? (
@@ -164,9 +170,15 @@ const TrackRow = memo(function TrackRow({ track: t, index, active, playing, like
         {saved !== 'none' && <DownloadMark id={t.id} saved={saved} label={tx.menu.downloaded} />}
         <span className="tr-time">{fmtTime((t.durationMs || 0) / 1000)}</span>
       </div>
-      <button className="icon-btn tr-more" onClick={menu} title={tx.common.more}>
-        <MoreHorizontal size={18} />
-      </button>
+      {handle ? (
+        <span className="drag-handle" title={tx.menu.move} data-testid="drag-handle">
+          <GripVertical size={18} />
+        </span>
+      ) : (
+        <button className="icon-btn tr-more" onClick={menu} title={tx.common.more}>
+          <MoreHorizontal size={18} />
+        </button>
+      )}
     </div>
   );
 });
@@ -198,6 +210,7 @@ export function TrackList({
   onRemove,
   rowMenu,
   filter,
+  onMove,
 }: {
   tracks: Track[];
   /** Only rows matching this (ListSearch); they keep their positions in the whole list. */
@@ -207,14 +220,35 @@ export function TrackList({
   onRemove?: (index: number) => void;
   /** Extra menu items for a row (above the standard ones' tail). */
   rowMenu?: (t: Track, index: number) => MenuItem[];
+  /** The list can be put in another order (own playlists, Liked): a track taken from `from` goes to `to`. */
+  onMove?: (from: number, to: number) => void;
 }) {
   const currentId = usePlayer((s) => s.queue[s.index]?.id);
   const playing = usePlayer((s) => s.playing);
   const liked = useApp((s) => s.liked);
   const offlineNow = useApp((s) => s.offline);
   useOfflineVersion((s) => s.v);
+  const tx = useT();
+  // Moving tracks: with a mouse a row is dragged by the held left button; on the iPhone "Move" in a
+  // track's "…" shows handles to drag by (the user's way for each). Not while searching the list.
+  const list = useRef<HTMLDivElement>(null);
+  const [reordering, setReordering] = useState(false);
+  const sortable = Boolean(onMove) && !filter;
+  useDragSort(list, { enabled: sortable && (!isIos || reordering), mode: isIos ? 'handle' : 'row', onMove: (from, to) => onMove?.(from, to) });
+  const menuWithMove = useCallback(
+    (t: Track, i: number): MenuItem[] => [...(rowMenu?.(t, i) ?? []), { label: tx.menu.move, icon: <ArrowUpDown size={15} />, onClick: () => setReordering(true) }],
+    [rowMenu, tx],
+  );
   return (
-    <div className={cx('track-list', !showAlbum && 'no-album')}>
+    <div ref={list} className={cx('track-list', !showAlbum && 'no-album', reordering && 'reordering')}>
+      {reordering && (
+        <div className="reorder-bar" data-testid="reorder-bar">
+          <span>{tx.menu.moveHint}</span>
+          <button className="btn primary small" onClick={() => setReordering(false)} data-testid="reorder-done">
+            {tx.common.done}
+          </button>
+        </div>
+      )}
       {tracks.map((t, i) =>
         filter && !trackMatches(t, filter) ? null : (
           <TrackRow
@@ -227,9 +261,11 @@ export function TrackList({
             showAlbum={showAlbum}
             onPlay={onPlay}
             onRemove={onRemove}
-            rowMenu={rowMenu}
+            rowMenu={isIos && sortable ? menuWithMove : rowMenu}
             saved={offlineState(t.id)}
             off={offlineNow && !offline?.has(t.id)}
+            sortable={sortable}
+            handle={reordering && sortable}
           />
         ),
       )}

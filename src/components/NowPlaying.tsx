@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Ban, ChevronDown, MoreHorizontal, SlidersVertical, X } from 'lucide-react';
+import { Ban, ChevronDown, GripVertical, ListMusic, MoreHorizontal, SlidersVertical, X } from 'lucide-react';
 import { api } from '../api/client.ts';
 import type { Track } from '../api/types.ts';
 import { trackCover } from '../api/yandex.ts';
 import { useT } from '../i18n.ts';
-import { playAt, playTracks, removeAt, seek, usePlayer } from '../player/player.ts';
+import { moveInQueue, playAt, playTracks, removeAt, seek, usePlayer } from '../player/player.ts';
+import { useDragSort } from '../ui/dragSort.ts';
 import { dislike, useApp } from '../store.ts';
 import { useSwipeDown } from '../ui/swipe.ts';
 import { cx, useAsync } from '../ui/util.ts';
@@ -62,6 +63,8 @@ function Similar({ track }: { track: Track }) {
   );
 }
 
+/** What plays now and next. Up-next tracks are dragged to another place: by the held mouse button,
+ * or on the iPhone (its queue sheet) by their handles. */
 function Queue() {
   const queue = usePlayer((s) => s.queue);
   const index = usePlayer((s) => s.index);
@@ -69,6 +72,7 @@ function Queue() {
   const waveBusy = usePlayer((s) => s.waveBusy);
   const ref = useRef<HTMLDivElement>(null);
   const t = useT();
+  useDragSort(ref, { enabled: true, mode: isIos ? 'handle' : 'row', onMove: moveInQueue });
   useEffect(() => {
     ref.current?.querySelector('.q-row.current')?.scrollIntoView({ block: 'nearest' });
   }, [index]);
@@ -91,6 +95,7 @@ function Queue() {
 }
 
 function QueueRow({ i, current }: { i: number; current?: boolean }) {
+  const handle = isIos && !current;
   const t = usePlayer((s) => s.queue[i]);
   const suggested = usePlayer((s) => s.source?.kind === 'list' && !!t && !!s.source.suggested?.includes(String(t.id)));
   const tx = useT();
@@ -98,6 +103,7 @@ function QueueRow({ i, current }: { i: number; current?: boolean }) {
   return (
     <div
       className={cx('q-row', current && 'current')}
+      data-sort-index={current ? undefined : i}
       onDoubleClick={() => playAt(i)}
       onContextMenu={(e) => openMenu(e, trackMenu(t, current ? [] : [{ label: tx.nowPlaying.removeFromQueue, icon: <X size={15} />, onClick: () => removeAt(i) }]))}
     >
@@ -118,6 +124,11 @@ function QueueRow({ i, current }: { i: number; current?: boolean }) {
           <X size={15} />
         </button>
       )}
+      {handle && (
+        <span className="drag-handle" title={tx.menu.move} data-testid="drag-handle">
+          <GripVertical size={18} />
+        </span>
+      )}
     </div>
   );
 }
@@ -126,6 +137,8 @@ export function NowPlaying() {
   const track = usePlayer((s) => s.queue[s.index]);
   const isWave = usePlayer((s) => s.source?.kind === 'wave');
   const [picked, setTab] = useState<'queue' | 'lyrics' | 'similar'>('queue');
+  // The iPhone has no room for the queue beside the cover: it opens as a sheet.
+  const [queueOpen, setQueueOpen] = useState(false);
   const video = useCoverVideo(track);
   const t = useT();
   const close = useCallback(() => useApp.setState({ nowPlayingOpen: false }), []);
@@ -174,6 +187,11 @@ export function NowPlaying() {
                       <SlidersVertical size={21} />
                     </button>
                   )}
+                  {isIos && (
+                    <button className="icon-btn" onClick={() => setQueueOpen(true)} title={t.player.queue} data-testid="np-queue">
+                      <ListMusic size={21} />
+                    </button>
+                  )}
                   <button className="icon-btn" onClick={(e) => openMenu(e, trackMenu(track))} title={t.common.more} data-testid="np-more">
                     <MoreHorizontal size={22} />
                   </button>
@@ -199,6 +217,21 @@ export function NowPlaying() {
           </div>
           {tab === 'queue' || !track ? <Queue /> : tab === 'lyrics' ? <Lyrics trackId={track.id} /> : <Similar track={track} />}
         </aside>
+        {queueOpen && (
+          <div className="q-sheet-backdrop" onClick={() => setQueueOpen(false)}>
+            <div className="q-sheet glass" onClick={(e) => e.stopPropagation()} data-testid="queue-sheet">
+              <div className="q-sheet-head">
+                <h3>{t.player.queue}</h3>
+                <button className="icon-btn" onClick={() => setQueueOpen(false)} title={t.common.close}>
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="q-sheet-list">
+                <Queue />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

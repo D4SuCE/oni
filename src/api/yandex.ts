@@ -359,6 +359,20 @@ export class YandexMusic {
     });
   }
 
+  /** Moves the track at `from` to `to` (the official app's drag and drop; found in its code). The
+   * track is named too, so a list changed meanwhile is refused rather than moved wrong. Liked is
+   * not a list Yandex lets one reorder: it closes the connection. */
+  async moveInPlaylist(pl: Playlist, from: number, to: number): Promise<Playlist> {
+    const item = pl.tracks?.[from];
+    if (!item) throw new Error('no track at ' + from);
+    const albumId = item.albumId ?? item.track?.albums?.[0]?.id;
+    const diff = [{ op: 'move', from, to, tracks: [{ id: item.id, ...(albumId !== undefined && { albumId }) }] }];
+    return this.call(`/users/${pl.uid}/playlists/${pl.kind}/change-relative`, {
+      method: 'POST',
+      form: { diff: JSON.stringify(diff), revision: pl.revision },
+    });
+  }
+
   // ---------------------------------------------------------------- playback
 
   /** Stream URL in the asked quality; Yandex may give less (it returns what it actually serves). */

@@ -3179,3 +3179,79 @@ kbd {
   line-height: 15px;
   font-variant-numeric: tabular-nums;
 }
+
+/* Moving tracks (ui/dragSort.ts): the dragged row fades, a red line shows where it lands. */
+.sorting {
+  user-select: none;
+  cursor: grabbing;
+}
+.drag-source {
+  opacity: 0.4;
+}
+.track-row.drop-before,
+.q-row.drop-before {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.track-row.drop-after,
+.q-row.drop-after {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.drag-handle {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 40px;
+  color: var(--text-2);
+  touch-action: none;
+  cursor: grab;
+}
+/* The iPhone's "Move" mode: what to do, and "Done". */
+.reorder-bar {
+  position: sticky;
+  top: calc(env(safe-area-inset-top) + 4px);
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 8px;
+  padding: 8px 8px 8px 14px;
+  border-radius: 12px;
+  background: rgba(33, 24, 22, 0.92);
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+/* The iPhone's queue: a sheet over Now Playing, its tracks dragged by their handles. */
+.q-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(0, 0, 0, 0.45);
+}
+.q-sheet {
+  width: 100%;
+  max-height: 78vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px 20px 0 0;
+  padding: 12px 10px calc(12px + env(safe-area-inset-bottom));
+}
+.q-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px 6px 10px;
+}
+.q-sheet-head h3 {
+  margin: 0;
+}
+.q-sheet-list {
+  overflow-y: auto;
+  min-height: 0;
+}
+.q-sheet .queue {
+  overflow: visible;
+}

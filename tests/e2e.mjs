@@ -762,6 +762,85 @@ await step('sidebar playlists are dragged into an order of one\'s own, which sta
   }
 });
 
+/** Drags a row by the held left mouse button onto another's lower half (it lands after it). */
+async function dragRow(from, onto, selector = '.track-row') {
+  const rows = page.locator(selector);
+  const a = await rows.nth(from).boundingBox();
+  const b = await rows.nth(onto).boundingBox();
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+  await page.mouse.down();
+  for (let k = 1; k <= 8; k++) await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2 + ((b.y + b.height * 0.8 - (a.y + a.height / 2)) * k) / 8);
+  await page.mouse.up();
+}
+
+await step('an own playlist: a track dragged by the held mouse button moves, also at Yandex (temporary playlist)', async () => {
+  // The user's wish: own playlists in an order of one's own, on both platforms.
+  const pl = await page.evaluate(async () => {
+    const w = window.__wave;
+    const created = await w.api.createPlaylist('oni-e2e-move');
+    const chart = (await w.api.chart()).filter((t) => t.available !== false).slice(0, 3);
+    await w.api.addToPlaylist(created, chart, 0);
+    return { uid: created.uid, kind: created.kind };
+  });
+  try {
+    const ids = () => page.locator('.track-row').evaluateAll((els) => els.map((e) => e.dataset.trackId));
+    await page.evaluate(({ uid, kind }) => window.__wave.navigate({ name: 'playlist', uid, kind }), pl);
+    await page.waitForFunction(() => document.querySelectorAll('.track-row').length === 3, null, { timeout: 15000 });
+    const before = await ids();
+    await dragRow(0, 2);
+    const want = [before[1], before[2], before[0]];
+    await page.waitForFunction((w) => [...document.querySelectorAll('.track-row')].map((e) => e.dataset.trackId).join() === w.join(), want, { timeout: 5000 }).catch(async () => {
+      throw new Error(`on the page: ${await ids()}; want ${want}`);
+    });
+    await page.waitForFunction(async ({ uid, kind, w }) => {
+      const fresh = await window.__wave.api.playlist(uid, kind, false);
+      return fresh.tracks.map((x) => String(x.id)).join() === w.join();
+    }, { ...pl, w: want }, { timeout: 15000, polling: 1000 });
+  } finally {
+    await page.evaluate((kind) => window.__wave.api.deletePlaylist(kind), pl.kind);
+  }
+});
+
+await step('Liked: a track dragged moves at Yandex too (one re-like call), then the order is put back', async () => {
+  // The user: the order synced to the other devices. Yandex keeps likes newest first; liking
+  // again puts tracks on top in the order given.
+  await page.click('[data-testid="nav-liked"]');
+  await page.waitForFunction(() => document.querySelectorAll('.track-row').length >= window.__wave.useApp.getState().likedKeys.length, null, { timeout: 30000 });
+  const before = await page.evaluate(async () => (await window.__wave.api.likedTrackKeys()).slice(0, 3));
+  const id = (k) => k.split(':')[0];
+  try {
+    await dragRow(2, 0);
+    await page.mouse.move(0, 0);
+    // Onto the first row's lower half: it lands second.
+    const want = [id(before[0]), id(before[2]), id(before[1])];
+    await page.waitForFunction(async (w) => (await window.__wave.api.likedTrackKeys()).slice(0, 3).map((k) => k.split(':')[0]).join() === w.join(), want, { timeout: 15000, polling: 1000 }).catch(async () => {
+      throw new Error(`at Yandex: ${(await page.evaluate(async () => (await window.__wave.api.likedTrackKeys()).slice(0, 3))).map(id)}; want ${want}`);
+    });
+  } finally {
+    // The first three as they were (liked again in their order: the first on top).
+    await page.evaluate((keys) => window.__wave.api.setLiked(keys, true), before);
+  }
+});
+
+await step('the queue: an up-next track dragged moves in the queue', async () => {
+  await page.evaluate(async () => {
+    const chart = (await window.__wave.api.chart()).filter((t) => t.available !== false).slice(0, 5);
+    await window.__wave.playTracks(chart, 0, 'e2e queue');
+  });
+  await waitPlaying(0.5);
+  await page.click('.pb-cover');
+  await page.waitForSelector('.nowplaying .q-row[data-sort-index]');
+  const queue = () => page.evaluate(() => window.__wave.usePlayer.getState().queue.map((t) => String(t.id)));
+  const before = await queue();
+  await dragRow(0, 1, '.nowplaying .q-row[data-sort-index]');
+  const after = await queue();
+  const want = [before[0], before[2], before[1], ...before.slice(3)];
+  if (after.join() !== want.join()) throw new Error(`queue ${after.slice(0, 4)}; want ${want.slice(0, 4)}`);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.nowplaying', { state: 'detached' });
+  await page.evaluate(() => window.__wave.audio.pause());
+});
+
 await step('library: own and liked playlists', async () => {
   await page.click('[data-testid="nav-library"]');
   await page.waitForSelector('[data-testid="liked-card"]');

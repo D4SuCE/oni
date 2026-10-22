@@ -4,6 +4,7 @@ import { isIos } from '../ui/platform.ts';
 import { DownloadButton } from '../components/DownloadButton.tsx';
 import { DownloadsView } from './Downloads.tsx';
 import { useEffect, useState } from 'react';
+import { moved } from '../ui/dragSort.ts';
 import { api } from '../api/client.ts';
 import type { Track } from '../api/types.ts';
 import { AlbumCard, ArtistCard, ErrorBox, ListPlayButton, PlaylistCard, Section, Spinner } from '../components/Common.tsx';
@@ -12,16 +13,30 @@ import { SmartShuffleButton } from '../components/SmartShuffle.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { useT } from '../i18n.ts';
 import { offline, playRadio, playShuffled, playTracks } from '../player/player.ts';
-import { createPlaylist, navigate, useApp, type LibraryTab } from '../store.ts';
+import { createPlaylist, errorText, navigate, refreshLibrary, toast, type LibraryTab, useApp } from '../store.ts';
 import { cx, useAsync } from '../ui/util.ts';
 import { useListSearch } from '../components/ListSearch.tsx';
 import { savedList, useKeepForOffline } from '../ui/offline.ts';
-import { ApiError } from '../api/yandex.ts';
+import { ApiError, trackKey } from '../api/yandex.ts';
 
 /** "tracks" (liked songs) is its own page, reached from the sidebar or the Liked Songs card. */
 const TABS = ['playlists', 'albums', 'artists'] as const;
 
 const FIRST_PAGE = 100;
+
+
+/**
+ * Liked in an order of one's own, kept by Yandex (the user: synced to the other devices). Yandex
+ * keeps likes newest first and refuses to move one, but liking a liked track again puts it on top,
+ * and one call with several puts them on top in the order given (both found by trying). So a track
+ * moved to `to` is one call: the new list's first `to + 1` liked again, top first; the rest keep
+ * their order below. Yandex's own app shows the same order.
+ */
+async function moveLiked(tracks: Track[], from: number, to: number) {
+  const next = moved(tracks, from, to);
+  await api.setLiked(next.slice(0, to + 1).map(trackKey), true);
+  return next;
+}
 
 function LikedTracks() {
   const keys = useApp((s) => s.likedKeys);
@@ -102,7 +117,25 @@ function LikedTracks() {
       </div>
       {search.field}
       {tracks.length ? (
-        <TrackList tracks={tracks} filter={search.query} onPlay={(i) => playTracks(tracks, i, t.common.liked, from)} />
+        <TrackList
+          tracks={tracks}
+          filter={search.query}
+          onPlay={(i) => playTracks(tracks, i, t.common.liked, from)}
+          onMove={
+            tracks.length >= keys.length
+              ? async (a, b) => {
+                  // In the new order at once, while Yandex is told; then the library from Yandex.
+                  setTracks(moved(tracks, a, b));
+                  try {
+                    await moveLiked(tracks, a, b);
+                  } catch (e) {
+                    toast(t.playlist.moveFailed(errorText(e)));
+                  }
+                  refreshLibrary();
+                }
+              : undefined
+          }
+        />
       ) : (
         <div className="empty-hint">{t.library.likedEmpty}</div>
       )}

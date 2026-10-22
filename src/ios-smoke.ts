@@ -312,6 +312,51 @@ async function phoneTop() {
   report('no-endless-backdrop', !endless.length, `${endless.length} running`);
 }
 
+/** Moving tracks on the phone: "Move" in a track's "…" shows handles, a drag by one moves the
+ * track (a temporary playlist, deleted after); Now Playing has its queue as a sheet. */
+async function moveTracks() {
+  type Api = { createPlaylist(t: string): Promise<{ uid: number; kind: number }>; chart(): Promise<Track[]>; addToPlaylist(p: unknown, t: Track[], at: number): Promise<unknown>; deletePlaylist(k: number): Promise<void> };
+  const w = window as unknown as { __wave: { api: Api; navigate(r: unknown): void } };
+  const pl = await w.__wave.api.createPlaylist('oni-smoke-move');
+  try {
+    const chart = (await w.__wave.api.chart()).filter((t) => t.available !== false).slice(0, 3);
+    await w.__wave.api.addToPlaylist(pl, chart, 0);
+    w.__wave.navigate({ name: 'playlist', uid: pl.uid, kind: pl.kind });
+    await until(() => document.querySelectorAll('.track-row').length === 3, 15000);
+    const ids = () => [...document.querySelectorAll<HTMLElement>('.track-row')].map((r) => r.dataset.trackId);
+    const before = ids();
+    const first = document.querySelector('.track-row')!;
+    const box = first.getBoundingClientRect();
+    first.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: box.left + 60, clientY: box.top + 20 }));
+    await until(() => document.querySelector('.menu'), 3000);
+    const item = [...document.querySelectorAll<HTMLElement>('.menu .menu-item')].find((i) => /переместить|move/i.test(i.textContent ?? ''));
+    item?.click();
+    const handles = await until(() => document.querySelectorAll('[data-testid="drag-handle"]').length === 3, 3000);
+    // Drag the first by its handle onto the lower half of the third.
+    const handle = document.querySelector('[data-testid="drag-handle"]')!;
+    const h = handle.getBoundingClientRect();
+    const third = document.querySelectorAll('.track-row')[2].getBoundingClientRect();
+    const at = (y: number) => ({ pointerId: 21, pointerType: 'touch', isPrimary: true, clientX: h.left + h.width / 2, clientY: y, bubbles: true, cancelable: true });
+    handle.dispatchEvent(new PointerEvent('pointerdown', at(h.top + h.height / 2)));
+    for (let k = 1; k <= 6; k++) window.dispatchEvent(new PointerEvent('pointermove', at(h.top + ((third.top + third.height * 0.8 - h.top) * k) / 6)));
+    window.dispatchEvent(new PointerEvent('pointerup', at(third.top + third.height * 0.8)));
+    const want = [before[1], before[2], before[0]].join();
+    const movedOk = await until(() => ids().join() === want, 5000);
+    click('[data-testid="reorder-done"]');
+    report('move-tracks', Boolean(item) && Boolean(handles) && Boolean(movedOk), `menu item ${item ? 'there' : 'missing'}, handles ${document.querySelectorAll('[data-testid="drag-handle"]').length}, order ${ids().join()} want ${want}`);
+  } finally {
+    await w.__wave.api.deletePlaylist(pl.kind).catch(() => {});
+  }
+  // The queue as a sheet over Now Playing, with handles.
+  click('.pb-cover');
+  await until(() => document.querySelector('[data-testid="np-queue"]'), 5000);
+  click('[data-testid="np-queue"]');
+  const sheet = await until(() => document.querySelector('[data-testid="queue-sheet"]'), 3000);
+  report('queue-sheet', Boolean(sheet), `${document.querySelectorAll('[data-testid="queue-sheet"] [data-testid="drag-handle"]').length} handles`);
+  (document.querySelector('.q-sheet-backdrop') as HTMLElement | null)?.click();
+  click('.np-close');
+}
+
 /** The update check reads the SideStore source (iosUpdate.ts): latest, or a newer one offered. */
 async function updateCheck() {
   const { checkIosUpdate } = await import('./ui/iosUpdate.ts');
@@ -394,6 +439,7 @@ export async function runSmoke() {
     await playlistActions();
     await swipeBack();
     await phoneTop();
+    await moveTracks();
     await updateCheck();
   } catch (e) {
     report('crash', false, String(e));

@@ -607,6 +607,17 @@ export function enqueue(t: Track) {
   if (get().index < 0) loadAt(0);
 }
 
+/** A queued track to another place (dragged in the queue); the one playing stays playing. */
+export function moveInQueue(from: number, to: number) {
+  const s = get();
+  if (from === s.index || to <= s.index || from <= s.index || from >= s.queue.length || to >= s.queue.length) return;
+  const queue = [...s.queue];
+  const [t] = queue.splice(from, 1);
+  queue.splice(to, 0, t);
+  set({ queue });
+  prefetchNext();
+}
+
 export function removeAt(i: number) {
   const s = get();
   if (i === s.index) return;
