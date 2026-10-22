@@ -144,15 +144,28 @@ await step('wave tuning panel', async () => {
   await page.waitForSelector('.drawer');
   await page.waitForTimeout(800);
   await shot('03-wave-tuning');
-  // Change a local filter and a Yandex-side setting; playback must keep going.
-  await page.locator('.segmented').nth(0).locator('button', { hasText: 'Незнакомое' }).click();
-  await page.waitForTimeout(2500);
-  const p = await player();
-  if (!p.playing) throw new Error('playback stopped after retune');
-  if (p.queue - p.index - 1 < 1) throw new Error('no upcoming tracks after retune');
-  await page.keyboard.press('Escape');
-  await page.mouse.click(200, 400);
-  await page.waitForSelector('.drawer', { state: 'detached' });
+  // Found by the user (both platforms): the first Yandex-side pick after My Wave started only
+  // changed the banner's label, the track played on; the second pick did switch it. The wave
+  // must restart with the very first pick, and keep going.
+  const before = await player();
+  try {
+    await page.locator('.segmented').nth(0).locator('button', { hasText: 'Незнакомое' }).click();
+    await page.waitForFunction((t) => {
+      const s = window.__wave.usePlayer.getState();
+      return s.tuning.diversity === 'discover' && !s.waveBusy && s.queue[s.index]?.title !== t && !window.__wave.audio.paused;
+    }, before.title, { timeout: 25000 }).catch(async (e) => {
+      throw new Error(`the first pick did not restart the wave: ${JSON.stringify(await player())} (${e.message})`);
+    });
+    await page.waitForTimeout(2500);
+    const p = await player();
+    if (!p.playing) throw new Error('playback stopped after retune');
+    if (p.queue - p.index - 1 < 1) throw new Error('no upcoming tracks after retune');
+  } finally {
+    await page.evaluate(() => window.__wave.usePlayer.setState((s) => ({ tuning: { ...s.tuning, diversity: 'default' } })));
+    await page.keyboard.press('Escape');
+    if (await page.locator('.drawer').count()) await page.mouse.click(200, 400);
+    await page.waitForSelector('.drawer', { state: 'detached' });
+  }
 });
 
 await step('a Yandex-side tuning while a list plays starts the wave with it, and next works', async () => {
@@ -243,6 +256,13 @@ await step('settings picked during a track radio start My Wave with them: quick 
     if (await page.locator('.drawer').count()) await page.mouse.click(200, 400);
     await page.waitForSelector('.drawer', { state: 'detached' });
   }
+});
+
+await step('a playback error shows as a toast that goes away by itself', async () => {
+  // Found by the user: "Couldn't play …" stayed over the player for good.
+  await page.evaluate(() => window.__wave.usePlayer.setState({ error: 'e2e: could not play' }));
+  await page.waitForSelector('.toast:has-text("e2e: could not play")', { timeout: 3000 });
+  await page.waitForSelector('.toast:has-text("e2e: could not play")', { state: 'detached', timeout: 6000 });
 });
 
 await step('"…" pressed again closes its menu instead of opening it anew', async () => {

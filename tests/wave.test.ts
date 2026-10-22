@@ -186,5 +186,15 @@ await test("plays on the account's other devices count for the repeat filter, on
   assert(engine.rejectReason(mkTrack(2)) === null, 'and it ages out like any play');
 });
 
+await test("the engine keeps its own copy of the settings: re-tuning it leaves the caller's object as it was", async () => {
+  // The player compares the settings before and after a change; the engine shared its object,
+  // so the first change after a start overwrote "before" and My Wave never restarted.
+  const before = tuning();
+  const engine = new WaveEngine(fakeYandex([mkTrack(1)]).api, new ListenHistory(memoryStore()), before);
+  Object.assign(engine.tuning, { ...before, mood: 'sad' });
+  assert(before.mood === 'all', `the caller's settings changed to ${before.mood}`);
+  assert(waveSeeds(before).join() !== waveSeeds(engine.tuning).join(), 'the change is seen');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

@@ -92,7 +92,10 @@ export class WaveEngine {
   constructor(api: WaveApi, history: ListenHistory, tuning: WaveTuning, isDisliked: (id: string) => boolean = () => false, stationSeeds: string[] | null = null) {
     this.api = api;
     this.history = history;
-    this.tuning = tuning;
+    // Its own copy: the player's settings object stays the "before" of the next change. Shared,
+    // the first change after a start was written into it too, so it looked like no change at all
+    // and My Wave did not restart (the user: the first mood picked did nothing, the second did).
+    this.tuning = { ...tuning };
     this.isDisliked = isDisliked;
     this.stationSeeds = stationSeeds;
   }

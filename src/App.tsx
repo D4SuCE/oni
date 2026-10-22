@@ -18,7 +18,7 @@ import { pulseLevel, pulseTempo } from './player/pulse.ts';
 import { cx } from './ui/util.ts';
 import { TuningPanel } from './components/Wave.tsx';
 import { audio, current, next, offline, playTracks, prev, restoreSession, setVolume, toggle, usePlayer } from './player/player.ts';
-import { historyStep, init, navigate, toggleLike, useApp } from './store.ts';
+import { historyStep, init, navigate, toast, toggleLike, useApp } from './store.ts';
 import { AlbumView } from './views/Album.tsx';
 import { ArtistView } from './views/Artist.tsx';
 import { HistoryView } from './views/History.tsx';
@@ -170,8 +170,12 @@ export function App() {
     restoreSession();
   }, []);
 
+  // A playback error is an ordinary toast that goes away by itself (it was set straight into the
+  // state, past toast()'s timer, and stayed up for good); cleared, so the same error shows again.
   useEffect(() => {
-    if (error) useApp.setState({ toast: { id: Date.now(), text: error } });
+    if (!error) return;
+    toast(error);
+    usePlayer.setState({ error: null });
   }, [error]);
 
   return (
