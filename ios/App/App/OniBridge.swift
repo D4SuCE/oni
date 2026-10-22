@@ -984,6 +984,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         CAPPluginMethod(name: "setGain", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "state", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "testThrottle", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "pulse", returnType: CAPPluginReturnPromise),
     ]
 
     /// The equalizer's bands, as on the desktop (src/player/eq.ts).
@@ -1652,6 +1653,101 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
                 "crossing": self.tail != nil, "streaming": self.stream != nil, "waiting": self.stalled,
                 "received": st?.received ?? 0, "expected": st?.expected ?? 0, "trace": self.trace,
             ])
+        }
+    }
+
+    // MARK: the beat pulse
+
+    /// The bass, listened to for the page's beat pulse (src/player/pulse.ts): the music after the
+    /// two players meet, low-passed at 150 Hz, its loudness in dB about 60 times a second (as the
+    /// desktop's analyser gives it) and the rise of it ("flux"), each with the moment it will be
+    /// heard (wall clock, ms). Sent to the page a few at a time; it finds the beats.
+    private var pulseOn = false
+    private var lowState: (x1: Float, x2: Float, y1: Float, y2: Float) = (0, 0, 0, 0)
+    private var lowCoeffs: (b0: Float, b1: Float, b2: Float, a1: Float, a2: Float) = (0, 0, 0, 0, 0)
+    private var hopFill = 0
+    private var hopEnergy: Float = 0
+    private var level: Float = 0
+    private var pulseAt: [Double] = []
+    private var pulseFlux: [Double] = []
+    private var pulseSent = Date()
+
+    /// { on } — listen to the bass for the page's beat pulse, or stop (it costs a little power).
+    @objc func pulse(_ call: CAPPluginCall) {
+        let on = call.getBool("on") ?? false
+        DispatchQueue.main.async {
+            self.setPulse(on)
+            call.resolve()
+        }
+    }
+
+    private func setPulse(_ on: Bool) {
+        guard on != pulseOn else { return }
+        pulseOn = on
+        if !on {
+            mix.removeTap(onBus: 0)
+            return
+        }
+        let format = mix.outputFormat(forBus: 0)
+        let rate = Float(format.sampleRate > 0 ? format.sampleRate : 44100)
+        // A low-pass biquad at 150 Hz (RBJ's cookbook), Q 0.707: the kick and the bass.
+        let w = 2 * Float.pi * 150 / rate
+        let alpha = sin(w) / (2 * 0.707)
+        let a0 = 1 + alpha
+        lowCoeffs = (b0: (1 - cos(w)) / 2 / a0, b1: (1 - cos(w)) / a0, b2: (1 - cos(w)) / 2 / a0, a1: -2 * cos(w) / a0, a2: (1 - alpha) / a0)
+        lowState = (0, 0, 0, 0)
+        hopFill = 0
+        hopEnergy = 0
+        let hop = Int(rate / 60)
+        mix.installTap(onBus: 0, bufferSize: 2048, format: nil) { [weak self] buffer, when in
+            self?.listen(buffer, when: when, hop: hop, rate: Double(rate))
+        }
+    }
+
+    /// One buffer of the music (the tap's thread): its bass, hop by hop.
+    private func listen(_ buffer: AVAudioPCMBuffer, when: AVAudioTime, hop: Int, rate: Double) {
+        guard let data = buffer.floatChannelData else { return }
+        let frames = Int(buffer.frameLength)
+        let channels = Int(buffer.format.channelCount)
+        let c = lowCoeffs
+        var st = lowState
+        // When the buffer's first frame is heard, on the wall clock (ms).
+        let session = AVAudioSession.sharedInstance()
+        let lead = when.isHostTimeValid ? AVAudioTime.seconds(forHostTime: when.hostTime) - CACurrentMediaTime() : 0
+        let start = Date().timeIntervalSince1970 * 1000 + (lead + session.outputLatency + session.ioBufferDuration) * 1000
+        var at: [Double] = []
+        var flux: [Double] = []
+        for i in 0..<frames {
+            var x: Float = 0
+            for ch in 0..<channels { x += data[ch][i] }
+            x /= Float(max(1, channels))
+            let y = c.b0 * x + c.b1 * st.x1 + c.b2 * st.x2 - c.a1 * st.y1 - c.a2 * st.y2
+            st = (x, st.x1, y, st.y1)
+            hopEnergy += y * y
+            hopFill += 1
+            if hopFill >= hop {
+                let rms = (hopEnergy / Float(hopFill)).squareRoot()
+                // dB mapped as the desktop's analyser maps it (−100…−30 dB to 0…1), smoothed by half.
+                let db = 20 * log10(max(rms, 1e-7))
+                let now = min(1, max(0, (db + 100) / 70))
+                let smoothed = 0.5 * level + 0.5 * now
+                flux.append(Double(max(0, smoothed - level)))
+                level = smoothed
+                at.append(start + Double(i) / rate * 1000)
+                hopFill = 0
+                hopEnergy = 0
+            }
+        }
+        lowState = st
+        DispatchQueue.main.async {
+            guard self.pulseOn else { return }
+            self.pulseAt += at
+            self.pulseFlux += flux
+            guard Date().timeIntervalSince(self.pulseSent) >= 0.09 else { return }
+            self.pulseSent = Date()
+            self.notifyListeners("beat", data: ["at": self.pulseAt, "flux": self.pulseFlux])
+            self.pulseAt = []
+            self.pulseFlux = []
         }
     }
 

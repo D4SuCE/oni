@@ -2031,6 +2031,11 @@ html.ios .drawer-grip {
     0 40px 100px rgba(0, 0, 0, 0.55),
     0 0 calc(var(--beat, 0) * 70px) rgba(217, 39, 46, calc(var(--beat, 0) * 0.55));
 }
+/* The iPhone: the cover alone throbs (scale, done by the compositor); a glow redrawn each frame
+   would heat the phone, so it stays still. */
+html.ios .np-cover {
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.55);
+}
 
 /* Live covers (Settings > Appearance): Yandex's cover videos and slow drift of stills. */
 /* the cover video fills Now Playing under a dark ink gradient that keeps text readable */

@@ -230,6 +230,23 @@ async function recap() {
   report('recap-stories', Boolean(opened) && full && summary && shareOk, `${full ? 'full screen' : 'not full screen'}, summary ${summary ? 'reached' : 'not reached'}, share ${shareOk ? 'there' : 'missing'}`);
 }
 
+/** The beat pulse on the phone: the native player sends the bass, the page finds beats in it and
+ * Now Playing's cover throbs (Now Playing is open here, the music playing). */
+async function iosPulse() {
+  const { setPulse } = await import('./ui/motion.ts');
+  const w = window as unknown as { __wave: { pulseLevel(): number; pulseTempo(): number | null } };
+  setPulse(true);
+  await sleep(6000);
+  let max = 0;
+  const end = Date.now() + 5000;
+  while (Date.now() < end) {
+    max = Math.max(max, w.__wave.pulseLevel());
+    await sleep(40);
+  }
+  const cover = Number((document.querySelector('.np-cover') as HTMLElement | null)?.style.getPropertyValue('--beat') || -1);
+  report('ios-pulse', max > 0.2 && cover >= 0, `max ${max.toFixed(2)}, tempo ${w.__wave.pulseTempo()?.toFixed(0) ?? 'none'}, cover --beat ${cover}`);
+}
+
 /**
  * Fast start: a track not in the cache plays after a few seconds of it, not after the whole file
  * (the user's wish after 1.7.0). The download is held to ~200 KB/s, so the whole of it would take
@@ -626,6 +643,7 @@ export async function runSmoke() {
     const local = await until(() => wave().audio.src.startsWith('oni-sealed:') && !wave().audio.paused && wave().audio.currentTime > 1, 20000);
     report('offline-playback', local, wave().audio.src.slice(0, 12));
     await nativePlayer();
+    await iosPulse();
     await crossfade();
     await fastStart();
     await intents();

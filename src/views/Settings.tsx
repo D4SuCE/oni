@@ -68,7 +68,7 @@ export function SettingsView() {
           </div>
           <input type="checkbox" className="switch" checked={motion} onChange={(e) => setMotion(e.target.checked)} data-testid="live-covers" />
         </label>
-        {canAnalyzeAudio() && (
+        {(canAnalyzeAudio() || isIos) && (
           <label className="toggle-row">
             <div>
               <div>{s.pulse}</div>
