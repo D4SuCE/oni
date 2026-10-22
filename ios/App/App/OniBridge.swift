@@ -1023,6 +1023,10 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
         guard playing else { return }
         pausedAt = position
         node.pause()
+        // The engine too: running, it fed the output silence, and iOS took the app for playing, so
+        // the lock screen and the shade kept "pause" up after a pause in Oni (the user). Play
+        // starts it again; the node keeps its place.
+        engine.pause()
         playing = false
         stopTimer()
         tick()
@@ -1073,7 +1077,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func state(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
-            call.resolve(["time": self.position, "duration": self.duration, "playing": self.playing, "eq": !self.eq.bypass])
+            call.resolve(["time": self.position, "duration": self.duration, "playing": self.playing, "eq": !self.eq.bypass, "engine": self.engine.isRunning])
         }
     }
 

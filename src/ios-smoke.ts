@@ -142,6 +142,15 @@ async function nativePlayer() {
   const on = await OniPlayer.state();
   await OniPlayer.setEq({ enabled: false, preamp: 0, gains: [] });
   report('native-player', before.playing && before.time > 1 && on.eq, JSON.stringify({ ...before, eq: on.eq }));
+  // A pause stops the audio engine too, so iOS sees nothing playing (the lock screen showed
+  // "pause" still); play runs it again from the same place.
+  wave().audio.pause();
+  await sleep(700);
+  const paused = await OniPlayer.state();
+  await wave().audio.play();
+  await sleep(1200);
+  const resumed = await OniPlayer.state();
+  report('pause-stops-engine', !paused.playing && paused.engine === false && resumed.playing && resumed.engine === true && resumed.time >= paused.time, JSON.stringify({ paused, resumed }));
 }
 
 /** Does the page keep running while the app is in the background with the native player on? The
@@ -207,6 +216,13 @@ async function backgroundDownload() {
   report('background-download', kept && !plain, `${((Date.now() - started) / 1000).toFixed(1)} s, pending ${bg.pendingFor('smoke')}, unencrypted left ${plain}, ring up to ${ring.toFixed(2)}`);
   // The Dynamic Island / lock screen: a Live Activity, where the simulator allows them.
   report('live-activity', Boolean(live) && state.total === 1, JSON.stringify(state));
+  // Its row shows it downloaded, left of "…" (the cell with the arrow was hidden on the phone).
+  click('[data-testid="nav-home"]');
+  const mark = await until(() => {
+    const m = document.querySelector(`.track-row[data-track-id="${track.id}"] [data-testid="saved-mark"]`);
+    return m && m.getBoundingClientRect().width > 0 && m.checkVisibility();
+  }, 10000);
+  report('row-saved-mark', Boolean(mark), document.querySelector(`.track-row[data-track-id="${track.id}"]`) ? 'row there' : 'no row for it on Home');
   // Cancelled: the island and the lock screen let go of the count (they kept the old numbers).
   const more = chart.filter((t) => t.available !== false && !wave().offline!.has(String(t.id)) && String(t.id) !== String(track.id)).slice(0, 2);
   await bg.add('smoke-cancel', more, 'Cancel');

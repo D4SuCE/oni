@@ -17,7 +17,7 @@ interface PlayerPlugin {
   seek(options: { time: number }): Promise<void>;
   setEq(options: { enabled: boolean; preamp: number; gains: number[] }): Promise<void>;
   setGain(options: { value: number }): Promise<void>;
-  state(): Promise<{ time: number; duration: number; playing: boolean; eq: boolean }>;
+  state(): Promise<{ time: number; duration: number; playing: boolean; eq: boolean; engine?: boolean }>;
   addListener(event: 'time', cb: (e: { time: number; duration: number; playing: boolean }) => void): Promise<unknown>;
   addListener(event: 'ended', cb: () => void): Promise<unknown>;
 }

@@ -162,7 +162,7 @@ const TrackRow = memo(function TrackRow({ track: t, index, active, playing, like
       </button>
       <div className="tr-dur">
         {saved !== 'none' && <DownloadMark id={t.id} saved={saved} label={tx.menu.downloaded} />}
-        {fmtTime((t.durationMs || 0) / 1000)}
+        <span className="tr-time">{fmtTime((t.durationMs || 0) / 1000)}</span>
       </div>
       <button className="icon-btn tr-more" onClick={menu} title={tx.common.more}>
         <MoreHorizontal size={18} />

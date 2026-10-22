@@ -314,8 +314,9 @@ let fillLostNetwork = false;
 /** A wave request that has not answered by then is given up (the phone in the background could
  * hold one for good, and "next" waited on it even after the screen was unlocked). */
 const FILL_TIMEOUT = 15_000;
-/** Tracks kept ready ahead: more on the iPhone, where the page may be held in the background. */
-const WAVE_AHEAD = isIos ? 4 : 2;
+/** Tracks kept ready ahead, so a few quick skips never wait on Yandex (the user: three or four
+ * and "next" did nothing); more on the iPhone, where the page may be held in the background. */
+const WAVE_AHEAD = isIos ? 5 : 4;
 
 const withTimeout = <T,>(p: Promise<T>) =>
   Promise.race([p, new Promise<never>((_, reject) => setTimeout(() => reject(new Error('wave request timed out')), FILL_TIMEOUT))]);
@@ -325,7 +326,12 @@ function fillWave(min = WAVE_AHEAD): Promise<void> {
   if (!mine) return Promise.resolve();
   if (filling?.engine === mine && Date.now() - filling.at < FILL_TIMEOUT) return filling.done;
   const id = ++fills;
-  const done = (async () => {
+  // Marked under way before it starts. A fill with nothing to do ends at once, before the line
+  // below it ran: marked after that, it stayed "under way" for 15 s, and every "next" meanwhile
+  // waited on it for nothing (the user: after a few quick skips "next" did nothing).
+  const entry = { engine: mine, done: Promise.resolve(), at: Date.now(), id };
+  filling = entry;
+  entry.done = (async () => {
     fillLostNetwork = false;
     try {
       while (engine === mine && get().source?.kind === 'wave' && get().queue.length - get().index - 1 < min) {
@@ -342,8 +348,7 @@ function fillWave(min = WAVE_AHEAD): Promise<void> {
       if (filling?.id === id) filling = null;
     }
   })();
-  filling = { engine: mine, done, at: Date.now(), id };
-  return done;
+  return entry.done;
 }
 
 export async function playWave(tuning?: Partial<WaveTuning>) {
@@ -497,8 +502,11 @@ export async function next(user = true) {
   finishCurrent(!user);
   if (s.index + 1 < s.queue.length) return loadAt(s.index + 1);
   if (s.source?.kind === 'wave') {
+    // Skipped past what was ready: the next one is on its way, and the player says so.
+    set({ loading: true });
     await fillWave(1);
     if (get().index + 1 < get().queue.length) return loadAt(get().index + 1);
+    set({ loading: false });
     // Nothing more came: with no network the downloads play instead.
     if (offlineMode || fillLostNetwork) fallBackToDownloads();
     return;
@@ -728,6 +736,12 @@ function persistSoon() {
       JSON.stringify({ queue: s.queue.slice(from, from + 200), index: s.index - from, title: sourceTitle(s.source), wave }),
     );
   }, 1000);
+}
+
+/** The account is ready (the app store calls it): a wave restored from the last run tops itself
+ * up now, not only once play is pressed, so the first skips find tracks waiting. */
+export function warmWave() {
+  if (get().source?.kind === 'wave' && engine) fillWave();
 }
 
 /** Restore the last queue (paused) so the app opens where you left off. */

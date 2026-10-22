@@ -2799,6 +2799,21 @@ kbd {
   .tr-dur {
     display: none;
   }
+  /* The iPhone: the download's arrow or ring left of "…", as in Yandex's app (the cell with it was
+     hidden with the duration, so a download never showed on the phone). */
+  html.ios .track-row,
+  html.ios .no-album .track-row {
+    grid-template-columns: 40px minmax(0, 1fr) auto 32px;
+  }
+  html.ios .tr-dur {
+    display: flex;
+    align-items: center;
+    /* nothing in it: no extra gap before "…" */
+    margin-right: -12px;
+  }
+  html.ios .tr-time {
+    display: none;
+  }
   .tr-more {
     opacity: 1;
   }

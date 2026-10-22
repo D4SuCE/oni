@@ -5,7 +5,7 @@ import type { Account, Playlist, Track } from './api/types.ts';
 import { api, loadJson, storage, transport } from './api/client.ts';
 import { ApiError, trackKey } from './api/yandex.ts';
 import { tr, useLang } from './i18n.ts';
-import { dropFromQueue, offline, onNetworkLost, setDislikedCheck, setOfflineMode, waveFeedback } from './player/player.ts';
+import { dropFromQueue, offline, onNetworkLost, setDislikedCheck, setOfflineMode, warmWave, waveFeedback } from './player/player.ts';
 
 export type Route =
   | { name: 'home' }
@@ -126,6 +126,7 @@ export async function init() {
     set({ account, auth: 'ready', offline: false });
     setOfflineMode(false);
     refreshLibrary();
+    warmWave();
   } catch (e) {
     // No network (not a refused token): start from what was saved last time, with the downloads.
     const cached = loadJson<Account | null>(ACCOUNT_CACHE, null);
