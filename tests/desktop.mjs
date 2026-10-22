@@ -169,6 +169,9 @@ await step('after a restart quick skips do not stall: the wave fills up as Oni o
   await page.waitForFunction((want) => window.__wave.usePlayer.getState().index >= want, start.index + 4, { timeout: 5000 }).catch(async () => {
     throw new Error(`four quick skips stalled: ${JSON.stringify(await ahead())}, at the start ${JSON.stringify(start)}`);
   });
+  // The last of them loaded and playing before the pause (a load still under way would cut off
+  // the next step's play).
+  await page.waitForFunction(() => !window.__wave.usePlayer.getState().loading && !window.__wave.audio.paused, null, { timeout: 20000 }).catch(() => {});
   await page.evaluate(() => window.__wave.audio.pause());
 });
 
