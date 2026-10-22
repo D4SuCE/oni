@@ -59,4 +59,7 @@ try {
   console.warn(`release: iOS skipped (${e.message}); later: node scripts/ios-release.mjs ${tag}`);
 }
 run(`gh release edit ${tag} -R ${REPO} --draft=false --latest`);
+// The installers are on GitHub now: the local copies go (each version's folder was ~600 MB, and
+// they filled the disk). The notes stay, for a later `node scripts/ios-release.mjs <tag>`.
+for (const name of fs.readdirSync(path.join(root, out))) if (name !== 'notes.md') fs.rmSync(path.join(root, out, name), { recursive: true, force: true });
 console.log(`\nreleased ${tag}: https://github.com/${REPO}/releases/tag/${tag}`);

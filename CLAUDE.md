@@ -65,6 +65,8 @@
   потеряются вход и история).
 - Сборка для себя: `npx electron-builder --win -c.directories.output=release/oni`
   (если папка занята запущенной копией — `release/oni-next`).
+  Сборки не копить: `npm run release` сам удаляет установщики версии после выкладки (оставляет
+  `notes.md`); сборки «для себя» удалять, когда проверены (22.10.2026 папка `release` весила 11 ГБ).
 - Для установки SideStore на компьютере стоят iTunes и **iloader** (`%LOCALAPPDATA%/iloader`,
   winget `nabdev.iloader`) — по инструкции docs.sidestore.io. Тихая установка iTunes через winget
   не ставит Apple Mobile Device Support (без неё iloader не видит iPhone): её MSI достаётся из
