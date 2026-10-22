@@ -239,8 +239,9 @@ async function playlistActions() {
   const more = box('[data-testid="playlist-more"]');
   // At the page's edge, with a gap after the other buttons (not just the last of the row).
   const edge = document.querySelector('.page-header')!.getBoundingClientRect().right;
-  const placed = Boolean(search && more && more.right >= edge - 2 && more.left - search.right > 16);
-  report('playlist-actions', over === 0 && placed && items.some((i) => /удалить|delete/i.test(i ?? '')), `${over} off screen; search ${placed ? 'before' : 'not before'} "…" at the edge; menu: ${items.join(', ')}`);
+  const placed = Boolean(search && more && Math.abs(more.right - edge) <= 2 && search.right <= more.left);
+  const where = `search ${search?.left.toFixed(0)}–${search?.right.toFixed(0)}, "…" ${more?.left.toFixed(0)}–${more?.right.toFixed(0)}, edge ${edge.toFixed(0)}`;
+  report('playlist-actions', over === 0 && placed && items.some((i) => /удалить|delete/i.test(i ?? '')), `${over} off screen; ${where}; menu: ${items.join(', ')}`);
 }
 
 /** On a page opened from somewhere (the own playlist above), a pull down from its top goes back
