@@ -44,20 +44,14 @@ function Backdrop() {
     img.onload = () => setLayers((l) => [...l.slice(-1), { url, id: ++seq.current }]);
     img.src = url;
   }, [url]);
-  // The covers in their own layer: the window's transparency fades the painting, and the haze
-  // only with it while "Cover haze" is off (styles.css).
   return (
-    <>
-      <div className="backdrop" aria-hidden>
-        <div className="backdrop-art" />
-        <div className="backdrop-tint" />
-      </div>
-      <div className="backdrop backdrop-haze" aria-hidden data-testid="backdrop-haze">
-        {layers.map((l) => (
-          <div key={l.id} className="backdrop-img" style={{ backgroundImage: `url("${l.url}")` }} />
-        ))}
-      </div>
-    </>
+    <div className="backdrop" aria-hidden>
+      <div className="backdrop-art" />
+      {layers.map((l) => (
+        <div key={l.id} className="backdrop-img" style={{ backgroundImage: `url("${l.url}")` }} />
+      ))}
+      <div className="backdrop-tint" />
+    </div>
   );
 }
 

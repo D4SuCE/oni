@@ -788,31 +788,6 @@ await step('settings page', async () => {
   await shot('11-settings');
 });
 
-await step('cover haze: the cover colours the window also through the transparency', async () => {
-  // The user liked the haze in the test runs; at their maximum transparency it faded with the rest.
-  const look = () => page.evaluate(() => ({
-    art: Number(getComputedStyle(document.querySelector('.backdrop:not(.backdrop-haze)')).opacity),
-    haze: Number(getComputedStyle(document.querySelector('[data-testid="backdrop-haze"]')).opacity),
-    strength: getComputedStyle(document.documentElement).getPropertyValue('--haze-strength').trim(),
-  }));
-  const was = await page.evaluate(() => localStorage.getItem('ui.seeThrough'));
-  try {
-    await page.locator('[data-testid="see-through"]').fill('80');
-    const off = await look();
-    if (Math.abs(off.art - 0.2) > 0.01 || Math.abs(off.haze - 0.2) > 0.01) throw new Error(`off: ${JSON.stringify(off)}`);
-    await page.locator('label', { has: page.locator('[data-testid="cover-haze"]') }).click();
-    const on = await look();
-    if (Math.abs(on.art - 0.2) > 0.01 || on.haze !== 1 || Number(on.strength) !== 0.3) throw new Error(`on: ${JSON.stringify(on)}`);
-    await shot('11b-cover-haze');
-  } finally {
-    // As the run found them: haze off, transparency back.
-    if (await page.locator('[data-testid="cover-haze"]').isChecked()) await page.locator('label', { has: page.locator('[data-testid="cover-haze"]') }).click();
-    await page.locator('[data-testid="see-through"]').fill(String(Math.round(Number(was ?? 0.3) * 100)));
-    // Out of the slider: keys typed into a field are its own (Space would not reach the player).
-    await page.evaluate(() => document.activeElement?.blur());
-  }
-});
-
 await step('keyboard: space toggles playback', async () => {
   await page.mouse.click(700, 300);
   const before = await page.evaluate(() => window.__wave.audio.paused);

@@ -141,18 +141,11 @@ img {
   opacity: 0;
   animation: backdrop-in 1.6s ease forwards;
 }
-/* the blurred cover of the playing track only tints the painting a little; with "Cover haze" on
-   (Settings > Appearance) it colours the window more, transparency or not */
+/* the blurred cover of the playing track only tints the painting a little */
 @keyframes backdrop-in {
   to {
-    opacity: var(--haze-strength, 0.14);
+    opacity: 0.2;
   }
-}
-html.haze {
-  --haze-strength: 0.3;
-}
-html.acrylic.haze .backdrop.backdrop-haze {
-  opacity: 1;
 }
 /* Window transparency (Settings > Appearance): fade the app's own background so the
    Windows acrylic behind the window — the blurred desktop, like the taskbar — shows through. */
