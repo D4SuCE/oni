@@ -244,7 +244,8 @@ async function iosPulse() {
     await sleep(40);
   }
   const cover = Number((document.querySelector('.np-cover') as HTMLElement | null)?.style.getPropertyValue('--beat') || -1);
-  report('ios-pulse', max > 0.2 && cover >= 0, `max ${max.toFixed(2)}, tempo ${w.__wave.pulseTempo()?.toFixed(0) ?? 'none'}, cover --beat ${cover}`);
+  const { pulseDebug } = await import('./player/pulse.ts');
+  report('ios-pulse', max > 0.2 && cover >= 0, `max ${max.toFixed(2)}, tempo ${w.__wave.pulseTempo()?.toFixed(0) ?? 'none'}, cover --beat ${cover} ${JSON.stringify(pulseDebug())}`);
 }
 
 /**

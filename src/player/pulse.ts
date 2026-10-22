@@ -51,6 +51,9 @@ function frame(now: number) {
 /** Beats found in the bass the native player sent, waiting for the moment they are heard. */
 const pending: { t: number; strength: number }[] = [];
 let native = false;
+/** For the simulator run: what came from the native player, and what the tracker made of it. */
+const seen = { batches: 0, values: 0, maxFlux: 0, hits: 0, late: 0 };
+export const pulseDebug = () => ({ native, ...seen, open: useApp.getState().nowPlayingOpen, enabled: usePulse.getState().enabled, playing: usePlayer.getState().playing });
 
 function nativeFrame() {
   const now = performance.now();
@@ -112,12 +115,19 @@ export function startBeatPulse() {
     useApp.subscribe((s, was) => s.nowPlayingOpen !== was.nowPlayingOpen && update());
     // The bass's rise, with when it is heard (wall clock): to the tracker, on the page's clock.
     OniPlayer.addListener('beat', ({ at, flux }) => {
+      seen.batches++;
       if (!native) return;
       const shift = performance.now() - Date.now();
       for (let i = 0; i < at.length; i++) {
         const t = at[i] + shift;
+        seen.values++;
+        seen.maxFlux = Math.max(seen.maxFlux, flux[i]);
+        if (t < performance.now()) seen.late++;
         const hit = tracker.push(t, flux[i]);
-        if (hit) pending.push({ t, strength: hit.strength });
+        if (hit) {
+          seen.hits++;
+          pending.push({ t, strength: hit.strength });
+        }
       }
     });
   }
