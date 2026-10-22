@@ -13,6 +13,8 @@
 
 ## [Не выпущено]
 
+## [1.6.0] — 2026-10-22
+
 ### Добавлено
 - Плавный переход между треками (Настройки → Воспроизведение, 1–12 секунд; ПК и iPhone): конец трека
   затихает, пока начинается следующий. Если следующий грузится долго, он не пропускается.
@@ -368,7 +370,8 @@
 - Фон-картина «Blood Moon Over Misty Pagodas», прозрачность окна (Acrylic).
 - Живые видеообложки Яндекса и пульсация обложек в такт музыке.
 
-[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.5.10...HEAD
+[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.6.0
 [1.5.10]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.10
 [1.5.9]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.9
 [1.5.8]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.5.8
