@@ -255,10 +255,11 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
       const old = localUrl;
       localUrl = local ? URL.createObjectURL(local.blob) : null;
       set({ stream: { codec: stream.codec, bitrate: stream.bitrate } });
-      applyVolume();
       await (audio as unknown as Crossfading).crossfade(sealedKey ? `oni-sealed:${t.id}` : (localUrl ?? stream.url), fade * 1000, () => {
         if (old) URL.revokeObjectURL(old);
       });
+      // After the crossing has begun: this track's level (normalization) leads the fade, not the old one's.
+      applyVolume();
     } else {
       audio.src = sealedKey ? `oni-sealed:${t.id}` : local ? setLocalAudio(local.blob)! : stream.url;
       if (!local) setLocalAudio(null);

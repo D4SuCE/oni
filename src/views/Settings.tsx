@@ -104,24 +104,27 @@ export function SettingsView() {
           </div>
           <input type="checkbox" className="switch" checked={normalize} onChange={(e) => setNormalize(e.target.checked)} />
         </label>
-        <div className="slider-row">
-          <div className="slider-head">
-            <span>{s.crossfade}</span>
-            <span className="slider-value">{crossfade ? s.crossfadeValue(crossfade) : t.common.off}</span>
+        {/* The iPhone's native player has no crossfade yet. */}
+        {!isIos && (
+          <div className="slider-row">
+            <div className="slider-head">
+              <span>{s.crossfade}</span>
+              <span className="slider-value">{crossfade ? s.crossfadeValue(crossfade) : t.common.off}</span>
+            </div>
+            <input
+              type="range"
+              className="range"
+              min={0}
+              max={12}
+              step={1}
+              value={crossfade}
+              style={{ '--p': `${(crossfade / 12) * 100}%` } as React.CSSProperties}
+              onChange={(e) => setCrossfade(Number(e.target.value))}
+              data-testid="crossfade"
+            />
+            <div className="hint">{s.crossfadeHint}</div>
           </div>
-          <input
-            type="range"
-            className="range"
-            min={0}
-            max={12}
-            step={1}
-            value={crossfade}
-            style={{ '--p': `${(crossfade / 12) * 100}%` } as React.CSSProperties}
-            onChange={(e) => setCrossfade(Number(e.target.value))}
-            data-testid="crossfade"
-          />
-          <div className="hint">{s.crossfadeHint}</div>
-        </div>
+        )}
         {isIos && <PhoneSound />}
       </div>
 

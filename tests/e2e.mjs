@@ -627,7 +627,9 @@ await step('search inside Liked: the list narrows, and a found track plays the w
   });
   if (!edge) throw new Error('the search button is not at the right edge');
   const total = await page.locator('.track-row').count();
-  const word = (await page.locator('.track-row .tr-title').nth(2).innerText()).split(/\s+/).find((w) => w.length >= 3) ?? '';
+  // The title's own text: marks such as the explicit "E" are elements of their own, glued to it in innerText.
+  const title = await page.locator('.track-row .tr-title').nth(2).evaluate((el) => [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join(' '));
+  const word = title.split(/\s+/).find((w) => w.length >= 3) ?? '';
   await page.click('[data-testid="list-search"]');
   await page.fill('[data-testid="list-search-input"]', word);
   await page.waitForTimeout(300);
@@ -933,34 +935,9 @@ await step('crossfade: the next track starts before this one ends, both sound fo
     await page.waitForFunction(() => window.__wave.audio.elements.every((el) => !el.paused) && window.__wave.usePlayer.getState().index === 1, null, { timeout: 15000 }).catch(async () => {
       throw new Error(`no overlap: ${JSON.stringify(await page.evaluate(() => ({ index: window.__wave.usePlayer.getState().index, els: window.__wave.audio.elements.map((el) => ({ paused: el.paused, t: el.currentTime, v: el.volume })) })))}`);
     });
-    // Then the old one is silent and stopped, the new one at full volume, alone.
-    await page.waitForFunction(() => window.__wave.audio.elements.filter((el) => !el.paused).length === 1, null, { timeout: 8000 });
-    const end = await page.evaluate(() => ({ volume: window.__wave.audio.volume, el: window.__wave.audio.el.volume, playing: !window.__wave.audio.paused }));
-    if (!end.playing || Math.abs(end.el - end.volume) > 0.01) throw new Error(`after the crossing: ${JSON.stringify(end)}`);
-  } finally {
-    await page.locator('[data-testid="crossfade"]').fill('0');
-    await page.evaluate(() => document.activeElement?.blur());
-    await page.evaluate(() => window.__wave.audio.pause());
-  }
-});
-
-await step('crossfade: the next track starts before this one ends, both sound for a while, then the old one is silent', async () => {
-  // The user's wish (accepted proposals). Settings is open from the steps above.
-  await page.locator('[data-testid="crossfade"]').fill('4');
-  try {
-    await page.evaluate(async () => {
-      const chart = (await window.__wave.api.chart()).filter((t) => t.available !== false && t.durationMs > 60000).slice(0, 2);
-      await window.__wave.playTracks(chart, 0, 'e2e crossfade');
-    });
-    await waitPlaying(0.5);
-    await page.waitForFunction(() => Number.isFinite(window.__wave.audio.duration), null, { timeout: 10000 });
-    await page.evaluate(() => (window.__wave.audio.currentTime = window.__wave.audio.duration - 6));
-    // Both playing at once: the crossing.
-    await page.waitForFunction(() => window.__wave.audio.elements.every((el) => !el.paused) && window.__wave.usePlayer.getState().index === 1, null, { timeout: 15000 }).catch(async () => {
-      throw new Error(`no overlap: ${JSON.stringify(await page.evaluate(() => ({ index: window.__wave.usePlayer.getState().index, els: window.__wave.audio.elements.map((el) => ({ paused: el.paused, t: el.currentTime, v: el.volume })) })))}`);
-    });
-    // Then the old one is silent and stopped, the new one at full volume, alone.
-    await page.waitForFunction(() => window.__wave.audio.elements.filter((el) => !el.paused).length === 1, null, { timeout: 8000 });
+    // Then the old one is silent and stopped, the new one at full volume, alone (the old one may
+    // reach its end a moment before the fade does: wait for the fade, not for the old one).
+    await page.waitForFunction(() => { const a = window.__wave.audio; return a.elements.filter((el) => !el.paused).length === 1 && Math.abs(a.el.volume - a.volume) < 0.01; }, null, { timeout: 8000 });
     const end = await page.evaluate(() => ({ volume: window.__wave.audio.volume, el: window.__wave.audio.el.volume, playing: !window.__wave.audio.paused }));
     if (!end.playing || Math.abs(end.el - end.volume) > 0.01) throw new Error(`after the crossing: ${JSON.stringify(end)}`);
   } finally {
@@ -971,7 +948,8 @@ await step('crossfade: the next track starts before this one ends, both sound fo
 });
 
 await step('keyboard: space toggles playback', async () => {
-  await page.mouse.click(700, 300);
+  // Nothing focused (a click could land on a switch of the page open, and space would flip it).
+  await page.evaluate(() => document.activeElement?.blur());
   const before = await page.evaluate(() => window.__wave.audio.paused);
   await page.keyboard.press('Space');
   await page.waitForFunction((b) => window.__wave.audio.paused !== b, before);

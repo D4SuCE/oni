@@ -114,7 +114,7 @@ export class DualAudio extends EventTarget {
     return this.el.preload;
   }
   set preload(value: string) {
-    for (const el of this.elements) el.preload = value as HTMLMediaElement["preload"];
+    for (const el of this.elements) el.preload = value as HTMLMediaElement['preload'];
   }
   get crossOrigin() {
     return this.el.crossOrigin;
