@@ -151,6 +151,18 @@ async function nativePlayer() {
   await sleep(1200);
   const resumed = await OniPlayer.state();
   report('pause-stops-engine', !paused.playing && paused.engine === false && resumed.playing && resumed.engine === true && resumed.time >= paused.time, JSON.stringify({ paused, resumed }));
+  // The lock screen's play and pause are the player's own: with the page frozen (paused a few
+  // minutes, the screen locked) a play sent to it went nowhere (the user on 1.6.1). Right after
+  // the press, before the page could act, the player plays (and then stops).
+  wave().audio.pause();
+  await sleep(700);
+  const pressed = await OniRemote.press({ name: 'play' });
+  await sleep(1200);
+  const followed = !wave().audio.paused;
+  const stopped = await OniRemote.press({ name: 'toggle' });
+  await sleep(1200);
+  report('lock-screen-play', pressed.playing && followed && !stopped.playing && wave().audio.paused, JSON.stringify({ pressed, page: followed, toggled: stopped }));
+  await wave().audio.play();
 }
 
 /** Crossfade on the native player: near the end the next track starts on the other node while

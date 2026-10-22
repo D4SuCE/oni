@@ -222,6 +222,7 @@ public class RemotePlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "setNowPlaying", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "state", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "press", returnType: CAPPluginReturnPromise),
     ]
 
     private var artworkURL: String?
@@ -247,7 +248,7 @@ public class RemotePlugin: CAPPlugin, CAPBridgedPlugin {
         for (command, name) in named {
             command.isEnabled = true
             command.addTarget { [weak self] _ in
-                self?.notifyListeners("command", data: ["name": name])
+                self?.handle(name)
                 return .success
             }
         }
@@ -306,6 +307,38 @@ public class RemotePlugin: CAPPlugin, CAPBridgedPlugin {
                 MPNowPlayingInfoCenter.default().nowPlayingInfo = info
             }
         }.resume()
+    }
+
+    /// Play and pause are done here, by the player itself: after a few minutes paused with the
+    /// screen locked iOS freezes the page, and a "play" sent there went nowhere (the user on
+    /// 1.6.1). The page catches up from the player's clock when it wakes (nativeAudio.ts). The
+    /// rest (next, like, seek) and a play with nothing open go to the page.
+    private func handle(_ name: String) {
+        let player = PlayerPlugin.shared
+        let done: Bool
+        switch name {
+        case "play": done = player?.resume() ?? false
+        case "pause": done = player?.pauseNow() ?? false
+        case "toggle": done = (player?.isPlaying ?? false) ? player?.pauseNow() ?? false : player?.resume() ?? false
+        default: done = false
+        }
+        guard done, let player = player else { return notifyListeners("command", data: ["name": name]) }
+        // The lock screen shows it at once, the page asleep or not.
+        var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = player.currentTime
+        info[MPNowPlayingInfoPropertyPlaybackRate] = player.isPlaying ? 1.0 : 0.0
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        MPNowPlayingInfoCenter.default().playbackState = player.isPlaying ? .playing : .paused
+    }
+
+    /// For the simulator run: a lock-screen button pressed ({ name }), handled as iOS would hand it
+    /// over; resolves whether the player plays right after, before the page could do a thing.
+    @objc func press(_ call: CAPPluginCall) {
+        let name = call.getString("name") ?? ""
+        DispatchQueue.main.async {
+            self.handle(name)
+            call.resolve(["playing": PlayerPlugin.shared?.isPlaying ?? false])
+        }
     }
 
     /// For the simulator run: what the system was told, and which commands are on.
@@ -836,6 +869,9 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
     private var fetches: [String: [(Result<URL, Error>) -> Void]] = [:]
     private let lock = NSLock()
 
+    /// The one player, for the lock screen's play and pause (RemotePlugin).
+    static weak var shared: PlayerPlugin?
+
     static var folder: URL {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("oni-play", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -843,6 +879,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     override public func load() {
+        PlayerPlugin.shared = self
         for (i, band) in eq.bands.enumerated() {
             band.frequency = PlayerPlugin.bands[i]
             band.filterType = i == 0 ? .lowShelf : (i == PlayerPlugin.bands.count - 1 ? .highShelf : .parametric)
@@ -1083,24 +1120,44 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
             do {
-                try AVAudioSession.sharedInstance().setActive(true)
-                if !self.engine.isRunning { try self.engine.start() }
+                try self.start()
+                call.resolve()
             } catch {
                 call.reject("cannot start: " + error.localizedDescription)
-                return
             }
-            // A fade under way (another app's sound) gives way to the user's play; a crossfade goes on.
-            self.fading?.invalidate()
-            self.fading = nil
-            if self.tail == nil { self.node.volume = 1 }
-            // What plays elsewhere already (a sound kept on by some app) is not a reason to stop.
-            self.othersPlaying = AVAudioSession.sharedInstance().isOtherAudioPlaying
-            self.node.play()
-            self.playing = true
-            self.startTimer()
-            self.tick()
-            call.resolve()
         }
+    }
+
+    private func start() throws {
+        try AVAudioSession.sharedInstance().setActive(true)
+        if !engine.isRunning { try engine.start() }
+        // A fade under way (another app's sound) gives way to the user's play; a crossfade goes on.
+        fading?.invalidate()
+        fading = nil
+        if tail == nil { node.volume = 1 }
+        // What plays elsewhere already (a sound kept on by some app) is not a reason to stop.
+        othersPlaying = AVAudioSession.sharedInstance().isOtherAudioPlaying
+        node.play()
+        playing = true
+        startTimer()
+        tick()
+    }
+
+    var isPlaying: Bool { playing }
+    var currentTime: Double { position }
+
+    /// The lock screen's play (main thread): false when there is nothing open to play (or the
+    /// track has ended), so the page is asked instead.
+    func resume() -> Bool {
+        guard let file = file, playing || pausedAt < Double(file.length) / file.processingFormat.sampleRate - 0.05 else { return false }
+        if playing { return true }
+        return (try? start()) != nil
+    }
+
+    /// The lock screen's pause (main thread).
+    func pauseNow() -> Bool {
+        halt()
+        return true
     }
 
     @objc func pause(_ call: CAPPluginCall) {

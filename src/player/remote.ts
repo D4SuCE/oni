@@ -1,6 +1,7 @@
 // The iPhone's lock screen and Control Center player, run by the OniRemote plugin
 // (ios/App/App/OniBridge.swift): WebKit's own showed -10 s / +10 s instead of previous / next and
-// had no like. The page tells it what plays; it sends back what the user pressed.
+// had no like. The page tells it what plays; it sends back what the user pressed. Play and pause
+// it does itself (the page may be frozen after a while paused with the screen locked).
 
 import { registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 import { artistNames, trackCover } from '../api/yandex.ts';
@@ -22,6 +23,8 @@ interface RemotePlugin {
   setNowPlaying(info: NowPlaying): Promise<void>;
   /** For the simulator run: what the system was told and which commands are on. */
   state(): Promise<{ title: string; next: boolean; prev: boolean; skip: boolean; like: boolean }>;
+  /** For the simulator run: a lock-screen button, as iOS hands it over; whether it plays right after. */
+  press(options: { name: string }): Promise<{ playing: boolean }>;
   addListener(event: 'command', cb: (e: { name: string; position?: number }) => void): Promise<PluginListenerHandle>;
 }
 
