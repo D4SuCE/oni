@@ -850,6 +850,10 @@ final class TrackFetch {
     /// Bytes to drop from a response that ignored the range asked for (it starts from the top).
     var skip: Int64 = 0
     var began: Bool { handle != nil }
+    /// For the simulator run's slow network (on the fetch queue only): bytes that came, let
+    /// through at the throttle's pace, and how the download ended if it ended meanwhile.
+    var held = Data()
+    var heldEnd: Error?? = nil
     var part: URL { target.appendingPathExtension("part") }
     var task: URLSessionDataTask?
     /// Called once it is whole (or failed): the prefetch and those who wait for the whole file.
@@ -1019,11 +1023,17 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     /// Downloads under way by track id (written under `lock`), on a session of their own.
     private var fetching: [String: TrackFetch] = [:]
     private var byTask: [Int: TrackFetch] = [:]
+    /// The downloads' callbacks, and the slow network's releases, one at a time.
+    private let netQueue = DispatchQueue(label: "oni.fetch")
     private lazy var session: URLSession = {
         let queue = OperationQueue()
         queue.maxConcurrentOperationCount = 1
+        queue.underlyingQueue = netQueue
         return URLSession(configuration: .default, delegate: self, delegateQueue: queue)
     }()
+    /// The slow network (testThrottle): downloads holding bytes back, and the clock letting them through.
+    private var holding: [TrackFetch] = []
+    private var releaser: DispatchSourceTimer?
     /// Those waiting to start a track as soon as enough of it is in (main thread).
     private var starters: [String: [() -> Void]] = [:]
     /// Bumped by every open: a track that comes in after a newer one was asked for is not played
@@ -1147,13 +1157,53 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
 
     public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         guard let fetch = fetchOf(dataTask) else { return }
-        if PlayerPlugin.throttle > 0 { Thread.sleep(forTimeInterval: Double(data.count) / PlayerPlugin.throttle) }
+        // The simulator run's slow network: read at full speed, let through at its pace (sleeping on
+        // the reads instead shrank the connection, which every download from that server shares).
+        if PlayerPlugin.throttle > 0 || !fetch.held.isEmpty {
+            fetch.held.append(data)
+            hold(fetch)
+            return
+        }
+        deliver(fetch, data)
+    }
+
+    private func deliver(_ fetch: TrackFetch, _ data: Data) {
         do {
             try fetch.append(data)
         } catch {
-            return dataTask.cancel()
+            fetch.task?.cancel()
+            return
         }
         DispatchQueue.main.async { self.arrived(fetch) }
+    }
+
+    private func hold(_ fetch: TrackFetch) {
+        if !holding.contains(where: { $0 === fetch }) { holding.append(fetch) }
+        guard releaser == nil else { return }
+        let timer = DispatchSource.makeTimerSource(queue: netQueue)
+        timer.schedule(deadline: .now() + 0.05, repeating: 0.05)
+        timer.setEventHandler { [weak self] in self?.release() }
+        releaser = timer
+        timer.resume()
+    }
+
+    /// A twentieth of a second's worth of each held download (all of it once the throttle is off).
+    private func release() {
+        for fetch in holding {
+            let n = PlayerPlugin.throttle > 0 ? max(1, Int(PlayerPlugin.throttle * 0.05)) : fetch.held.count
+            let chunk = fetch.held.prefix(n)
+            fetch.held.removeFirst(chunk.count)
+            if !chunk.isEmpty { deliver(fetch, Data(chunk)) }
+            if fetch.held.isEmpty, let end = fetch.heldEnd {
+                fetch.heldEnd = nil
+                complete(fetch, end)
+            }
+        }
+        holding.removeAll { $0.held.isEmpty && $0.heldEnd == nil }
+        if holding.isEmpty {
+            releaser?.cancel()
+            releaser = nil
+        }
     }
 
     public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
@@ -1164,7 +1214,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         if let failure = failure, (failure as? URLError)?.code != .cancelled, fetch.began, fetch.retries < 4 {
             fetch.retries += 1
             var request = URLRequest(url: fetch.url)
-            request.setValue("bytes=\(fetch.state.received)-", forHTTPHeaderField: "Range")
+            request.setValue("bytes=\(fetch.state.received + Int64(fetch.held.count))-", forHTTPHeaderField: "Range")
             let next = session.dataTask(with: request)
             lock.lock()
             byTask.removeValue(forKey: task.taskIdentifier)
@@ -1174,10 +1224,20 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
             next.resume()
             return
         }
+        // Bytes still held back (the slow network): it ends once they are through.
+        if !fetch.held.isEmpty {
+            fetch.heldEnd = .some(failure)
+            return
+        }
+        complete(fetch, failure)
+    }
+
+    /// The download is over: whole or failed; those waiting for it are told.
+    private func complete(_ fetch: TrackFetch, _ failure: Error?) {
         fetch.finish(failure)
         lock.lock()
         fetching.removeValue(forKey: fetch.id)
-        byTask.removeValue(forKey: task.taskIdentifier)
+        if let task = fetch.task { byTask.removeValue(forKey: task.taskIdentifier) }
         let waiting = fetch.waiters
         fetch.waiters = []
         lock.unlock()
