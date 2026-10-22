@@ -410,6 +410,27 @@ async function moveTracks() {
     return mid < title.top || mid > title.bottom || g.left < title.right;
   }).length;
   report('queue-sheet', Boolean(sheet) && rows.length > 0 && !misplaced, `${rows.length} handles, ${misplaced} off their line`);
+  // A track dragged down by its handle goes down; Now Playing stays (its swipe-down took the drag
+  // and pulled the whole screen down: the user on 1.6.1).
+  const queueIds = () => wave().usePlayer.getState().queue.map((t) => String(t.id));
+  const qBefore = queueIds();
+  const grip = rows[0]?.querySelector('[data-testid="drag-handle"]');
+  const target = rows[2];
+  let pulled = '';
+  let qMoved = false;
+  if (grip && target) {
+    const g = grip.getBoundingClientRect();
+    const t3 = target.getBoundingClientRect();
+    const at = (y: number) => ({ pointerId: 31, pointerType: 'touch', isPrimary: true, clientX: g.left + g.width / 2, clientY: y, bubbles: true, cancelable: true });
+    grip.dispatchEvent(new PointerEvent('pointerdown', at(g.top + g.height / 2)));
+    for (let k = 1; k <= 6; k++) window.dispatchEvent(new PointerEvent('pointermove', at(g.top + ((t3.top + t3.height * 0.8 - g.top) * k) / 6)));
+    pulled = (document.querySelector('.nowplaying') as HTMLElement | null)?.style.transform ?? 'closed';
+    window.dispatchEvent(new PointerEvent('pointerup', at(t3.top + t3.height * 0.8)));
+    qMoved = await until(() => queueIds().join() !== qBefore.join(), 3000);
+  }
+  await sleep(400);
+  const npOpen = Boolean(document.querySelector('.nowplaying'));
+  report('queue-drag-down', Boolean(grip && target) && !pulled && qMoved && npOpen, `Now Playing pulled "${pulled}", queue ${qMoved ? 'reordered' : 'unchanged'}, ${npOpen ? 'open' : 'closed'}`);
   (document.querySelector('.q-sheet-backdrop') as HTMLElement | null)?.click();
   click('.np-close');
 }
