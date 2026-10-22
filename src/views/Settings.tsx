@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { Segmented } from '../components/Wave.tsx';
 import { LANGS, setLang, useLang, useT } from '../i18n.ts';
 import { canAnalyzeAudio } from '../player/eq.ts';
-import { offline, recsFeedback, setNormalize, stats, usePlayer } from '../player/player.ts';
+import { offline, recsFeedback, setCrossfade, setNormalize, stats, usePlayer } from '../player/player.ts';
 import { logout, navigate, useApp } from '../store.ts';
 import { setMotion, setPulse, useMotion, usePulse } from '../ui/motion.ts';
 import { isIos } from '../ui/platform.ts';
@@ -18,6 +18,7 @@ import { cx } from '../ui/util.ts';
 export function SettingsView() {
   const account = useApp((s) => s.account);
   const normalize = usePlayer((s) => s.normalize);
+  const crossfade = usePlayer((s) => s.crossfade);
   const lang = useLang((s) => s.lang);
   const motion = useMotion((s) => s.enabled);
   const pulse = usePulse((s) => s.enabled);
@@ -103,6 +104,24 @@ export function SettingsView() {
           </div>
           <input type="checkbox" className="switch" checked={normalize} onChange={(e) => setNormalize(e.target.checked)} />
         </label>
+        <div className="slider-row">
+          <div className="slider-head">
+            <span>{s.crossfade}</span>
+            <span className="slider-value">{crossfade ? s.crossfadeValue(crossfade) : t.common.off}</span>
+          </div>
+          <input
+            type="range"
+            className="range"
+            min={0}
+            max={12}
+            step={1}
+            value={crossfade}
+            style={{ '--p': `${(crossfade / 12) * 100}%` } as React.CSSProperties}
+            onChange={(e) => setCrossfade(Number(e.target.value))}
+            data-testid="crossfade"
+          />
+          <div className="hint">{s.crossfadeHint}</div>
+        </div>
         {isIos && <PhoneSound />}
       </div>
 

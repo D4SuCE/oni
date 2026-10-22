@@ -42,7 +42,8 @@ const KEY = 'player.eq';
 export const useEq = create<EqState>(() => loadJson<EqState>(KEY, { enabled: false, preamp: 0, gains: [...EQ_PRESETS.mine], preset: 'mine' }));
 
 let ctx: AudioContext | null = null;
-let source: MediaElementAudioSourceNode | null = null;
+/** Where the music comes in (both of the desktop's elements, dualAudio.ts), before the preamp. */
+let input: GainNode | null = null;
 let preamp: GainNode | null = null;
 let filters: BiquadFilterNode[] = [];
 
@@ -54,7 +55,9 @@ export const canProcessAudio = () => canAnalyzeAudio() || isIos;
 function build() {
   if (ctx || !canAnalyzeAudio()) return;
   ctx = new AudioContext();
-  source = ctx.createMediaElementSource(audio as HTMLMediaElement);
+  input = ctx.createGain();
+  const elements = (audio as unknown as { elements?: HTMLMediaElement[] }).elements ?? [audio as HTMLMediaElement];
+  for (const el of elements) ctx.createMediaElementSource(el).connect(input);
   preamp = ctx.createGain();
   filters = EQ_BANDS.map((frequency, i) => {
     const f = ctx!.createBiquadFilter();
@@ -63,7 +66,7 @@ function build() {
     f.Q.value = 1.1;
     return f;
   });
-  let node: AudioNode = source.connect(preamp);
+  let node: AudioNode = input.connect(preamp);
   for (const f of filters) node = node.connect(f);
   node.connect(ctx.destination);
 }
@@ -93,7 +96,7 @@ export function tapAnalyser(): AnalyserNode {
   const a = ctx!.createAnalyser();
   a.fftSize = 1024;
   a.smoothingTimeConstant = 0.5;
-  source!.connect(a);
+  input!.connect(a);
   return a;
 }
 

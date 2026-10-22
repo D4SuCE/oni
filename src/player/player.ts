@@ -61,6 +61,8 @@ interface Prefs {
   repeat: Repeat;
   normalize: boolean;
   quality: StreamQuality;
+  /** Seconds one track flows into the next (0: off). */
+  crossfade: number;
 }
 
 export interface PlayerState extends Prefs {
@@ -82,7 +84,7 @@ export interface PlayerState extends Prefs {
   sleep: { until: number | null; afterTrack: boolean };
 }
 
-const prefs = loadJson<Prefs>('player.prefs', { volume: 0.8, repeat: 'off', normalize: true, quality: 'lossless' });
+const prefs = loadJson<Prefs>('player.prefs', { volume: 0.8, repeat: 'off', normalize: true, quality: 'lossless', crossfade: 0 });
 
 export const usePlayer = create<PlayerState>(() => ({
   ...prefs,
@@ -216,10 +218,18 @@ function applyVolume() {
   else audio.volume = Math.max(0, Math.min(1, s.volume * gain));
 }
 
-async function loadAt(index: number, autoplay = true) {
+/** The audio element can cross from one track into the next (dualAudio.ts; the iPhone's native player). */
+type Crossfading = { crossfade(url: string, ms: number, ended?: () => void): Promise<void> };
+const canCrossfade = () => typeof (audio as unknown as Partial<Crossfading>).crossfade === 'function';
+/** This track's crossfade has begun (it is set off once, near its end). */
+let crossStarted = false;
+
+/** `fade`: seconds to cross into this track from the one playing (the crossfade setting). */
+async function loadAt(index: number, autoplay = true, fade = 0) {
   const t = get().queue[index];
   if (!t) return;
   const seq = ++loadSeq;
+  crossStarted = false;
   set({ index, loading: true, position: 0, duration: (t.durationMs || 0) / 1000, error: null });
   listened = 0;
   play = { id: crypto.randomUUID(), startedAt: new Date() };
@@ -240,11 +250,22 @@ async function loadAt(index: number, autoplay = true) {
       const nextId = get().queue[index + 1]?.id;
       (audio as unknown as NativeAudio).next = { id: String(t.id), ext: audioExt(stream.codec), keep: [String(t.id), ...(nextId ? [String(nextId)] : [])], key: sealedKey ?? undefined };
     }
-    audio.src = sealedKey ? `oni-sealed:${t.id}` : local ? setLocalAudio(local.blob)! : stream.url;
-    if (!local) setLocalAudio(null);
-    set({ stream: { codec: stream.codec, bitrate: stream.bitrate } });
-    applyVolume();
-    if (autoplay) await audio.play();
+    if (fade > 0 && autoplay && !audio.paused && canCrossfade()) {
+      // The next one starts while this one fades out; this one's downloaded copy is freed once silent.
+      const old = localUrl;
+      localUrl = local ? URL.createObjectURL(local.blob) : null;
+      set({ stream: { codec: stream.codec, bitrate: stream.bitrate } });
+      applyVolume();
+      await (audio as unknown as Crossfading).crossfade(sealedKey ? `oni-sealed:${t.id}` : (localUrl ?? stream.url), fade * 1000, () => {
+        if (old) URL.revokeObjectURL(old);
+      });
+    } else {
+      audio.src = sealedKey ? `oni-sealed:${t.id}` : local ? setLocalAudio(local.blob)! : stream.url;
+      if (!local) setLocalAudio(null);
+      set({ stream: { codec: stream.codec, bitrate: stream.bitrate } });
+      applyVolume();
+      if (autoplay) await audio.play();
+    }
     if (get().source?.kind === 'wave') engine?.feedback('trackStarted', t);
     prefetchNext();
     if (get().source?.kind === 'wave') fillWave();
@@ -493,7 +514,8 @@ export function toggle() {
   } else audio.pause();
 }
 
-export async function next(user = true) {
+/** `fade`: the crossfade's seconds, when the track playing flows into the next. */
+export async function next(user = true, fade = 0) {
   const s = get();
   if (!s.queue.length) return;
   // The network is back: the wave it took away plays again, from this track's end on.
@@ -503,18 +525,18 @@ export async function next(user = true) {
     return startWave(wave);
   }
   finishCurrent(!user);
-  if (s.index + 1 < s.queue.length) return loadAt(s.index + 1);
+  if (s.index + 1 < s.queue.length) return loadAt(s.index + 1, true, fade);
   if (s.source?.kind === 'wave') {
     // Skipped past what was ready: the next one is on its way, and the player says so.
     set({ loading: true });
     await fillWave(1);
-    if (get().index + 1 < get().queue.length) return loadAt(get().index + 1);
+    if (get().index + 1 < get().queue.length) return loadAt(get().index + 1, true, fade);
     set({ loading: false });
     // Nothing more came: with no network the downloads play instead.
     if (offlineMode || fillLostNetwork) fallBackToDownloads();
     return;
   }
-  if (s.repeat === 'all') return loadAt(0);
+  if (s.repeat === 'all') return loadAt(0, true, fade);
   audio.pause();
 }
 
@@ -568,6 +590,12 @@ export function setQuality(quality: StreamQuality) {
   const at = audio.currentTime;
   const wasPlaying = !audio.paused;
   loadAt(get().index, wasPlaying).then(() => at > 1 && seek(at));
+}
+
+/** The crossfade's length in seconds (0: off). */
+export function setCrossfade(seconds: number) {
+  set({ crossfade: Math.max(0, Math.min(12, Math.round(seconds))) });
+  savePrefs();
 }
 
 export function cycleRepeat() {
@@ -693,6 +721,14 @@ audio.addEventListener('timeupdate', () => {
   if (!audio.paused && delta > 0 && delta < 2) listened += delta;
   lastTime = t;
   set({ position: t });
+  // Crossfade: the next track begins this many seconds before this one ends (not on repeat-one,
+  // not when the sleep timer stops after this track, not for tracks too short for it).
+  const fade = get().crossfade;
+  const d = audio.duration;
+  if (fade > 0 && !crossStarted && !audio.paused && canCrossfade() && Number.isFinite(d) && d > fade * 3 && d - t <= fade && get().repeat !== 'one' && !get().sleep.afterTrack) {
+    crossStarted = true;
+    void next(false, fade);
+  }
   if ('setPositionState' in navigator.mediaSession && Number.isFinite(audio.duration)) {
     try {
       navigator.mediaSession.setPositionState({ duration: audio.duration, position: Math.min(t, audio.duration), playbackRate: 1 });
@@ -769,8 +805,8 @@ if (isIos) import('./volume.ts').then((m) => m.followSystemVolume((volume) => se
 // -------------------------------------------------------------- persistence
 
 function savePrefs() {
-  const { volume, repeat, normalize, quality } = get();
-  storage.setItem('player.prefs', JSON.stringify({ volume, repeat, normalize, quality }));
+  const { volume, repeat, normalize, quality, crossfade } = get();
+  storage.setItem('player.prefs', JSON.stringify({ volume, repeat, normalize, quality, crossfade }));
 }
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
