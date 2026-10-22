@@ -979,7 +979,7 @@ const en: Dict = {
     logHint: 'The error log helps when something breaks',
     window: 'Window',
     voice: 'Voice commands',
-    voiceHint: 'Siri knows Oni as it is: "Next track", "Pause", "Включи Мою волну в Oni", "Лайкни трек в Oni". These need no "in Oni": "Hey Siri, лайкни трек". The iPhone asks before adding one. If Oni was installed here with another Apple ID, the shortcut shows "unknown app": open it and pick Oni's action again (once).',
+    voiceHint: 'Siri knows Oni as it is: "Next track", "Pause", "Включи Мою волну в Oni", "Лайкни трек в Oni". These need no "in Oni": "Hey Siri, лайкни трек". The iPhone asks before adding one. If Oni was installed here with another Apple ID, the shortcut shows "unknown app": open it and pick the Oni action again (once).',
     voiceAdd: (phrase) => `Add "${phrase}"`,
     discord: 'Discord status',
     discordHint: 'Friends on Discord see what you play in Oni: the track, the artist and the cover. It goes on a pause',
