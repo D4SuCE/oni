@@ -19,7 +19,7 @@ interface DownloadsPlugin {
   cancel(options: { ids: string[] }): Promise<void>;
   /** The key files are sealed with (base64, AES-256-GCM); kept in the Keychain for launches in the background. */
   setKey(options: { key: string }): Promise<void>;
-  notifications(options: { progress: string; done: string; title: string }): Promise<{ granted: boolean }>;
+  notifications(options: { progress: string; done: string; title: string; stale: string }): Promise<{ granted: boolean }>;
   /** The lists' count, from the page; the native side moves it on by itself while the page sleeps. */
   progress(options: { done: number; total: number; title: string }): Promise<void>;
   /** For the smoke test: the Live Activity and the count. */
@@ -101,6 +101,8 @@ export function iosBackgroundDownloads() {
   });
   document.addEventListener('visibilitychange', () => !document.hidden && bg.resume());
   bg.resume();
+  // Lists still going from before: the native side gets its texts again (it keeps them in memory).
+  if (bg.progress().total) showProgressInShade();
   return bg;
 }
 
@@ -111,5 +113,5 @@ export function showProgressInShade() {
   if (asked) return;
   asked = true;
   const d = tr().downloads;
-  OniDownloads.notifications({ progress: d.shadeProgress, done: d.shadeDone, title: d.shadeTitle }).catch(() => {});
+  OniDownloads.notifications({ progress: d.shadeProgress, done: d.shadeDone, title: d.shadeTitle, stale: d.shadeStale }).catch(() => {});
 }

@@ -44,6 +44,9 @@ interface Pending {
   /** Handed to iOS (with a URL) at least once. */
   sent: boolean;
   tries: number;
+  /** Its place in the queue. The books are an object keyed by track id, and numeric keys come out
+   * sorted by number, not as added: lists went to iOS in a jumble (the user). */
+  seq?: number;
 }
 
 const KEY = 'downloads.background';
@@ -81,6 +84,14 @@ export class BackgroundDownloads {
     };
     this.pending = load(KEY);
     this.lists = load(LISTS);
+    this.seq = Math.max(0, ...Object.values(this.pending).map((p) => p.seq ?? 0)) + 1;
+  }
+
+  private seq: number;
+
+  /** What is to go, in the order it was asked for. */
+  private queue() {
+    return Object.entries(this.pending).sort(([, a], [, b]) => (a.seq ?? 0) - (b.seq ?? 0));
   }
 
   isPending(id: string | number) {
@@ -122,7 +133,7 @@ export class BackgroundDownloads {
     for (const t of tracks) {
       const id = String(t.id);
       if (t.available === false || this.deps.has(id) || this.pending[id]) continue;
-      this.pending[id] = { track: trimTrack(t), list, codec: '', bitrate: 0, sent: false, tries: 0 };
+      this.pending[id] = { track: trimTrack(t), list, codec: '', bitrate: 0, sent: false, tries: 0, seq: this.seq++ };
     }
     this.changed();
     await this.send();
@@ -190,27 +201,28 @@ export class BackgroundDownloads {
     if (this.sending) return this.sending;
     this.sending = (async () => {
       for (;;) {
-        const due = Object.entries(this.pending)
+        const due = this.queue()
           .filter(([, p]) => !p.sent)
           .slice(0, CHUNK);
         if (!due.length) break;
-        const items: { id: string; url: string }[] = [];
-        await Promise.all(
+        // Resolved together, handed over in the queue's order (not in the order Yandex answers).
+        const resolved = await Promise.all(
           due.map(async ([id, p]) => {
             if (++p.tries > MAX_TRIES) {
               this.failed[p.list] = (this.failed[p.list] ?? 0) + 1;
               delete this.pending[id];
-              return;
+              return null;
             }
             try {
               const s = await this.deps.stream(id);
               Object.assign(p, { codec: s.codec, bitrate: s.bitrate, sent: true });
-              items.push({ id, url: s.url });
+              return { id, url: s.url };
             } catch {
-              /* left unsent: the next pass (or the next resume) tries again */
+              return null; // left unsent: the next pass (or the next resume) tries again
             }
           }),
         );
+        const items = resolved.filter((i): i is { id: string; url: string } => Boolean(i));
         if (items.length) await this.deps.native.enqueue(items);
         this.changed();
         // Nothing could be resolved this pass (no network?): stop until the next resume.

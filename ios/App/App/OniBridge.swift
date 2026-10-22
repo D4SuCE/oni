@@ -652,7 +652,7 @@ public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDel
     @objc func notifications(_ call: CAPPluginCall) {
         let me = DownloadsPlugin.shared
         DispatchQueue.main.async {
-            me.labels = ["progress": call.getString("progress") ?? "", "done": call.getString("done") ?? ""]
+            me.labels = ["progress": call.getString("progress") ?? "", "done": call.getString("done") ?? "", "stale": call.getString("stale") ?? ""]
             if me.title.isEmpty { me.title = call.getString("title") ?? "" }
         }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { granted, _ in
@@ -726,8 +726,10 @@ public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDel
     @available(iOS 16.2, *)
     private func showActivity(_ through: Bool) -> Bool {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return false }
-        let state = DownloadAttributes.ContentState(done: done, total: total, line: line(through), finished: through)
-        let content = ActivityContent(state: state, staleDate: nil)
+        let state = DownloadAttributes.ContentState(done: done, total: total, line: line(through), finished: through, staleLine: labels["stale"] ?? "")
+        // Not moved for a minute: the app is frozen in the background (iOS wakes it only at the
+        // end), and the island says so instead of showing an old count as current (the user).
+        let content = ActivityContent(state: state, staleDate: through ? nil : Date().addingTimeInterval(60))
         if let running = activity as? Activity<DownloadAttributes> {
             if through {
                 activity = nil

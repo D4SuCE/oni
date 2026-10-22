@@ -23,6 +23,9 @@ private enum Palette {
 private extension DownloadAttributes.ContentState {
     var fraction: Double { total > 0 ? min(1, Double(done) / Double(total)) : 0 }
     var percent: Int { Int((fraction * 100).rounded(.down)) }
+    /// "57/502", or "57+/502" when stale: at least that many, the rest came while the app slept.
+    func count(stale: Bool) -> String { "\(done)\(stale ? "+" : "")/\(total)" }
+    func text(stale: Bool) -> String { stale && !staleLine.isEmpty ? staleLine : line }
 }
 
 /// A ring that fills as the files come, an arrow inside (a check at the end).
@@ -57,7 +60,7 @@ struct DownloadActivity: Widget {
                         .font(.headline)
                         .foregroundColor(Palette.text)
                         .lineLimit(1)
-                    Text(context.state.line)
+                    Text(context.state.text(stale: context.isStale))
                         .font(.subheadline)
                         .foregroundColor(Palette.muted)
                         .lineLimit(1)
@@ -88,7 +91,7 @@ struct DownloadActivity: Widget {
                     VStack(alignment: .leading, spacing: 6) {
                         ProgressView(value: context.state.fraction)
                             .tint(Palette.red)
-                        Text(context.state.line)
+                        Text(context.state.text(stale: context.isStale))
                             .font(.caption)
                             .foregroundColor(Palette.muted)
                     }
@@ -97,7 +100,7 @@ struct DownloadActivity: Widget {
                 Ring(state: context.state, size: 22, width: 2.5)
             } compactTrailing: {
                 // How many of how many, as the user asked: "57/502".
-                Text("\(context.state.done)/\(context.state.total)")
+                Text(context.state.count(stale: context.isStale))
                     .font(.system(size: 13, weight: .semibold).monospacedDigit())
                     .foregroundColor(Palette.gold)
                     .minimumScaleFactor(0.6)

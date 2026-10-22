@@ -85,6 +85,19 @@ await test("a list goes to iOS in small chunks, in the list's order (top first, 
   assert(bg.pendingFor('liked') === 8, `pending ${bg.pendingFor('liked')}`);
 });
 
+await test("the list's order, not the ids' (real ids are numbers in no order: a list went out shuffled)", async () => {
+  // The user: downloads went in a jumble. Numeric keys of an object come out sorted by number.
+  const { bg, sent, deps } = setup();
+  const ids = ['150497127', '3', '98000', '41688365', '7', '2000000000'];
+  await bg.add('liked', ids.map((id) => track(id)));
+  assert(sent.flat().join() === ids.join(), `sent ${sent.flat()}`);
+  // And after a restart with iOS holding none of them, they go again in that order.
+  const again: string[] = [];
+  const resumed = new BackgroundDownloads({ ...deps, native: { ...deps.native, running: async () => [], enqueue: async (items) => void again.push(...items.map((i) => i.id)) } });
+  await resumed.resume();
+  assert(again.join() === ids.join(), `after a restart ${again}`);
+});
+
 await test('finished files are sealed into the library and leave the folder', async () => {
   const { bg, kept, folder, finish } = setup();
   await bg.add('liked', [track('1'), track('2')]);
