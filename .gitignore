@@ -5,3 +5,6 @@ tests/screenshots/
 *.mp3
 .env
 *.log
+
+# Screen recordings shared for a task (kept locally, not in the code)
+task/*.mp4
