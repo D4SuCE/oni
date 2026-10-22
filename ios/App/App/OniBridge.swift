@@ -1024,6 +1024,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     private var stalled = false
     /// For the simulator run: downloads held to this many bytes a second (0: as fast as they come).
     static var throttle: Double = 0
+    /// For the simulator run: how the pieces went (extend calls, pieces given, the last view of the file).
+    private var trace: [String: Any] = [:]
 
     /// The one player, for the lock screen's play and pause (RemotePlugin).
     static weak var shared: PlayerPlugin?
@@ -1352,12 +1354,25 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     private func extend() {
         guard let fetch = stream, file != nil else { return }
         let st = fetch.state
+        trace["extends"] = (trace["extends"] as? Int ?? 0) + 1
         if st.failed != nil { return }
         // The newest view of it: what has arrived so far, or the whole file.
-        guard let view = try? AVAudioFile(forReading: st.done ? fetch.target : fetch.part) else { return }
+        let view: AVAudioFile
+        do {
+            view = try AVAudioFile(forReading: st.done ? fetch.target : fetch.part)
+        } catch {
+            trace["openError"] = String(describing: error)
+            return
+        }
         let available = st.done ? view.length : min(view.length, st.frames) - PlayerPlugin.MARGIN
+        trace["viewLength"] = view.length
+        trace["frames"] = st.frames
+        trace["received"] = st.received
+        trace["scheduledEnd"] = scheduledEnd
+        trace["outstanding"] = outstanding
         if available > scheduledEnd && (st.done || outstanding == 0 || available - scheduledEnd >= PlayerPlugin.PIECE) {
             give(view, upTo: available)
+            trace["gives"] = (trace["gives"] as? Int ?? 0) + 1
             file = view
             if stalled {
                 stalled = false
@@ -1528,7 +1543,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
             call.resolve([
                 "time": self.position, "duration": self.duration, "playing": self.playing, "eq": !self.eq.bypass, "engine": self.engine.isRunning,
                 "crossing": self.tail != nil, "streaming": self.stream != nil, "waiting": self.stalled,
-                "received": st?.received ?? 0, "expected": st?.expected ?? 0,
+                "received": st?.received ?? 0, "expected": st?.expected ?? 0, "trace": self.trace,
             ])
         }
     }
