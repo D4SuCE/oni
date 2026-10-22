@@ -18,6 +18,8 @@
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		A0C1B2D3E4F5061728394A5C /* OniBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0C1B2D3E4F5061728394A5B /* OniBridge.swift */; };
 		A0C1B2D3E4F5061728394A7C /* OniIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0C1B2D3E4F5061728394A7B /* OniIntents.swift */; };
+		A0C1B2D3E4F5061728394A8C /* OniCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0C1B2D3E4F5061728394A8B /* OniCommands.swift */; };
+		A0C1B2D3E4F5061728394A8D /* OniCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0C1B2D3E4F5061728394A8B /* OniCommands.swift */; };
 		0A1B2C3D4E5F607182930001 /* DownloadAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1B2C3D4E5F607182930011 /* DownloadAttributes.swift */; };
 		0A1B2C3D4E5F607182930002 /* DownloadAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1B2C3D4E5F607182930011 /* DownloadAttributes.swift */; };
 		0A1B2C3D4E5F607182930003 /* OniActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1B2C3D4E5F607182930012 /* OniActivity.swift */; };
@@ -37,6 +39,7 @@
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		A0C1B2D3E4F5061728394A5B /* OniBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OniBridge.swift; sourceTree = "<group>"; };
 		A0C1B2D3E4F5061728394A7B /* OniIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OniIntents.swift; sourceTree = "<group>"; };
+		A0C1B2D3E4F5061728394A8B /* OniCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OniCommands.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		0A1B2C3D4E5F607182930011 /* DownloadAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadAttributes.swift; sourceTree = "<group>"; };
 		0A1B2C3D4E5F607182930012 /* OniActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OniActivity.swift; sourceTree = "<group>"; };
@@ -112,6 +115,7 @@
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
 				A0C1B2D3E4F5061728394A5B /* OniBridge.swift */,
 				A0C1B2D3E4F5061728394A7B /* OniIntents.swift */,
+				A0C1B2D3E4F5061728394A8B /* OniCommands.swift */,
 				0A1B2C3D4E5F607182930011 /* DownloadAttributes.swift */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
@@ -250,6 +254,7 @@
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				A0C1B2D3E4F5061728394A5C /* OniBridge.swift in Sources */,
 				A0C1B2D3E4F5061728394A7C /* OniIntents.swift in Sources */,
+				A0C1B2D3E4F5061728394A8C /* OniCommands.swift in Sources */,
 				0A1B2C3D4E5F607182930001 /* DownloadAttributes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -259,6 +264,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0A1B2C3D4E5F607182930003 /* OniActivity.swift in Sources */,
+				A0C1B2D3E4F5061728394A8D /* OniCommands.swift in Sources */,
 				0A1B2C3D4E5F607182930002 /* DownloadAttributes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

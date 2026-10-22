@@ -1,87 +1,12 @@
 import AppIntents
 
-/// Siri and Shortcuts (stage 7, accepted by the user): My Wave, pause and play, next and previous,
-/// like. They go the way the lock screen's buttons go (RemotePlugin.press): pause and play are
-/// the player's own, so they work with the app in the background, its page asleep; the rest is the
-/// page's (the queue and the wave live there), which gets them even when it only starts now
-/// (Capacitor keeps the event until the page listens). My Wave opens the app. The phrases are
-/// Russian (the user's wish): the app's development language is Russian, so Siri set to Russian
-/// knows them, and "Они" is the app's spoken name (INAlternativeAppNames in Info.plist).
-@available(iOS 16.0, *)
-struct PlayWaveIntent: AppIntent {
-    static var title: LocalizedStringResource = "Моя волна"
-    static var description = IntentDescription("Включает «Мою волну» в Oni.")
-    static var openAppWhenRun = true
-
-    @MainActor
-    func perform() async throws -> some IntentResult {
-        RemotePlugin.press("wave")
-        return .result()
-    }
-}
-
-@available(iOS 16.0, *)
-struct PauseIntent: AppIntent {
-    static var title: LocalizedStringResource = "Пауза"
-    static var description = IntentDescription("Ставит музыку в Oni на паузу.")
-
-    @MainActor
-    func perform() async throws -> some IntentResult {
-        RemotePlugin.press("pause")
-        return .result()
-    }
-}
-
-@available(iOS 16.0, *)
-struct ResumeIntent: AppIntent {
-    static var title: LocalizedStringResource = "Продолжить"
-    static var description = IntentDescription("Продолжает музыку в Oni с того же места.")
-
-    @MainActor
-    func perform() async throws -> some IntentResult {
-        RemotePlugin.press("play")
-        return .result()
-    }
-}
-
-@available(iOS 16.0, *)
-struct NextTrackIntent: AppIntent {
-    static var title: LocalizedStringResource = "Следующий трек"
-    static var description = IntentDescription("Переключает Oni на следующий трек.")
-
-    @MainActor
-    func perform() async throws -> some IntentResult {
-        RemotePlugin.press("next")
-        return .result()
-    }
-}
-
-@available(iOS 16.0, *)
-struct PreviousTrackIntent: AppIntent {
-    static var title: LocalizedStringResource = "Предыдущий трек"
-    static var description = IntentDescription("Возвращает Oni к предыдущему треку.")
-
-    @MainActor
-    func perform() async throws -> some IntentResult {
-        RemotePlugin.press("prev")
-        return .result()
-    }
-}
-
-@available(iOS 16.0, *)
-struct LikeIntent: AppIntent {
-    static var title: LocalizedStringResource = "Мне нравится"
-    static var description = IntentDescription("Отмечает играющий в Oni трек «Мне нравится» (повторно — снимает отметку).")
-
-    @MainActor
-    func perform() async throws -> some IntentResult {
-        RemotePlugin.press("like")
-        return .result()
-    }
-}
-
+/// Siri's phrases for Oni's actions (the actions themselves: OniCommands.swift, shared with the
+/// widget extension; this provider is the app's alone). Russian (the user's wish): the app's
+/// development language is Russian, so Siri set to Russian knows them, and "Они" is the app's
+/// spoken name (INAlternativeAppNames in Info.plist). Siri's own media commands ("Следующий трек",
+/// "Пауза") reach Oni without its name anyway, as the now-playing app.
 /// The phrases Siri knows without any setup (each must name the app).
-@available(iOS 16.0, *)
+@available(iOS 17.0, *)
 struct OniShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(

@@ -1,13 +1,25 @@
 import ActivityKit
+import AppIntents
 import SwiftUI
 import WidgetKit
 
-/// The downloads' progress in the Dynamic Island and on the lock screen, in Oni's colors: started
-/// and updated by the app (DownloadsPlugin), drawn here. Nothing else lives in this extension.
+/// Oni's extension: the downloads' progress in the Dynamic Island and on the lock screen (started
+/// and updated by the app, DownloadsPlugin), a remote on the Home and lock screens (My Wave, play
+/// and pause, next, like), and Control Center buttons, which also go on the lock screen and the
+/// Action button. The buttons run Oni's actions (OniCommands.swift) in the app.
 @main
 struct OniActivityBundle: WidgetBundle {
     var body: some Widget {
         DownloadActivity()
+        if #available(iOS 17.0, *) {
+            RemoteWidget()
+        }
+        if #available(iOS 18.0, *) {
+            WaveControl()
+            ToggleControl()
+            NextControl()
+            LikeControl()
+        }
     }
 }
 
@@ -18,6 +30,7 @@ private enum Palette {
     static let text = Color(red: 0xF2 / 255, green: 0xEE / 255, blue: 0xE8 / 255)
     static let muted = Color(red: 0xA7 / 255, green: 0xA3 / 255, blue: 0xA0 / 255)
     static let line = Color(red: 0x49 / 255, green: 0x40 / 255, blue: 0x3D / 255)
+    static let glass = Color(red: 0x21 / 255, green: 0x18 / 255, blue: 0x16 / 255)
 }
 
 private extension DownloadAttributes.ContentState {
@@ -125,5 +138,204 @@ struct DownloadActivity: Widget {
             }
             .keylineTint(Palette.red)
         }
+    }
+}
+
+
+// MARK: - The remote (Home and lock screens)
+
+struct RemoteEntry: TimelineEntry {
+    let date: Date
+}
+
+/// Nothing changes on it: one entry, never refreshed (the track playing is iOS's own Now Playing).
+struct RemoteProvider: TimelineProvider {
+    func placeholder(in context: Context) -> RemoteEntry { RemoteEntry(date: Date()) }
+    func getSnapshot(in context: Context, completion: @escaping (RemoteEntry) -> Void) { completion(RemoteEntry(date: Date())) }
+    func getTimeline(in context: Context, completion: @escaping (Timeline<RemoteEntry>) -> Void) {
+        completion(Timeline(entries: [RemoteEntry(date: Date())], policy: .never))
+    }
+}
+
+@available(iOS 17.0, *)
+private struct RoundButton<I: AppIntent>: View {
+    let intent: I
+    let symbol: String
+    var size: CGFloat = 40
+    var tint: Color = Palette.text
+
+    var body: some View {
+        Button(intent: intent) {
+            Image(systemName: symbol)
+                .font(.system(size: size * 0.4, weight: .semibold))
+                .foregroundColor(tint)
+                .frame(width: size, height: size)
+                .background(Circle().fill(Palette.line.opacity(0.55)))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+@available(iOS 17.0, *)
+private struct WaveButton: View {
+    var compact = false
+
+    var body: some View {
+        Button(intent: PlayWaveIntent()) {
+            HStack(spacing: 6) {
+                Image(systemName: "waveform")
+                    .font(.system(size: compact ? 13 : 15, weight: .bold))
+                Text("Моя волна")
+                    .font(.system(size: compact ? 13 : 15, weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .foregroundColor(Palette.text)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, minHeight: compact ? 34 : 40)
+            .background(Capsule().fill(Palette.red))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// The mask's kanji and the name, as in the app's sidebar.
+private struct Brand: View {
+    var body: some View {
+        HStack(spacing: 6) {
+            Text("鬼")
+                .font(.system(size: 20, weight: .bold, design: .serif))
+                .foregroundColor(Palette.red)
+            Text("ONI")
+                .font(.system(size: 13, weight: .heavy))
+                .tracking(3)
+                .foregroundColor(Palette.text)
+        }
+    }
+}
+
+@available(iOS 17.0, *)
+struct RemoteView: View {
+    @Environment(\.widgetFamily) private var family
+
+    var body: some View {
+        switch family {
+        case .accessoryCircular:
+            Button(intent: PlayWaveIntent()) {
+                ZStack {
+                    AccessoryWidgetBackground()
+                    Image(systemName: "waveform").font(.system(size: 20, weight: .bold))
+                }
+            }
+            .buttonStyle(.plain)
+        case .accessoryRectangular:
+            HStack(spacing: 8) {
+                Button(intent: PlayWaveIntent()) {
+                    Label("Волна", systemImage: "waveform").font(.system(size: 13, weight: .semibold))
+                }
+                .buttonStyle(.plain)
+                Spacer(minLength: 0)
+                Button(intent: TogglePlaybackIntent()) { Image(systemName: "playpause.fill") }.buttonStyle(.plain)
+                Button(intent: NextTrackIntent()) { Image(systemName: "forward.fill") }.buttonStyle(.plain)
+            }
+        case .systemMedium:
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Brand()
+                    Spacer(minLength: 0)
+                    WaveButton()
+                }
+                HStack(spacing: 10) {
+                    RoundButton(intent: TogglePlaybackIntent(), symbol: "playpause.fill", size: 46)
+                    RoundButton(intent: NextTrackIntent(), symbol: "forward.fill", size: 46)
+                    RoundButton(intent: LikeIntent(), symbol: "heart.fill", size: 46, tint: Palette.red)
+                }
+            }
+            .padding(16)
+        default:
+            VStack(alignment: .leading, spacing: 10) {
+                Brand()
+                Spacer(minLength: 0)
+                WaveButton(compact: true)
+                HStack(spacing: 0) {
+                    RoundButton(intent: TogglePlaybackIntent(), symbol: "playpause.fill", size: 36)
+                    Spacer(minLength: 0)
+                    RoundButton(intent: NextTrackIntent(), symbol: "forward.fill", size: 36)
+                    Spacer(minLength: 0)
+                    RoundButton(intent: LikeIntent(), symbol: "heart.fill", size: 36, tint: Palette.red)
+                }
+            }
+            .padding(14)
+        }
+    }
+}
+
+@available(iOS 17.0, *)
+struct RemoteWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "OniRemote", provider: RemoteProvider()) { _ in
+            RemoteView()
+                .containerBackground(for: .widget) {
+                    LinearGradient(colors: [Palette.panel, Palette.glass], startPoint: .topLeading, endPoint: .bottomTrailing)
+                }
+        }
+        .configurationDisplayName("Oni")
+        .description("«Моя волна», пауза, следующий трек и «Мне нравится» одним нажатием.")
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular])
+        .contentMarginsDisabled()
+    }
+}
+
+// MARK: - Control Center (and the lock screen, the Action button)
+
+@available(iOS 18.0, *)
+struct WaveControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "local.wave.player.control.wave") {
+            ControlWidgetButton(action: PlayWaveIntent()) {
+                Label("Моя волна", systemImage: "waveform")
+            }
+        }
+        .displayName("Моя волна")
+        .description("Включает «Мою волну» в Oni.")
+    }
+}
+
+@available(iOS 18.0, *)
+struct ToggleControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "local.wave.player.control.toggle") {
+            ControlWidgetButton(action: TogglePlaybackIntent()) {
+                Label("Пауза / продолжить", systemImage: "playpause.fill")
+            }
+        }
+        .displayName("Oni: пауза / продолжить")
+        .description("Ставит Oni на паузу или продолжает.")
+    }
+}
+
+@available(iOS 18.0, *)
+struct NextControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "local.wave.player.control.next") {
+            ControlWidgetButton(action: NextTrackIntent()) {
+                Label("Следующий трек", systemImage: "forward.fill")
+            }
+        }
+        .displayName("Oni: следующий трек")
+        .description("Переключает Oni на следующий трек.")
+    }
+}
+
+@available(iOS 18.0, *)
+struct LikeControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "local.wave.player.control.like") {
+            ControlWidgetButton(action: LikeIntent()) {
+                Label("Мне нравится", systemImage: "heart.fill")
+            }
+        }
+        .displayName("Oni: мне нравится")
+        .description("Отмечает играющий трек «Мне нравится».")
     }
 }

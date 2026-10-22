@@ -10,6 +10,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Music: keeps playing in the background, on the lock screen and with the silent switch on.
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+        // Oni's actions (Siri, Shortcuts, the widget, Control Center) go the lock screen's way.
+        OniCommands.send = { RemotePlugin.press($0) }
         return true
     }
 
