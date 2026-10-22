@@ -49,6 +49,9 @@ const explain = (page, what) => async (e) => {
   throw new Error(`${what}: ${await state(page)} (${e.message.split('\n')[0]})`);
 };
 
+/** Ids of the list's rows that can play with no network (downloaded), top down. */
+const downloadedRows = () => page.evaluate(() => [...document.querySelectorAll('.track-row:not(.unavailable)')].map((r) => r.dataset.trackId));
+
 async function playingFromFile(page) {
   await page.waitForFunction(() => window.__wave.audio.src.startsWith('blob:') && !window.__wave.audio.paused && window.__wave.audio.currentTime > 1, null, { timeout: 20000 });
   // The bar moves with it.
@@ -167,11 +170,14 @@ await step('no network: the app starts on Liked, kept whole; the downloaded trac
   await page.waitForSelector('[data-testid="list-play"]', { timeout: 10000 });
   const rows = await page.locator('.track-row').count();
   const off = await page.locator('.track-row.unavailable').count();
-  if (rows < likedTotal || off !== rows - 2) throw new Error(`${rows} rows (Liked has ${likedTotal}), ${off} dimmed`);
+  // The downloaded ones in Liked, in its order: the two picked, and any other download that is a
+  // liked track too (the first step's, from a mix, may be: the account's data decides).
+  const playable = await downloadedRows();
+  if (rows < likedTotal || off !== rows - playable.length || !likedIds.every((id) => playable.includes(id))) throw new Error(`${rows} rows (Liked has ${likedTotal}), ${off} dimmed, playable ${playable}`);
   await page.click('[data-testid="list-play"]');
   await playingFromFile(page);
   const queue = await page.evaluate(() => window.__wave.usePlayer.getState().queue.map((t) => String(t.id)));
-  if (queue.join() !== likedIds.join()) throw new Error(`queue ${queue}, want ${likedIds}`);
+  if (queue.join() !== playable.join()) throw new Error(`queue ${queue}, want ${playable}`);
   // Their covers show though nothing loads from the network (the user: the picture was missing).
   await page.waitForFunction((ids) => ids.every((id) => document.querySelector(`.track-row[data-track-id="${id}"] img`)?.src.startsWith('blob:')), likedIds, { timeout: 5000 }).catch(async () => {
     throw new Error(`covers: ${await page.evaluate((ids) => ids.map((id) => document.querySelector(`.track-row[data-track-id="${id}"] img`)?.src ?? 'none').join(', '), likedIds)}`);
@@ -183,10 +189,11 @@ await step('no network: a playlist with a downloaded track opens and plays it', 
   await page.evaluate(({ uid, kind }) => window.__wave.navigate({ name: 'playlist', uid, kind }), playlist);
   await page.waitForSelector('[data-testid="list-play"]', { timeout: 10000 });
   if (!(await page.locator('h1', { hasText: playlist.title }).count())) throw new Error('no playlist title');
+  const playable = await downloadedRows();
   await page.click('[data-testid="list-play"]');
   await playingFromFile(page);
   const queue = await page.evaluate(() => window.__wave.usePlayer.getState().queue.map((t) => String(t.id)));
-  if (queue.join() !== playlist.id) throw new Error(`queue ${queue}, want ${playlist.id}`);
+  if (!playable.includes(playlist.id) || queue.join() !== playable.join()) throw new Error(`queue ${queue}, want ${playable} (with ${playlist.id})`);
 });
 
 await step('no network: Downloads lists everything downloaded', async () => {
