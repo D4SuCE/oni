@@ -287,6 +287,30 @@ await step('"…" pressed again closes its menu instead of opening it anew', asy
   await page.waitForSelector('.menu', { state: 'detached' });
 });
 
+await step('sleep timer: after this track it stops at its end; in minutes it fades out and pauses', async () => {
+  // The user's wish (accepted proposals). Wave playing from the steps above.
+  await page.evaluate(() => window.__wave.audio.play());
+  await waitPlaying(0.5);
+  const before = await player();
+  await page.click('.playerbar [data-testid="sleep"]');
+  await page.locator('.menu-item', { hasText: 'После этого трека' }).click();
+  if (!(await page.evaluate(() => window.__wave.usePlayer.getState().sleep.afterTrack))) throw new Error('not set');
+  await page.evaluate(() => (window.__wave.audio.currentTime = window.__wave.audio.duration - 1.5));
+  await page.waitForFunction(() => window.__wave.audio.paused && !window.__wave.usePlayer.getState().sleep.afterTrack, null, { timeout: 15000 });
+  const after = await player();
+  if (after.index !== before.index) throw new Error(`went on to the next track: ${before.index} -> ${after.index}`);
+  // In minutes (a few seconds here): faded out, paused, the volume back for next time.
+  await page.click('[data-testid="next"]');
+  await waitPlaying(0.5);
+  const volume = await page.evaluate(() => window.__wave.audio.volume);
+  await page.evaluate(() => window.__wave.setSleep(0.05));
+  await page.waitForSelector('.playerbar [data-testid="sleep"] .sleep-left', { timeout: 2000 });
+  await page.waitForFunction(() => window.__wave.audio.paused, null, { timeout: 15000 });
+  const back = await page.evaluate(() => window.__wave.audio.volume);
+  if (Math.abs(back - volume) > 0.01) throw new Error(`volume ${volume} -> ${back} after the fade`);
+  if (await page.locator('.playerbar [data-testid="sleep"] .sleep-left').count()) throw new Error('the timer still shows');
+});
+
 await step('now playing screen', async () => {
   await page.click('.pb-cover');
   await page.waitForSelector('.nowplaying');

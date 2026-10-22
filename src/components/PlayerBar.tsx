@@ -1,9 +1,9 @@
 import { useCover } from '../ui/offline.ts';
-import { Ban, Heart, ListMusic, Loader2, Maximize2, MoreHorizontal, Pause, PictureInPicture2, Play, Repeat, Repeat1, Shuffle, SlidersVertical, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Waves } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { Ban, Heart, ListMusic, Loader2, Maximize2, Moon, MoreHorizontal, Pause, PictureInPicture2, Play, Repeat, Repeat1, Shuffle, SlidersVertical, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Waves } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import type { Track } from '../api/types.ts';
 import { useLang, useT } from '../i18n.ts';
-import { cycleRepeat, next, prev, seek, setVolume, sourceTitle, toggle, toggleShuffle, usePlayer } from '../player/player.ts';
+import { cycleRepeat, next, prev, seek, setSleep, setVolume, sourceTitle, toggle, toggleShuffle, usePlayer } from '../player/player.ts';
 import { dislike, toggleLike, useApp } from '../store.ts';
 import { cx, fmtTime } from '../ui/util.ts';
 import { useEq } from '../player/eq.ts';
@@ -11,6 +11,39 @@ import { isIos } from '../ui/platform.ts';
 import { ArtistLinks, Cover } from './Common.tsx';
 import { openMenu } from './Menu.tsx';
 import { isUpload, trackMenu } from './TrackList.tsx';
+
+/** The sleep timer: a moon, with the minutes left beside it while it runs; its menu sets it. */
+export function SleepButton({ size = 18 }: { size?: number }) {
+  const t = useT().player;
+  const sleep = usePlayer((s) => s.sleep);
+  const [, tick] = useState(0);
+  // The minutes left move on while it runs.
+  useEffect(() => {
+    if (!sleep.until) return;
+    const timer = setInterval(() => tick((n) => n + 1), 15_000);
+    return () => clearInterval(timer);
+  }, [sleep.until]);
+  const on = Boolean(sleep.until) || sleep.afterTrack;
+  const left = sleep.until ? Math.max(1, Math.ceil((sleep.until - Date.now()) / 60_000)) : 0;
+  const label = sleep.until ? t.sleepLeft(left) : sleep.afterTrack ? t.sleepEnd : '';
+  return (
+    <button
+      className={cx('icon-btn sleep-btn', on && 'on')}
+      title={on ? `${t.sleep}: ${label}` : t.sleep}
+      data-testid="sleep"
+      onClick={(e) =>
+        openMenu(e, [
+          ...[15, 30, 45, 60].map((n) => ({ label: t.sleepMinutes(n), onClick: () => setSleep(n) })),
+          { label: t.sleepTrack, onClick: () => setSleep('track') },
+          ...(on ? [{ label: '', separator: true }, { label: t.sleepOff, danger: true, onClick: () => setSleep(null) }] : []),
+        ])
+      }
+    >
+      <Moon size={size} />
+      {sleep.until ? <span className="sleep-left">{left}</span> : null}
+    </button>
+  );
+}
 
 export function SeekBar({ className }: { className?: string }) {
   const position = usePlayer((s) => s.position);
@@ -179,6 +212,7 @@ export function PlayerBar() {
             {isWave && <Waves size={14} />} {sourceTitle(source)}
           </span>
         )}
+        <SleepButton />
         <button className="icon-btn" onClick={openNow} title={t.player.queue}>
           <ListMusic size={18} />
         </button>

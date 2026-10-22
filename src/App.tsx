@@ -16,7 +16,7 @@ import { eqOutputLevel } from './player/eq.ts';
 import { pulseLevel, pulseTempo } from './player/pulse.ts';
 import { cx } from './ui/util.ts';
 import { TuningPanel } from './components/Wave.tsx';
-import { audio, current, next, offline, playTracks, prev, restoreSession, setVolume, toggle, usePlayer } from './player/player.ts';
+import { audio, current, next, offline, playTracks, prev, restoreSession, setSleep, setVolume, toggle, usePlayer } from './player/player.ts';
 import { back, historyStep, init, navigate, toast, toggleLike, useApp } from './store.ts';
 import { AlbumView } from './views/Album.tsx';
 import { ArtistView } from './views/Artist.tsx';
@@ -220,4 +220,4 @@ export function App() {
 }
 
 // Handy for debugging and for the automated UI test.
-Object.assign(window, { __wave: { offline, usePlayer, useApp, audio, api, navigate, playTracks, eqOutputLevel, pulseLevel, pulseTempo } });
+Object.assign(window, { __wave: { offline, usePlayer, useApp, audio, api, navigate, playTracks, setSleep, eqOutputLevel, pulseLevel, pulseTempo } });

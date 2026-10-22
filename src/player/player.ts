@@ -78,6 +78,8 @@ export interface PlayerState extends Prefs {
   error: string | null;
   /** What Yandex actually serves for the current track (it can be less than asked). */
   stream: { codec: string; bitrate: number } | null;
+  /** The sleep timer: when the music stops (ms epoch), or at the end of the track playing. */
+  sleep: { until: number | null; afterTrack: boolean };
 }
 
 const prefs = loadJson<Prefs>('player.prefs', { volume: 0.8, repeat: 'off', normalize: true, quality: 'lossless' });
@@ -97,6 +99,7 @@ export const usePlayer = create<PlayerState>(() => ({
   waveBusy: false,
   error: null,
   stream: null,
+  sleep: { until: null, afterTrack: false },
 }));
 
 const set = usePlayer.setState;
@@ -631,6 +634,39 @@ function shuffleArray<T>(arr: T[]) {
   return a;
 }
 
+// ---------------------------------------------------------------- sleep timer
+
+let sleepTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** The sleep timer: in so many minutes, at the end of this track, or off (null). */
+export function setSleep(when: number | 'track' | null) {
+  if (sleepTimer) clearTimeout(sleepTimer);
+  sleepTimer = null;
+  if (typeof when === 'number') {
+    const until = Date.now() + when * 60_000;
+    sleepTimer = setTimeout(() => void fallAsleep(), until - Date.now());
+    set({ sleep: { until, afterTrack: false } });
+  } else set({ sleep: { until: null, afterTrack: when === 'track' } });
+}
+
+/** The music fades out over a few seconds and pauses (not cut off mid-note); the volume comes back for next time. */
+async function fallAsleep() {
+  sleepTimer = null;
+  set({ sleep: { until: null, afterTrack: false } });
+  if (audio.paused) return;
+  const steps = 16;
+  const gain = (k: number) => {
+    if (isIos) OniPlayer.setGain({ value: Math.min(1, (get().normalize ? levellingGain(current()?.r128?.i) : 1) * k) }).catch(() => {});
+    else audio.volume = Math.max(0, Math.min(1, get().volume * (get().normalize ? levellingGain(current()?.r128?.i) : 1) * k));
+  };
+  for (let i = steps - 1; i >= 0; i--) {
+    gain(i / steps);
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  audio.pause();
+  applyVolume();
+}
+
 // --------------------------------------------------------------- audio events
 
 audio.addEventListener('playing', () => set({ playing: true, loading: false }));
@@ -655,6 +691,12 @@ audio.addEventListener('timeupdate', () => {
   }
 });
 audio.addEventListener('ended', () => {
+  // "At the end of this track": it ends, and nothing comes after it.
+  if (get().sleep.afterTrack) {
+    finishCurrent(true);
+    set({ sleep: { until: null, afterTrack: false } });
+    return;
+  }
   if (get().repeat === 'one') {
     finishCurrent(true);
     audio.currentTime = 0;

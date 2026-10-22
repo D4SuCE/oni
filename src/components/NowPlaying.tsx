@@ -9,7 +9,7 @@ import { dislike, useApp } from '../store.ts';
 import { useSwipeDown } from '../ui/swipe.ts';
 import { cx, useAsync } from '../ui/util.ts';
 import { ArtistLinks, Cover, Spinner } from './Common.tsx';
-import { LikeButton, SeekBar, Transport, VolumeControl } from './PlayerBar.tsx';
+import { LikeButton, SeekBar, SleepButton, Transport, VolumeControl } from './PlayerBar.tsx';
 import { usePhoneSound } from '../player/phoneSound.ts';
 import { isIos } from '../ui/platform.ts';
 import { BackgroundVideo, LiveCover, useCoverVideo } from './LiveCover.tsx';
@@ -167,6 +167,7 @@ export function NowPlaying() {
                     </button>
                   )}
                   <LikeButton track={track} size={22} />
+                  <SleepButton size={20} />
                   {/* The equalizer on the iPhone, where the player bar has no room for it. */}
                   {isIos && (
                     <button className="icon-btn" onClick={() => useApp.setState({ soundOpen: true })} title={t.sound.title} data-testid="np-sound">
