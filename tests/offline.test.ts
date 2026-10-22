@@ -109,6 +109,35 @@ await test('keep: audio fetched elsewhere (background downloads) is stored like 
   assert(back.length === audioOf('30').byteLength, 'opens back');
 });
 
+await test('adopt: a file sealed elsewhere with the key (nonce, ciphertext, tag, as CryptoKit writes) opens back', async () => {
+  // The iPhone's native side seals background downloads with CryptoKit's AES.GCM: its "combined"
+  // layout is the 12-byte nonce, then the ciphertext and the 16-byte tag, as Web Crypto here.
+  const { lib, disk } = setup();
+  const nodeCrypto = await import('node:crypto');
+  const key = Buffer.from(await lib.rawKey(), 'base64');
+  const audio = Buffer.from(audioOf('40'));
+  const nonce = nodeCrypto.randomBytes(12);
+  const cipher = nodeCrypto.createCipheriv('aes-256-gcm', key, nonce);
+  const file = Buffer.concat([nonce, cipher.update(audio), cipher.final(), cipher.getAuthTag()]);
+  disk.set('40.oni', new Uint8Array(file));
+  lib.adopt(track('40'), file.length, 'mp3', 192);
+  assert(lib.has('40') && lib.entry('40')?.size === file.length, 'in the index');
+  const back = Buffer.from(await (await lib.open('40')).blob.arrayBuffer());
+  assert(back.equals(audio), 'opens to the same audio');
+});
+
+await test('base64 both ways, also for a few megabytes', async () => {
+  const { toBase64, fromBase64 } = await import('../src/api/bytes.ts');
+  const big = new Uint8Array(3 * 1024 * 1024 + 7).map((_, i) => (i * 31) % 256);
+  const b64 = toBase64(big);
+  assert(b64 === Buffer.from(big).toString('base64'), 'encodes as node does');
+  const t = performance.now();
+  const back = fromBase64(b64);
+  const ms = performance.now() - t;
+  assert(back.length === big.length && back.every((v, i) => v === big[i]), 'decodes back');
+  assert(ms < 400, `decoding 3 MB took ${ms.toFixed(0)} ms`);
+});
+
 await test('the key survives a restart: a new library opens old downloads', async () => {
   const { lib, deps } = setup();
   await lib.download(track('8'));

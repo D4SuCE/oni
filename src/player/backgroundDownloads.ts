@@ -1,6 +1,7 @@
 // The iPhone's background downloads (DownloadsPlugin in ios/App/App/OniBridge.swift): iOS fetches
-// the files even while Oni is in the background or locked, and they land unencrypted in a folder;
-// this keeps the books. A list is written down whole at once (so a lock screen mid-way loses
+// the files even while Oni is in the background or locked, a few at a time in the list's order;
+// the native side seals each with the library's key as it lands (or, without the key yet, leaves
+// it unencrypted in a folder for the page to seal); this keeps the books. A list is written down whole at once (so a lock screen mid-way loses
 // nothing), stream URLs are resolved a few at a time and handed to iOS, finished files are sealed
 // into the offline library whenever the page runs, and whatever iOS dropped (an expired URL, a
 // network error) is asked for again with a fresh URL, a few times at most.
@@ -15,6 +16,12 @@ export interface BackgroundDeps {
     /** Ids iOS is still working on. */
     running(): Promise<string[]>;
     cancel(ids: string[]): Promise<void>;
+  };
+  /** Files the native side has sealed already: moved into the library (`take`), no bytes read. */
+  sealed?: {
+    list(): Promise<{ id: string; size: number }[]>;
+    take(id: string, track: Track, size: number, codec: string, bitrate: number): Promise<void>;
+    remove(id: string): Promise<void>;
   };
   /** The folder iOS puts finished files in, by track id. */
   incoming: {
@@ -40,6 +47,14 @@ interface Pending {
 }
 
 const KEY = 'downloads.background';
+const LISTS = 'downloads.background.lists';
+
+/** A list being downloaded: its size (what is there already counted as done, as on its button)
+ * and its name, for the progress in the shade and the Dynamic Island. */
+interface ListInfo {
+  total: number;
+  title: string;
+}
 /** URLs resolved at once: Yandex refuses bursts. */
 const CHUNK = 6;
 /** Hand-overs per track before it counts as failed. */
@@ -53,13 +68,39 @@ export class BackgroundDownloads {
   /** Tracks given up on, by list, until the list is asked for again. */
   readonly failed: Record<string, number> = {};
 
+  private lists: Record<string, ListInfo>;
+
   constructor(deps: BackgroundDeps) {
     this.deps = deps;
-    try {
-      this.pending = JSON.parse(deps.store.getItem(KEY) || '{}');
-    } catch {
-      this.pending = {};
+    const load = <T,>(key: string): T => {
+      try {
+        return JSON.parse(deps.store.getItem(key) || '{}');
+      } catch {
+        return {} as T;
+      }
+    };
+    this.pending = load(KEY);
+    this.lists = load(LISTS);
+  }
+
+  isPending(id: string | number) {
+    return Boolean(this.pending[String(id)]);
+  }
+
+  /**
+   * All the lists under way: done of total, counted as the lists' buttons count (what was there
+   * before included). Lists that are through stay in it until the last one is, so the end reads
+   * "502 of 502"; a new list starts a new count.
+   */
+  progress(): { done: number; total: number; title: string } {
+    let done = 0;
+    let total = 0;
+    for (const [list, info] of Object.entries(this.lists)) {
+      total += info.total;
+      done += Math.max(0, info.total - this.pendingFor(list));
     }
+    const names = Object.values(this.lists).map((l) => l.title);
+    return { done, total, title: names.length === 1 ? names[0] : '' };
   }
 
   subscribe(fn: () => void) {
@@ -72,9 +113,12 @@ export class BackgroundDownloads {
     return Object.values(this.pending).filter((p) => p.list === list).length;
   }
 
-  /** Writes the list down (oldest first is the caller's order) and starts handing it to iOS. */
-  async add(list: string, tracks: Track[]) {
+  /** Writes the list down (in the caller's order: iOS takes them in it) and starts handing it to iOS. */
+  async add(list: string, tracks: Track[], title = '') {
     delete this.failed[list];
+    // A new count: lists that are through leave it.
+    for (const l of Object.keys(this.lists)) if (!this.pendingFor(l)) delete this.lists[l];
+    this.lists[list] = { total: tracks.filter((t) => t.available !== false).length, title };
     for (const t of tracks) {
       const id = String(t.id);
       if (t.available === false || this.deps.has(id) || this.pending[id]) continue;
@@ -88,12 +132,27 @@ export class BackgroundDownloads {
   async cancel(list: string) {
     const ids = Object.keys(this.pending).filter((id) => this.pending[id].list === list);
     for (const id of ids) delete this.pending[id];
+    delete this.lists[list];
     this.changed();
     await this.deps.native.cancel(ids);
   }
 
-  /** Seals what iOS has finished into the offline library. */
+  /** Takes what iOS has finished into the offline library: sealed files as they are, the rest sealed here. */
   async collect() {
+    for (const { id, size } of (await this.deps.sealed?.list().catch(() => [])) ?? []) {
+      const p = this.pending[id];
+      try {
+        if (p) await this.deps.sealed!.take(id, p.track, size, p.codec, p.bitrate);
+        else await this.deps.sealed!.remove(id); // a cancelled list's
+      } catch (e) {
+        console.warn('background download: taking failed', id, e);
+        continue;
+      }
+      if (p) {
+        delete this.pending[id];
+        this.changed();
+      }
+    }
     for (const id of await this.deps.incoming.list()) {
       const p = this.pending[id];
       try {
@@ -165,6 +224,7 @@ export class BackgroundDownloads {
 
   private changed() {
     this.deps.store.setItem(KEY, JSON.stringify(this.pending));
+    this.deps.store.setItem(LISTS, JSON.stringify(this.lists));
     for (const fn of this.listeners) fn();
   }
 }

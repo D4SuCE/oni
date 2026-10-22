@@ -39,7 +39,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     /// iOS wakes it to deliver them and waits for this to be called back.
     func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
         DownloadsPlugin.backgroundCompletion = completionHandler
-        _ = DownloadsPlugin.shared.session
+        // The session and the queue kept on disk: what finishes starts the next ones, page or not.
+        DownloadsPlugin.shared.restore()
     }
 
     func application(_ application: UIApplication,

@@ -5,7 +5,7 @@ import { artistNames, trackCover } from '../api/yandex.ts';
 import { tr, useT } from '../i18n.ts';
 import { enqueue, offline, playNext, playRadio, toggle, usePlayer } from '../player/player.ts';
 import { addToPlaylist, createPlaylist, dislike, isOwn, navigate, toggleLike, useApp } from '../store.ts';
-import { downloadTrack, offlineState, useOfflineVersion, type OfflineState } from '../ui/offline.ts';
+import { downloadTrack, offlineState, useDownloadProgress, useOfflineVersion, type OfflineState } from '../ui/offline.ts';
 import { isIos } from '../ui/platform.ts';
 import { shareTrack } from '../ui/share.ts';
 import { cx, fmtTime } from '../ui/util.ts';
@@ -46,7 +46,7 @@ export function trackMenu(t: Track, extra: MenuItem[] = []): MenuItem[] {
     ? []
     : state === 'done'
       ? [{ label: tx.menu.removeDownload, icon: <CircleCheck size={15} />, onClick: () => offline?.remove(t.id) }]
-      : state === 'busy'
+      : state === 'busy' || state === 'queued'
         ? [{ label: tx.menu.downloading, icon: <Loader2 size={15} className="spin" /> }]
         : [{ label: tx.menu.download, icon: <Download size={15} />, onClick: () => downloadTrack(t) }];
   if (isUpload(t))
@@ -160,8 +160,7 @@ const TrackRow = memo(function TrackRow({ track: t, index, active, playing, like
         <Heart size={16} fill={liked ? 'currentColor' : 'none'} />
       </button>
       <div className="tr-dur">
-        {saved === 'done' && <ArrowDownToLine size={14} className="tr-saved" aria-label={tx.menu.downloaded} data-testid="saved-mark" />}
-        {saved === 'busy' && <Loader2 size={14} className="tr-saved spin" />}
+        {saved !== 'none' && <DownloadMark id={t.id} saved={saved} label={tx.menu.downloaded} />}
         {fmtTime((t.durationMs || 0) / 1000)}
       </div>
       <button className="icon-btn tr-more" onClick={menu} title={tx.common.more}>
@@ -170,6 +169,26 @@ const TrackRow = memo(function TrackRow({ track: t, index, active, playing, like
     </div>
   );
 });
+
+/**
+ * A row's download, as in Yandex's app: an arrow once downloaded, a ring filling while it comes
+ * (spinning on the desktop, where the progress is not known), nothing before or while queued
+ * (hundreds of spinning rings would cost the page its smoothness). Its own component: only this
+ * row redraws as the ring fills.
+ */
+function DownloadMark({ id, saved, label }: { id: string | number; saved: OfflineState; label: string }) {
+  const progress = useDownloadProgress(id);
+  if (saved === 'done') return <ArrowDownToLine size={14} className="tr-saved" aria-label={label} data-testid="saved-mark" />;
+  if (progress === undefined) return saved === 'busy' ? <span className="tr-saved dl-ring waiting" data-testid="downloading-mark" /> : null;
+  const r = 6;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg className="tr-saved dl-ring" width={14} height={14} viewBox="0 0 16 16" data-testid="downloading-mark" data-progress={progress.toFixed(2)}>
+      <circle cx={8} cy={8} r={r} className="dl-ring-track" />
+      <circle cx={8} cy={8} r={r} className="dl-ring-fill" strokeDasharray={c} strokeDashoffset={c * (1 - progress)} transform="rotate(-90 8 8)" />
+    </svg>
+  );
+}
 
 export function TrackList({
   tracks,

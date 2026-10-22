@@ -78,7 +78,7 @@ function LikedTracks() {
         </button>
         <SmartShuffleButton tracks={tracks} title={t.common.liked} from={from} />
         {/* Only the whole list: the first page alone would download the newest hundred. */}
-        {tracks.length >= keys.length && <DownloadButton listKey="liked" tracks={tracks} />}
+        {tracks.length >= keys.length && <DownloadButton listKey="liked" tracks={tracks} title={t.common.liked} />}
         {tracks.length > 0 && search.button}
         {/* Radio by the liked tracks, as a playlist's (the user: playlists had it, Liked did not);
             on the iPhone in "…", as on a playlist's page. */}

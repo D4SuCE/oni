@@ -7,7 +7,7 @@ import type { Album, Playlist, Track } from '../api/types.ts';
 import { ApiError } from '../api/yandex.ts';
 import { saveList, savedList } from '../player/offlineLists.ts';
 import { tr } from '../i18n.ts';
-import { iosBackgroundDownloads, showProgressInShade } from '../player/iosDownloads.ts';
+import { iosBackgroundDownloads, showProgressInShade, useTrackProgress } from '../player/iosDownloads.ts';
 import { offline } from '../player/player.ts';
 import { errorText, toast, useApp } from '../store.ts';
 import { isIos } from './platform.ts';
@@ -35,10 +35,21 @@ background?.subscribe(() => {
 /** Whole-list downloads in progress, by list ("playlist:<uid>:<kind>", "album:<id>", …). */
 export const useBatches = create<Record<string, { done: number; total: number }>>(() => ({}));
 
-export type OfflineState = 'none' | 'busy' | 'done';
-export const offlineState = (id: string | number): OfflineState => (offline?.has(id) ? 'done' : offline?.isDownloading(id) ? 'busy' : 'none');
+/** `busy`: being fetched now (the desktop's); `queued`: given to iOS, which fetches a few at a time. */
+export type OfflineState = 'none' | 'queued' | 'busy' | 'done';
+export const offlineState = (id: string | number): OfflineState =>
+  offline?.has(id) ? 'done' : offline?.isDownloading(id) ? 'busy' : background?.isPending(id) ? 'queued' : 'none';
+
+/** How far a track's download is (0…1) where it is known: the iPhone's, through iOS. */
+export const useDownloadProgress = (id: string | number) => useTrackProgress((s) => s[String(id)]);
 
 export async function downloadTrack(t: Track) {
+  // The iPhone: through iOS too, sealed natively (no audio through the page) and with its ring.
+  if (background) {
+    showProgressInShade();
+    await background.add(`track:${t.id}`, [t], t.title);
+    return;
+  }
   try {
     await offline?.download(t);
   } catch (e) {
@@ -50,12 +61,13 @@ export async function downloadTrack(t: Track) {
 const cancelled = new Set<string>();
 
 /**
- * Downloads a list, oldest first: Liked and playlists list the newest on top, so they go from
- * the bottom up (an album keeps its order). Asking again while it runs cancels it.
+ * Downloads a list in its order, top first, as Yandex's app does (the user, 22.10.2026; it went
+ * from the bottom up before). Asking again while it runs cancels it. `title`: for the progress
+ * outside the app.
  */
-export async function downloadList(key: string, tracks: Track[]) {
+export async function downloadList(key: string, tracks: Track[], title = '') {
   if (!offline) return;
-  const ordered = key === 'liked' || key.startsWith('playlist:') ? [...tracks].reverse() : tracks;
+  const ordered = tracks;
   if (background) {
     if (background.pendingFor(key)) {
       watched.delete(key);
@@ -64,7 +76,7 @@ export async function downloadList(key: string, tracks: Track[]) {
     } else {
       watched.set(key, tracks.length);
       showProgressInShade();
-      await background.add(key, ordered);
+      await background.add(key, ordered, title);
     }
     return;
   }

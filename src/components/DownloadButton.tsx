@@ -5,7 +5,7 @@ import { offline } from '../player/player.ts';
 import { background, downloadList, useBatches, useOfflineVersion } from '../ui/offline.ts';
 
 /** "Download" for a whole playlist, album, mix or "Liked": progress while it runs, "Downloaded" after. */
-export function DownloadButton({ listKey, tracks }: { listKey: string; tracks: Track[] }) {
+export function DownloadButton({ listKey, tracks, title }: { listKey: string; tracks: Track[]; title?: string }) {
   const t = useT().downloads;
   useOfflineVersion((s) => s.v);
   const running = useBatches((s) => s[listKey]);
@@ -17,7 +17,7 @@ export function DownloadButton({ listKey, tracks }: { listKey: string; tracks: T
   // While it runs the button shows how far it is, and a tap cancels it.
   if (batch)
     return (
-      <button className="btn glass-btn busy" onClick={() => downloadList(listKey, playable)} title={t.cancel} data-testid="download-all">
+      <button className="btn glass-btn busy" onClick={() => downloadList(listKey, playable, title)} title={t.cancel} data-testid="download-all">
         <Loader2 size={16} className="spin" /> <span className="dl-full">{t.progress(batch.done, batch.total)}</span>
         <span className="dl-short">
           {batch.done} / {batch.total}
@@ -26,7 +26,7 @@ export function DownloadButton({ listKey, tracks }: { listKey: string; tracks: T
       </button>
     );
   return (
-    <button className="btn glass-btn" onClick={() => !all && downloadList(listKey, playable)} disabled={all} data-testid="download-all" data-done={all || undefined}>
+    <button className="btn glass-btn" onClick={() => !all && downloadList(listKey, playable, title)} disabled={all} data-testid="download-all" data-done={all || undefined}>
       {all ? <Check size={16} /> : <Download size={16} />} {all ? t.done : t.download}
     </button>
   );

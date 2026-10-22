@@ -38,7 +38,7 @@ export function MixView({ id }: { id: string }) {
             <button className="btn glass-btn" onClick={() => playShuffled(mix.tracks, title, undefined, extra)}>
               <Shuffle size={16} /> {t.common.shuffle}
             </button>
-            <DownloadButton listKey={`mix:${mix.id}`} tracks={mix.tracks} />
+            <DownloadButton listKey={`mix:${mix.id}`} tracks={mix.tracks} title={title} />
           </div>
         </div>
       </header>

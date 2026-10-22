@@ -56,6 +56,9 @@ export class OfflineLibrary {
   private busy = new Map<string, Promise<void>>();
   private listeners = new Set<() => void>();
   private deps: OfflineDeps;
+  /** Tracks someone else is putting in place (the iPhone's background downloads): their files are
+   * not leftovers, even before they are in the index. */
+  protect: (id: string) => boolean = () => false;
 
   constructor(deps: OfflineDeps) {
     this.deps = deps;
@@ -93,6 +96,25 @@ export class OfflineLibrary {
 
   has(id: string | number) {
     return Boolean(this.index[String(id)]);
+  }
+
+  entry(id: string | number): OfflineEntry | undefined {
+    return this.index[String(id)];
+  }
+
+  /** The key, base64, for the iPhone's native side: it seals background downloads and opens
+   * downloaded tracks itself (AES-GCM, the same file: nonce, then ciphertext and tag), so the
+   * audio never crosses the bridge as text. */
+  async rawKey() {
+    await this.cryptoKey();
+    return this.deps.store.getItem(KEY)!;
+  }
+
+  /** A file already sealed with this key and put in place by someone else (the iPhone's native
+   * side): only its index entry is new. */
+  adopt(track: Track, size: number, codec: string, bitrate: number) {
+    this.index[String(track.id)] = { track: trimTrack(track), size, at: Date.now(), codec, bitrate };
+    this.changed();
   }
 
   isDownloading(id: string | number) {
@@ -209,7 +231,7 @@ export class OfflineLibrary {
     }
     for (const f of files) {
       const id = f.name.replace(/\.oni$/, '');
-      if (!this.index[id] && !this.busy.has(id)) await this.deps.files.remove(f.name).catch(() => {});
+      if (!this.index[id] && !this.busy.has(id) && !this.protect(id)) await this.deps.files.remove(f.name).catch(() => {});
     }
     if (changed) this.changed();
   }

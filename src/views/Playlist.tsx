@@ -130,7 +130,7 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
               <Shuffle size={16} /> {t.common.shuffle}
             </button>
             <SmartShuffleButton tracks={tracks} title={pl.title} from={from} />
-            <DownloadButton listKey={`playlist:${pl.uid}:${pl.kind}`} tracks={tracks} />
+            <DownloadButton listKey={`playlist:${pl.uid}:${pl.kind}`} tracks={tracks} title={pl.title} />
             {tracks.length > 0 && search.button}
             {/* On the iPhone the rest lives in "…": one row of buttons fits its screen. */}
             {isIos ? (

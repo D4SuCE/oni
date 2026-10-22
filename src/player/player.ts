@@ -220,16 +220,20 @@ async function loadAt(index: number, autoplay = true) {
   updateMediaSession(t);
   try {
     if (offlineMode && !offline?.has(t.id)) throw new Error('not downloaded and no network');
-    // A downloaded copy plays first: it needs no network and no traffic.
-    const local = offline?.has(t.id) ? await offline.open(t.id).catch(() => null) : null;
-    const stream = local ? { url: '', codec: local.entry.codec, bitrate: local.entry.bitrate } : await streamUrl(t);
+    // A downloaded copy plays first: it needs no network and no traffic. The iPhone's player opens
+    // the sealed file itself with the key (decrypting it here and sending it over as text froze
+    // the page on every downloaded track).
+    const saved = offline?.entry(t.id);
+    const sealedKey = isIos && saved ? await offline!.rawKey() : null;
+    const local = saved && !sealedKey ? await offline!.open(t.id).catch(() => null) : null;
+    const stream = saved && (sealedKey || local) ? { url: '', codec: saved.codec, bitrate: saved.bitrate } : await streamUrl(t);
     if (seq !== loadSeq) return;
     if (isIos) {
       // The native player is told which track it opens and which files to keep (this and the next).
       const nextId = get().queue[index + 1]?.id;
-      (audio as unknown as NativeAudio).next = { id: String(t.id), ext: audioExt(local ? local.entry.codec : stream.codec), keep: [String(t.id), ...(nextId ? [String(nextId)] : [])] };
+      (audio as unknown as NativeAudio).next = { id: String(t.id), ext: audioExt(stream.codec), keep: [String(t.id), ...(nextId ? [String(nextId)] : [])], key: sealedKey ?? undefined };
     }
-    audio.src = local ? setLocalAudio(local.blob)! : stream.url;
+    audio.src = sealedKey ? `oni-sealed:${t.id}` : local ? setLocalAudio(local.blob)! : stream.url;
     if (!local) setLocalAudio(null);
     set({ stream: { codec: stream.codec, bitrate: stream.bitrate } });
     applyVolume();

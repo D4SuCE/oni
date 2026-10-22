@@ -5,6 +5,8 @@ import WebKit
 import MediaPlayer
 import AVFoundation
 import UserNotifications
+import CryptoKit
+import ActivityKit
 
 /// The app's own bridge controller: registers the plugins that live in this project.
 class OniViewController: CAPBridgeViewController {
@@ -61,18 +63,23 @@ public class KeychainPlugin: CAPPlugin, CAPBridgedPlugin {
         return SecItemAdd(q as CFDictionary, nil)
     }
 
+    /// The stored string, or nil.
+    static func read(key: String) -> String? {
+        var q = query(key)
+        q[kSecReturnData as String] = true
+        q[kSecMatchLimit as String] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(q as CFDictionary, &item) == errSecSuccess, let data = item as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
     /// Resolves { value } with the stored string, or {} when there is none.
     @objc func get(_ call: CAPPluginCall) {
         guard let key = call.getString("key") else {
             call.reject("key is required")
             return
         }
-        var q = KeychainPlugin.query(key)
-        q[kSecReturnData as String] = true
-        q[kSecMatchLimit as String] = kSecMatchLimitOne
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(q as CFDictionary, &item)
-        if status == errSecSuccess, let data = item as? Data, let value = String(data: data, encoding: .utf8) {
+        if let value = KeychainPlugin.read(key: key) {
             call.resolve(["value": value])
         } else {
             call.resolve([:])
@@ -334,10 +341,51 @@ public class VolumePlugin: CAPPlugin, CAPBridgedPlugin {
     }
 }
 
+/// The downloads' key (src/player/offline.ts): AES-256-GCM, and a file is the 12-byte nonce, the
+/// ciphertext and the 16-byte tag (CryptoKit's "combined", the page's Web Crypto layout too). The
+/// page hands it over; it is kept in the Keychain for launches in the background, when no page runs.
+/// Sealing and opening here keeps the audio off the bridge: as base64 text through the page it
+/// froze the iPhone's interface on every downloaded track.
+enum Vault {
+    static let keychainKey = "offline-key"
+    private static var cached: SymmetricKey?
+    private static let lock = NSLock()
+
+    static func set(base64: String) {
+        guard let data = Data(base64Encoded: base64), data.count == 32 else { return }
+        lock.lock()
+        cached = SymmetricKey(data: data)
+        lock.unlock()
+        if KeychainPlugin.read(key: keychainKey) != base64 { _ = KeychainPlugin.store(key: keychainKey, value: base64) }
+    }
+
+    static var key: SymmetricKey? {
+        lock.lock()
+        defer { lock.unlock() }
+        if cached == nil, let b64 = KeychainPlugin.read(key: keychainKey), let data = Data(base64Encoded: b64), data.count == 32 {
+            cached = SymmetricKey(data: data)
+        }
+        return cached
+    }
+
+    static func seal(_ data: Data, with key: SymmetricKey) throws -> Data {
+        guard let combined = try AES.GCM.seal(data, using: key).combined else { throw CryptoKitError.incorrectParameterSize }
+        return combined
+    }
+
+    static func open(_ data: Data, with key: SymmetricKey) throws -> Data {
+        return try AES.GCM.open(try AES.GCM.SealedBox(combined: data), using: key)
+    }
+}
+
 /// Downloads that go on while Oni is in the background or the screen is locked: a background
-/// URLSession, run by iOS itself (it cancels them only if the app is swiped away). Finished files
-/// land as they are in Library/oni-incoming/<track id>; the page encrypts them into the offline
-/// library when it runs (src/player/backgroundDownloads.ts). JS: registerPlugin('OniDownloads').
+/// URLSession, run by iOS itself (it cancels them only if the app is swiped away). They go a few at
+/// a time in the order the page gives (a list top first, as in Yandex's app: iOS left alone took
+/// hundreds at once in an order of its own). Each finished file is sealed with the key into
+/// Library/oni-sealed/<id>.oni, which the page moves into the library; without the key it lands as
+/// it is in Library/oni-incoming/<id> for the page to seal (src/player/backgroundDownloads.ts).
+/// The count shows in the Dynamic Island and on the lock screen (a Live Activity, OniActivity), or
+/// as a quiet notification where those are off. JS: registerPlugin('OniDownloads').
 @objc(DownloadsPlugin)
 public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDelegate {
     public let identifier = "DownloadsPlugin"
@@ -346,25 +394,27 @@ public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDel
         CAPPluginMethod(name: "enqueue", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "running", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "cancel", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setKey", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "notifications", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "progress", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "state", returnType: CAPPluginReturnPromise),
     ]
 
-    /// The progress notification (a quiet one, replaced in place): texts from the page, with
-    /// {done} and {total}; counts for the files handed over since the last batch was through.
-    private var labels: [String: String] = [:]
-    private var batchTotal = 0
-    private var batchDone = 0
-    private var notifiedAt = Date.distantPast
+    /// Files fetched at once.
+    static let parallel = 4
+    private static let waitingKey = "oni.downloads.waiting"
 
     /// One instance for the app's whole life: iOS hands the session's events to whoever made it.
     static var shared = DownloadsPlugin()
     static var backgroundCompletion: (() -> Void)?
 
-    static var incoming: URL {
-        let dir = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0].appendingPathComponent("oni-incoming", isDirectory: true)
+    static func folder(_ name: String) -> URL {
+        let dir = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0].appendingPathComponent(name, isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }
+    static var incoming: URL { folder("oni-incoming") }
+    static var sealed: URL { folder("oni-sealed") }
 
     lazy var session: URLSession = {
         let config = URLSessionConfiguration.background(withIdentifier: "oni.downloads")
@@ -373,57 +423,120 @@ public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDel
         return URLSession(configuration: config, delegate: DownloadsPlugin.shared, delegateQueue: nil)
     }()
 
+    /// The queue and what iOS is fetching, touched on `ledger` only. The queue is kept on disk too,
+    /// so a relaunch in the background goes on with it while no page runs.
+    private let ledger = DispatchQueue(label: "oni.downloads.ledger")
+    private var waiting: [[String: String]] = []
+    private var active = Set<String>()
+    private var restored = false
+
+    /// The count (from the page; moved on here for each file while the page sleeps) and its texts.
+    private var labels: [String: String] = [:]
+    private var title = ""
+    private var done = 0
+    private var total = 0
+    private var shownAt = Date.distantPast
+    /// The Live Activity (Activity<DownloadAttributes>, iOS 16.2+), kept untyped for iOS 15.
+    private var activity: Any?
+
     private var lastProgress: [String: Date] = [:]
     private weak var page: DownloadsPlugin?
 
     override public func load() {
         // Capacitor makes this instance; events go out through it, the session lives in `shared`.
         DownloadsPlugin.shared.page = self
-        _ = DownloadsPlugin.shared.session
+        DownloadsPlugin.shared.restore()
+    }
+
+    /// The queue from disk and what iOS still fetches from before (a relaunch).
+    func restore() {
+        _ = session // made here, on the main thread, before any other thread asks for it
+        ledger.async {
+            guard !self.restored else { return }
+            self.restored = true
+            self.waiting = (UserDefaults.standard.array(forKey: DownloadsPlugin.waitingKey) as? [[String: String]]) ?? []
+            self.session.getAllTasks { tasks in
+                self.ledger.async {
+                    for task in tasks where task.state == .running || task.state == .suspended {
+                        if let id = task.taskDescription { self.active.insert(id) }
+                    }
+                    self.pump()
+                }
+            }
+        }
+        DispatchQueue.main.async {
+            if #available(iOS 16.2, *), let running = Activity<DownloadAttributes>.activities.first {
+                self.activity = running
+                self.title = running.attributes.title
+                self.done = running.content.state.done
+                self.total = running.content.state.total
+            }
+        }
     }
 
     private func emit(_ event: String, _ data: [String: Any]) {
         (page ?? DownloadsPlugin.shared.page)?.notifyListeners(event, data: data)
     }
 
-    /// { progress, done } — asks once for permission to notify, and keeps the texts.
-    @objc func notifications(_ call: CAPPluginCall) {
-        let labels = ["progress": call.getString("progress") ?? "", "done": call.getString("done") ?? ""]
-        DownloadsPlugin.shared.labels = labels
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { granted, _ in
-            call.resolve(["granted": granted])
-        }
-    }
+    // MARK: the queue
 
-    /// { items: [{ id, url }] }
-    @objc func enqueue(_ call: CAPPluginCall) {
-        let items = call.getArray("items", JSObject.self) ?? []
-        DownloadsPlugin.shared.counted(added: items.count)
-        for item in items {
-            guard let id = item["id"] as? String, let address = item["url"] as? String, let url = URL(string: address) else { continue }
-            let task = DownloadsPlugin.shared.session.downloadTask(with: url)
+    /// Starts the next ones while fewer than `parallel` are fetched. On `ledger`.
+    private func pump() {
+        while active.count < DownloadsPlugin.parallel, !waiting.isEmpty {
+            let item = waiting.removeFirst()
+            guard let id = item["id"], let address = item["url"], let url = URL(string: address), !active.contains(id) else { continue }
+            let task = session.downloadTask(with: url)
             task.taskDescription = id
+            active.insert(id)
             task.resume()
         }
-        call.resolve()
+        UserDefaults.standard.set(waiting, forKey: DownloadsPlugin.waitingKey)
     }
 
-    /// The ids iOS is still working on.
+    /// { items: [{ id, url }] } — queued in this order behind what is queued already.
+    @objc func enqueue(_ call: CAPPluginCall) {
+        let items = (call.getArray("items", JSObject.self) ?? []).compactMap { item -> [String: String]? in
+            guard let id = item["id"] as? String, let url = item["url"] as? String else { return nil }
+            return ["id": id, "url": url]
+        }
+        let me = DownloadsPlugin.shared
+        me.ledger.async {
+            let known = Set(me.waiting.compactMap { $0["id"] }).union(me.active)
+            me.waiting += items.filter { !known.contains($0["id"]!) }
+            me.pump()
+            call.resolve()
+        }
+    }
+
+    /// The ids iOS is fetching or that wait their turn.
     @objc func running(_ call: CAPPluginCall) {
-        DownloadsPlugin.shared.session.getAllTasks { tasks in
-            let ids = tasks.filter { $0.state == .running || $0.state == .suspended }.compactMap { $0.taskDescription }
-            call.resolve(["ids": ids])
+        let me = DownloadsPlugin.shared
+        me.ledger.async {
+            call.resolve(["ids": Array(me.active) + me.waiting.compactMap { $0["id"] }])
         }
     }
 
     /// { ids?: [String] } — those, or all.
     @objc func cancel(_ call: CAPPluginCall) {
         let ids = call.getArray("ids", String.self).map(Set.init)
-        DownloadsPlugin.shared.session.getAllTasks { tasks in
-            for task in tasks where ids == nil || ids!.contains(task.taskDescription ?? "") { task.cancel() }
-            call.resolve()
+        let me = DownloadsPlugin.shared
+        me.ledger.async {
+            me.waiting.removeAll { ids == nil || ids!.contains($0["id"] ?? "") }
+            UserDefaults.standard.set(me.waiting, forKey: DownloadsPlugin.waitingKey)
+            me.session.getAllTasks { tasks in
+                for task in tasks where ids == nil || ids!.contains(task.taskDescription ?? "") { task.cancel() }
+                call.resolve()
+            }
         }
     }
+
+    /// { key } — the library's key, base64.
+    @objc func setKey(_ call: CAPPluginCall) {
+        Vault.set(base64: call.getString("key") ?? "")
+        call.resolve()
+    }
+
+    // MARK: the session
 
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         guard let id = downloadTask.taskDescription else { return }
@@ -432,43 +545,32 @@ public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDel
             emit("failed", ["id": id, "status": status])
             return
         }
-        let target = DownloadsPlugin.incoming.appendingPathComponent(id)
-        try? FileManager.default.removeItem(at: target)
+        // The file at `location` is gone once this returns: sealed or moved now.
         do {
-            try FileManager.default.moveItem(at: location, to: target)
+            if let key = Vault.key {
+                let target = DownloadsPlugin.sealed.appendingPathComponent(id + ".oni")
+                try Vault.seal(try Data(contentsOf: location), with: key).write(to: target, options: .atomic)
+            } else {
+                let target = DownloadsPlugin.incoming.appendingPathComponent(id)
+                try? FileManager.default.removeItem(at: target)
+                try FileManager.default.moveItem(at: location, to: target)
+            }
             emit("done", ["id": id])
+            DispatchQueue.main.async { self.advance() }
         } catch {
             emit("failed", ["id": id, "status": 0])
         }
     }
 
     public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        if let error = error, (error as NSError).code == NSURLErrorCancelled { return }
-        counted(finished: 1)
-        guard error != nil, let id = task.taskDescription else { return }
-        emit("failed", ["id": id, "status": 0])
-    }
-
-    /// Keeps the counts and the notification: every couple of seconds while files arrive, and
-    /// once more when the batch is through. Runs natively, so it goes on with the screen locked.
-    private func counted(added: Int = 0, finished: Int = 0) {
-        DispatchQueue.main.async {
-            if added > 0 && self.batchDone >= self.batchTotal {
-                self.batchTotal = 0
-                self.batchDone = 0
-            }
-            self.batchTotal += added
-            self.batchDone += finished
-            guard finished > 0, let template = self.labels[self.batchDone >= self.batchTotal ? "done" : "progress"], !template.isEmpty else { return }
-            let through = self.batchDone >= self.batchTotal
-            if !through && Date().timeIntervalSince(self.notifiedAt) < 2 { return }
-            self.notifiedAt = Date()
-            let content = UNMutableNotificationContent()
-            content.title = "Oni"
-            content.body = template.replacingOccurrences(of: "{done}", with: String(self.batchDone)).replacingOccurrences(of: "{total}", with: String(self.batchTotal))
-            if #available(iOS 15.0, *) { content.interruptionLevel = .passive }
-            UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "oni-downloads", content: content, trigger: nil))
+        let id = task.taskDescription ?? ""
+        ledger.async {
+            self.active.remove(id)
+            self.pump()
         }
+        if let error = error, (error as NSError).code == NSURLErrorCancelled { return }
+        guard error != nil, !id.isEmpty else { return }
+        emit("failed", ["id": id, "status": 0])
     }
 
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
@@ -484,6 +586,99 @@ public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDel
             DownloadsPlugin.backgroundCompletion?()
             DownloadsPlugin.backgroundCompletion = nil
         }
+    }
+
+    // MARK: the count outside the app
+
+    /// { progress, done, title } — the texts ({done}, {total}) and the permission for notifications.
+    @objc func notifications(_ call: CAPPluginCall) {
+        let me = DownloadsPlugin.shared
+        DispatchQueue.main.async {
+            me.labels = ["progress": call.getString("progress") ?? "", "done": call.getString("done") ?? ""]
+            if me.title.isEmpty { me.title = call.getString("title") ?? "" }
+        }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { granted, _ in
+            call.resolve(["granted": granted])
+        }
+    }
+
+    /// { done, total, title } — the lists' count, as their buttons show it.
+    @objc func progress(_ call: CAPPluginCall) {
+        let me = DownloadsPlugin.shared
+        DispatchQueue.main.async {
+            me.done = call.getInt("done") ?? me.done
+            me.total = call.getInt("total") ?? me.total
+            me.title = call.getString("title") ?? me.title
+            me.show()
+            call.resolve()
+        }
+    }
+
+    /// For the smoke test.
+    @objc func state(_ call: CAPPluginCall) {
+        let me = DownloadsPlugin.shared
+        DispatchQueue.main.async {
+            var live = false
+            if #available(iOS 16.2, *) { live = me.activity is Activity<DownloadAttributes> }
+            me.ledger.async {
+                call.resolve(["activity": live, "done": me.done, "total": me.total, "queued": me.waiting.count, "running": me.active.count])
+            }
+        }
+    }
+
+    /// One more file is in while the page may sleep: the count moves on by itself (the page's
+    /// next count replaces it).
+    private func advance() {
+        guard total > 0, done < total else { return }
+        done += 1
+        show()
+    }
+
+    private func line(_ through: Bool) -> String {
+        let template = labels[through ? "done" : "progress"] ?? ""
+        let text = template.isEmpty ? "\(done) / \(total)" : template
+        return text.replacingOccurrences(of: "{done}", with: String(done)).replacingOccurrences(of: "{total}", with: String(total))
+    }
+
+    /// Shows the count: about once a second while files come, and at the end. On main.
+    private func show() {
+        guard total > 0 else { return }
+        let through = done >= total
+        if !through && Date().timeIntervalSince(shownAt) < 1 { return }
+        shownAt = Date()
+        if #available(iOS 16.2, *), showActivity(through) { return }
+        notify(through)
+    }
+
+    /// The Live Activity: started with the first count (the app is on screen then: iOS starts
+    /// one only from the foreground), updated, and ended a minute after the last file.
+    @available(iOS 16.2, *)
+    private func showActivity(_ through: Bool) -> Bool {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return false }
+        let state = DownloadAttributes.ContentState(done: done, total: total, line: line(through), finished: through)
+        let content = ActivityContent(state: state, staleDate: nil)
+        if let running = activity as? Activity<DownloadAttributes> {
+            if through {
+                activity = nil
+                Task { await running.end(content, dismissalPolicy: .after(Date().addingTimeInterval(60))) }
+            } else {
+                Task { await running.update(content) }
+            }
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["oni-downloads"])
+            return true
+        }
+        guard !through, let started = try? Activity<DownloadAttributes>.request(attributes: DownloadAttributes(title: title), content: content, pushType: nil) else { return false }
+        activity = started
+        return true
+    }
+
+    /// Where there is no Live Activity: a quiet notification, replaced in place.
+    private func notify(_ through: Bool) {
+        let content = UNMutableNotificationContent()
+        content.title = title.isEmpty ? "Oni" : title
+        content.body = line(through)
+        if #available(iOS 15.0, *) { content.interruptionLevel = .passive }
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "oni-downloads", content: content, trigger: nil))
     }
 }
 
@@ -645,7 +840,22 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
                 }
             }
         }
-        if let name = call.getString("file") {
+        if let b64 = call.getString("sealed") {
+            // A downloaded track: its sealed file from the library, opened here into the cache the
+            // player reads (the page used to decrypt it and send it over as text, a freeze each time).
+            Vault.set(base64: b64)
+            DispatchQueue.global(qos: .userInitiated).async {
+                let source = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0].appendingPathComponent("offline/\(id).oni")
+                let target = self.cached(id, ext)
+                do {
+                    guard let key = Vault.key else { throw CryptoKitError.incorrectKeySize }
+                    try Vault.open(try Data(contentsOf: source), with: key).write(to: target, options: .atomic)
+                    opened(.success(target))
+                } catch {
+                    opened(.failure(error))
+                }
+            }
+        } else if let name = call.getString("file") {
             opened(.success(PlayerPlugin.folder.appendingPathComponent(name)))
         } else if let url = call.getString("url") {
             localFile(id: id, url: url, ext: ext, done: opened)

@@ -49,7 +49,7 @@ export function AlbumView({ id }: { id: number | string }) {
             <button className="btn glass-btn" onClick={() => playRadio(`album:${album.id}`, album.title)} data-testid="radio">
               <Radio size={16} /> {t.common.radio}
             </button>
-            <DownloadButton listKey={`album:${album.id}`} tracks={tracks} />
+            <DownloadButton listKey={`album:${album.id}`} tracks={tracks} title={album.title} />
           </>
         }
       />

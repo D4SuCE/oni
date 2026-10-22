@@ -24,7 +24,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function until(what: () => unknown, timeout: number) {
   const end = Date.now() + timeout;
   while (Date.now() < end) {
-    if (what()) return true;
+    if (await what()) return true;
     await sleep(250);
   }
   return false;
@@ -179,8 +179,10 @@ async function touchSeek() {
   report('touch-seek', moved, `at ${wave().audio.currentTime.toFixed(1)} of ${wave().audio.duration.toFixed(1)}`);
 }
 
-/** A list downloads through iOS's background session (iosDownloads.ts): the file lands in the
- * folder, is sealed into the library, and the books are clear. One track, removed afterwards. */
+/** A list downloads through iOS's background session (iosDownloads.ts): the native side seals the
+ * file with the library's key (nothing left unencrypted in oni-incoming), the page moves it into
+ * the library, the books are clear, it plays, and the count went to a Live Activity. One track,
+ * removed afterwards. */
 async function backgroundDownload() {
   // A chart track not downloaded yet (the queue holds one track by now).
   const chart = await (wave() as unknown as { api: { chart(): Promise<Track[]> } }).api.chart().catch(() => [] as Track[]);
@@ -188,9 +190,22 @@ async function backgroundDownload() {
   const bg = background;
   if (!bg || !track) return report('background-download', false, bg ? 'no track to try' : 'no background');
   const started = Date.now();
-  await bg.add('smoke', [track]);
+  const { OniDownloads, useTrackProgress } = await import('./player/iosDownloads.ts');
+  let ring = 0;
+  const unwatch = useTrackProgress.subscribe((s) => (ring = Math.max(ring, s[String(track.id)] ?? 0)));
+  await bg.add('smoke', [track], 'Smoke');
+  const live = await until(async () => (await OniDownloads.state()).total > 0, 5000);
+  const state = await OniDownloads.state();
   const kept = await until(() => wave().offline!.has(String(track.id)) && !bg.pendingFor('smoke'), 90000);
-  report('background-download', kept, `${((Date.now() - started) / 1000).toFixed(1)} s, pending ${bg.pendingFor('smoke')}`);
+  unwatch();
+  const { Directory, Filesystem } = await import('@capacitor/filesystem');
+  const plain = (await Filesystem.readdir({ path: 'oni-incoming', directory: Directory.Library }).catch(() => ({ files: [] }))).files.length;
+  report('background-download', kept && !plain, `${((Date.now() - started) / 1000).toFixed(1)} s, pending ${bg.pendingFor('smoke')}, unencrypted left ${plain}, ring up to ${ring.toFixed(2)}`);
+  // The Dynamic Island / lock screen: a Live Activity, where the simulator allows them.
+  report('live-activity', Boolean(live) && state.total === 1, JSON.stringify(state));
+  await wave().playTracks([track], 0, 'smoke');
+  const played = await until(() => wave().audio.src.startsWith('oni-sealed:') && !wave().audio.paused && wave().audio.currentTime > 1, 20000);
+  report('native-sealed-playback', played, wave().audio.src.slice(0, 12));
   await (wave().offline as unknown as { remove(id: string): Promise<void> }).remove(String(track.id));
 }
 
@@ -296,8 +311,9 @@ export async function runSmoke() {
     await wave().offline!.download(track);
     report('download', wave().offline!.has(track.id));
     await wave().playTracks([track], 0, 'smoke');
-    const local = await until(() => wave().audio.src.startsWith('blob:') && !wave().audio.paused && wave().audio.currentTime > 1, 20000);
-    report('offline-playback', local, wave().audio.src.slice(0, 5));
+    // Opened by the native player from the sealed file (no audio through the page).
+    const local = await until(() => wave().audio.src.startsWith('oni-sealed:') && !wave().audio.paused && wave().audio.currentTime > 1, 20000);
+    report('offline-playback', local, wave().audio.src.slice(0, 12));
     await nativePlayer();
     await backgroundDownload();
 

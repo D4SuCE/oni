@@ -2300,6 +2300,31 @@ html.motion .backdrop-img {
   color: var(--gold);
   vertical-align: -2px;
 }
+/* a download under way: a ring that fills; spinning while its progress is not known */
+.dl-ring {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+}
+.dl-ring circle {
+  fill: none;
+  stroke-width: 2.4;
+}
+.dl-ring-track {
+  stroke: var(--line);
+}
+.dl-ring-fill {
+  stroke: var(--gold);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.4s linear;
+}
+.dl-ring.waiting {
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  border-top-color: var(--gold);
+  animation: spin 1.1s linear infinite;
+}
 .offline-banner {
   position: sticky;
   top: 0;

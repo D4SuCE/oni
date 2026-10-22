@@ -9,7 +9,8 @@ import { Directory, Filesystem } from '@capacitor/filesystem';
 import { toBase64 } from '../api/bytes.ts';
 
 interface PlayerPlugin {
-  open(options: { id: string; url?: string; file?: string; ext: string; keep: string[] }): Promise<{ duration: number }>;
+  /** `sealed`: a downloaded track, opened from the library with this key (base64). */
+  open(options: { id: string; url?: string; file?: string; sealed?: string; ext: string; keep: string[] }): Promise<{ duration: number }>;
   fetch(options: { id: string; url: string; ext: string }): Promise<void>;
   play(): Promise<void>;
   pause(): Promise<void>;
@@ -40,8 +41,9 @@ export class NativeAudio extends EventTarget {
   /** iOS's volume is the phone's (volume.ts); levelling goes through OniPlayer.setGain. */
   volume = 1;
   error: { message: string } | null = null;
-  /** What the next `src` is: the track's id, its file ending, and the ids whose files to keep. */
-  next = { id: '', ext: 'mp3', keep: [] as string[] };
+  /** What the next `src` is: the track's id, its file ending, the ids whose files to keep, and
+   * for a downloaded track (src `oni-sealed:<id>`) the key its file opens with. */
+  next: { id: string; ext: string; keep: string[]; key?: string } = { id: '', ext: 'mp3', keep: [] };
 
   private source = '';
   private time = 0;
@@ -97,10 +99,11 @@ export class NativeAudio extends EventTarget {
   }
 
   private async open(value: string, seq: number) {
-    const { id, ext, keep } = this.next;
+    const { id, ext, keep, key } = this.next;
     try {
       let opened: { duration: number };
-      if (value.startsWith('blob:')) {
+      if (value.startsWith('oni-sealed:') && key) opened = await OniPlayer.open({ id, sealed: key, ext, keep });
+      else if (value.startsWith('blob:')) {
         // A downloaded track, decrypted by the page: written where the player reads it.
         const bytes = new Uint8Array(await (await fetch(value)).arrayBuffer());
         const file = `${id}.${ext}`;
