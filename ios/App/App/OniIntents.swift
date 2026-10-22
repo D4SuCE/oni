@@ -4,9 +4,9 @@ import AppIntents
 /// like. They go the way the lock screen's buttons go (RemotePlugin.press): pause and play are
 /// the player's own, so they work with the app in the background, its page asleep; the rest is the
 /// page's (the queue and the wave live there), which gets them even when it only starts now
-/// (Capacitor keeps the event until the page listens). My Wave opens the app. Siri has no Russian:
-/// it hears the English phrases; in Shortcuts the actions have Russian names and work in any
-/// automation.
+/// (Capacitor keeps the event until the page listens). My Wave opens the app. The phrases are
+/// Russian (the user's wish): the app's development language is Russian, so Siri set to Russian
+/// knows them, and "Они" is the app's spoken name (INAlternativeAppNames in Info.plist).
 @available(iOS 16.0, *)
 struct PlayWaveIntent: AppIntent {
     static var title: LocalizedStringResource = "Моя волна"
@@ -84,11 +84,41 @@ struct LikeIntent: AppIntent {
 @available(iOS 16.0, *)
 struct OniShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
-        AppShortcut(intent: PlayWaveIntent(), phrases: ["Play My Wave in \(.applicationName)", "Start \(.applicationName)"], shortTitle: "Моя волна", systemImageName: "waveform")
-        AppShortcut(intent: PauseIntent(), phrases: ["Pause \(.applicationName)"], shortTitle: "Пауза", systemImageName: "pause.fill")
-        AppShortcut(intent: ResumeIntent(), phrases: ["Resume \(.applicationName)"], shortTitle: "Продолжить", systemImageName: "play.fill")
-        AppShortcut(intent: NextTrackIntent(), phrases: ["Next track in \(.applicationName)", "Skip in \(.applicationName)"], shortTitle: "Следующий трек", systemImageName: "forward.fill")
-        AppShortcut(intent: PreviousTrackIntent(), phrases: ["Previous track in \(.applicationName)"], shortTitle: "Предыдущий трек", systemImageName: "backward.fill")
-        AppShortcut(intent: LikeIntent(), phrases: ["Like this in \(.applicationName)"], shortTitle: "Мне нравится", systemImageName: "heart.fill")
+        AppShortcut(
+            intent: PlayWaveIntent(),
+            phrases: ["Включи Мою волну в \(.applicationName)", "Моя волна в \(.applicationName)", "Включи \(.applicationName)", "Включи музыку в \(.applicationName)"],
+            shortTitle: "Моя волна",
+            systemImageName: "waveform"
+        )
+        AppShortcut(
+            intent: PauseIntent(),
+            phrases: ["Пауза в \(.applicationName)", "Поставь \(.applicationName) на паузу", "Останови \(.applicationName)"],
+            shortTitle: "Пауза",
+            systemImageName: "pause.fill"
+        )
+        AppShortcut(
+            intent: ResumeIntent(),
+            phrases: ["Продолжи \(.applicationName)", "Продолжить в \(.applicationName)", "Играй дальше в \(.applicationName)"],
+            shortTitle: "Продолжить",
+            systemImageName: "play.fill"
+        )
+        AppShortcut(
+            intent: NextTrackIntent(),
+            phrases: ["Следующий трек в \(.applicationName)", "Дальше в \(.applicationName)", "Переключи трек в \(.applicationName)"],
+            shortTitle: "Следующий трек",
+            systemImageName: "forward.fill"
+        )
+        AppShortcut(
+            intent: PreviousTrackIntent(),
+            phrases: ["Предыдущий трек в \(.applicationName)", "Назад в \(.applicationName)"],
+            shortTitle: "Предыдущий трек",
+            systemImageName: "backward.fill"
+        )
+        AppShortcut(
+            intent: LikeIntent(),
+            phrases: ["Мне нравится в \(.applicationName)", "Лайкни трек в \(.applicationName)", "Добавь в любимое в \(.applicationName)"],
+            shortTitle: "Мне нравится",
+            systemImageName: "heart.fill"
+        )
     }
 }

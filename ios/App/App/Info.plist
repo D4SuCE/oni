@@ -5,7 +5,16 @@
   <key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>en</string>
+	<string>ru</string>
+	<key>INAlternativeAppNames</key>
+	<array>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>Они</string>
+			<key>INAlternativeAppNamePronunciationHint</key>
+			<string>о-ни</string>
+		</dict>
+	</array>
 	<key>CFBundleDisplayName</key>
         <string>Oni</string>
 	<key>CFBundleExecutable</key>
