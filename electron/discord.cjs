@@ -17,6 +17,8 @@ const RETRY = 15_000;
 const SETTLE = 1500;
 
 let socket = null;
+/** A connection on its way (one at a time: a second, started meanwhile, doubled every update). */
+let connecting = false;
 let ready = false;
 let enabled = true;
 /** The activity wanted now (null: none), and the last one sent. */
@@ -53,8 +55,12 @@ function later() {
 
 /** Tries the pipes Discord may have opened (0…9), the first that answers. */
 function connect(n = 0) {
-  if (socket || !enabled) return;
-  if (n > 9) return later();
+  if (!enabled || (n === 0 && (socket || connecting))) return;
+  if (n > 9) {
+    connecting = false;
+    return later();
+  }
+  connecting = true;
   const s = net.connect(PIPE + n);
   let buffer = Buffer.alloc(0);
   s.once('error', () => {
@@ -64,6 +70,7 @@ function connect(n = 0) {
     } else connect(n + 1);
   });
   s.on('connect', () => {
+    connecting = false;
     socket = s;
     s.write(frame(0, { v: 1, client_id: CLIENT_ID }));
   });
@@ -80,11 +87,14 @@ function connect(n = 0) {
         /* a frame we cannot read: skipped */
       }
       buffer = buffer.subarray(8 + len);
+      if (process.env.ONI_DISCORD_DEBUG) log('info', `discord ← ${op} ${JSON.stringify(msg).slice(0, 600)}`);
       if (op === 1 && msg?.evt === 'READY') {
         ready = true;
         log('info', 'discord: connected');
         flush();
       } else if (op === 1 && msg?.evt === 'ERROR') log('warn', `discord: ${msg.data?.message}`);
+      // Accepted: Discord answers with the activity as it shows it.
+      else if (op === 1 && msg?.cmd === 'SET_ACTIVITY') log('info', `discord: ${msg.data ? `showing "${msg.data.details ?? ''}"` : 'cleared'}`);
       else if (op === 2) {
         // Closed by Discord (a wrong id, or it is quitting).
         log('warn', `discord: closed (${msg?.message})`);
