@@ -865,6 +865,10 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func begin(_ file: AVAudioFile) {
+        // A new track: a fade of the old one (another app's sound) is over.
+        fading?.invalidate()
+        fading = nil
+        node.volume = 1
         generation += 1
         node.stop()
         stopTimer()
@@ -921,6 +925,12 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.reject("cannot start: " + error.localizedDescription)
                 return
             }
+            // A fade under way (another app's sound) gives way to the user's play.
+            self.fading?.invalidate()
+            self.fading = nil
+            self.node.volume = 1
+            // What plays elsewhere already (a sound kept on by some app) is not a reason to stop.
+            self.othersPlaying = AVAudioSession.sharedInstance().isOtherAudioPlaying
             self.node.play()
             self.playing = true
             self.startTimer()
@@ -1008,6 +1018,34 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin {
 
     private func tick() {
         notifyListeners("time", data: ["time": position, "duration": duration, "playing": playing])
+        if playing && fading == nil { watchOthers() }
+    }
+
+    /// Whether another app played the last time the clock looked.
+    private var othersPlaying = false
+    private var fading: Timer?
+
+    /// Another app's sound started over the music without taking it (Instagram's videos mix with
+    /// others, so iOS says nothing and both played): the music fades out over a second and
+    /// pauses, as the user expects when a video starts. Apps that take the sound (YouTube) are an
+    /// interruption instead: iOS silences the music at once, before telling us, so no fade there.
+    private func watchOthers() {
+        let others = AVAudioSession.sharedInstance().isOtherAudioPlaying
+        defer { othersPlaying = others }
+        guard others, !othersPlaying else { return }
+        let from = node.volume
+        var step = 0
+        let steps = 12
+        fading = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] timer in
+            guard let self = self else { return timer.invalidate() }
+            step += 1
+            self.node.volume = from * Float(max(0, steps - step)) / Float(steps)
+            guard step >= steps else { return }
+            timer.invalidate()
+            self.fading = nil
+            self.halt()
+            self.node.volume = 1
+        }
     }
 
     /// A call or another app took the sound: paused, and the page told (it shows paused).
