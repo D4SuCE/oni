@@ -188,6 +188,17 @@ async function crossfade() {
   }
 }
 
+/** History → Recap on the phone: the numbers and the tops are there, and nothing runs off the screen. */
+async function recap() {
+  click('[data-testid="nav-history"]');
+  await until(() => document.querySelector('[data-testid="history-recap"]'), 10000);
+  click('[data-testid="history-recap"]');
+  const shown = await until(() => document.querySelector('[data-testid="recap-track"], [data-testid="recap-empty"]'), 30000);
+  const tracks = document.querySelectorAll('[data-testid="recap-track"]').length;
+  const over = [...document.querySelectorAll<HTMLElement>('.recap-stat, .recap-track, .recap-head, .recap .lib-actions > *')].filter((el) => el.getBoundingClientRect().right > window.innerWidth + 1).length;
+  report('recap', Boolean(shown) && over === 0, `${tracks} tracks, ${document.querySelectorAll('[data-testid="recap-artist"]').length} artists, ${over} off screen`);
+}
+
 /** Does the page keep running while the app is in the background with the native player on? The
  * workflow sends the app away for 25 s and back; a tick every 2 s shows whether this page ran. */
 function backgroundProbe() {
@@ -548,6 +559,7 @@ export async function runSmoke() {
     const { OniHaptics } = await import('./ui/haptics.ts');
     const tapped = await OniHaptics.tap({ kind: 'pick' }).then(() => '', (e) => String(e));
     report('haptics', !tapped, tapped);
+    await recap();
     await updateCheck();
   } catch (e) {
     report('crash', false, String(e));
