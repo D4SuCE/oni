@@ -208,6 +208,26 @@ async function recap() {
   const tracks = document.querySelectorAll('[data-testid="recap-track"]').length;
   const over = [...document.querySelectorAll<HTMLElement>('.recap-stat, .recap-track, .recap-head, .recap .lib-actions > *')].filter((el) => el.getBoundingClientRect().right > window.innerWidth + 1).length;
   report('recap', Boolean(shown) && over === 0, `${tracks} tracks, ${document.querySelectorAll('[data-testid="recap-artist"]').length} artists, ${over} off screen`);
+  // As stories: full screen, a tap goes on; the last card offers iOS's share sheet.
+  if (!tracks) return;
+  click('[data-testid="recap-stories-open"]');
+  const opened = await until(() => document.querySelector('[data-testid="story-card"]'), 3000);
+  const card = document.querySelector<HTMLElement>('[data-testid="story-card"]');
+  const full = card ? Math.abs(card.getBoundingClientRect().width - window.innerWidth) < 2 : false;
+  let summary = false;
+  for (let i = 0; i < 12 && !summary; i++) {
+    const c = document.querySelector<HTMLElement>('[data-testid="story-card"]');
+    if (c?.dataset.card === 'summary') summary = true;
+    else {
+      const r = c!.getBoundingClientRect();
+      c!.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: r.right - 20, clientY: r.top + r.height / 2 }));
+      await sleep(400);
+    }
+  }
+  const share = document.querySelector<HTMLElement>('[data-testid="story-share"]');
+  const shareOk = Boolean(share) && share!.getBoundingClientRect().bottom <= window.innerHeight;
+  click('[data-testid="stories-close"]');
+  report('recap-stories', Boolean(opened) && full && summary && shareOk, `${full ? 'full screen' : 'not full screen'}, summary ${summary ? 'reached' : 'not reached'}, share ${shareOk ? 'there' : 'missing'}`);
 }
 
 /**
