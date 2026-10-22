@@ -1,4 +1,4 @@
-import { Heart, MoreHorizontal, Pencil, Radio, Shuffle, Trash2, Upload } from 'lucide-react';
+import { ArrowUpDown, Heart, MoreHorizontal, Pencil, Radio, Shuffle, Trash2, Upload } from 'lucide-react';
 import { DownloadButton } from '../components/DownloadButton.tsx';
 import { useEffect, useRef, useState } from 'react';
 import { api, transport } from '../api/client.ts';
@@ -43,6 +43,8 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
   const t = useT();
   const likedPlaylists = useApp((s) => s.likedPlaylists);
   const search = useListSearch();
+  /** The iPhone's "Move" mode (from "…"). */
+  const [reordering, setReordering] = useState(false);
   const { tracks: loadedTracks, total: listTotal, complete } = useListTracks(pl);
   // Tracks moved by the user show in their new order at once, while Yandex is told (reset with
   // every load of the playlist, which then has that order itself).
@@ -134,11 +136,13 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
     toast(t.playlist.uploadPending);
   };
 
-  // "…" on the iPhone: what does not fit its one row of buttons.
+  // "…" on the iPhone: what does not fit its one row of buttons. "Move" puts the list in order
+  // (handles on its rows), once it is all in and not narrowed by a search.
   const more: MenuItem[] = [
     { label: t.common.radio, icon: <Radio size={15} />, onClick: () => playRadio(`playlist:${pl.uid}:${pl.kind}`, pl.title) },
     ...(own
       ? [
+          ...(complete && tracks.length > 1 && !search.query ? [{ label: t.menu.move, icon: <ArrowUpDown size={15} />, onClick: () => setReordering(true) }] : []),
           ...(transport.canUpload ? [{ label: t.playlist.upload, icon: <Upload size={15} />, onClick: () => fileInput.current?.click() }] : []),
           { label: t.playlist.rename, icon: <Pencil size={15} />, onClick: rename },
           { label: t.playlist.delete, icon: <Trash2 size={15} />, danger: true, onClick: destroy },
@@ -217,6 +221,8 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
           onPlay={(i) => playTracks(tracks, i, pl.title, from)}
           onRemove={own ? remove : undefined}
           onMove={own && complete ? move : undefined}
+          reordering={reordering}
+          onReorderDone={() => setReordering(false)}
         />
       ) : complete ? (
         <div className="empty-hint">{own ? t.playlist.emptyOwn : t.playlist.empty}</div>

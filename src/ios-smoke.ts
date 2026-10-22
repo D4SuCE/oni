@@ -302,11 +302,19 @@ async function swipeBack() {
   report('swipe-back', left, `route ${app.useApp.getState().route.name}`);
   click('[data-testid="nav-liked"]');
   await until(() => document.querySelector('[data-testid="liked-more"]'), 20000);
-  click('[data-testid="liked-more"]');
-  await until(() => document.querySelector('.menu'), 3000);
-  const items = [...document.querySelectorAll('.menu .menu-item')].map((i) => i.textContent?.trim());
-  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  // "Move" comes once the whole list is in (a part cannot be put in order): asked again till then.
+  let items: (string | undefined)[] = [];
+  await until(async () => {
+    click('[data-testid="liked-more"]');
+    await until(() => document.querySelector('.menu'), 3000);
+    items = [...document.querySelectorAll('.menu .menu-item')].map((i) => i.textContent?.trim());
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await until(() => !document.querySelector('.menu'), 2000);
+    return items.some((i) => /переместить|move/i.test(i ?? ''));
+  }, 30000);
   report('liked-radio', items.some((i) => /радио|radio/i.test(i ?? '')), items.join(', '));
+  // Not tried on the real Liked: it would put the account's likes in another order.
+  report('liked-move', items.some((i) => /переместить|move/i.test(i ?? '')), items.join(', '));
 }
 
 /** The phone's top: the offline banner sits below the status bar and the Dynamic Island (it was
@@ -348,25 +356,41 @@ async function moveTracks() {
     await until(() => document.querySelectorAll('.track-row').length === 3, 15000);
     const ids = () => [...document.querySelectorAll<HTMLElement>('.track-row')].map((r) => r.dataset.trackId);
     const before = ids();
+    const menuItems = () => [...document.querySelectorAll<HTMLElement>('.menu .menu-item')];
+    const isMove = (i: HTMLElement) => /переместить|move/i.test(i.textContent ?? '');
+    // "Move" is the list's, in the page's "…" (the user's wish after 1.6.0), not a track's.
     const first = document.querySelector('.track-row')!;
     const box = first.getBoundingClientRect();
     first.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: box.left + 60, clientY: box.top + 20 }));
     await until(() => document.querySelector('.menu'), 3000);
-    const item = [...document.querySelectorAll<HTMLElement>('.menu .menu-item')].find((i) => /переместить|move/i.test(i.textContent ?? ''));
+    const inTrack = menuItems().some(isMove);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await until(() => !document.querySelector('.menu'), 2000);
+    click('[data-testid="playlist-more"]');
+    await until(() => document.querySelector('.menu'), 3000);
+    const item = menuItems().find(isMove);
     item?.click();
     const handles = await until(() => document.querySelectorAll('[data-testid="drag-handle"]').length === 3, 3000);
-    // Drag the first by its handle onto the lower half of the third.
+    // A finger held on a handle before it moves: no track menu (it opened and stopped the drag).
     const handle = document.querySelector('[data-testid="drag-handle"]')!;
     const h = handle.getBoundingClientRect();
     const third = document.querySelectorAll('.track-row')[2].getBoundingClientRect();
     const at = (y: number) => ({ pointerId: 21, pointerType: 'touch', isPrimary: true, clientX: h.left + h.width / 2, clientY: y, bubbles: true, cancelable: true });
     handle.dispatchEvent(new PointerEvent('pointerdown', at(h.top + h.height / 2)));
+    await sleep(700);
+    const menuOnHold = Boolean(document.querySelector('.menu'));
+    // Then dragged onto the lower half of the third.
     for (let k = 1; k <= 6; k++) window.dispatchEvent(new PointerEvent('pointermove', at(h.top + ((third.top + third.height * 0.8 - h.top) * k) / 6)));
     window.dispatchEvent(new PointerEvent('pointerup', at(third.top + third.height * 0.8)));
     const want = [before[1], before[2], before[0]].join();
     const movedOk = await until(() => ids().join() === want, 5000);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     click('[data-testid="reorder-done"]');
-    report('move-tracks', Boolean(item) && Boolean(handles) && Boolean(movedOk), `menu item ${item ? 'there' : 'missing'}, handles ${document.querySelectorAll('[data-testid="drag-handle"]').length}, order ${ids().join()} want ${want}`);
+    report(
+      'move-tracks',
+      !inTrack && Boolean(item) && Boolean(handles) && !menuOnHold && Boolean(movedOk),
+      `in a track's menu ${inTrack ? 'yes' : 'no'}, in "…" ${item ? 'yes' : 'no'}, handles ${document.querySelectorAll('[data-testid="drag-handle"]').length}, menu on hold ${menuOnHold ? 'yes' : 'no'}, order ${ids().join()} want ${want}`,
+    );
   } finally {
     await w.__wave.api.deletePlaylist(pl.kind).catch(() => {});
   }
@@ -374,8 +398,16 @@ async function moveTracks() {
   click('.pb-cover');
   await until(() => document.querySelector('[data-testid="np-queue"]'), 5000);
   click('[data-testid="np-queue"]');
-  const sheet = await until(() => document.querySelector('[data-testid="queue-sheet"]'), 3000);
-  report('queue-sheet', Boolean(sheet), `${document.querySelectorAll('[data-testid="queue-sheet"] [data-testid="drag-handle"]').length} handles`);
+  const sheet = await until(() => document.querySelector('[data-testid="queue-sheet"] [data-testid="drag-handle"]'), 3000);
+  // Each handle on its track's line, at the right (it fell under the track: the user's screenshot).
+  const rows = [...document.querySelectorAll<HTMLElement>('[data-testid="queue-sheet"] .q-row')].filter((r) => r.querySelector('[data-testid="drag-handle"]'));
+  const misplaced = rows.filter((r) => {
+    const g = r.querySelector('[data-testid="drag-handle"]')!.getBoundingClientRect();
+    const title = r.querySelector('.tr-main')!.getBoundingClientRect();
+    const mid = g.top + g.height / 2;
+    return mid < title.top || mid > title.bottom || g.left < title.right;
+  }).length;
+  report('queue-sheet', Boolean(sheet) && rows.length > 0 && !misplaced, `${rows.length} handles, ${misplaced} off their line`);
   (document.querySelector('.q-sheet-backdrop') as HTMLElement | null)?.click();
   click('.np-close');
 }

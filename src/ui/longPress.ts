@@ -25,7 +25,9 @@ export function connectLongPress() {
       if (e.pointerType !== 'touch' || !e.isPrimary) return;
       swallowUntil = 0; // a new touch: what follows is its own
       const target = e.target as Element;
-      if (target.closest('input, textarea, .menu')) return;
+      // A list being put in order (the iPhone's "Move"): a hold there is for dragging (on a handle
+      // the menu opened, the drag stopped).
+      if (target.closest('input, textarea, .menu, .drag-handle, .reordering')) return;
       cancel();
       const { clientX: x, clientY: y } = e;
       press = {

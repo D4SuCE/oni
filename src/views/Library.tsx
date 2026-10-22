@@ -1,4 +1,4 @@
-import { Heart, Library as LibraryIcon, MoreHorizontal, Plus, Radio, Shuffle } from 'lucide-react';
+import { ArrowUpDown, Heart, Library as LibraryIcon, MoreHorizontal, Plus, Radio, Shuffle } from 'lucide-react';
 import { openMenu } from '../components/Menu.tsx';
 import { isIos } from '../ui/platform.ts';
 import { DownloadButton } from '../components/DownloadButton.tsx';
@@ -85,6 +85,8 @@ function LikedTracks() {
   }, [keys, offlineNow]);
 
   const search = useListSearch();
+  /** The iPhone's "Move" mode (from "…"). */
+  const [reordering, setReordering] = useState(false);
   // Kept whole only: the first page alone is not Liked.
   useKeepForOffline('liked', t.common.liked, tracks && tracks.length >= keys.length ? tracks : null);
   const radio = () => playRadio(`playlist:${from.playlist}`, t.common.liked);
@@ -105,7 +107,18 @@ function LikedTracks() {
             on the iPhone in "…", as on a playlist's page. */}
         {tracks.length > 0 &&
           (isIos ? (
-            <button className="btn glass-btn" onClick={(e) => openMenu(e, [{ label: t.common.radio, icon: <Radio size={15} />, onClick: radio }])} title={t.common.more} data-testid="liked-more">
+            <button
+              className="btn glass-btn"
+              onClick={(e) =>
+                openMenu(e, [
+                  { label: t.common.radio, icon: <Radio size={15} />, onClick: radio },
+                  // Putting Liked in order: once it is all in, as dragging on the desktop.
+                  ...(tracks.length >= keys.length && tracks.length > 1 && !search.query ? [{ label: t.menu.move, icon: <ArrowUpDown size={15} />, onClick: () => setReordering(true) }] : []),
+                ])
+              }
+              title={t.common.more}
+              data-testid="liked-more"
+            >
               <MoreHorizontal size={18} />
             </button>
           ) : (
@@ -135,6 +148,8 @@ function LikedTracks() {
                 }
               : undefined
           }
+          reordering={reordering}
+          onReorderDone={() => setReordering(false)}
         />
       ) : (
         <div className="empty-hint">{t.library.likedEmpty}</div>

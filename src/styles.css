@@ -3207,6 +3207,15 @@ kbd {
 .q-row.drop-after {
   box-shadow: inset 0 -2px 0 var(--accent);
 }
+/* The iPhone's queue: the handle at the right of its track's line (a fourth item wrapped it under
+   the track, the user's screenshot). Removing is in the row's menu (a long press): the hidden "×"
+   only showed on hover, which a phone has not. */
+html.ios .q-row {
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+}
+html.ios .q-row .icon-btn {
+  display: none;
+}
 .drag-handle {
   display: grid;
   place-items: center;
