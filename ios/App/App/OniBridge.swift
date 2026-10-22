@@ -1460,6 +1460,9 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         let st = fetch.state
         trace["extends"] = (trace["extends"] as? Int ?? 0) + 1
         if st.failed != nil { return }
+        // Less than a piece more, and the node still has some: the file is not opened again for it
+        // (dozens of small arrivals a second, each an open: heat on the phone).
+        if !st.done && outstanding > 0 && st.frames - PlayerPlugin.MARGIN - scheduledEnd < PlayerPlugin.PIECE { return }
         // The newest view of it: what has arrived so far, or the whole file.
         let view: AVAudioFile
         do {
