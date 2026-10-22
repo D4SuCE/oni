@@ -3213,6 +3213,13 @@ kbd {
 html.ios .q-row {
   grid-template-columns: 40px minmax(0, 1fr) auto;
 }
+/* Rows are held to be dragged in "Reorder": no text selection or iOS's callout on the hold. */
+html.ios .reordering .track-row,
+html.ios .q-sheet .q-row {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
 html.ios .q-row .icon-btn {
   display: none;
 }

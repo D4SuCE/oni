@@ -192,7 +192,8 @@ const ru = {
     downloaded: 'Скачан',
     removeDownload: 'Удалить с устройства',
     move: 'Переместить',
-    moveHint: 'Перетаскивайте треки за ≡',
+    reorder: 'Изменить порядок',
+    moveHint: 'Удерживайте трек и перетащите',
   },
   downloads: {
     kicker: 'Играет без интернета',
@@ -674,7 +675,8 @@ const en: Dict = {
     downloaded: 'Downloaded',
     removeDownload: 'Remove from device',
     move: 'Move',
-    moveHint: 'Drag tracks by ≡',
+    reorder: 'Reorder',
+    moveHint: 'Hold a track and drag it',
   },
   downloads: {
     kicker: 'Plays without internet',

@@ -113,7 +113,7 @@ function LikedTracks() {
                 openMenu(e, [
                   { label: t.common.radio, icon: <Radio size={15} />, onClick: radio },
                   // Putting Liked in order: once it is all in, as dragging on the desktop.
-                  ...(tracks.length >= keys.length && tracks.length > 1 && !search.query ? [{ label: t.menu.move, icon: <ArrowUpDown size={15} />, onClick: () => setReordering(true) }] : []),
+                  ...(tracks.length >= keys.length && tracks.length > 1 && !search.query ? [{ label: t.menu.reorder, icon: <ArrowUpDown size={15} />, onClick: () => setReordering(true) }] : []),
                 ])
               }
               title={t.common.more}

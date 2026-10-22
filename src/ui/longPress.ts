@@ -2,6 +2,8 @@
 // click does on the desktop. iOS sends no contextmenu event for a long press, so one is sent
 // here; the menus' own onContextMenu handlers do the rest.
 
+import { haptic } from './haptics.ts';
+
 /** How long to hold, and how far the finger may wander meanwhile (it is a scroll beyond that). */
 const HOLD = 450;
 const SLOP = 10;
@@ -39,6 +41,7 @@ export function connectLongPress() {
           const menu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y });
           target.dispatchEvent(menu);
           held = menu.defaultPrevented; // a handler opened a menu
+          if (held) haptic('pick');
         }, HOLD),
       };
     },

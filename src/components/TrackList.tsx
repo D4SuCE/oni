@@ -240,7 +240,7 @@ export function TrackList({
   // a track's menu before 1.6.1). Not while searching the list.
   const list = useRef<HTMLDivElement>(null);
   const sortable = Boolean(onMove) && !filter;
-  useDragSort(list, { enabled: sortable && (!isIos || reordering), mode: isIos ? 'handle' : 'row', onMove: (from, to) => onMove?.(from, to) });
+  useDragSort(list, { enabled: sortable && (!isIos || reordering), mode: isIos ? 'handle' : 'row', hold: true, onMove: (from, to) => onMove?.(from, to) });
   return (
     <div ref={list} className={cx('track-list', !showAlbum && 'no-album', reordering && 'reordering')}>
       {reordering && (

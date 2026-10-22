@@ -310,11 +310,11 @@ async function swipeBack() {
     items = [...document.querySelectorAll('.menu .menu-item')].map((i) => i.textContent?.trim());
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     await until(() => !document.querySelector('.menu'), 2000);
-    return items.some((i) => /переместить|move/i.test(i ?? ''));
+    return items.some((i) => /изменить порядок|reorder/i.test(i ?? ''));
   }, 30000);
   report('liked-radio', items.some((i) => /радио|radio/i.test(i ?? '')), items.join(', '));
   // Not tried on the real Liked: it would put the account's likes in another order.
-  report('liked-move', items.some((i) => /переместить|move/i.test(i ?? '')), items.join(', '));
+  report('liked-move', items.some((i) => /изменить порядок|reorder/i.test(i ?? '')), items.join(', '));
 }
 
 /** The phone's top: the offline banner sits below the status bar and the Dynamic Island (it was
@@ -357,8 +357,8 @@ async function moveTracks() {
     const ids = () => [...document.querySelectorAll<HTMLElement>('.track-row')].map((r) => r.dataset.trackId);
     const before = ids();
     const menuItems = () => [...document.querySelectorAll<HTMLElement>('.menu .menu-item')];
-    const isMove = (i: HTMLElement) => /переместить|move/i.test(i.textContent ?? '');
-    // "Move" is the list's, in the page's "…" (the user's wish after 1.6.0), not a track's.
+    const isMove = (i: HTMLElement) => /переместить|изменить порядок|move|reorder/i.test(i.textContent ?? '');
+    // "Reorder" is the list's, in the page's "…" (the user's wish after 1.6.0), not a track's.
     const first = document.querySelector('.track-row')!;
     const box = first.getBoundingClientRect();
     first.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: box.left + 60, clientY: box.top + 20 }));
@@ -371,14 +371,16 @@ async function moveTracks() {
     const item = menuItems().find(isMove);
     item?.click();
     const handles = await until(() => document.querySelectorAll('[data-testid="drag-handle"]').length === 3, 3000);
-    // A finger held on a handle before it moves: no track menu (it opened and stopped the drag).
-    const handle = document.querySelector('[data-testid="drag-handle"]')!;
-    const h = handle.getBoundingClientRect();
+    // The user's way: a finger held on the track itself (its title), then moved. No track menu on
+    // the hold (it opened and stopped the drag): the list is being edited.
+    const grip = document.querySelector('.track-row .tr-title')!;
+    const h = grip.getBoundingClientRect();
     const third = document.querySelectorAll('.track-row')[2].getBoundingClientRect();
-    const at = (y: number) => ({ pointerId: 21, pointerType: 'touch', isPrimary: true, clientX: h.left + h.width / 2, clientY: y, bubbles: true, cancelable: true });
-    handle.dispatchEvent(new PointerEvent('pointerdown', at(h.top + h.height / 2)));
+    const at = (y: number) => ({ pointerId: 21, pointerType: 'touch', isPrimary: true, clientX: h.left + 20, clientY: y, bubbles: true, cancelable: true });
+    grip.dispatchEvent(new PointerEvent('pointerdown', at(h.top + h.height / 2)));
     await sleep(700);
     const menuOnHold = Boolean(document.querySelector('.menu'));
+    const dragging = Boolean(document.querySelector('.track-list.sorting'));
     // Then dragged onto the lower half of the third.
     for (let k = 1; k <= 6; k++) window.dispatchEvent(new PointerEvent('pointermove', at(h.top + ((third.top + third.height * 0.8 - h.top) * k) / 6)));
     window.dispatchEvent(new PointerEvent('pointerup', at(third.top + third.height * 0.8)));
@@ -388,8 +390,8 @@ async function moveTracks() {
     click('[data-testid="reorder-done"]');
     report(
       'move-tracks',
-      !inTrack && Boolean(item) && Boolean(handles) && !menuOnHold && Boolean(movedOk),
-      `in a track's menu ${inTrack ? 'yes' : 'no'}, in "…" ${item ? 'yes' : 'no'}, handles ${document.querySelectorAll('[data-testid="drag-handle"]').length}, menu on hold ${menuOnHold ? 'yes' : 'no'}, order ${ids().join()} want ${want}`,
+      !inTrack && Boolean(item) && Boolean(handles) && !menuOnHold && dragging && Boolean(movedOk),
+      `in a track's menu ${inTrack ? 'yes' : 'no'}, in "…" ${item ? 'yes' : 'no'}, handles ${document.querySelectorAll('[data-testid="drag-handle"]').length}, menu on hold ${menuOnHold ? 'yes' : 'no'}, held row dragging ${dragging ? 'yes' : 'no'}, order ${ids().join()} want ${want}`,
     );
   } finally {
     await w.__wave.api.deletePlaylist(pl.kind).catch(() => {});
@@ -496,6 +498,10 @@ export async function runSmoke() {
     await swipeBack();
     await phoneTop();
     await moveTracks();
+    // The Taptic Engine's plugin is there and answers (the simulator has nothing to feel).
+    const { OniHaptics } = await import('./ui/haptics.ts');
+    const tapped = await OniHaptics.tap({ kind: 'pick' }).then(() => '', (e) => String(e));
+    report('haptics', !tapped, tapped);
     await updateCheck();
   } catch (e) {
     report('crash', false, String(e));

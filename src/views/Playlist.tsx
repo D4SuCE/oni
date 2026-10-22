@@ -142,7 +142,7 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
     { label: t.common.radio, icon: <Radio size={15} />, onClick: () => playRadio(`playlist:${pl.uid}:${pl.kind}`, pl.title) },
     ...(own
       ? [
-          ...(complete && tracks.length > 1 && !search.query ? [{ label: t.menu.move, icon: <ArrowUpDown size={15} />, onClick: () => setReordering(true) }] : []),
+          ...(complete && tracks.length > 1 && !search.query ? [{ label: t.menu.reorder, icon: <ArrowUpDown size={15} />, onClick: () => setReordering(true) }] : []),
           ...(transport.canUpload ? [{ label: t.playlist.upload, icon: <Upload size={15} />, onClick: () => fileInput.current?.click() }] : []),
           { label: t.playlist.rename, icon: <Pencil size={15} />, onClick: rename },
           { label: t.playlist.delete, icon: <Trash2 size={15} />, danger: true, onClick: destroy },
