@@ -315,6 +315,19 @@ async function swipeBack() {
   report('liked-radio', items.some((i) => /радио|radio/i.test(i ?? '')), items.join(', '));
   // Not tried on the real Liked: it would put the account's likes in another order.
   report('liked-move', items.some((i) => /изменить порядок|reorder/i.test(i ?? '')), items.join(', '));
+  // Downloading Liked: its row of buttons still fits the screen ("…" ran off it with the count
+  // in the button: the user on 1.6.1). Started and cancelled at once (only the simulator's files).
+  const download = document.querySelector<HTMLElement>('.lib-actions [data-testid="download-all"]');
+  let busyOver = -1;
+  if (download && !download.dataset.done) {
+    download.click();
+    if (await until(() => document.querySelector('.lib-actions [data-testid="download-all"].busy'), 10000)) {
+      await sleep(1500);
+      busyOver = [...document.querySelectorAll<HTMLElement>('.lib-actions > *')].filter((b) => b.getBoundingClientRect().right > window.innerWidth + 1).length;
+      document.querySelector<HTMLElement>('.lib-actions [data-testid="download-all"]')?.click();
+    }
+  }
+  report('liked-download-fits', busyOver === 0, busyOver < 0 ? 'no download started' : `${busyOver} off screen while downloading`);
 }
 
 /** The phone's top: the offline banner sits below the status bar and the Dynamic Island (it was
