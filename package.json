@@ -1,7 +1,7 @@
 {
   "name": "wave-player",
   "productName": "Oni",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "private": true,
   "description": "Неофициальный клиент Яндекс Музыки с собственным интерфейсом",
   "main": "electron/main.cjs",

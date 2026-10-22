@@ -13,6 +13,8 @@
 
 ## [Не выпущено]
 
+## [1.8.0] — 2026-10-22
+
 ### Добавлено
 - iPhone: Siri и «Команды» — «Моя волна», пауза, продолжить, следующий и предыдущий трек, «Мне нравится».
   По-русски: «Привет, Siri, включи Мою волну в Oni», «Пауза в Oni», «Следующий трек в Oni», «Мне нравится в Oni».
@@ -409,7 +411,8 @@
 - Фон-картина «Blood Moon Over Misty Pagodas», прозрачность окна (Acrylic).
 - Живые видеообложки Яндекса и пульсация обложек в такт музыке.
 
-[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.7.0...HEAD
+[Не выпущено]: https://github.com/D4SuCE/oni/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.8.0
 [1.7.0]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.7.0
 [1.6.1]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.6.1
 [1.6.0]: https://github.com/D4SuCE/oni-releases/releases/tag/v1.6.0
