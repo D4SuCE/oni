@@ -1,7 +1,11 @@
 # Сторож Яндекс Музыки: что делать облачному агенту
 
 Тебя запускает облачный агент Claude Code (routine «Oni — сторож Яндекс Музыки», каждый день в 10:00 UTC)
-без пользователя: он не смотрит в чат. За час до тебя GitHub (`.github/workflows/ym-watch.yml`) проверил
+без пользователя: он не смотрит в чат.
+
+Облако Claude: запросы к GitHub идут через посредника, открыт только репозиторий `D4SuCE/oni`, и GraphQL
+закрыт — `gh issue …` не работает, задачи — через REST (`gh api repos/D4SuCE/oni/issues…`, ниже). `gh run`,
+`gh workflow run`, `gh api` — работают. 7-Zip нет (не нужен: код приложения Яндекса — готовым артефактом). За час до тебя GitHub (`.github/workflows/ym-watch.yml`) проверил
 новую версию официального приложения Яндекс Музыки и прогнал тесты API на аккаунте. Если он нашёл, что
 разобрать, на ветке `ym-watch` лежит `pending.md` (отчёт), а в GitHub открыта задача с меткой `ym-watch`.
 
@@ -50,8 +54,9 @@ git fetch origin ym-watch && git show origin/ym-watch:pending.md
    git merge --ff-only <ветка> && git push`.
 5. Выпуск PATCH по разделу «Выпуск» в `CLAUDE.md`: раздел в `CHANGELOG.md`, `npm version x.y.z
    --no-git-tag-version`, коммит «Release x.y.z», `git tag -a vx.y.z -m "Oni x.y.z"`, `git push --follow-tags`.
-   Метка сама запускает `release.yml` (Windows) и `ios.yml` (iPhone): дождись `gh run watch`, проверь
-   `gh release view vx.y.z -R D4SuCE/oni-releases` (установщики, IPA, `sidestore.json`).
+   Метка сама запускает `release.yml` (Windows; он же прикладывает IPA и `sidestore.json`) и `ios.yml`
+   (iPhone): дождись обоих (`gh run list --workflow release.yml --limit 1`, `gh run watch <id> --exit-status`).
+   В `oni-releases` отсюда не заглянуть — итог выпуска виден по `release.yml` (строка «released vx.y.z»).
 6. ROADMAP: пункт с доводами и что сделано; сводка в начале.
 
 ## 3. Если интересно — не встраивать
@@ -62,9 +67,11 @@ git fetch origin ym-watch && git show origin/ym-watch:pending.md
 ## 4. Всегда в конце
 
 1. `ROADMAP.md`, «Журнал сторожа»: дата, версия, итог одной фразой (коммит в `main`, `git push`).
-2. Сообщи пользователю комментарием к задаче сторожа (`gh issue list --label ym-watch --state open`):
-   что нашёл, что сделал (выпущено x.y.z — с доводами; интересное — «скажи, если встроить»; ничего), и
-   закрой её (`gh issue close`). Комментарий приходит ему письмом.
+2. Сообщи пользователю комментарием к задаче сторожа — что нашёл, что сделал (выпущено x.y.z — с доводами;
+   интересное — «скажи, если встроить»; ничего) — и закрой её. Комментарий приходит ему письмом.
+   Задача: `gh api 'repos/D4SuCE/oni/issues?labels=ym-watch&state=open' --jq '.[0].number'`;
+   комментарий: `gh api repos/D4SuCE/oni/issues/<N>/comments -f body=@/tmp/comment.md` (или `-f body="…"`);
+   закрыть: `gh api -X PATCH repos/D4SuCE/oni/issues/<N> -f state=closed`.
 3. Прими снимок на ветке `ym-watch`: `next-snapshot.json` → `snapshot.json`, удали `pending.md`, коммит, push.
    Не получилось починить — снимок и `pending.md` не трогай (завтра разбор повторится), задачу не закрывай.
 

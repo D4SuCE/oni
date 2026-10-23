@@ -1273,6 +1273,20 @@ await step('history: this app and all devices', async () => {
   if (await page.locator('.error-box').count()) throw new Error(await page.locator('.error-box').innerText());
   console.log(`       in this app: ${local} groups; from Yandex: ${await page.locator('.history-group .track-row').count()} tracks`);
   await shot('13-history');
+  // Found by the user: a track started from History showed "My Wave" (the run's source) on the home
+  // banner, not where it was started from. Both tabs: Yandex's, then this app's.
+  for (const tab of ['history-yandex', 'history-app']) {
+    await page.click(`[data-testid="${tab}"]`);
+    await page.locator('.history-group .track-row').first().dblclick();
+    await page.waitForFunction(() => window.__wave.usePlayer.getState().source?.kind === 'list', null, { timeout: 15000 });
+    const title = await page.evaluate(() => window.__wave.usePlayer.getState().source?.title);
+    if (title !== 'История') throw new Error(`${tab}: playing from "${title}", not "История"`);
+  }
+  await page.click('[data-testid="nav-home"]');
+  const kicker = await page.locator('[data-testid="wave-kicker"]').innerText();
+  if (!/история/i.test(kicker)) throw new Error(`home banner: "${kicker}"`);
+  await page.evaluate(() => window.__wave.audio.pause());
+  await page.click('[data-testid="nav-history"]');
 });
 
 await step('recap: the month summed up from the plays (here and, for the last days, everywhere); play it, save it as a playlist (removed again)', async () => {

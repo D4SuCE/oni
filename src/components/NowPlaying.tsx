@@ -12,6 +12,7 @@ import { cx, useAsync } from '../ui/util.ts';
 import { ArtistLinks, Cover, Spinner } from './Common.tsx';
 import { LikeButton, SeekBar, SleepButton, Transport, VolumeControl } from './PlayerBar.tsx';
 import { usePhoneSound } from '../player/phoneSound.ts';
+import { useEq } from '../player/eq.ts';
 import { isIos } from '../ui/platform.ts';
 import { BackgroundVideo, LiveCover, useCoverVideo } from './LiveCover.tsx';
 import { openMenu } from './Menu.tsx';
@@ -136,6 +137,8 @@ function QueueRow({ i, current }: { i: number; current?: boolean }) {
 export function NowPlaying() {
   const track = usePlayer((s) => s.queue[s.index]);
   const isWave = usePlayer((s) => s.source?.kind === 'wave');
+  // The equalizer's button is red while it is on, as in the desktop's player bar (the user).
+  const eqOn = useEq((s) => s.enabled);
   const [picked, setTab] = useState<'queue' | 'lyrics' | 'similar'>('queue');
   // The iPhone has no room for the queue beside the cover: it opens as a sheet.
   const [queueOpen, setQueueOpen] = useState(false);
@@ -183,7 +186,7 @@ export function NowPlaying() {
                   <SleepButton size={20} />
                   {/* The equalizer on the iPhone, where the player bar has no room for it. */}
                   {isIos && (
-                    <button className="icon-btn" onClick={() => useApp.setState({ soundOpen: true })} title={t.sound.title} data-testid="np-sound">
+                    <button className={cx('icon-btn', eqOn && 'on')} onClick={() => useApp.setState({ soundOpen: true })} title={t.sound.title} data-testid="np-sound">
                       <SlidersVertical size={21} />
                     </button>
                   )}

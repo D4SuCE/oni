@@ -5,7 +5,7 @@ import { create } from 'zustand';
 import type { Track } from '../api/types.ts';
 import { api, loadJson, storage, transport } from '../api/client.ts';
 import { tr } from '../i18n.ts';
-import { artistNames, NetworkError, trackCover, type StreamQuality } from '../api/yandex.ts';
+import { artistNames, heardSeconds, NetworkError, trackCover, type StreamQuality } from '../api/yandex.ts';
 import { DEFAULT_TUNING, WaveEngine, waveSeeds, type WaveStats, type WaveTuning } from '../wave/engine.ts';
 import { HEARD_SECONDS, ListenHistory } from '../wave/history.ts';
 import { PlayLog } from './playLog.ts';
@@ -469,7 +469,7 @@ function reportPlay(t: Track, ended: boolean) {
       track: t,
       playId: play.id,
       startedAt: play.startedAt,
-      playedSeconds: listened,
+      playedSeconds: heardSeconds(listened, ended, (t.durationMs || 0) / 1000, audio.currentTime),
       endSeconds: ended ? (t.durationMs || 0) / 1000 : audio.currentTime,
       ...(source.kind === 'list' ? source.from : { wave: engine?.radio }),
     })

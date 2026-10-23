@@ -4,7 +4,7 @@
 // Run: npm run test:plays
 import type { HttpRequest, Transport } from '../src/api/transport.ts';
 import type { Track } from '../src/api/types.ts';
-import { YandexMusic } from '../src/api/yandex.ts';
+import { heardSeconds, YandexMusic } from '../src/api/yandex.ts';
 
 let passed = 0;
 let failed = 0;
@@ -75,6 +75,17 @@ await test('an album play names the album; a list of no kind is "other"', async 
   const [a, b] = playsOf(sent).map((r) => (r.json as any).plays[0]);
   assert(a.context === 'album' && a.contextItem === '77', `album: ${JSON.stringify(a)}`);
   assert(b.context === 'other', `other: ${JSON.stringify(b)}`);
+});
+
+await test('a track that played to its end counts whole, also when the crossfade took its last seconds', () => {
+  // Yandex puts a play into the history only at ~95 % of the track (checked on the account: 90 % no,
+  // 95 % yes). With a 5 s crossfade a 90 s track reported 85 s and never got there (the user).
+  assert(heardSeconds(85, true, 90, 85) === 90, `crossfaded: ${heardSeconds(85, true, 90, 85)}`);
+  assert(heardSeconds(180, true, 180, 180) === 180, 'played out');
+  // Skipped: what was heard, no more.
+  assert(heardSeconds(40, false, 180, 40) === 40, `skipped: ${heardSeconds(40, false, 180, 40)}`);
+  // Seeked to near the end and let run out: the part not heard is not counted.
+  assert(heardSeconds(20, true, 180, 178) === 22, `seeked: ${heardSeconds(20, true, 180, 178)}`);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

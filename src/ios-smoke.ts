@@ -403,6 +403,25 @@ async function eqMatch() {
   report('eq-match', asPlays <= 1, `the system equalizer as Oni plays is at most ${asPlays.toFixed(2)} dB off the official app's curve`);
 }
 
+/** Now Playing's equalizer button is red while the equalizer is on, as on the desktop (the user). */
+async function eqButton() {
+  const { setEqEnabled, useEq } = await import('./player/eq.ts');
+  const app = (window as unknown as { __wave: { useApp: { setState(s: object): void } } }).__wave.useApp;
+  const was = useEq.getState().enabled;
+  app.setState({ nowPlayingOpen: true });
+  await until(() => document.querySelector('[data-testid="np-sound"]'), 5000);
+  const lit = async (on: boolean) => {
+    setEqEnabled(on);
+    await sleep(300);
+    return document.querySelector('[data-testid="np-sound"]')?.classList.contains('on') ?? null;
+  };
+  const whenOn = await lit(true);
+  const whenOff = await lit(false);
+  setEqEnabled(was);
+  app.setState({ nowPlayingOpen: false });
+  report('eq-button', whenOn === true && whenOff === false, `on: ${whenOn}, off: ${whenOff}`);
+}
+
 /** Set by the background probe just before the page says it shows nothing. */
 const REVIVE = 'oni-smoke-revive';
 
@@ -756,6 +775,7 @@ export async function runSmoke() {
     report('haptics', !tapped, tapped);
     await recap();
     await eqMatch().catch((e) => report('eq-match', false, String(e)));
+    await eqButton().catch((e) => report('eq-button', false, String(e)));
     await voiceShortcuts();
     await updateCheck();
   } catch (e) {

@@ -76,7 +76,9 @@ function Group({ group }: { group: HistoryGroup }) {
         )}
         <span className="muted">· {t.count.tracks(group.tracks.length)}</span>
       </div>
-      <TrackList tracks={group.tracks} onPlay={(i) => playTracks(group.tracks, i, title, playContext(group.context))} />
+      {/* Played from History, it is "History" on the banner and in the player, not the run's own source
+          (the user: "My Wave" showed for a track started here). */}
+      <TrackList tracks={group.tracks} onPlay={(i) => playTracks(group.tracks, i, t.nav.history, playContext(group.context))} />
     </div>
   );
 }
@@ -125,7 +127,7 @@ function InThisApp() {
                   · {time.format(run.at)} · {t.count.tracks(run.tracks.length)}
                 </span>
               </div>
-              <TrackList tracks={run.tracks} onPlay={(k) => playTracks(run.tracks, k, run.source, run.from)} />
+              <TrackList tracks={run.tracks} onPlay={(k) => playTracks(run.tracks, k, t.nav.history, run.from)} />
             </div>
           ))}
         </section>

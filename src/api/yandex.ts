@@ -111,6 +111,17 @@ function historyContext(ctx: any): HistoryContext {
   }
 }
 
+/**
+ * The seconds of a play to report. A track that played to its end (by itself or into the next
+ * one's crossfade) counts its last seconds too: they sound while the next one fades in. Yandex
+ * puts a play into the history only at ~95 % of the track (checked on the account: 90 % no, 95 %
+ * yes), and with a 5 s crossfade a short track never got there (the user). `position`: where the
+ * track was when left.
+ */
+export function heardSeconds(listened: number, ended: boolean, duration: number, position: number) {
+  return ended ? listened + Math.max(0, duration - position) : listened;
+}
+
 const acceptedSeeds = (r: any): string[] => (r.acceptedSeeds || []).map((s: any) => `${s.type}:${s.tag}`);
 
 export class YandexMusic {
