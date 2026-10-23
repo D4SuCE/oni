@@ -111,6 +111,8 @@ function historyContext(ctx: any): HistoryContext {
   }
 }
 
+const acceptedSeeds = (r: any): string[] => (r.acceptedSeeds || []).map((s: any) => `${s.type}:${s.tag}`);
+
 export class YandexMusic {
   private me?: Account;
   private transport: Transport;
@@ -177,24 +179,43 @@ export class YandexMusic {
   /**
    * Tells Yandex a track was listened to, like the official clients do. This is what
    * puts plays into the account's history and lets Yandex's own recommendations learn.
+   * Sent as POST /plays, as Yandex's own app does: since October 2026 the old /play-audio
+   * form still answers "ok" but nothing reaches the history (the user: none after the 21st).
+   * The wave's plays go here too: its session feedback alone is not a play in the history.
    */
-  async reportPlay(r: { track: Track; playId: string; startedAt: Date; playedSeconds: number; endSeconds: number; playlist?: string; album?: number | string }) {
-    const form: Record<string, string | number> = {
-      'track-id': r.track.id,
-      from: 'desktop_win-wave-player',
-      'from-cache': 'false',
-      'play-id': r.playId,
-      uid: await this.uid(),
-      timestamp: r.startedAt.toISOString(),
-      'track-length-seconds': Math.round((r.track.durationMs || 0) / 1000),
-      'total-played-seconds': Math.round(r.playedSeconds),
-      'end-position-seconds': Math.round(r.endSeconds),
-      'client-now': new Date().toISOString(),
-    };
+  async reportPlay(r: {
+    track: Track;
+    playId: string;
+    startedAt: Date;
+    playedSeconds: number;
+    endSeconds: number;
+    playlist?: string;
+    album?: number | string;
+    wave?: { sessionId: string; batchId: string; seeds: string[] };
+  }) {
+    const now = new Date().toISOString();
     const album = r.album ?? r.track.albums?.[0]?.id;
-    if (album !== undefined) form['album-id'] = album;
-    if (r.playlist) form['playlist-id'] = r.playlist;
-    await this.call('/play-audio', { method: 'POST', form });
+    const context = r.wave
+      ? { context: 'radio', contextItem: r.wave.seeds.join(), radioSessionId: r.wave.sessionId, batchId: r.wave.batchId }
+      : r.playlist
+        ? { context: 'playlist', contextItem: r.playlist, playlistId: r.playlist }
+        : r.album !== undefined
+          ? { context: 'album', contextItem: String(r.album) }
+          : { context: 'other' };
+    const play = {
+      trackId: String(r.track.id),
+      albumId: album !== undefined ? String(album) : undefined,
+      playId: r.playId,
+      from: r.wave ? 'desktop_win-home-wave' : 'desktop_win-wave-player',
+      ...context,
+      timestamp: now,
+      startTimestamp: r.startedAt.toISOString(),
+      trackLengthSeconds: Math.round((r.track.durationMs || 0) / 1000),
+      totalPlayedSeconds: Math.round(r.playedSeconds),
+      endPositionSeconds: Math.round(r.endSeconds),
+      fromCache: false,
+    };
+    await this.call('/plays', { method: 'POST', query: { clientNow: now }, json: { plays: [play] } });
   }
 
   /** Which tracks the account played on which day (about ten days, every device): ids only,
@@ -463,7 +484,7 @@ export class YandexMusic {
       method: 'POST',
       json: { seeds, includeTracksInResponse: true },
     });
-    return { sessionId: r.radioSessionId, batchId: r.batchId, items: r.sequence.map((x: any) => ({ track: x.track, liked: x.liked })) };
+    return { sessionId: r.radioSessionId, batchId: r.batchId, items: r.sequence.map((x: any) => ({ track: x.track, liked: x.liked })), accepted: acceptedSeeds(r) };
   }
 
   /** `queue` is everything the session has handed out so far (track keys), so the server continues past it. */

@@ -308,19 +308,30 @@ async function intents() {
 }
 
 /** Does the page keep running while the app is in the background with the native player on? The
- * workflow sends the app away for 25 s and back; a tick every 2 s shows whether this page ran. */
+ * workflow sends the app away for 25 s and back; a tick every 2 s shows whether this page ran.
+ * Away, the player's clock comes once a second and no beat at all, even with the pulse asked for
+ * (a night of them was a flood; the user's black screen in the morning). Back, the shell asks the
+ * page whether it shows anything: this one says no, as a black page would, and must be loaded
+ * anew, the music going on (`revived` below). */
 function backgroundProbe() {
   let hiddenAt = 0;
   let timeAt = 0;
   let indexAt = 0;
   let ticks = 0;
+  let times = 0;
+  let beats = 0;
   setInterval(() => document.hidden && ticks++, 2000);
+  OniPlayer.addListener('time', () => document.hidden && times++);
+  OniPlayer.addListener('beat', () => document.hidden && beats++);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       hiddenAt = Date.now();
       timeAt = wave().audio.currentTime;
       indexAt = wave().usePlayer.getState().index;
-      ticks = 0;
+      ticks = times = beats = 0;
+      OniPlayer.pulse({ on: true }).catch(() => {});
+      sessionStorage.setItem(REVIVE, String(Date.now()));
+      (window as { __oniAlive?: () => boolean }).__oniAlive = () => false;
       return;
     }
     const away = (Date.now() - hiddenAt) / 1000;
@@ -328,9 +339,22 @@ function backgroundProbe() {
     // A short track may end while away: the next one playing is the music going on too.
     const next = wave().usePlayer.getState().index > indexAt;
     console.log(`SMOKE background-life ${played > away / 2 || next ? 'ok' : 'FAIL'} away ${away.toFixed(0)} s, music moved ${played.toFixed(0)} s${next ? ' (on to the next track)' : ''}, page ticks ${ticks}`);
+    report('background-quiet', times <= away * 1.5 && beats === 0, `${times} clock messages and ${beats} beats in ${away.toFixed(0)} s away`);
+    OniPlayer.pulse({ on: false }).catch(() => {});
   });
 }
 
+/** Set by the background probe just before the page says it shows nothing. */
+const REVIVE = 'oni-smoke-revive';
+
+/** The page loaded anew by the shell after it said it showed nothing: it shows Oni again, and the
+ * native player, which never stopped, is seen playing. */
+async function revived() {
+  sessionStorage.removeItem(REVIVE);
+  const shown = await until(() => document.querySelector('.wave-hero'), 30000);
+  const playing = await until(() => wave()?.audio && !wave().audio.paused, 20000);
+  report('revived', shown && playing, `page ${shown ? 'shown' : 'not shown'}, music ${playing ? 'playing' : 'not seen playing'}`);
+}
 
 /** Now Playing's seek bar: a tap in its middle (not on the thumb) takes the track there, once,
  * when the finger lifts (src/ui/touchRange.ts, SeekBar). */
@@ -602,6 +626,7 @@ async function updateCheck() {
 }
 
 export async function runSmoke() {
+  if (sessionStorage.getItem(REVIVE)) return revived();
   try {
     noZoom();
     await loginRedirect();

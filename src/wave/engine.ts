@@ -14,6 +14,10 @@ export interface WaveApi {
 export type Diversity = 'default' | 'favorite' | 'discover' | 'popular';
 export type Mood = 'all' | 'active' | 'fun' | 'calm' | 'sad';
 export type Language = 'any' | 'russian' | 'not-russian' | 'without-words';
+/** The choices "Tune" offers, in its order; tests/api.test.ts checks Yandex takes each of them. */
+export const DIVERSITIES: Diversity[] = ['default', 'favorite', 'discover', 'popular'];
+export const MOODS: Mood[] = ['all', 'active', 'fun', 'calm', 'sad'];
+export const LANGUAGES: Language[] = ['any', 'russian', 'not-russian', 'without-words'];
 
 export interface WaveTuning {
   // Sent to Yandex
@@ -117,6 +121,11 @@ export class WaveEngine {
     // Filters are too strict for what Yandex offers right now: relax gracefully.
     const fallback = this.pending.shift() || this.takeOldestReserve();
     return fallback ? this.give(fallback) : null;
+  }
+
+  /** The Yandex session the tracks came from, for the play reports that fill the history. */
+  get radio() {
+    return this.session ? { sessionId: this.session.id, batchId: this.session.batchId, seeds: this.stationSeeds ?? waveSeeds(this.tuning) } : undefined;
   }
 
   /** Report a playback event to Yandex so its own model learns too. Never throws. */

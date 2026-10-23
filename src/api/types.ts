@@ -141,6 +141,8 @@ export interface WaveBatch {
   sessionId: string;
   batchId: string;
   items: WaveItem[];
+  /** The seeds Yandex took ("type:tag"); one it does not know is left out without an error. */
+  accepted?: string[];
 }
 
 export type WaveEventType = 'radioStarted' | 'trackStarted' | 'trackFinished' | 'skip' | 'like' | 'dislike';

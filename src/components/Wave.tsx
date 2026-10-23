@@ -3,16 +3,12 @@ import { useCallback, useRef, useState } from 'react';
 import { api } from '../api/client.ts';
 import { useLang, useT } from '../i18n.ts';
 import { artistNames } from '../api/yandex.ts';
-import { history, isMyWave, playWave, retuneWave, sourceTitle, toggle, usePlayer } from '../player/player.ts';
+import { history, isMyWave, PLAIN_WAVE, playWave, retuneWave, sourceTitle, toggle, usePlayer } from '../player/player.ts';
 import { useApp } from '../store.ts';
 import { useSwipeDown } from '../ui/swipe.ts';
 import { cx, useAsync } from '../ui/util.ts';
-import type { Diversity, Language, Mood, WaveTuning } from '../wave/engine.ts';
+import { DIVERSITIES as DIVERSITY, LANGUAGES as LANGUAGE, MOODS as MOOD, type WaveTuning } from '../wave/engine.ts';
 import { confirmDialog } from './Dialog.tsx';
-
-const DIVERSITY: Diversity[] = ['default', 'favorite', 'discover', 'popular'];
-const MOOD: Mood[] = ['all', 'active', 'fun', 'calm', 'sad'];
-const LANGUAGE: Language[] = ['any', 'russian', 'not-russian', 'without-words'];
 
 /** Pairs each option with its label from a dictionary record. */
 const labeled = <T extends string>(values: T[], labels: Record<T, string>) => values.map((v): [T, string] => [v, labels[v]]);
@@ -177,9 +173,6 @@ export function TuningPanel() {
   );
 }
 
-/** My Wave's Yandex-side settings back to none (the repeat filters are the user's own and stay). */
-const PLAIN = { context: null, diversity: 'default', mood: 'all', language: 'any' } as const;
-
 export function WaveHero() {
   // Whatever plays takes the banner's title (My Wave's tracks too); above it, where it plays
   // from. "My Wave" is offered unless plain My Wave is what plays: from a radio, a list, or My
@@ -241,7 +234,7 @@ export function WaveHero() {
           {offerMyWave && (
             <>
               {' · '}
-              <button className="link wave-back" onClick={() => playWave(PLAIN)} data-testid="wave-back">
+              <button className="link wave-back" onClick={() => playWave(PLAIN_WAVE)} data-testid="wave-back">
                 {w.backToMyWave}
               </button>
             </>

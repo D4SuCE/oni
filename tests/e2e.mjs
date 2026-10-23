@@ -206,6 +206,42 @@ await step('a Yandex-side tuning while a list plays starts the wave with it, and
   await page.evaluate(() => window.__wave.usePlayer.setState((s) => ({ tuning: { ...s.tuning, context: null } })));
 });
 
+await step('a list played after a tuned My Wave clears its picks in "Tune"; a pick there, even "Any", starts My Wave', async () => {
+  // Found by the user: My Wave set to "sad", then "Listen" in Recap — the recap played, but
+  // "Tune" still showed "sad" picked, as if My Wave were playing with it.
+  await page.evaluate(() => window.__wave.usePlayer.setState((s) => ({ tuning: { ...s.tuning, mood: 'sad' } })));
+  await page.evaluate(async () => {
+    const chart = await window.__wave.api.chart();
+    await window.__wave.playTracks(chart.slice(0, 3), 0, 'e2e');
+  });
+  await waitPlaying(0.5);
+  const tuning = () => page.evaluate(() => window.__wave.usePlayer.getState().tuning);
+  const after = await tuning();
+  if (after.mood !== 'all') throw new Error(`the list left the wave's picks: ${JSON.stringify(after)}`);
+  const before = await player();
+  try {
+    await page.click('[data-testid="nav-home"]');
+    await page.click('[data-testid="wave-tune"]');
+    await page.waitForSelector('.drawer .segmented');
+    const mood = page.locator('.drawer .segmented').nth(1).locator('button');
+    const active = await mood.evaluateAll((bs) => bs.findIndex((b) => b.classList.contains('active')));
+    if (active !== 0) throw new Error(`"Tune" shows mood #${active} picked, not "Any"`);
+    await mood.nth(0).click(); // "Любое": what is shown already, yet a pick of My Wave
+    await page.waitForFunction((t) => {
+      const s = window.__wave.usePlayer.getState();
+      return s.source?.kind === 'wave' && !s.source.station && !s.waveBusy && s.queue[s.index]?.title !== t && !window.__wave.audio.paused;
+    }, before.title, { timeout: 30000 }).catch(async (e) => {
+      throw new Error(`My Wave did not start: ${JSON.stringify(await player())} (${e.message})`);
+    });
+    console.log(`       list ${before.title} -> "Any" -> My Wave: ${(await player()).title}`);
+  } finally {
+    await page.evaluate(() => window.__wave.usePlayer.setState((s) => ({ tuning: { ...s.tuning, mood: 'all' } })));
+    await page.keyboard.press('Escape');
+    if (await page.locator('.drawer').count()) await page.mouse.click(200, 400);
+    await page.waitForSelector('.drawer', { state: 'detached' });
+  }
+});
+
 await step('settings picked during a track radio start My Wave with them: quick picks in several sections, the last wins; a slow one switches again', async () => {
   // Found by the user on the phone: picking "sad" left the old track on, and picking back too.
   // During a station radio the setting did nothing at all.

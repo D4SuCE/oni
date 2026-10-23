@@ -3,6 +3,7 @@
 // Run: npm run test:api
 import type { HttpRequest, Transport } from '../src/api/transport.ts';
 import { YandexMusic, trackKey } from '../src/api/yandex.ts';
+import { DEFAULT_TUNING, DIVERSITIES, LANGUAGES, MOODS, waveSeeds, type WaveTuning } from '../src/wave/engine.ts';
 
 const token = process.env.YANDEX_MUSIC_TOKEN;
 if (!token) throw new Error('YANDEX_MUSIC_TOKEN is not set');
@@ -159,6 +160,35 @@ await test('playlist create / add / remove / rename / delete', async () => {
     await ym.deletePlaylist(pl.kind);
   }
   assert(!(await ym.playlists()).some((p) => p.kind === pl.kind), 'playlist not deleted');
+});
+
+await test('every choice in "Tune" reaches Yandex as a setting of its own, and Yandex takes it', async () => {
+  // Asked by the user: are activity, character, mood and language really different requests, or
+  // buttons that all send the same? Yandex lists the seeds it took (acceptedSeeds) and leaves out
+  // one it does not know without an error, so each choice must come back there, and differ.
+  const control = await ym.waveStart(['user:onyourwave', 'settingMoodEnergy:no-such-mood']);
+  assert(!control.accepted?.includes('settingMoodEnergy:no-such-mood'), `an unknown seed was taken: ${control.accepted}`);
+  const choices: Partial<WaveTuning>[] = [
+    ...(await ym.waveContexts()).map((context) => ({ context })),
+    ...DIVERSITIES.map((diversity) => ({ diversity })),
+    ...MOODS.map((mood) => ({ mood })),
+    ...LANGUAGES.map((language) => ({ language })),
+    { diversity: 'discover', mood: 'sad', language: 'russian' },
+  ];
+  const sent = new Set<string>();
+  const firstTracks = new Set<string>();
+  for (const choice of choices) {
+    const seeds = waveSeeds({ ...DEFAULT_TUNING, ...choice });
+    sent.add(seeds.join());
+    const b = await ym.waveStart(seeds);
+    const missing = seeds.filter((s) => !b.accepted?.includes(s));
+    assert(!missing.length, `${JSON.stringify(choice)}: Yandex left out ${missing} (took ${b.accepted})`);
+    assert(b.items.length > 0, `${JSON.stringify(choice)}: no tracks`);
+    firstTracks.add(b.items.slice(0, 3).map((i) => i.track.id).join());
+  }
+  // "As usual", "Any" (mood) and "Any" (language) are plain My Wave, one and the same request.
+  assert(sent.size === choices.length - 2 && sent.has('user:onyourwave'), `${choices.length} choices sent ${sent.size} different requests: ${[...sent].join(' | ')}`);
+  console.log(`       ${choices.length} choices, ${sent.size} different requests, all taken; ${firstTracks.size} different first batches`);
 });
 
 await test('wave: contexts, start, more, radioStarted feedback', async () => {

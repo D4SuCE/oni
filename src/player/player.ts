@@ -461,8 +461,9 @@ let play = { id: '', startedAt: new Date() };
 
 function reportPlay(t: Track, ended: boolean) {
   const source = get().source;
-  // Wave plays reach Yandex through the radio session feedback; tests must not touch the history.
-  if (source?.kind !== 'list' || transport.testMode || listened < 1) return;
+  // Tests must not touch the history. The wave's plays are reported too: its session feedback
+  // alone puts nothing into the account's history (the user: none for a night of My Wave).
+  if (!source || transport.testMode || listened < 1) return;
   api
     .reportPlay({
       track: t,
@@ -470,7 +471,7 @@ function reportPlay(t: Track, ended: boolean) {
       startedAt: play.startedAt,
       playedSeconds: listened,
       endSeconds: ended ? (t.durationMs || 0) / 1000 : audio.currentTime,
-      ...source.from,
+      ...(source.kind === 'list' ? source.from : { wave: engine?.radio }),
     })
     .catch((e) => console.warn('play report failed', e));
 }
@@ -532,6 +533,7 @@ export async function playWave(tuning?: Partial<WaveTuning>) {
 /** Endless radio from one seed, e.g. `track:123`, `artist:45`, `album:67`, `playlist:<uid>:<kind>`. Repeat filters apply. */
 export async function playRadio(seed: string, title: string) {
   forgetResume();
+  clearWavePicks();
   await startWave({ kind: 'wave', station: { seed, title } });
 }
 
@@ -579,6 +581,17 @@ async function startWave(source: Source & { kind: 'wave' }) {
   }
 }
 
+/** My Wave without Yandex-side settings (activity, character, mood, language); the repeat filters are the user's own and stay. */
+export const PLAIN_WAVE = { context: null, diversity: 'default', mood: 'all', language: 'any' } as const;
+const YANDEX_PICKS = Object.keys(PLAIN_WAVE) as (keyof WaveTuning)[];
+
+/** Something else than My Wave plays (a list, a station radio): its settings are let go, so
+ * "Tune" does not show "sad" picked over a recap that plays (the user), and a later My Wave
+ * starts plain, as the "My Wave" link has always started it. */
+function clearWavePicks() {
+  saveTuning(PLAIN_WAVE);
+}
+
 export function saveTuning(patch: Partial<WaveTuning>) {
   const before = get().tuning;
   const tuning = { ...before, ...patch };
@@ -602,7 +615,9 @@ export async function retuneWave(patch: Partial<WaveTuning>) {
   }
   // A Yandex-side setting starts My Wave with it, also from a station radio (a track's, an
   // artist's): there the setting used to do nothing at all, and the radio's track went on.
-  if (seedsChanged) await startWave({ kind: 'wave' });
+  // From a list or a station even a pick of what is shown ("Any") does: it is a pick of My Wave.
+  const pick = YANDEX_PICKS.some((k) => k in patch);
+  if (seedsChanged || (pick && !isMyWave(source))) await startWave({ kind: 'wave' });
 }
 
 export function waveFeedback(type: 'like' | 'dislike', t: Track) {
@@ -614,6 +629,7 @@ export function waveFeedback(type: 'like' | 'dislike', t: Track) {
 export async function playTracks(tracks: Track[], start = 0, title = tr().common.list, from?: PlayContext, extra: PlayExtra = {}) {
   // Picked by the user: the wave (or list) the downloads stood in for does not come back over it.
   forgetResume();
+  clearWavePicks();
   await startList(tracks, start, title, from, extra);
 }
 

@@ -85,6 +85,9 @@ jobs:
           sleep 25
           xcrun simctl launch "$DEVICE" local.wave.player > /dev/null || true
           for i in $(seq 1 20); do grep -q "SMOKE background-life" console.log && break; sleep 1; done
+          # Back in front the shell finds the page "black" (the probe says so) and loads it anew.
+          for i in $(seq 1 60); do grep -q "SMOKE revived" console.log && break; sleep 1; done
+          shot revived.png
           kill $LOG $APP || true
           scrub
           echo "--- smoke ---"
@@ -92,6 +95,7 @@ jobs:
           echo "--- errors ---"
           grep -E "not implemented|TypeError|ReferenceError|SyntaxError|keychain\] read failed|\[error\]" console.log | head -20 || true
           grep -q "SMOKE done" console.log || { echo "::error::the smoke run did not finish"; exit 1; }
+          grep -q "SMOKE revived" console.log || { echo "::error::the page was not loaded anew after it showed nothing"; exit 1; }
           if grep -q "SMOKE .* FAIL" console.log; then echo "::error::a smoke step failed"; exit 1; fi
         env:
           ONI_TEST_TOKEN: ${{ secrets.YANDEX_MUSIC_TOKEN }}
@@ -117,6 +121,7 @@ jobs:
             playing.png
             now-playing.png
             search-link.png
+            revived.png
             app.log
             console.log
             *.ipa

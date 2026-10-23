@@ -29,6 +29,39 @@ class OniViewController: CAPBridgeViewController {
             webView?.configuration.userContentController.addUserScript(flag)
         }
         #endif
+        NotificationCenter.default.addObserver(self, selector: #selector(checkPage), name: UIApplication.didBecomeActiveNotification, object: nil)
+    }
+
+    private var checking = false
+
+    /// Back from the background: is the page still there? The user found a black screen in the
+    /// morning after a night of music (the native player went on, the page did not show), and had
+    /// to close Oni for good. A page that does not answer within a few seconds, or answers that it
+    /// shows nothing, is loaded anew; the new one picks up the native player that kept playing (its
+    /// clock says it plays, its end moves the restored queue on). A page still loading (no check
+    /// of its own yet) is left alone.
+    @objc private func checkPage() {
+        guard let webView = webView, webView.url != nil, !checking else { return }
+        checking = true
+        var answered = false
+        webView.evaluateJavaScript("typeof window.__oniAlive === 'function' ? window.__oniAlive() : null") { result, error in
+            guard !answered else { return }
+            answered = true
+            self.checking = false
+            if error != nil { self.revive("error: \(error!.localizedDescription)") }
+            else if let alive = result as? Bool, !alive { self.revive("empty") }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+            guard !answered else { return }
+            answered = true
+            self.checking = false
+            self.revive("no answer")
+        }
+    }
+
+    private func revive(_ why: String) {
+        CAPLog.print("⚡️  Oni: the page is gone (\(why)), loading it anew")
+        webView?.reload()
     }
 }
 
@@ -1013,6 +1046,12 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     private var pausedAt: Double = 0
     private var timer: Timer?
     private let lock = NSLock()
+    /// Oni is in the background: the clock goes to the page once a second, not four times, and the
+    /// bass is not listened to (no pulse to show). A night of four a second plus the beat's ten
+    /// was a flood of messages to a page nobody looked at (the user's black screen in the morning).
+    private var away = false
+    /// What the page last asked of the pulse, given back once Oni is in front again.
+    private var pulseWanted = false
 
     // Fast start: a track plays once START seconds of it have come; the rest is given to the node
     // in pieces as it arrives (`extend`). Running short, the node stops and waits ("stalled",
@@ -1081,6 +1120,23 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         center.addObserver(self, selector: #selector(interrupted(_:)), name: AVAudioSession.interruptionNotification, object: nil)
         center.addObserver(self, selector: #selector(routeChanged(_:)), name: AVAudioSession.routeChangeNotification, object: nil)
         center.addObserver(self, selector: #selector(configurationChanged(_:)), name: .AVAudioEngineConfigurationChange, object: engine)
+        center.addObserver(self, selector: #selector(leaving), name: UIApplication.didEnterBackgroundNotification, object: nil)
+        center.addObserver(self, selector: #selector(returning), name: UIApplication.didBecomeActiveNotification, object: nil)
+    }
+
+    @objc private func leaving() {
+        away = true
+        if timer != nil { startTimer() }
+        setPulse(false)
+    }
+
+    @objc private func returning() {
+        away = false
+        if timer != nil {
+            startTimer()
+            tick()
+        }
+        setPulse(pulseWanted)
     }
 
     // MARK: files
@@ -1673,7 +1729,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     @objc func pulse(_ call: CAPPluginCall) {
         let on = call.getBool("on") ?? false
         DispatchQueue.main.async {
-            self.setPulse(on)
+            self.pulseWanted = on
+            self.setPulse(on && !self.away)
             call.resolve()
         }
     }
@@ -1754,7 +1811,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
 
     private func startTimer() {
         stopTimer()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in self?.tick() }
+        timer = Timer.scheduledTimer(withTimeInterval: away ? 1 : 0.25, repeats: true) { [weak self] _ in self?.tick() }
     }
 
     private func stopTimer() {
