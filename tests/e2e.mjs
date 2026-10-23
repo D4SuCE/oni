@@ -25,6 +25,10 @@ const page = await app.firstWindow();
 page.on('console', (m) => m.type() === 'error' && consoleErrors.push(m.text()));
 page.on('pageerror', (e) => consoleErrors.push(String(e)));
 
+/** GitHub's machines (e2e.yml) have no graphics card and are slower than the user's PC: the speed
+ * checks get this much more room there; on the PC they stay as they are. */
+const SLOW = process.env.CI ? 3 : 1;
+
 async function step(name, fn) {
   try {
     await fn();
@@ -702,13 +706,13 @@ await step('a playing list says so on its page: Play turns Pause, then Resume, w
   if (!(await button.innerText()).includes('Пауза')) throw new Error(`label "${await button.innerText()}"`);
   const before = await state();
   await button.click();
-  await page.waitForFunction(() => window.__wave.audio.paused);
+  await page.waitForFunction(() => window.__wave.audio.paused, null, { timeout: 10000 }).catch(why('Pause did not pause'));
   // The label follows the player's state a moment after the audio (read at once, it failed now and then).
   await page.waitForFunction(() => document.querySelector('[data-testid="list-play"]')?.textContent.includes('Продолжить'), null, { timeout: 5000 }).catch(async () => {
     throw new Error(`paused label "${await button.innerText()}"`);
   });
   await button.click();
-  await page.waitForFunction(() => !window.__wave.audio.paused);
+  await page.waitForFunction(() => !window.__wave.audio.paused, null, { timeout: 15000 }).catch(why('Resume did not play'));
   const after = await state();
   if (after.id !== before.id || after.index !== before.index) throw new Error(`started over: ${JSON.stringify(before)} -> ${JSON.stringify(after)}`);
   // Another list's page offers Play as ever.
@@ -766,7 +770,7 @@ await step('a big playlist opens at once, the rest of it comes in parts and join
   });
   if (gap > 2) throw new Error(`the search button is ${gap}px short of the right edge`);
   // The first part shows before the whole list is in (the old page waited for all of it).
-  if (first > 2000 || early >= rows) throw new Error(`the first rows took ${first} ms, ${early} of ${rows}`);
+  if (first > 2000 * SLOW || early >= rows) throw new Error(`the first rows took ${first} ms, ${early} of ${rows}`);
   if (rows < big.n * 0.9 || queue < playable) throw new Error(`${rows} rows, queue ${queue} of ${playable}`);
   await page.evaluate(() => window.__wave.audio.pause());
 });
@@ -1235,7 +1239,7 @@ await step('beat pulse follows the music', async () => {
     return gaps.sort((x, y) => x - y)[gaps.length >> 1];
   });
   console.log(`       ${await page.locator('.track-row').count()} rows with the pulse on: a frame takes ${frame.toFixed(1)} ms`);
-  if (frame > 25) throw new Error(`a long list with the pulse stutters: ${frame.toFixed(1)} ms a frame`);
+  if (frame > 25 * SLOW) throw new Error(`a long list with the pulse stutters: ${frame.toFixed(1)} ms a frame`);
   await page.evaluate(() => window.__wave.audio.pause());
   await page.waitForFunction(() => document.querySelector('.pb-cover .cover')?.style.getPropertyValue('--beat') === '0', null, { timeout: 3000 });
 });
