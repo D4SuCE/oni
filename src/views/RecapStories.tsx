@@ -5,6 +5,7 @@
 
 import { ChevronLeft, ChevronRight, Copy, Download, Share2, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useSwipeDown } from '../ui/swipe.ts';
 import { transport } from '../api/client.ts';
 import type { Track } from '../api/types.ts';
 import { trackCover } from '../api/yandex.ts';
@@ -121,6 +122,11 @@ export function RecapStories({ recap, period, genreTitles, onClose }: { recap: R
 
   const [index, setIndex] = useState(0);
   const [held, setHeld] = useState(false);
+  // Pulled down by a finger, the stories close, as Now Playing does (the user: the close button
+  // was a reach on the phone); a pull is no tap on the card, which would turn it.
+  const frame = useRef<HTMLDivElement>(null);
+  const pressedAt = useRef<number | null>(null);
+  useSwipeDown(frame, onClose);
   const last = index === cards.length - 1;
   const go = (step: number) => setIndex((i) => Math.max(0, Math.min(cards.length - 1, i + step)));
 
@@ -136,7 +142,7 @@ export function RecapStories({ recap, period, genreTitles, onClose }: { recap: R
 
   return (
     <div className="stories" data-testid="recap-stories">
-      <div className="story-frame">
+      <div className="story-frame" ref={frame}>
         <div className="story-bars-top">
           {cards.map((c, i) => (
             <span key={c.id} className={cx('story-progress', i < index && 'done')}>
@@ -152,11 +158,16 @@ export function RecapStories({ recap, period, genreTitles, onClose }: { recap: R
           className={cx('story-card', `story-${cards[index].id}`)}
           data-testid="story-card"
           data-card={cards[index].id}
-          onPointerDown={() => setHeld(true)}
+          onPointerDown={(e) => {
+            pressedAt.current = e.clientY;
+            setHeld(true);
+          }}
           onPointerUp={() => setHeld(false)}
           onPointerLeave={() => setHeld(false)}
           onClick={(e) => {
-            if ((e.target as Element).closest('button')) return;
+            const pulled = pressedAt.current !== null && Math.abs(e.clientY - pressedAt.current) > 12;
+            pressedAt.current = null;
+            if ((e.target as Element).closest('button') || pulled) return;
             const r = e.currentTarget.getBoundingClientRect();
             go(e.clientX - r.left < r.width / 3 ? -1 : 1);
           }}

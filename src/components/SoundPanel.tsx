@@ -23,7 +23,7 @@ function EqSlider({ value, onChange, label, testid }: { value: number; onChange:
           className="eq-slider"
           min={-EQ_RANGE}
           max={EQ_RANGE}
-          step={0.5}
+          step={0.1}
           value={value}
           onChange={(e) => onChange(Number(e.target.value))}
           onDoubleClick={() => onChange(0)}

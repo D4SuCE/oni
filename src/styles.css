@@ -2784,6 +2784,7 @@ html.ios .toast {
   backdrop-filter: blur(14px);
 }
 .story-frame {
+  touch-action: none;
   position: relative;
   height: min(92vh, 860px);
   aspect-ratio: 9 / 16;

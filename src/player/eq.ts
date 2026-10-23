@@ -1,4 +1,4 @@
-// 10-band equalizer with a preamp ("level"), the bands of the official app.
+// 10-band equalizer with a preamp ("level"), the bands of the official app (eqCurve.ts).
 // audio element → preamp → low shelf 60 Hz → peaking 170 Hz … 14 kHz → high shelf 16 kHz → out.
 // The Web Audio graph is built the first time the equalizer is switched on; until then
 // the <audio> element plays straight to the speakers.
@@ -8,26 +8,9 @@ import { loadJson, storage, transport } from '../api/client.ts';
 import { audio } from './audio.ts';
 import { isIos } from '../ui/platform.ts';
 import { OniPlayer } from './nativeAudio.ts';
+import { bandType, EQ_BANDS, EQ_PRESETS, EQ_Q, EQ_RANGE, type EqPreset } from './eqCurve.ts';
 
-export const EQ_BANDS = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000];
-export const EQ_RANGE = 12;
-
-export type EqPreset = 'mine' | 'flat' | 'bass' | 'treble' | 'rock' | 'pop' | 'electronic' | 'hiphop' | 'vocal' | 'classical' | 'jazz';
-
-export const EQ_PRESETS: Record<EqPreset, number[]> = {
-  // the user's own curve from the official app: warm lows, a dip around 600 Hz, bright highs
-  mine: [6, 5, 2, -2, -1, 1, 1.5, 5.5, 7.5, 7.5],
-  flat: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-  bass: [7, 6, 4, 2, 0, 0, 0, 0, 0, 0],
-  treble: [0, 0, 0, 0, 0, 1, 3, 5, 6, 7],
-  rock: [5, 4, 2, -1, -2, -1, 2, 4, 5, 5],
-  pop: [-1, 1, 3, 4, 3, 1, -1, -1, -1, -1],
-  electronic: [5, 4, 1, 0, -2, 2, 1, 2, 4, 5],
-  hiphop: [6, 5, 1, 2, -1, -1, 1, -1, 2, 3],
-  vocal: [-2, -1, 0, 2, 4, 4, 3, 1, 0, -1],
-  classical: [4, 3, 2, 1, -1, -1, 0, 2, 3, 4],
-  jazz: [3, 2, 1, 2, -1, -1, 0, 1, 2, 3],
-};
+export { EQ_BANDS, EQ_PRESETS, EQ_RANGE, type EqPreset } from './eqCurve.ts';
 
 interface EqState {
   enabled: boolean;
@@ -39,7 +22,11 @@ interface EqState {
 }
 
 const KEY = 'player.eq';
-export const useEq = create<EqState>(() => loadJson<EqState>(KEY, { enabled: false, preamp: 0, gains: [...EQ_PRESETS.mine], preset: 'mine' }));
+export const useEq = create<EqState>(() => {
+  const saved = loadJson<EqState>(KEY, { enabled: false, preamp: 0, gains: [...EQ_PRESETS.mine], preset: 'mine' });
+  // "Mine" follows the preset: it was the user's curve rounded (6 for 5.8, 7.5 for 7.3, …).
+  return saved.preset && EQ_PRESETS[saved.preset] ? { ...saved, gains: [...EQ_PRESETS[saved.preset]] } : saved;
+});
 
 let ctx: AudioContext | null = null;
 /** Where the music comes in (both of the desktop's elements, dualAudio.ts), before the preamp. */
@@ -61,9 +48,9 @@ function build() {
   preamp = ctx.createGain();
   filters = EQ_BANDS.map((frequency, i) => {
     const f = ctx!.createBiquadFilter();
-    f.type = i === 0 ? 'lowshelf' : i === EQ_BANDS.length - 1 ? 'highshelf' : 'peaking';
+    f.type = bandType(i);
     f.frequency.value = frequency;
-    f.Q.value = 1.1;
+    f.Q.value = EQ_Q;
     return f;
   });
   let node: AudioNode = input.connect(preamp);

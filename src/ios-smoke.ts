@@ -10,6 +10,7 @@ import { OniRemote } from './player/remote.ts';
 import { OniPlayer } from './player/nativeAudio.ts';
 import { OniVolume } from './player/volume.ts';
 import { background } from './ui/offline.ts';
+import { EQ_PRESETS, eqResponse } from './player/eqCurve.ts';
 
 type Wave = {
   audio: HTMLAudioElement;
@@ -226,8 +227,19 @@ async function recap() {
   }
   const share = document.querySelector<HTMLElement>('[data-testid="story-share"]');
   const shareOk = Boolean(share) && share!.getBoundingClientRect().bottom <= window.innerHeight;
-  click('[data-testid="stories-close"]');
-  report('recap-stories', Boolean(opened) && full && summary && shareOk, `${full ? 'full screen' : 'not full screen'}, summary ${summary ? 'reached' : 'not reached'}, share ${shareOk ? 'there' : 'missing'}`);
+  // Closed with a finger pulled down (the user: the close button was a reach), not the button.
+  const c = document.querySelector<HTMLElement>('[data-testid="story-card"]')!;
+  const r = c.getBoundingClientRect();
+  const touch = (y: number) => ({ pointerId: 21, pointerType: 'touch', isPrimary: true, clientX: r.left + r.width / 2, clientY: y, bubbles: true });
+  c.dispatchEvent(new PointerEvent('pointerdown', touch(r.top + 200)));
+  for (let y = 220; y <= 420; y += 40) {
+    window.dispatchEvent(new PointerEvent('pointermove', touch(r.top + y)));
+    await sleep(16);
+  }
+  window.dispatchEvent(new PointerEvent('pointerup', touch(r.top + 420)));
+  const swiped = await until(() => !document.querySelector('[data-testid="recap-stories"]'), 3000);
+  if (!swiped) click('[data-testid="stories-close"]');
+  report('recap-stories', Boolean(opened) && full && summary && shareOk && swiped, `${full ? 'full screen' : 'not full screen'}, summary ${summary ? 'reached' : 'not reached'}, share ${shareOk ? 'there' : 'missing'}, ${swiped ? 'closed by a pull down' : 'a pull down did not close it'}`);
 }
 
 /** The beat pulse on the phone: the native player sends the bass, the page finds beats in it and
@@ -342,6 +354,41 @@ function backgroundProbe() {
     report('background-quiet', times <= away * 1.5 && beats === 0, `${times} clock messages and ${beats} beats in ${away.toFixed(0)} s away`);
     OniPlayer.pulse({ on: false }).catch(() => {});
   });
+}
+
+/** The iPhone's equalizer is the system's (AVAudioUnitEQ), not Web Audio: does it do what the
+ * official app's does with the same settings (asked by the user)? Measured with pure tones,
+ * set up as Oni plays and in a few other ways, against Yandex's curve (eqCurve.ts). */
+async function eqMatch() {
+  const frequencies: number[] = [];
+  for (let f = 30; f <= 18000; f *= Math.pow(2, 1 / 3)) frequencies.push(Math.round(f));
+  const curves = { mine: EQ_PRESETS.mine, rock: EQ_PRESETS.rock, zigzag: [8, -8, 8, -8, 8, -8, 8, -8, 8, -8] };
+  const ways: [string, { bandwidth?: number; shelf?: 'plain' | 'resonant'; shelfWidth?: number }][] = [
+    ['as Oni plays', {}],
+    ['width 1 octave (before)', { bandwidth: 1 }],
+    ['resonant shelves 1.9', { shelf: 'resonant', shelfWidth: 1.9 }],
+    ['resonant shelves 1', { shelf: 'resonant', shelfWidth: 1 }],
+  ];
+  let asPlays = Infinity;
+  for (const [way, extra] of ways) {
+    const parts: string[] = [];
+    let worstOfWay = 0;
+    for (const [name, gains] of Object.entries(curves)) {
+      const { db } = await OniPlayer.eqResponse({ gains, preamp: 0, frequencies, ...extra });
+      let worst = 0;
+      let at = 0;
+      db.forEach((d, i) => {
+        const off = Math.abs(d - eqResponse(gains, 0, frequencies[i]));
+        if (off > worst) [worst, at] = [off, frequencies[i]];
+      });
+      worstOfWay = Math.max(worstOfWay, worst);
+      parts.push(`${name} ${worst.toFixed(2)} dB at ${at} Hz`);
+      if (name === 'mine' && way === 'as Oni plays') console.log(`SMOKE eq-curve mine: ${frequencies.map((f, i) => `${f}:${db[i].toFixed(1)}/${eqResponse(gains, 0, f).toFixed(1)}`).join(' ')}`);
+    }
+    if (way === 'as Oni plays') asPlays = worstOfWay;
+    console.log(`SMOKE eq-way ${way}: ${parts.join(', ')}`);
+  }
+  report('eq-match', asPlays <= 1, `the system equalizer as Oni plays is at most ${asPlays.toFixed(2)} dB off the official app's curve`);
 }
 
 /** Set by the background probe just before the page says it shows nothing. */
@@ -696,6 +743,7 @@ export async function runSmoke() {
     const tapped = await OniHaptics.tap({ kind: 'pick' }).then(() => '', (e) => String(e));
     report('haptics', !tapped, tapped);
     await recap();
+    await eqMatch().catch((e) => report('eq-match', false, String(e)));
     await voiceShortcuts();
     await updateCheck();
   } catch (e) {

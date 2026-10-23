@@ -1018,10 +1018,28 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         CAPPluginMethod(name: "state", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "testThrottle", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pulse", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "eqResponse", returnType: CAPPluginReturnPromise),
     ]
 
-    /// The equalizer's bands, as on the desktop (src/player/eq.ts).
+    /// The equalizer's bands, as on the desktop (src/player/eqCurve.ts) and in the official app.
     static let bands: [Float] = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000]
+    /// The middle bands' width in octaves: the official app's Q 1 (2/ln 2 · asinh(1/2Q)); it was one
+    /// octave, narrower. The smoke run measures the system equalizer against Yandex's curve.
+    static let bandwidth: Float = 1.3885
+
+    /// Sets an equalizer's bands up as Oni's: a low shelf, peaking bands, a high shelf. `shelf`:
+    /// "plain" (the system's shelf) or "resonant" (one with a width, `shelfWidth` octaves).
+    static func shape(_ eq: AVAudioUnitEQ, bandwidth: Float = PlayerPlugin.bandwidth, shelf: String = "plain", shelfWidth: Float = 1) {
+        let last = bands.count - 1
+        for (i, band) in eq.bands.enumerated() {
+            band.frequency = bands[i]
+            let resonant = shelf == "resonant"
+            band.filterType = i == 0 ? (resonant ? .resonantLowShelf : .lowShelf) : (i == last ? (resonant ? .resonantHighShelf : .highShelf) : .parametric)
+            band.bandwidth = i == 0 || i == last ? shelfWidth : bandwidth
+            band.gain = 0
+            band.bypass = false
+        }
+    }
 
     private let engine = AVAudioEngine()
     private let nodes = [AVAudioPlayerNode(), AVAudioPlayerNode()]
@@ -1103,13 +1121,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
 
     override public func load() {
         PlayerPlugin.shared = self
-        for (i, band) in eq.bands.enumerated() {
-            band.frequency = PlayerPlugin.bands[i]
-            band.filterType = i == 0 ? .lowShelf : (i == PlayerPlugin.bands.count - 1 ? .highShelf : .parametric)
-            band.bandwidth = 1.0
-            band.gain = 0
-            band.bypass = false
-        }
+        PlayerPlugin.shape(eq)
         eq.bypass = true
         for n in nodes { engine.attach(n) }
         engine.attach(mix)
@@ -1799,6 +1811,69 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
             guard self.pulseOn, !at.isEmpty else { return }
             self.notifyListeners("beat", data: ["at": at, "flux": flux])
         }
+    }
+
+    /// { gains, preamp, frequencies, bandwidth?, shelf?, shelfWidth? } → { db: [...] } — for the
+    /// simulator run: what the system equalizer, set up as Oni's, does to a pure tone at each
+    /// frequency (rendered offline, against the same tone with the bands flat). The user asked
+    /// whether it sounds as the official app's equalizer does.
+    @objc func eqResponse(_ call: CAPPluginCall) {
+        let gains = (call.getArray("gains", Double.self) ?? []).map { Float($0) }
+        let preamp = Float(call.getDouble("preamp") ?? 0)
+        let frequencies = call.getArray("frequencies", Double.self) ?? []
+        let bandwidth = Float(call.getDouble("bandwidth") ?? Double(PlayerPlugin.bandwidth))
+        let shelf = call.getString("shelf") ?? "plain"
+        let shelfWidth = Float(call.getDouble("shelfWidth") ?? 1)
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                var out: [Double] = []
+                for f in frequencies {
+                    let shaped = try PlayerPlugin.toneLevel(f, gains: gains, preamp: preamp, bandwidth: bandwidth, shelf: shelf, shelfWidth: shelfWidth)
+                    let flat = try PlayerPlugin.toneLevel(f, gains: [], preamp: 0, bandwidth: bandwidth, shelf: shelf, shelfWidth: shelfWidth)
+                    out.append(20 * log10(shaped / flat))
+                }
+                call.resolve(["db": out])
+            } catch {
+                call.reject(error.localizedDescription)
+            }
+        }
+    }
+
+    /// The RMS of a tone at `frequency` after an equalizer set up as Oni's (its last quarter second,
+    /// once the filters have settled).
+    private static func toneLevel(_ frequency: Double, gains: [Float], preamp: Float, bandwidth: Float, shelf: String, shelfWidth: Float) throws -> Double {
+        let rate = 44100.0
+        let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1)!
+        let frames = AVAudioFrameCount(rate * 0.75)
+        let tone = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames)!
+        tone.frameLength = frames
+        for i in 0..<Int(frames) { tone.floatChannelData![0][i] = 0.25 * Float(sin(2 * Double.pi * frequency * Double(i) / rate)) }
+        let engine = AVAudioEngine()
+        let player = AVAudioPlayerNode()
+        let eq = AVAudioUnitEQ(numberOfBands: bands.count)
+        shape(eq, bandwidth: bandwidth, shelf: shelf, shelfWidth: shelfWidth)
+        eq.globalGain = preamp
+        for (i, band) in eq.bands.enumerated() { band.gain = i < gains.count ? gains[i] : 0 }
+        eq.bypass = false
+        engine.attach(player)
+        engine.attach(eq)
+        engine.connect(player, to: eq, format: format)
+        engine.connect(eq, to: engine.mainMixerNode, format: format)
+        try engine.enableManualRenderingMode(.offline, format: format, maximumFrameCount: 4096)
+        try engine.start()
+        player.scheduleBuffer(tone, at: nil)
+        player.play()
+        let buffer = AVAudioPCMBuffer(pcmFormat: engine.manualRenderingFormat, frameCapacity: 4096)!
+        var samples: [Float] = []
+        while samples.count < Int(frames) {
+            guard try engine.renderOffline(4096, to: buffer) == .success else { break }
+            let data = buffer.floatChannelData![0]
+            samples.append(contentsOf: UnsafeBufferPointer(start: data, count: Int(buffer.frameLength)))
+        }
+        player.stop()
+        engine.stop()
+        let tail = samples.suffix(Int(rate * 0.25))
+        return sqrt(tail.reduce(0.0) { $0 + Double($1 * $1) } / Double(max(1, tail.count)))
     }
 
     /// { bytesPerSecond } — for the simulator run: downloads held to a slow network's pace (0: off).
