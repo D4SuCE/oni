@@ -46,7 +46,7 @@ async function signInPage(lang) {
 
 await step('Yandex sign-in follows a Russian interface', async () => {
   const text = await signInPage('ru');
-  if (!/Введите|Войти|номер/i.test(text)) throw new Error(`page: ${text.slice(0, 120)}`);
+  if (!/Введите|Войти|Войдите|номер/i.test(text)) throw new Error(`page: ${text.slice(0, 120)}`);
 });
 
 await step('Yandex sign-in follows an English interface', async () => {
