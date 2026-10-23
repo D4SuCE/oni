@@ -860,6 +860,26 @@ await step('sidebar playlists are dragged into an order of one\'s own, which sta
   }
 });
 
+await step('after a restart the restored track plays on the first Play', async () => {
+  // The user: after reopening Oni, Play did nothing; only next/previous got it going.
+  const state = () => page.evaluate(() => {
+    const s = window.__wave.usePlayer.getState();
+    const a = window.__wave.audio;
+    return { index: s.index, id: s.queue[s.index]?.id, paused: a.paused, src: !!a.src, time: a.currentTime };
+  });
+  await page.reload();
+  await page.waitForSelector('[data-testid="play-toggle"]', { timeout: 30000 });
+  const before = await state();
+  if (!before.id) throw new Error('no track restored');
+  await page.click('[data-testid="play-toggle"]');
+  // Not only "not paused": with no track in place the audio is unpaused too, and silent.
+  await page.waitForFunction(() => !window.__wave.audio.paused && window.__wave.audio.currentTime > 0.5, null, { timeout: 15000 }).catch(async () => {
+    throw new Error(`Play did not play: ${JSON.stringify(await state())}`);
+  });
+  const after = await state();
+  if (after.id !== before.id) throw new Error(`another track: ${before.id} -> ${after.id}`);
+});
+
 /** Drags a row by the held left mouse button onto another's lower half (it lands after it). */
 async function dragRow(from, onto, selector = '.track-row') {
   const rows = page.locator(selector);

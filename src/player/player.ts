@@ -693,17 +693,20 @@ export function toggle() {
   // The user's own play or pause: no longer a wait that ends by itself.
   waitingForYandex = false;
   const s = get();
+  // Just opened, nothing has loaded yet (both 0): the restored track is not "opening" — taken for
+  // one, Play only unpaused an empty player and stayed silent (the user, after a restart).
+  const isOpening = opening !== 0 && opening === loadSeq;
   // A track still loading to play shows Pause: pressed then, it pauses. Going by the audio (not
   // playing yet) it started the track instead (found by the e2e run; a lock screen's pause right
   // after "next" too).
-  if (opening === loadSeq && s.playing) {
+  if (isOpening && s.playing) {
     pausedLoad = loadSeq;
     audio.pause();
     set({ playing: false });
     return;
   }
   // Paused while loading and pressed again before it is ready: it plays as soon as it is.
-  if (opening === loadSeq && pausedLoad === loadSeq) {
+  if (isOpening && pausedLoad === loadSeq) {
     pausedLoad = 0;
     if (heldLoad === loadSeq) audio.play().catch(() => {});
     else set({ playing: true });
