@@ -355,6 +355,7 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
   const seq = ++loadSeq;
   crossStarted = false;
   set({ index, loading: true, position: 0, duration: (t.durationMs || 0) / 1000, error: null });
+  opening = seq;
   listened = 0;
   play = { id: crypto.randomUUID(), startedAt: new Date() };
   lastTime = 0;
@@ -405,10 +406,12 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
       applyVolume();
       if (autoplay) await audio.play();
     }
+    if (opening === seq) opening = 0;
     if (get().source?.kind === 'wave') engine?.feedback('trackStarted', t);
     prefetchNext();
     if (get().source?.kind === 'wave') fillWave();
   } catch (e: any) {
+    if (opening === seq) opening = 0;
     if (seq !== loadSeq || e?.name === 'AbortError') return;
     // The wave lost the network: the downloads play instead of skipping through its queue.
     if (get().source?.kind === 'wave' && (offlineMode || isNetworkError(e)) && fallBackToDownloads()) return;
@@ -681,6 +684,9 @@ export async function playShuffled(tracks: Track[], title = tr().common.list, fr
  * load that, so paused, has its track in place already (Play then plays it). */
 let pausedLoad = 0;
 let heldLoad = 0;
+/** The load still opening its track (its loadSeq; 0 once the track is in place). "Loading" alone
+ * is also a playing track's wait for more data, where Pause and Play act on the audio as ever. */
+let opening = 0;
 
 export function toggle() {
   if (!current()) return;
@@ -690,14 +696,14 @@ export function toggle() {
   // A track still loading to play shows Pause: pressed then, it pauses. Going by the audio (not
   // playing yet) it started the track instead (found by the e2e run; a lock screen's pause right
   // after "next" too).
-  if (s.loading && s.playing) {
+  if (opening === loadSeq && s.playing) {
     pausedLoad = loadSeq;
     audio.pause();
     set({ playing: false });
     return;
   }
   // Paused while loading and pressed again before it is ready: it plays as soon as it is.
-  if (s.loading && pausedLoad === loadSeq) {
+  if (opening === loadSeq && pausedLoad === loadSeq) {
     pausedLoad = 0;
     if (heldLoad === loadSeq) audio.play().catch(() => {});
     else set({ playing: true });
