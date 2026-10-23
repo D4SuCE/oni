@@ -21,6 +21,15 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # The machine's screen is 1024x768: Oni's window was smaller than on any PC and the track menu
+      # covered its own "…" button. A monitor's size, as the user's.
+      - name: Screen 1920x1080
+        shell: powershell
+        continue-on-error: true
+        run: |
+          Set-DisplayResolution -Width 1920 -Height 1080 -Force
+          Add-Type -AssemblyName System.Windows.Forms
+          [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
       - name: End-to-end tests
         run: npm run test:e2e
         env:
