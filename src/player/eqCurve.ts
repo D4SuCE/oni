@@ -47,6 +47,15 @@ export function biquad(type: BandType, frequency: number, gain: number, q: numbe
   return [A * (A + 1 + (A - 1) * cos + s), -2 * A * (A - 1 + (A + 1) * cos), A * (A + 1 + (A - 1) * cos - s), A + 1 - (A - 1) * cos + s, 2 * (A - 1 - (A + 1) * cos), A + 1 - (A - 1) * cos - s];
 }
 
+/** The width in octaves a Web Audio peaking band really has at `frequency`: Q's width, narrowed
+ * towards the top as the digital filter squeezes it (RBJ: BW·w0/sin w0 stays Q's). The iPhone's
+ * system equalizer keeps a band the width it is given, so it is given these (12k and 14k were
+ * 1.7 and 2.5 dB wide of Yandex's at one width for all). 48 kHz: the usual rate of a Windows PC. */
+export function digitalWidth(frequency: number, q = EQ_Q, rate = 48000) {
+  const w = (2 * Math.PI * frequency) / rate;
+  return ((2 / Math.LN2) * Math.asinh(1 / (2 * q)) * Math.sin(w)) / w;
+}
+
 /** How loud a biquad leaves `frequency`, in dB. */
 export function biquadDb(c: number[], frequency: number, rate = 44100) {
   const w = (2 * Math.PI * frequency) / rate;
@@ -55,6 +64,6 @@ export function biquadDb(c: number[], frequency: number, rate = 44100) {
 }
 
 /** The whole equalizer at `frequency`, in dB: the preamp plus every band. */
-export function eqResponse(gains: number[], preamp: number, frequency: number, q = EQ_Q) {
-  return EQ_BANDS.reduce((sum, band, i) => sum + biquadDb(biquad(bandType(i), band, gains[i] ?? 0, q), frequency), preamp);
+export function eqResponse(gains: number[], preamp: number, frequency: number, q = EQ_Q, rate = 44100) {
+  return EQ_BANDS.reduce((sum, band, i) => sum + biquadDb(biquad(bandType(i), band, gains[i] ?? 0, q, rate), frequency, rate), preamp);
 }

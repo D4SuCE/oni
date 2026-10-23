@@ -10,7 +10,7 @@ import { OniRemote } from './player/remote.ts';
 import { OniPlayer, type EqShape } from './player/nativeAudio.ts';
 import { OniVolume } from './player/volume.ts';
 import { background } from './ui/offline.ts';
-import { EQ_PRESETS, eqResponse } from './player/eqCurve.ts';
+import { EQ_PRESETS, EQ_Q, eqResponse } from './player/eqCurve.ts';
 
 type Wave = {
   audio: HTMLAudioElement;
@@ -367,7 +367,7 @@ async function eqMatch() {
     let worst = 0;
     let at = 0;
     db.forEach((d, i) => {
-      const off = Math.abs(d - eqResponse(gains, 0, frequencies[i]));
+      const off = Math.abs(d - eqResponse(gains, 0, frequencies[i], EQ_Q, 48000));
       if (off > worst) [worst, at] = [off, frequencies[i]];
     });
     return { worst, at, db };
@@ -383,12 +383,9 @@ async function eqMatch() {
   const curves = { mine: EQ_PRESETS.mine, rock: EQ_PRESETS.rock, zigzag: [8, -8, 8, -8, 8, -8, 8, -8, 8, -8] };
   const ways: [string, EqShape][] = [
     ['as Oni plays', {}],
-    ['width 1 octave (before)', { bandwidth: 1 }],
-    ['top resonant 0.5', { high: 'resonant', highWidth: 0.5 }],
-    ['top resonant 1', { high: 'resonant', highWidth: 1 }],
-    ['top resonant 2', { high: 'resonant', highWidth: 2 }],
-    ['top parametric 1.39', { high: 'parametric', highWidth: 1.3885 }],
-    ['top parametric 2', { high: 'parametric', highWidth: 2 }],
+    ['widths for 44.1 kHz', { widthRate: 44100 }],
+    ['one width 1.3885', { bandwidth: 1.3885 }],
+    ['one width 1 (1.10.0)', { bandwidth: 1 }],
   ];
   let asPlays = Infinity;
   for (const [way, shape] of ways) {
@@ -398,7 +395,7 @@ async function eqMatch() {
       const { worst, at, db } = await worstOff(gains, shape);
       worstOfWay = Math.max(worstOfWay, worst);
       parts.push(`${name} ${worst.toFixed(2)} dB at ${at} Hz`);
-      if (name === 'mine' && way === 'as Oni plays') console.log(`SMOKE eq-curve mine: ${frequencies.map((f, i) => `${f}:${db[i].toFixed(1)}/${eqResponse(gains, 0, f).toFixed(1)}`).join(' ')}`);
+      if (name === 'mine' && way === 'as Oni plays') console.log(`SMOKE eq-curve mine: ${frequencies.map((f, i) => `${f}:${db[i].toFixed(1)}/${eqResponse(gains, 0, f, EQ_Q, 48000).toFixed(1)}`).join(' ')}`);
     }
     if (way === 'as Oni plays') asPlays = worstOfWay;
     console.log(`SMOKE eq-way ${way}: ${parts.join(', ')}`);
@@ -413,7 +410,7 @@ const REVIVE = 'oni-smoke-revive';
  * native player, which never stopped, is seen playing. */
 async function revived() {
   sessionStorage.removeItem(REVIVE);
-  const shown = await until(() => document.querySelector('.wave-hero'), 30000);
+  const shown = await until(() => document.querySelector('[data-testid="nav-home"]'), 30000);
   const playing = await until(() => wave()?.audio && !wave().audio.paused, 20000);
   report('revived', shown && playing, `page ${shown ? 'shown' : 'not shown'}, music ${playing ? 'playing' : 'not seen playing'}`);
 }

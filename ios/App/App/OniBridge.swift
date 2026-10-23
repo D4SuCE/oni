@@ -1029,21 +1029,24 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
 
     /// The equalizer's bands, as on the desktop (src/player/eqCurve.ts) and in the official app.
     static let bands: [Float] = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000]
-    /// The middle bands' width in octaves: the official app's Q 1 (2/ln 2 · asinh(1/2Q)); it was one
-    /// octave, narrower. The smoke run measures the system equalizer against Yandex's curve.
-    static let bandwidth: Float = 1.3885
+    /// The middle bands' widths in octaves: what the official app's peaking bands (Web Audio, Q 1)
+    /// really have at a 48 kHz PC, narrower towards the top (src/player/eqCurve.ts, digitalWidth);
+    /// the system equalizer keeps a band the width it is given. One octave for all was too narrow
+    /// below and too wide at 12k and 14k. The smoke run measures it against Yandex's curve.
+    static func digitalWidth(_ frequency: Float, q: Double = 1, rate: Double = 48000) -> Float {
+        let w = 2 * Double.pi * Double(frequency) / rate
+        return Float(2 / log(2.0) * asinh(1 / (2 * q)) * sin(w) / w)
+    }
 
-    /// Sets an equalizer's bands up as Oni's: a low shelf, peaking bands, a high shelf. `shelf`:
-    /// "plain" (the system's shelf) or "resonant" (one with a width, `shelfWidth` octaves).
-    /// `high`: the top band's kind on its own ("shelf", "resonant" or "parametric", `highWidth` octaves).
-    static func shape(_ eq: AVAudioUnitEQ, bandwidth: Float = PlayerPlugin.bandwidth, shelf: String = "plain", shelfWidth: Float = 1, high: String = "shelf", highWidth: Float = 1) {
+    /// Sets an equalizer's bands up as Oni's: a low shelf, peaking bands, a high shelf. For the
+    /// smoke run's comparisons: `bandwidth` one width for every peaking band instead of each its
+    /// own, `widthRate` the PC rate those are worked out for.
+    static func shape(_ eq: AVAudioUnitEQ, bandwidth: Float? = nil, widthRate: Double = 48000) {
         let last = bands.count - 1
         for (i, band) in eq.bands.enumerated() {
             band.frequency = bands[i]
-            let resonant = shelf == "resonant"
-            let top: AVAudioUnitEQFilterType = high == "parametric" ? .parametric : (high == "resonant" || resonant ? .resonantHighShelf : .highShelf)
-            band.filterType = i == 0 ? (resonant ? .resonantLowShelf : .lowShelf) : (i == last ? top : .parametric)
-            band.bandwidth = i == 0 ? shelfWidth : (i == last ? (high == "shelf" ? shelfWidth : highWidth) : bandwidth)
+            band.filterType = i == 0 ? .lowShelf : (i == last ? .highShelf : .parametric)
+            band.bandwidth = i == 0 || i == last ? 1 : (bandwidth ?? digitalWidth(bands[i], rate: widthRate))
             band.gain = 0
             band.bypass = false
         }
@@ -1823,7 +1826,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         }
     }
 
-    /// { gains, preamp, frequencies, bandwidth?, shelf?, shelfWidth? } → { db: [...] } — for the
+    /// { gains, preamp, frequencies, bandwidth?, widthRate?, rate? } → { db: [...] } — for the
     /// simulator run: what the system equalizer, set up as Oni's, does to a pure tone at each
     /// frequency (rendered offline, against the same tone with the bands flat). The user asked
     /// whether it sounds as the official app's equalizer does.
@@ -1831,17 +1834,15 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         let gains = (call.getArray("gains", Double.self) ?? []).map { Float($0) }
         let preamp = Float(call.getDouble("preamp") ?? 0)
         let frequencies = call.getArray("frequencies", Double.self) ?? []
-        let bandwidth = Float(call.getDouble("bandwidth") ?? Double(PlayerPlugin.bandwidth))
-        let shelf = call.getString("shelf") ?? "plain"
-        let shelfWidth = Float(call.getDouble("shelfWidth") ?? 1)
-        let high = call.getString("high") ?? "shelf"
-        let highWidth = Float(call.getDouble("highWidth") ?? 1)
+        let bandwidth = call.getDouble("bandwidth").map { Float($0) }
+        let widthRate = call.getDouble("widthRate") ?? 48000
+        let rate = call.getDouble("rate") ?? 48000
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 var out: [Double] = []
                 for f in frequencies {
-                    let shaped = try PlayerPlugin.toneLevel(f, gains: gains, preamp: preamp, bandwidth: bandwidth, shelf: shelf, shelfWidth: shelfWidth, high: high, highWidth: highWidth)
-                    let flat = try PlayerPlugin.toneLevel(f, gains: [], preamp: 0, bandwidth: bandwidth, shelf: shelf, shelfWidth: shelfWidth, high: high, highWidth: highWidth)
+                    let shaped = try PlayerPlugin.toneLevel(f, gains: gains, preamp: preamp, bandwidth: bandwidth, widthRate: widthRate, rate: rate)
+                    let flat = try PlayerPlugin.toneLevel(f, gains: [], preamp: 0, bandwidth: bandwidth, widthRate: widthRate, rate: rate)
                     out.append(20 * log10(shaped / flat))
                 }
                 call.resolve(["db": out])
@@ -1853,8 +1854,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
 
     /// The RMS of a tone at `frequency` after an equalizer set up as Oni's (its last quarter second,
     /// once the filters have settled).
-    private static func toneLevel(_ frequency: Double, gains: [Float], preamp: Float, bandwidth: Float, shelf: String, shelfWidth: Float, high: String, highWidth: Float) throws -> Double {
-        let rate = 44100.0
+    private static func toneLevel(_ frequency: Double, gains: [Float], preamp: Float, bandwidth: Float?, widthRate: Double, rate: Double) throws -> Double {
         let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1)!
         let frames = AVAudioFrameCount(rate * 0.75)
         let tone = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames)!
@@ -1863,7 +1863,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         let engine = AVAudioEngine()
         let player = AVAudioPlayerNode()
         let eq = AVAudioUnitEQ(numberOfBands: bands.count)
-        shape(eq, bandwidth: bandwidth, shelf: shelf, shelfWidth: shelfWidth, high: high, highWidth: highWidth)
+        shape(eq, bandwidth: bandwidth, widthRate: widthRate)
         eq.globalGain = preamp
         for (i, band) in eq.bands.enumerated() { band.gain = i < gains.count ? gains[i] : 0 }
         eq.bypass = false

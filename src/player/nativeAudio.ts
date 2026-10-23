@@ -10,11 +10,12 @@ import { toBase64 } from '../api/bytes.ts';
 
 /** How the system equalizer's bands are set up (the defaults are how Oni plays). */
 export interface EqShape {
+  /** One width (octaves) for every peaking band, instead of each its own. */
   bandwidth?: number;
-  shelf?: 'plain' | 'resonant';
-  shelfWidth?: number;
-  high?: 'shelf' | 'resonant' | 'parametric';
-  highWidth?: number;
+  /** The PC rate the bands' own widths are worked out for (48000). */
+  widthRate?: number;
+  /** The rate the tones are rendered at (48000). */
+  rate?: number;
 }
 
 interface PlayerPlugin {
