@@ -29,10 +29,16 @@ class OniViewController: CAPBridgeViewController {
             webView?.configuration.userContentController.addUserScript(flag)
         }
         #endif
-        NotificationCenter.default.addObserver(self, selector: #selector(checkPage), name: UIApplication.didBecomeActiveNotification, object: nil)
+        // On coming to the front (paired with didEnterBackground; didBecomeActive did not come on
+        // the simulator), once the page has had a moment to wake.
+        NotificationCenter.default.addObserver(self, selector: #selector(foreground), name: UIApplication.willEnterForegroundNotification, object: nil)
     }
 
     private var checking = false
+
+    @objc private func foreground() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.checkPage() }
+    }
 
     /// Back from the background: is the page still there? The user found a black screen in the
     /// morning after a night of music (the native player went on, the page did not show), and had
@@ -1029,13 +1035,15 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
 
     /// Sets an equalizer's bands up as Oni's: a low shelf, peaking bands, a high shelf. `shelf`:
     /// "plain" (the system's shelf) or "resonant" (one with a width, `shelfWidth` octaves).
-    static func shape(_ eq: AVAudioUnitEQ, bandwidth: Float = PlayerPlugin.bandwidth, shelf: String = "plain", shelfWidth: Float = 1) {
+    /// `high`: the top band's kind on its own ("shelf", "resonant" or "parametric", `highWidth` octaves).
+    static func shape(_ eq: AVAudioUnitEQ, bandwidth: Float = PlayerPlugin.bandwidth, shelf: String = "plain", shelfWidth: Float = 1, high: String = "shelf", highWidth: Float = 1) {
         let last = bands.count - 1
         for (i, band) in eq.bands.enumerated() {
             band.frequency = bands[i]
             let resonant = shelf == "resonant"
-            band.filterType = i == 0 ? (resonant ? .resonantLowShelf : .lowShelf) : (i == last ? (resonant ? .resonantHighShelf : .highShelf) : .parametric)
-            band.bandwidth = i == 0 || i == last ? shelfWidth : bandwidth
+            let top: AVAudioUnitEQFilterType = high == "parametric" ? .parametric : (high == "resonant" || resonant ? .resonantHighShelf : .highShelf)
+            band.filterType = i == 0 ? (resonant ? .resonantLowShelf : .lowShelf) : (i == last ? top : .parametric)
+            band.bandwidth = i == 0 ? shelfWidth : (i == last ? (high == "shelf" ? shelfWidth : highWidth) : bandwidth)
             band.gain = 0
             band.bypass = false
         }
@@ -1133,6 +1141,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         center.addObserver(self, selector: #selector(routeChanged(_:)), name: AVAudioSession.routeChangeNotification, object: nil)
         center.addObserver(self, selector: #selector(configurationChanged(_:)), name: .AVAudioEngineConfigurationChange, object: engine)
         center.addObserver(self, selector: #selector(leaving), name: UIApplication.didEnterBackgroundNotification, object: nil)
+        center.addObserver(self, selector: #selector(returning), name: UIApplication.willEnterForegroundNotification, object: nil)
         center.addObserver(self, selector: #selector(returning), name: UIApplication.didBecomeActiveNotification, object: nil)
     }
 
@@ -1143,6 +1152,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     }
 
     @objc private func returning() {
+        guard away else { return }
         away = false
         if timer != nil {
             startTimer()
@@ -1824,12 +1834,14 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         let bandwidth = Float(call.getDouble("bandwidth") ?? Double(PlayerPlugin.bandwidth))
         let shelf = call.getString("shelf") ?? "plain"
         let shelfWidth = Float(call.getDouble("shelfWidth") ?? 1)
+        let high = call.getString("high") ?? "shelf"
+        let highWidth = Float(call.getDouble("highWidth") ?? 1)
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 var out: [Double] = []
                 for f in frequencies {
-                    let shaped = try PlayerPlugin.toneLevel(f, gains: gains, preamp: preamp, bandwidth: bandwidth, shelf: shelf, shelfWidth: shelfWidth)
-                    let flat = try PlayerPlugin.toneLevel(f, gains: [], preamp: 0, bandwidth: bandwidth, shelf: shelf, shelfWidth: shelfWidth)
+                    let shaped = try PlayerPlugin.toneLevel(f, gains: gains, preamp: preamp, bandwidth: bandwidth, shelf: shelf, shelfWidth: shelfWidth, high: high, highWidth: highWidth)
+                    let flat = try PlayerPlugin.toneLevel(f, gains: [], preamp: 0, bandwidth: bandwidth, shelf: shelf, shelfWidth: shelfWidth, high: high, highWidth: highWidth)
                     out.append(20 * log10(shaped / flat))
                 }
                 call.resolve(["db": out])
@@ -1841,7 +1853,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
 
     /// The RMS of a tone at `frequency` after an equalizer set up as Oni's (its last quarter second,
     /// once the filters have settled).
-    private static func toneLevel(_ frequency: Double, gains: [Float], preamp: Float, bandwidth: Float, shelf: String, shelfWidth: Float) throws -> Double {
+    private static func toneLevel(_ frequency: Double, gains: [Float], preamp: Float, bandwidth: Float, shelf: String, shelfWidth: Float, high: String, highWidth: Float) throws -> Double {
         let rate = 44100.0
         let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1)!
         let frames = AVAudioFrameCount(rate * 0.75)
@@ -1851,7 +1863,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         let engine = AVAudioEngine()
         let player = AVAudioPlayerNode()
         let eq = AVAudioUnitEQ(numberOfBands: bands.count)
-        shape(eq, bandwidth: bandwidth, shelf: shelf, shelfWidth: shelfWidth)
+        shape(eq, bandwidth: bandwidth, shelf: shelf, shelfWidth: shelfWidth, high: high, highWidth: highWidth)
         eq.globalGain = preamp
         for (i, band) in eq.bands.enumerated() { band.gain = i < gains.count ? gains[i] : 0 }
         eq.bypass = false

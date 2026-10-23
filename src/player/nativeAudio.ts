@@ -8,6 +8,15 @@ import { registerPlugin } from '@capacitor/core';
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { toBase64 } from '../api/bytes.ts';
 
+/** How the system equalizer's bands are set up (the defaults are how Oni plays). */
+export interface EqShape {
+  bandwidth?: number;
+  shelf?: 'plain' | 'resonant';
+  shelfWidth?: number;
+  high?: 'shelf' | 'resonant' | 'parametric';
+  highWidth?: number;
+}
+
 interface PlayerPlugin {
   /** `sealed`: a downloaded track, opened from the library with this key (base64). `fade` (ms): with
    * music playing, it starts at once and the playing track fades out into it (a crossfade). */
@@ -22,7 +31,7 @@ interface PlayerPlugin {
   /** For the simulator run: downloads held to a slow network's pace (0: off). */
   testThrottle(options: { bytesPerSecond: number }): Promise<void>;
   /** For the simulator run: what the system equalizer set up as Oni's does at each frequency (dB). */
-  eqResponse(options: { gains: number[]; preamp: number; frequencies: number[]; bandwidth?: number; shelf?: 'plain' | 'resonant'; shelfWidth?: number }): Promise<{ db: number[] }>;
+  eqResponse(options: { gains: number[]; preamp: number; frequencies: number[] } & EqShape): Promise<{ db: number[] }>;
   /** Listen to the bass for the beat pulse (src/player/pulse.ts), or stop. */
   pulse(options: { on: boolean }): Promise<void>;
   /** The bass's rise, ~60 a second, sent a few at a time: when each is heard (wall clock, ms). */

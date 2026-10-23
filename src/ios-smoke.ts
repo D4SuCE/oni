@@ -7,7 +7,7 @@ import { OniLogin } from './api/capacitor.ts';
 import type { Track } from './api/types.ts';
 import { transport } from './api/client.ts';
 import { OniRemote } from './player/remote.ts';
-import { OniPlayer } from './player/nativeAudio.ts';
+import { OniPlayer, type EqShape } from './player/nativeAudio.ts';
 import { OniVolume } from './player/volume.ts';
 import { background } from './ui/offline.ts';
 import { EQ_PRESETS, eqResponse } from './player/eqCurve.ts';
@@ -233,10 +233,10 @@ async function recap() {
   const touch = (y: number) => ({ pointerId: 21, pointerType: 'touch', isPrimary: true, clientX: r.left + r.width / 2, clientY: y, bubbles: true });
   c.dispatchEvent(new PointerEvent('pointerdown', touch(r.top + 200)));
   for (let y = 220; y <= 420; y += 40) {
-    window.dispatchEvent(new PointerEvent('pointermove', touch(r.top + y)));
+    c.dispatchEvent(new PointerEvent('pointermove', touch(r.top + y)));
     await sleep(16);
   }
-  window.dispatchEvent(new PointerEvent('pointerup', touch(r.top + 420)));
+  c.dispatchEvent(new PointerEvent('pointerup', touch(r.top + 420)));
   const swiped = await until(() => !document.querySelector('[data-testid="recap-stories"]'), 3000);
   if (!swiped) click('[data-testid="stories-close"]');
   report('recap-stories', Boolean(opened) && full && summary && shareOk && swiped, `${full ? 'full screen' : 'not full screen'}, summary ${summary ? 'reached' : 'not reached'}, share ${shareOk ? 'there' : 'missing'}, ${swiped ? 'closed by a pull down' : 'a pull down did not close it'}`);
@@ -362,25 +362,40 @@ function backgroundProbe() {
 async function eqMatch() {
   const frequencies: number[] = [];
   for (let f = 30; f <= 18000; f *= Math.pow(2, 1 / 3)) frequencies.push(Math.round(f));
+  const worstOff = async (gains: number[], shape: EqShape) => {
+    const { db } = await OniPlayer.eqResponse({ gains, preamp: 0, frequencies, ...shape });
+    let worst = 0;
+    let at = 0;
+    db.forEach((d, i) => {
+      const off = Math.abs(d - eqResponse(gains, 0, frequencies[i]));
+      if (off > worst) [worst, at] = [off, frequencies[i]];
+    });
+    return { worst, at, db };
+  };
+  // Each band alone at +6 dB, as Oni plays: which of them strays from Yandex's curve.
+  const bands: string[] = [];
+  for (let i = 0; i < 10; i++) {
+    const gains = Array.from({ length: 10 }, (_, j) => (j === i ? 6 : 0));
+    const { worst, at } = await worstOff(gains, {});
+    bands.push(`${i}:${worst.toFixed(1)}@${at}`);
+  }
+  console.log(`SMOKE eq-bands ${bands.join(' ')}`);
   const curves = { mine: EQ_PRESETS.mine, rock: EQ_PRESETS.rock, zigzag: [8, -8, 8, -8, 8, -8, 8, -8, 8, -8] };
-  const ways: [string, { bandwidth?: number; shelf?: 'plain' | 'resonant'; shelfWidth?: number }][] = [
+  const ways: [string, EqShape][] = [
     ['as Oni plays', {}],
     ['width 1 octave (before)', { bandwidth: 1 }],
-    ['resonant shelves 1.9', { shelf: 'resonant', shelfWidth: 1.9 }],
-    ['resonant shelves 1', { shelf: 'resonant', shelfWidth: 1 }],
+    ['top resonant 0.5', { high: 'resonant', highWidth: 0.5 }],
+    ['top resonant 1', { high: 'resonant', highWidth: 1 }],
+    ['top resonant 2', { high: 'resonant', highWidth: 2 }],
+    ['top parametric 1.39', { high: 'parametric', highWidth: 1.3885 }],
+    ['top parametric 2', { high: 'parametric', highWidth: 2 }],
   ];
   let asPlays = Infinity;
-  for (const [way, extra] of ways) {
+  for (const [way, shape] of ways) {
     const parts: string[] = [];
     let worstOfWay = 0;
     for (const [name, gains] of Object.entries(curves)) {
-      const { db } = await OniPlayer.eqResponse({ gains, preamp: 0, frequencies, ...extra });
-      let worst = 0;
-      let at = 0;
-      db.forEach((d, i) => {
-        const off = Math.abs(d - eqResponse(gains, 0, frequencies[i]));
-        if (off > worst) [worst, at] = [off, frequencies[i]];
-      });
+      const { worst, at, db } = await worstOff(gains, shape);
       worstOfWay = Math.max(worstOfWay, worst);
       parts.push(`${name} ${worst.toFixed(2)} dB at ${at} Hz`);
       if (name === 'mine' && way === 'as Oni plays') console.log(`SMOKE eq-curve mine: ${frequencies.map((f, i) => `${f}:${db[i].toFixed(1)}/${eqResponse(gains, 0, f).toFixed(1)}`).join(' ')}`);
