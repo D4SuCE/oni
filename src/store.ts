@@ -7,6 +7,7 @@ import { ApiError, trackKey } from './api/yandex.ts';
 import { tr, useLang } from './i18n.ts';
 import { dropFromQueue, offline, onNetworkLost, setDislikedCheck, setLikedCheck, setOfflineMode, usePlayer, warmWave, waveFeedback } from './player/player.ts';
 import { startSync } from './sync/index.ts';
+import { celebrateAdd, celebrateLike } from './ui/anim.ts';
 
 export type Route =
   | { name: 'home' }
@@ -30,6 +31,8 @@ interface AppState {
   backStack: Route[];
   /** Pages left with Back, for Forward (cleared by any new navigation, as in a browser). */
   forwardStack: Route[];
+  /** Which way the last move went: a page slides in from the right going forward, from the left back. */
+  navDir: 'forward' | 'back';
   liked: Set<string>;
   likedKeys: string[];
   disliked: Set<string>;
@@ -52,6 +55,7 @@ export const useApp = create<AppState>(() => ({
   route: { name: 'home' },
   backStack: [],
   forwardStack: [],
+  navDir: 'forward',
   liked: new Set(),
   likedKeys: [],
   disliked: new Set(),
@@ -80,19 +84,19 @@ usePlayer.subscribe((s, prev) => {
 export function navigate(route: Route) {
   const s = get();
   if (JSON.stringify(s.route) === JSON.stringify(route)) return;
-  set({ route, backStack: [...s.backStack.slice(-30), s.route], forwardStack: [], nowPlayingOpen: false });
+  set({ route, backStack: [...s.backStack.slice(-30), s.route], forwardStack: [], nowPlayingOpen: false, navDir: 'forward' });
 }
 
 export function back() {
   const s = get();
   const prev = s.backStack[s.backStack.length - 1];
-  if (prev) set({ route: prev, backStack: s.backStack.slice(0, -1), forwardStack: [...s.forwardStack, s.route], nowPlayingOpen: false });
+  if (prev) set({ route: prev, backStack: s.backStack.slice(0, -1), forwardStack: [...s.forwardStack, s.route], nowPlayingOpen: false, navDir: 'back' });
 }
 
 export function forward() {
   const s = get();
   const next = s.forwardStack[s.forwardStack.length - 1];
-  if (next) set({ route: next, forwardStack: s.forwardStack.slice(0, -1), backStack: [...s.backStack.slice(-30), s.route], nowPlayingOpen: false });
+  if (next) set({ route: next, forwardStack: s.forwardStack.slice(0, -1), backStack: [...s.backStack.slice(-30), s.route], nowPlayingOpen: false, navDir: 'forward' });
 }
 
 let lastStep = 0;
@@ -261,6 +265,7 @@ export async function toggleLike(t: Track) {
   wasLiked ? liked.delete(id) : liked.add(id);
   const likedKeys = wasLiked ? get().likedKeys.filter((k) => k.split(':')[0] !== id) : [trackKey(t), ...get().likedKeys];
   set({ liked, likedKeys });
+  if (!wasLiked) celebrateLike();
   try {
     await api.setLiked([trackKey(t)], !wasLiked);
     if (!wasLiked) {
@@ -307,6 +312,7 @@ export async function addToPlaylist(pl: Playlist, t: Track) {
     const fresh = await api.playlist(pl.uid, pl.kind);
     await api.addToPlaylist(fresh, [t], fresh.trackCount);
     toast(tr().toast.added(pl.title));
+    celebrateAdd();
     refreshPlaylists();
   } catch (e) {
     toast(tr().toast.addFailed(errorText(e)));
