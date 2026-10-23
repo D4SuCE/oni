@@ -1,0 +1,27 @@
+# Checks, without changing anything, that RELEASES_TOKEN can do what release.yml and the watch's agent
+# need: see and write D4SuCE/oni-releases, read the actions of D4SuCE/oni. Run: gh workflow run token-check.yml
+name: token-check
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: RELEASES_TOKEN
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: |
+          set -e
+          [ -n "$GH_TOKEN" ] || { echo "::error::RELEASES_TOKEN is empty"; exit 1; }
+          for repo in D4SuCE/oni-releases D4SuCE/oni; do
+            perms=$(gh api "repos/$repo" --jq '.permissions | "push=\(.push) pull=\(.pull)"')
+            echo "$repo: $perms"
+            case "$perms" in *push=true*) ;; *) echo "::error::no write access to $repo"; exit 1;; esac
+          done
+          gh release list -R D4SuCE/oni-releases --limit 1
+          gh run list -R D4SuCE/oni --limit 1 --json workflowName -q '.[0].workflowName'
+          gh issue list -R D4SuCE/oni --limit 1 --state all > /dev/null && echo "issues: ok"
+          echo "all good"
