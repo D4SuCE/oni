@@ -2,7 +2,8 @@
 // in package.json): builds the installer and the portable exe, uploads them with latest.yml,
 // which the installed apps poll, and uses the version's CHANGELOG.md section as the notes.
 // The release stays a draft until every file is up, so no app sees it half-uploaded.
-// Needs `gh auth login`. Run: npm run release (after committing and tagging the version).
+// Needs `gh auth login` (or GH_TOKEN). Runs by itself in GitHub Actions on a version tag (release.yml);
+// by hand: npm run release (after committing and tagging the version).
 import { execSync, spawnSync } from 'node:child_process';
 import { releaseIos } from './ios-release.mjs';
 import fs from 'node:fs';
@@ -51,7 +52,8 @@ run('npx vite build');
 // Created up front: the installer and the portable target publish in parallel and would
 // race to create the release themselves.
 if (!released) run(`gh release create ${tag} -R ${REPO} --draft --title "Oni ${version}" --notes-file ${notesFile}`);
-run(`npx electron-builder --win --publish always -c.directories.output=${out}`, { ...process.env, GH_TOKEN: sh('gh auth token') });
+// In GitHub Actions (release.yml) the token comes in GH_TOKEN; on a PC it is gh's own.
+run(`npx electron-builder --win --publish always -c.directories.output=${out}`, { ...process.env, GH_TOKEN: process.env.GH_TOKEN || sh('gh auth token') });
 // The iPhone build of the same tag (the tag push started it); a failure there does not hold back Windows.
 try {
   await releaseIos(tag, notes);

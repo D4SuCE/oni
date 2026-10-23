@@ -1,0 +1,73 @@
+# The daily watch on Yandex Music (scripts/ym-watch.mjs), with no PC of the user's: a new official
+# desktop app that changed what it asks of the API, or the API tests failing on the account, leaves
+# pending.md on the ym-watch branch (with the snapshot it keeps) and an issue (an e-mail to the user).
+# The cloud agent (a Claude Code routine, an hour later) looks only when pending.md is there:
+# watch/AGENT.md. 09:00 UTC = 12:00 Moscow.
+name: ym-watch
+
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ym-watch
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          ref: ym-watch
+          path: state
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Watch
+        id: watch
+        run: |
+          set +e
+          node scripts/ym-watch.mjs
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" = 0 ] || [ "$code" = 3 ] || [ "$code" = 4 ] || [ "$code" = 5 ] || exit "$code"
+        env:
+          ONI_WATCH_DIR: ${{ github.workspace }}/state
+          YANDEX_MUSIC_TOKEN: ${{ secrets.YANDEX_MUSIC_TOKEN }}
+      # The new app's code, for the agent to read (a week): gh run download <id> -n yandex-app.
+      - uses: actions/upload-artifact@v4
+        if: steps.watch.outputs.code == '4' || steps.watch.outputs.code == '5'
+        with:
+          name: yandex-app
+          path: state/*/app
+          retention-days: 7
+          if-no-files-found: ignore
+      # The unpacked apps stay out of the branch: only the snapshot, the report and pending.md go there.
+      - run: find state -mindepth 1 -maxdepth 1 -type d ! -name .git -exec rm -rf {} +
+      - name: Keep the state
+        run: |
+          cd state
+          code=${{ steps.watch.outputs.code }}
+          if [ "$code" = 4 ] || [ "$code" = 5 ]; then cp report.md pending.md; fi
+          git config user.name "oni-watch"
+          git config user.email "oni-watch@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || { git commit -q -m "Watch: $(date -u +%F) exit $code" && git push -q; }
+      - name: Tell the user
+        if: steps.watch.outputs.code == '4' || steps.watch.outputs.code == '5'
+        run: |
+          title="Сторож Яндекс Музыки: $(date -u +%F)"
+          gh issue create --title "$title" --body-file state/report.md --label ym-watch || gh issue create --title "$title" --body-file state/report.md
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -1,0 +1,32 @@
+# A version tag (vX.Y.Z, see "Выпуск" in CLAUDE.md) is released from here, with no PC of the user's:
+# scripts/release.mjs builds the Windows installer and portable exe, publishes them to
+# D4SuCE/oni-releases (the apps' auto-update), then waits for the iPhone build of the same tag
+# (ios.yml) and attaches its IPA and sidestore.json. RELEASES_TOKEN: a token that may write
+# releases of D4SuCE/oni-releases and read the actions of D4SuCE/oni.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Release
+        run: node scripts/release.mjs
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}

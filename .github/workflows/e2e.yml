@@ -1,0 +1,33 @@
+# The end-to-end tests (npm run test:e2e) on a Windows machine of GitHub's, against the real account
+# (YANDEX_MUSIC_TOKEN secret): the same run as on the user's PC, for a change made in the cloud (the
+# watch's agent, watch/AGENT.md) or any branch. Run: gh workflow run e2e.yml --ref <branch>
+name: e2e
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: End-to-end tests
+        run: npm run test:e2e
+        env:
+          YANDEX_MUSIC_TOKEN: ${{ secrets.YANDEX_MUSIC_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-screenshots
+          path: tests/screenshots
+          if-no-files-found: ignore

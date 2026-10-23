@@ -1,6 +1,6 @@
 // The watch on Yandex Music (asked by the user, 23.10.2026): Yandex publishes no changelog of its
 // API, and on 21.10 it quietly stopped counting /play-audio. Once a day (scripts/ym-watch.ps1, from
-// the Windows Task Scheduler) this looks whether a new official desktop app is out; if so it takes
+// the Windows Task Scheduler, or GitHub's ym-watch.yml) this looks whether a new official desktop app is out; if so it takes
 // a fingerprint of what the app asks of the API (endpoints, the fields of a play, the equalizer)
 // and compares it with the last one. It also runs the API tests on the real account (test:api),
 // which catch a change on Yandex's side with no new app at all.
@@ -18,7 +18,8 @@ import path from 'node:path';
 import asar from '@electron/asar';
 
 const FEED = 'https://desktop.app.music.yandex.net/stable/';
-const DATA = path.join(process.env.LOCALAPPDATA || path.join(process.env.HOME || '.', '.local'), 'oni-watch');
+// ONI_WATCH_DIR: where GitHub's daily run (ym-watch.yml) keeps it, the checkout of the ym-watch branch.
+const DATA = process.env.ONI_WATCH_DIR || path.join(process.env.LOCALAPPDATA || path.join(process.env.HOME || '.', '.local'), 'oni-watch');
 const SNAPSHOT = path.join(DATA, 'snapshot.json');
 const REPORT = path.join(DATA, 'report.md');
 const NEXT = path.join(DATA, 'next-snapshot.json');
