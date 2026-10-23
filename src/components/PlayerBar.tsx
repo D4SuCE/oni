@@ -61,24 +61,15 @@ export function SeekBar({ className }: { className?: string }) {
     seek(Number(e.currentTarget.value));
     setDrag(null);
   };
-  // The time where it would go, over the bar: under the mouse (hovered or dragged) or over the thumb
-  // the finger holds (asked by the user: there was no telling what time a seek went to).
-  const [hover, setHover] = useState<number | null>(null);
-  const pointAt = (e: React.PointerEvent<HTMLInputElement>) => {
-    const box = e.currentTarget.getBoundingClientRect();
-    return Math.min(1, Math.max(0, (e.clientX - box.left) / (box.width || 1)));
-  };
-  const tip = drag !== null ? drag / (duration || 1) : hover;
   const t = useT();
   return (
     <div className={cx('seek', className)}>
-      <span className="time">{fmtTime(shown)}</span>
+      {/* While the bar is held, the time it goes to, lit (the user: there was no telling what time a
+          seek went to; there, not over the hand, by the user's choice). */}
+      <span className={cx('time', drag !== null && 'seeking')} data-testid="seek-time">
+        {fmtTime(shown)}
+      </span>
       <span className="seek-track">
-        {tip !== null && duration > 0 && (
-          <span className="seek-tip" style={{ left: `${tip * 100}%` }}>
-            {fmtTime(tip * duration)}
-          </span>
-        )}
         <input
           type="range"
           className="range"
@@ -90,8 +81,6 @@ export function SeekBar({ className }: { className?: string }) {
           onPointerDown={() => (holding.current = true)}
           onPointerUp={release}
           onPointerCancel={release}
-          onPointerMove={(e) => e.pointerType === 'mouse' && setHover(pointAt(e))}
-          onPointerLeave={() => setHover(null)}
           // Held: follow the hand; otherwise (the keyboard) seek right away.
           onChange={(e) => (holding.current ? setDrag(Number(e.target.value)) : seek(Number(e.target.value)))}
           aria-label={t.player.position}

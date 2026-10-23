@@ -298,8 +298,9 @@ await step('settings picked during a track radio start My Wave with them: quick 
   }
 });
 
-await step('the seek bar shows the time under the mouse, and the one it is dragged to', async () => {
-  // Asked by the user: seeking along the bar, there was no telling what time it would go to.
+await step('a held seek bar shows the time it goes to in its left label, lit; let go, the playing time again', async () => {
+  // Asked by the user: seeking along the bar, there was no telling what time it would go to; the
+  // left label (the playing time) says it while the bar is held.
   await page.evaluate(async () => {
     const chart = await window.__wave.api.chart();
     await window.__wave.playTracks(chart.slice(0, 2), 0, 'e2e');
@@ -307,28 +308,22 @@ await step('the seek bar shows the time under the mouse, and the one it is dragg
   await waitPlaying(0.5);
   await page.evaluate(() => window.__wave.audio.pause());
   const bar = page.locator('.playerbar .seek .range');
+  const label = page.locator('.playerbar [data-testid="seek-time"]');
   const box = await bar.boundingBox();
   const duration = await page.evaluate(() => window.__wave.usePlayer.getState().duration);
   const secs = (text) => text.split(':').reduce((a, b) => a * 60 + Number(b), 0);
-  await page.mouse.move(box.x + box.width * 0.75, box.y + box.height / 2);
-  const tip = page.locator('.playerbar .seek-tip');
-  await tip.waitFor({ timeout: 3000 }).catch(() => {
-    throw new Error('no time over the bar under the mouse');
-  });
-  const hovered = secs(await tip.innerText());
-  if (Math.abs(hovered - duration * 0.75) > duration * 0.03 + 1) throw new Error(`under the mouse ${hovered} s, want ~${Math.round(duration * 0.75)}`);
-  // Held and dragged: the time follows the hand, and the left label says it too.
+  const y = box.y + box.height / 2;
+  await page.mouse.move(box.x + box.width * 0.1, y);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width * 0.25, box.y + box.height / 2, { steps: 5 });
-  const dragged = secs(await tip.innerText());
-  const label = secs(await page.locator('.playerbar .seek .time').first().innerText());
+  await page.mouse.move(box.x + box.width * 0.75, y, { steps: 6 });
+  const held = secs(await label.innerText());
+  const lit = await label.evaluate((el) => el.classList.contains('seeking'));
   await page.mouse.up();
-  if (Math.abs(dragged - duration * 0.25) > duration * 0.03 + 1 || Math.abs(label - dragged) > 1) throw new Error(`dragged: tip ${dragged} s, label ${label} s, want ~${Math.round(duration * 0.25)}`);
-  await page.mouse.move(box.x + box.width / 2, box.y - 200);
-  await tip.waitFor({ state: 'detached', timeout: 3000 }).catch(() => {
-    throw new Error('the time stays after the mouse has left');
-  });
-  console.log(`       ${Math.round(duration)} s: 75% -> ${hovered} s, dragged to 25% -> ${dragged} s`);
+  if (Math.abs(held - duration * 0.75) > duration * 0.03 + 1 || !lit) throw new Error(`held at 75%: label ${held} s (lit ${lit}), want ~${Math.round(duration * 0.75)}`);
+  await page.waitForFunction(() => !document.querySelector('.playerbar [data-testid="seek-time"]').classList.contains('seeking'), null, { timeout: 3000 });
+  const position = await page.evaluate(() => window.__wave.audio.currentTime);
+  if (Math.abs(position - duration * 0.75) > duration * 0.03 + 1) throw new Error(`let go: playing at ${position.toFixed(1)} s`);
+  console.log(`       ${Math.round(duration)} s: held at 75% -> label ${held} s, then playing at ${position.toFixed(0)} s`);
 });
 
 await step('a playback error shows as a toast that goes away by itself', async () => {

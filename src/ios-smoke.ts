@@ -442,15 +442,16 @@ async function touchSeek() {
   const box = bar.getBoundingClientRect();
   const at = { pointerId: 11, pointerType: 'touch', isPrimary: true, clientX: box.left + box.width / 2, clientY: box.top + box.height / 2, bubbles: true };
   bar.dispatchEvent(new PointerEvent('pointerdown', at));
-  // While the finger moves, the time it would go to shows over the thumb (the finger hides the bar).
+  // While the finger holds the bar, the left label says the time it goes to, lit.
   bar.dispatchEvent(new PointerEvent('pointermove', { ...at, clientX: at.clientX + 2 }));
   bar.dispatchEvent(new PointerEvent('pointermove', at));
   await sleep(100);
-  const tip = document.querySelector('.nowplaying .seek-tip')?.textContent ?? '';
+  const label = document.querySelector('.nowplaying [data-testid="seek-time"]');
+  const tip = label?.classList.contains('seeking') ? (label.textContent ?? '') : '';
   bar.dispatchEvent(new PointerEvent('pointerup', at));
   const half = wave().audio.duration / 2;
   const moved = await until(() => Math.abs(wave().audio.currentTime - half) < 5, 5000);
-  report('touch-seek', moved && /^\d+:\d\d$/.test(tip), `at ${wave().audio.currentTime.toFixed(1)} of ${wave().audio.duration.toFixed(1)}; time over the finger "${tip}"`);
+  report('touch-seek', moved && /^\d+:\d\d$/.test(tip), `at ${wave().audio.currentTime.toFixed(1)} of ${wave().audio.duration.toFixed(1)}; held label "${tip}"`);
 }
 
 /** A list downloads through iOS's background session (iosDownloads.ts): the native side seals the
