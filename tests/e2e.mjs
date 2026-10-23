@@ -298,6 +298,39 @@ await step('settings picked during a track radio start My Wave with them: quick 
   }
 });
 
+await step('the seek bar shows the time under the mouse, and the one it is dragged to', async () => {
+  // Asked by the user: seeking along the bar, there was no telling what time it would go to.
+  await page.evaluate(async () => {
+    const chart = await window.__wave.api.chart();
+    await window.__wave.playTracks(chart.slice(0, 2), 0, 'e2e');
+  });
+  await waitPlaying(0.5);
+  await page.evaluate(() => window.__wave.audio.pause());
+  const bar = page.locator('.playerbar .seek .range');
+  const box = await bar.boundingBox();
+  const duration = await page.evaluate(() => window.__wave.usePlayer.getState().duration);
+  const secs = (text) => text.split(':').reduce((a, b) => a * 60 + Number(b), 0);
+  await page.mouse.move(box.x + box.width * 0.75, box.y + box.height / 2);
+  const tip = page.locator('.playerbar .seek-tip');
+  await tip.waitFor({ timeout: 3000 }).catch(() => {
+    throw new Error('no time over the bar under the mouse');
+  });
+  const hovered = secs(await tip.innerText());
+  if (Math.abs(hovered - duration * 0.75) > duration * 0.03 + 1) throw new Error(`under the mouse ${hovered} s, want ~${Math.round(duration * 0.75)}`);
+  // Held and dragged: the time follows the hand, and the left label says it too.
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.25, box.y + box.height / 2, { steps: 5 });
+  const dragged = secs(await tip.innerText());
+  const label = secs(await page.locator('.playerbar .seek .time').first().innerText());
+  await page.mouse.up();
+  if (Math.abs(dragged - duration * 0.25) > duration * 0.03 + 1 || Math.abs(label - dragged) > 1) throw new Error(`dragged: tip ${dragged} s, label ${label} s, want ~${Math.round(duration * 0.25)}`);
+  await page.mouse.move(box.x + box.width / 2, box.y - 200);
+  await tip.waitFor({ state: 'detached', timeout: 3000 }).catch(() => {
+    throw new Error('the time stays after the mouse has left');
+  });
+  console.log(`       ${Math.round(duration)} s: 75% -> ${hovered} s, dragged to 25% -> ${dragged} s`);
+});
+
 await step('a playback error shows as a toast that goes away by itself', async () => {
   // Found by the user: "Couldn't play …" stayed over the player for good.
   await page.evaluate(() => window.__wave.usePlayer.setState({ error: 'e2e: could not play' }));
@@ -684,6 +717,31 @@ await step('search inside Liked: the list narrows, and a found track plays the w
   if (queue < total) throw new Error(`queue ${queue}, list ${total}`);
   console.log(`       "${word}": ${shown} of ${total}`);
   await page.click('[data-testid="list-search"]');
+});
+
+await step('Pause pressed while the next track still loads keeps it from starting; Play then starts it', async () => {
+  // Found by the e2e run (twice): the button said Pause while a track loaded, but the press went by
+  // the audio, not playing yet, and started it. A pause on the lock screen right after "next" too.
+  await page.evaluate(async () => {
+    const chart = await window.__wave.api.chart();
+    await window.__wave.playTracks(chart.slice(3, 6), 0, 'e2e');
+  });
+  await waitPlaying(0.5);
+  // "Next", and Pause at once, while the next one loads.
+  await page.evaluate(() => {
+    document.querySelector('[data-testid="next"]').click();
+    document.querySelector('[data-testid="play-toggle"]').click();
+  });
+  await page.waitForTimeout(4000);
+  const held = await page.evaluate(() => ({ paused: window.__wave.audio.paused, playing: window.__wave.usePlayer.getState().playing, index: window.__wave.usePlayer.getState().index }));
+  if (!held.paused || held.playing || held.index !== 1) throw new Error(`after Pause while loading: ${JSON.stringify(held)}`);
+  await page.click('[data-testid="play-toggle"]');
+  await waitPlaying(0.3, 15000).catch(() => {
+    throw new Error('Play after that did not start the track');
+  });
+  const index = await page.evaluate(() => window.__wave.usePlayer.getState().index);
+  if (index !== 1) throw new Error(`Play started track ${index}, not the loaded one`);
+  await page.evaluate(() => window.__wave.audio.pause());
 });
 
 await step('a playing list says so on its page: Play turns Pause, then Resume, without starting over', async () => {

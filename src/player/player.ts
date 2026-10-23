@@ -377,6 +377,11 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
     const local = saved && !sealedKey ? await offline!.open(t.id).catch(() => null) : null;
     const stream = saved && (sealedKey || local) ? { url: '', codec: saved.codec, bitrate: saved.bitrate } : await streamUrl(t);
     if (seq !== loadSeq) return;
+    // Paused while it loaded: it is made ready, not started.
+    if (pausedLoad === seq) {
+      autoplay = false;
+      heldLoad = seq;
+    }
     if (isIos) {
       // The native player is told which track it opens and which files to keep (this and the next).
       const nextId = get().queue[index + 1]?.id;
@@ -672,10 +677,32 @@ export async function playShuffled(tracks: Track[], title = tr().common.list, fr
   await playTracks(shuffleArray(playable), 0, title, from, extra);
 }
 
+/** The load (its loadSeq) that Pause was pressed during: it does not start when ready; and the
+ * load that, so paused, has its track in place already (Play then plays it). */
+let pausedLoad = 0;
+let heldLoad = 0;
+
 export function toggle() {
   if (!current()) return;
   // The user's own play or pause: no longer a wait that ends by itself.
   waitingForYandex = false;
+  const s = get();
+  // A track still loading to play shows Pause: pressed then, it pauses. Going by the audio (not
+  // playing yet) it started the track instead (found by the e2e run; a lock screen's pause right
+  // after "next" too).
+  if (s.loading && s.playing) {
+    pausedLoad = loadSeq;
+    audio.pause();
+    set({ playing: false });
+    return;
+  }
+  // Paused while loading and pressed again before it is ready: it plays as soon as it is.
+  if (s.loading && pausedLoad === loadSeq) {
+    pausedLoad = 0;
+    if (heldLoad === loadSeq) audio.play().catch(() => {});
+    else set({ playing: true });
+    return;
+  }
   if (audio.paused) {
     if (!audio.src) loadAt(get().index);
     else audio.play().catch(() => {});

@@ -793,6 +793,31 @@ html.acrylic .backdrop {
   gap: 8px;
   width: 100%;
 }
+.seek-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.seek-track .range {
+  width: 100%;
+}
+/* The time a seek would go to, over the bar (the mouse's place, or the thumb a finger holds). */
+.seek-tip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  padding: 3px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--line, #49403d);
+  background: #211816;
+  color: #f2eee8;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 5;
+}
 .seek .time {
   font-size: 11.5px;
   color: var(--text-3);
