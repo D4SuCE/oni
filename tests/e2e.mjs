@@ -714,31 +714,6 @@ await step('search inside Liked: the list narrows, and a found track plays the w
   await page.click('[data-testid="list-search"]');
 });
 
-await step('Pause pressed while the next track still loads keeps it from starting; Play then starts it', async () => {
-  // Found by the e2e run (twice): the button said Pause while a track loaded, but the press went by
-  // the audio, not playing yet, and started it. A pause on the lock screen right after "next" too.
-  await page.evaluate(async () => {
-    const chart = await window.__wave.api.chart();
-    await window.__wave.playTracks(chart.slice(3, 6), 0, 'e2e');
-  });
-  await waitPlaying(0.5);
-  // "Next", and Pause at once, while the next one loads.
-  await page.evaluate(() => {
-    document.querySelector('[data-testid="next"]').click();
-    document.querySelector('[data-testid="play-toggle"]').click();
-  });
-  await page.waitForTimeout(4000);
-  const held = await page.evaluate(() => ({ paused: window.__wave.audio.paused, playing: window.__wave.usePlayer.getState().playing, index: window.__wave.usePlayer.getState().index }));
-  if (!held.paused || held.playing || held.index !== 1) throw new Error(`after Pause while loading: ${JSON.stringify(held)}`);
-  await page.click('[data-testid="play-toggle"]');
-  await waitPlaying(0.3, 15000).catch(() => {
-    throw new Error('Play after that did not start the track');
-  });
-  const index = await page.evaluate(() => window.__wave.usePlayer.getState().index);
-  if (index !== 1) throw new Error(`Play started track ${index}, not the loaded one`);
-  await page.evaluate(() => window.__wave.audio.pause());
-});
-
 await step('a playing list says so on its page: Play turns Pause, then Resume, without starting over', async () => {
   // The user: a playlist started from its page did not show there that it plays.
   const button = page.locator('[data-testid="list-play"]');
@@ -777,6 +752,31 @@ await step('a playing list says so on its page: Play turns Pause, then Resume, w
   if (await page.locator('[data-testid="list-play"][data-playing]').count()) throw new Error('another playlist shows as playing');
   await page.click('[data-testid="nav-liked"]');
   await page.waitForSelector('[data-testid="list-play"][data-playing]', { timeout: 15000 }).catch(why('Liked not shown playing on return'));
+});
+
+await step('Pause pressed while the next track still loads keeps it from starting; Play then starts it', async () => {
+  // Found by the e2e run (twice): the button said Pause while a track loaded, but the press went by
+  // the audio, not playing yet, and started it. A pause on the lock screen right after "next" too.
+  await page.evaluate(async () => {
+    const chart = await window.__wave.api.chart();
+    await window.__wave.playTracks(chart.slice(3, 6), 0, 'e2e');
+  });
+  await waitPlaying(0.5);
+  // "Next", and Pause at once, while the next one loads.
+  await page.evaluate(() => {
+    document.querySelector('[data-testid="next"]').click();
+    document.querySelector('[data-testid="play-toggle"]').click();
+  });
+  await page.waitForTimeout(4000);
+  const held = await page.evaluate(() => ({ paused: window.__wave.audio.paused, playing: window.__wave.usePlayer.getState().playing, index: window.__wave.usePlayer.getState().index }));
+  if (!held.paused || held.playing || held.index !== 1) throw new Error(`after Pause while loading: ${JSON.stringify(held)}`);
+  await page.click('[data-testid="play-toggle"]');
+  await waitPlaying(0.3, 15000).catch(() => {
+    throw new Error('Play after that did not start the track');
+  });
+  const index = await page.evaluate(() => window.__wave.usePlayer.getState().index);
+  if (index !== 1) throw new Error(`Play started track ${index}, not the loaded one`);
+  await page.evaluate(() => window.__wave.audio.pause());
 });
 
 await step('Liked opened again shows the whole list and its Download button at once', async () => {
