@@ -157,8 +157,19 @@ struct RemoteProvider: TimelineProvider {
     }
 }
 
+/// Tinted and clear Home screens (iOS 18) paint the whole widget in one colour: a filled shape and
+/// the words on it came out as one white patch (the user: "My Wave" white, no words). There the
+/// buttons are outlined instead, and take the accent colour.
+@available(iOS 17.0, *)
+private extension WidgetRenderingMode {
+    var inColor: Bool { self == .fullColor }
+}
+
+/// A pressed button dims until the widget is drawn again (iOS reloads it after the action ran):
+/// the press is seen, the widget is not a picture.
 @available(iOS 17.0, *)
 private struct RoundButton<I: AppIntent>: View {
+    @Environment(\.widgetRenderingMode) private var mode
     let intent: I
     let symbol: String
     var size: CGFloat = 40
@@ -168,16 +179,35 @@ private struct RoundButton<I: AppIntent>: View {
         Button(intent: intent) {
             Image(systemName: symbol)
                 .font(.system(size: size * 0.4, weight: .semibold))
-                .foregroundColor(tint)
+                .foregroundColor(mode.inColor ? tint : .primary)
                 .frame(width: size, height: size)
-                .background(Circle().fill(Palette.line.opacity(0.55)))
+                .background {
+                    if mode.inColor {
+                        Circle().fill(Palette.line.opacity(0.55))
+                    } else {
+                        Circle().strokeBorder(.primary.opacity(0.6), lineWidth: 1.2)
+                    }
+                }
+                .widgetAccentable()
+                .invalidatableContent()
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Text(label))
+    }
+
+    private var label: String {
+        switch symbol {
+        case "playpause.fill": return "Пауза / продолжить"
+        case "forward.fill": return "Следующий трек"
+        case "heart.fill": return "Мне нравится"
+        default: return symbol
+        }
     }
 }
 
 @available(iOS 17.0, *)
 private struct WaveButton: View {
+    @Environment(\.widgetRenderingMode) private var mode
     var compact = false
 
     var body: some View {
@@ -190,10 +220,18 @@ private struct WaveButton: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
-            .foregroundColor(Palette.text)
+            .foregroundColor(mode.inColor ? Palette.text : .primary)
             .padding(.horizontal, 12)
             .frame(maxWidth: .infinity, minHeight: compact ? 34 : 40)
-            .background(Capsule().fill(Palette.red))
+            .background {
+                if mode.inColor {
+                    Capsule().fill(Palette.red)
+                } else {
+                    Capsule().strokeBorder(.primary, lineWidth: 1.5)
+                }
+            }
+            .widgetAccentable()
+            .invalidatableContent()
         }
         .buttonStyle(.plain)
     }
