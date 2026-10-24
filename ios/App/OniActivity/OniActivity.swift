@@ -146,14 +146,52 @@ struct DownloadActivity: Widget {
 
 struct RemoteEntry: TimelineEntry {
     let date: Date
+    /// What plays, as the app last wrote it (NowPlayingShare.swift); nil before anything played or
+    /// in a build signed without the app group.
+    var track: NowPlayingShare.State? = nil
+    var cover: UIImage? = nil
 }
 
-/// Nothing changes on it: one entry, never refreshed (the track playing is iOS's own Now Playing).
+/// One entry, drawn again when the app says the track changed (WidgetCenter.reloadTimelines).
 struct RemoteProvider: TimelineProvider {
+    private func entry() -> RemoteEntry {
+        let track = NowPlayingShare.read()
+        return RemoteEntry(date: Date(), track: track, cover: track.flatMap(NowPlayingShare.cover))
+    }
     func placeholder(in context: Context) -> RemoteEntry { RemoteEntry(date: Date()) }
-    func getSnapshot(in context: Context, completion: @escaping (RemoteEntry) -> Void) { completion(RemoteEntry(date: Date())) }
+    func getSnapshot(in context: Context, completion: @escaping (RemoteEntry) -> Void) { completion(entry()) }
     func getTimeline(in context: Context, completion: @escaping (Timeline<RemoteEntry>) -> Void) {
-        completion(Timeline(entries: [RemoteEntry(date: Date())], policy: .never))
+        completion(Timeline(entries: [entry()], policy: .never))
+    }
+}
+
+/// The track playing: its cover and names, where the brand stood.
+@available(iOS 17.0, *)
+private struct Playing: View {
+    @Environment(\.widgetRenderingMode) private var mode
+    let track: NowPlayingShare.State
+    let cover: UIImage?
+    var compact = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if let cover = cover, !compact {
+                Image(uiImage: cover)
+                    .resizable()
+                    .frame(width: 40, height: 40)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(track.title)
+                    .font(.system(size: compact ? 13 : 14, weight: .semibold))
+                    .foregroundColor(mode.inColor ? Palette.text : .primary)
+                    .lineLimit(1)
+                Text(track.artist)
+                    .font(.system(size: compact ? 11 : 12))
+                    .foregroundColor(mode.inColor ? Palette.muted : .secondary)
+                    .lineLimit(1)
+            }
+        }
     }
 }
 
@@ -255,6 +293,16 @@ private struct Brand: View {
 @available(iOS 17.0, *)
 struct RemoteView: View {
     @Environment(\.widgetFamily) private var family
+    var entry = RemoteEntry(date: Date())
+
+    /// The track playing, or the brand before anything played.
+    @ViewBuilder private func top(compact: Bool) -> some View {
+        if let track = entry.track, !track.title.isEmpty {
+            Playing(track: track, cover: entry.cover, compact: compact)
+        } else {
+            Brand()
+        }
+    }
 
     var body: some View {
         switch family {
@@ -279,7 +327,7 @@ struct RemoteView: View {
         case .systemMedium:
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 10) {
-                    Brand()
+                    top(compact: false)
                     Spacer(minLength: 0)
                     WaveButton()
                 }
@@ -292,7 +340,7 @@ struct RemoteView: View {
             .padding(16)
         default:
             VStack(alignment: .leading, spacing: 10) {
-                Brand()
+                top(compact: true)
                 Spacer(minLength: 0)
                 WaveButton(compact: true)
                 HStack(spacing: 0) {
@@ -311,8 +359,8 @@ struct RemoteView: View {
 @available(iOS 17.0, *)
 struct RemoteWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "OniRemote", provider: RemoteProvider()) { _ in
-            RemoteView()
+        StaticConfiguration(kind: "OniRemote", provider: RemoteProvider()) { entry in
+            RemoteView(entry: entry)
                 .containerBackground(for: .widget) {
                     LinearGradient(colors: [Palette.panel, Palette.glass], startPoint: .topLeading, endPoint: .bottomTrailing)
                 }
