@@ -1362,6 +1362,50 @@ await step('history: this app and all devices', async () => {
   await page.click('[data-testid="nav-history"]');
 });
 
+await step("shared history: another device's plays come from Oni's folder on Yandex Disk, and this one's go up (all removed again)", async () => {
+  // Needs YANDEX_DISK_TOKEN (the app-folder token, a development build reads it like the music token).
+  if (!(await page.evaluate(() => window.__wave.sync.useSync.getState().connected))) {
+    console.log('       skipped: no YANDEX_DISK_TOKEN');
+    return;
+  }
+  const phone = `device-e2e${Date.now()}.json`;
+  const own = await page.evaluate(() => window.__wave.sync.deviceSync.fileName);
+  try {
+    const track = await page.evaluate(() => {
+      const s = window.__wave.usePlayer.getState();
+      return s.queue[s.index] ?? s.queue[0];
+    });
+    if (!track) throw new Error('nothing played yet');
+    const at = Date.now() - 60_000;
+    const file = {
+      v: 1,
+      device: { id: phone.slice(7, -5), platform: 'ios' },
+      at,
+      history: { '999000111': { plays: 2, skips: 0, last: at } },
+      log: { plays: [], tracks: {} },
+      recent: [{ track, at, source: 'e2e phone' }],
+    };
+    await page.evaluate(([name, text]) => window.__wave.sync.disk.write(name, text), [phone, JSON.stringify(file)]);
+    await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
+    await page.click('[data-testid="sync-now"]');
+    await page.waitForFunction(() => !window.__wave.sync.useSync.getState().busy && window.__wave.sync.useSync.getState().at, null, { timeout: 30000 });
+    const devices = await page.locator('[data-testid="sync-devices"]').innerText();
+    if (!/iPhone/.test(devices)) throw new Error(`devices: "${devices}"`);
+    const listed = await page.evaluate(() => window.__wave.sync.disk.list());
+    if (!listed.some((f) => f.name === own)) throw new Error(`own file not on Disk: ${listed.map((f) => f.name)}`);
+    await page.click('[data-testid="nav-history"]');
+    await page.click('[data-testid="history-app"]');
+    const run = page.locator('.history-context', { hasText: 'e2e phone' }).first();
+    await run.waitFor({ timeout: 5000 });
+    if (!/iPhone/.test(await run.innerText())) throw new Error(`run: "${await run.innerText()}"`);
+  } finally {
+    await page.evaluate(([a, b]) => Promise.all([window.__wave.sync.disk.remove(a), window.__wave.sync.disk.remove(b)]), [phone, own]);
+    await page.evaluate(() => window.__wave.sync.deviceSync.clear());
+  }
+  const left = await page.evaluate(() => window.__wave.sync.disk.list());
+  if (left.some((f) => f.name === phone || f.name === own)) throw new Error('files left on Disk');
+});
+
 await step('recap: the month summed up from the plays (here and, for the last days, everywhere); play it, save it as a playlist (removed again)', async () => {
   await page.click('[data-testid="history-recap"]');
   await page.waitForSelector('[data-testid="recap-track"]', { timeout: 30000 });

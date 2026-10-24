@@ -60,8 +60,15 @@ const dayOf = (ms: number) => {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 };
 
+/** Another device's log (src/sync, Yandex Disk): its own plays and their cards. */
+export interface DeviceLog {
+  plays: LoggedPlay[];
+  tracks: Record<string, Track>;
+}
+
 export class PlayLog {
   private data: Stored;
+  private remote: DeviceLog[] = [];
   private store: KeyValueStore;
   private now: () => number;
 
@@ -79,6 +86,19 @@ export class PlayLog {
   /** The card of every track in the log. */
   cards(): Track[] {
     return Object.values(this.data.tracks);
+  }
+
+  /** The plays heard on this device (not the ones Yandex's history told of) with their cards, for Yandex Disk. */
+  own(): DeviceLog {
+    const plays = this.data.plays.filter((p) => !p.r);
+    const tracks: Record<string, Track> = {};
+    for (const p of plays) if (this.data.tracks[p.id]) tracks[p.id] = this.data.tracks[p.id];
+    return { plays, tracks };
+  }
+
+  /** The other devices' logs: recaps count their plays, read, never saved here. */
+  setRemote(devices: DeviceLog[]) {
+    this.remote = devices;
   }
 
   /** A play heard here: `seconds` it played. */
@@ -118,14 +138,18 @@ export class PlayLog {
 
   /** Sums up the plays in [from, to). */
   recap({ from, to }: { from: number; to: number }): Recap {
-    const plays = this.data.plays.filter((p) => p.at >= from && p.at < to);
+    // Another Oni's own plays stand in for what Yandex's history told of the same track that day
+    // (there: once, for the track's length; here: as heard).
+    const theirs = this.remote.flatMap((d) => d.plays.filter((p) => !p.r && p.at >= from && p.at < to));
+    const told = new Set(theirs.map((p) => `${p.id}@${dayOf(p.at)}`));
+    const plays = [...this.data.plays.filter((p) => p.at >= from && p.at < to && !(p.r && told.has(`${p.id}@${dayOf(p.at)}`))), ...theirs];
     const tracks = new Map<string, { track: Track; plays: number; seconds: number }>();
     const artists = new Map<string, { artist: Artist; plays: number; seconds: number; track: Track; best: number }>();
     const genres = new Map<string, number>();
     const days = new Set<number>();
     let seconds = 0;
     for (const p of plays) {
-      const track = this.data.tracks[p.id];
+      const track = this.data.tracks[p.id] ?? this.remote.find((d) => d.tracks[p.id])?.tracks[p.id];
       if (!track) continue;
       seconds += p.s;
       days.add(dayOf(p.at));

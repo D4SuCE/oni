@@ -1,4 +1,4 @@
-import { Download, ExternalLink, FileText, HardDriveDownload, LogOut, Mic, RefreshCw, Trash2, Undo2 } from 'lucide-react';
+import { Cloud, Download, ExternalLink, FileText, HardDriveDownload, LogOut, Mic, RefreshCw, Trash2, Undo2 } from 'lucide-react';
 import { confirmDialog } from '../components/Dialog.tsx';
 import { formatSize, setAutoLikes, useAutoLikes, useOfflineVersion } from '../ui/offline.ts';
 import { useEffect, useState } from 'react';
@@ -7,7 +7,7 @@ import { LANGS, setLang, useLang, useT } from '../i18n.ts';
 import { canAnalyzeAudio } from '../player/eq.ts';
 import { offline, recsFeedback, setCrossfade, setNormalize, stats, usePlayer } from '../player/player.ts';
 import type { SpaceRules } from '../player/offline.ts';
-import { logout, navigate, useApp } from '../store.ts';
+import { logout, navigate, toast, useApp } from '../store.ts';
 import { setMotion, setPulse, useMotion, usePulse } from '../ui/motion.ts';
 import { isIos } from '../ui/platform.ts';
 import { setPhoneSound, usePhoneSound } from '../player/phoneSound.ts';
@@ -17,6 +17,7 @@ import { checkIosUpdate, installIosUpdate, installUpdateShortcut, setAutoUpdate,
 import { useUpdate } from '../ui/update.ts';
 import { addVoiceShortcut, VOICE_SHORTCUTS } from '../ui/voice.ts';
 import { cx } from '../ui/util.ts';
+import { connectDisk, disconnectDisk, syncNow, useSync } from '../sync/index.ts';
 
 export function SettingsView() {
   const account = useApp((s) => s.account);
@@ -50,6 +51,8 @@ export function SettingsView() {
           </button>
         </div>
       </div>
+
+      <SyncPanel />
 
       <div className="panel glass">
         <h3>{s.language}</h3>
@@ -282,6 +285,55 @@ export function SettingsView() {
 const LIMITS_GB = [0, 2, 5, 10, 20];
 const FORGET_MONTHS = [0, 1, 3, 6];
 const GB = 1024 * 1024 * 1024;
+
+/** The shared history on Yandex Disk (src/sync). */
+function SyncPanel() {
+  const t = useT();
+  const y = t.sync;
+  const lang = useLang((s) => s.lang);
+  const { connected, busy, at, devices, expired } = useSync();
+  if (connected === null) return null;
+  const when = (ms: number) => new Date(ms).toLocaleString(lang, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const status = !connected ? (expired ? y.expired : y.off) : busy ? y.busy : at ? y.on(when(at)) : y.connected;
+  return (
+    <div className="panel glass" data-testid="sync-panel">
+      <h3>{y.title}</h3>
+      <div className="settings-row">
+        <div>
+          <div data-testid="sync-status">{status}</div>
+          {connected && (
+            <div className="hint" data-testid="sync-devices">
+              {devices.length ? y.devices(devices.map((d) => y.device(d.device.platform, when(d.at))).join(', ')) : y.noDevices}
+            </div>
+          )}
+          <div className="hint">{y.hint}</div>
+        </div>
+        <div className="update-actions">
+          {connected ? (
+            <>
+              <button className="btn ghost" onClick={() => syncNow()} disabled={busy} data-testid="sync-now">
+                <RefreshCw size={16} className={cx(busy && 'spin')} /> {y.now}
+              </button>
+              <button
+                className="btn ghost"
+                onClick={async () => {
+                  if (await confirmDialog(y.disconnectTitle, y.disconnectMessage, y.disconnect)) await disconnectDisk();
+                }}
+                data-testid="sync-disconnect"
+              >
+                <LogOut size={16} /> {y.disconnect}
+              </button>
+            </>
+          ) : (
+            <button className="btn primary" onClick={async () => !(await connectDisk()) && toast(y.failed)} data-testid="sync-connect">
+              <Cloud size={16} /> {y.connect}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function DownloadsPanel() {
   const t = useT();

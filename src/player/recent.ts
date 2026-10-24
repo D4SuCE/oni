@@ -15,6 +15,8 @@ export interface RecentPlay {
   label?: ListLabel;
   /** For playing it again from the same place. */
   from?: { playlist?: string; album?: number | string };
+  /** Played on another device (src/sync): its name, as History shows it. */
+  device?: string;
 }
 
 const KEY = 'player.recent.v1';
@@ -42,6 +44,7 @@ export function trimTrack(t: Track): Track {
 
 export class RecentPlays {
   private items: RecentPlay[];
+  private remote: RecentPlay[] = [];
   private store: KeyValueStore;
 
   constructor(store: KeyValueStore) {
@@ -53,9 +56,20 @@ export class RecentPlays {
     }
   }
 
-  /** Newest first. */
+  /** Newest first, the other devices' plays among them. */
   list(): RecentPlay[] {
+    if (!this.remote.length) return this.items;
+    return [...this.items, ...this.remote].sort((a, b) => b.at - a.at).slice(0, LIMIT * 2);
+  }
+
+  /** This device's plays, for Yandex Disk. */
+  own(): RecentPlay[] {
     return this.items;
+  }
+
+  /** The other devices' plays (src/sync), each with its device's name. */
+  setRemote(plays: RecentPlay[]) {
+    this.remote = plays;
   }
 
   add(play: RecentPlay) {

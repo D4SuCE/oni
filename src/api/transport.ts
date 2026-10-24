@@ -5,12 +5,14 @@ import { tr } from '../i18n.ts';
 import { capacitorTransport, isNativeIos } from './capacitor.ts';
 
 export interface HttpRequest {
-  method?: 'GET' | 'POST';
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   url: string;
   query?: Record<string, string | number | boolean | undefined>;
   form?: Record<string, string | number>;
   json?: unknown;
   multipart?: { field: string; filename: string; contentType: string; data: ArrayBuffer };
+  /** Sent as it is (a file uploaded to Yandex Disk); its Content-Type goes in `headers`. */
+  body?: string;
   headers?: Record<string, string>;
   responseType?: 'json' | 'text';
 }
@@ -48,6 +50,10 @@ export interface Transport {
   setToken(value: string | null): Promise<void>;
   /** Sign-in through Yandex; `lang` is the interface language, for the sign-in page. */
   login?(lang?: string): Promise<boolean>;
+  /** Yandex Disk, Oni's folder only (the shared history, src/sync): a token of its own, kept by the shell. */
+  hasDiskToken?(): Promise<boolean>;
+  setDiskToken?(value: string | null): Promise<void>;
+  diskLogin?(lang?: string): Promise<boolean>;
   /** Appends a line to the app's log file. */
   log?(level: 'error' | 'warn' | 'info', source: string, message: string): void;
   /** Opens the log file in the system's default viewer. */

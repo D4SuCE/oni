@@ -93,16 +93,16 @@ const localDate = (ms: number) => {
 
 /** Days of local plays, each split into runs of the same source. */
 function localDays(plays: RecentPlay[]) {
-  const days: { date: string; runs: { source: string; label?: RecentPlay['label']; at: number; from?: RecentPlay['from']; tracks: RecentPlay['track'][] }[] }[] = [];
+  const days: { date: string; runs: { source: string; label?: RecentPlay['label']; device?: string; at: number; from?: RecentPlay['from']; tracks: RecentPlay['track'][] }[] }[] = [];
   for (const p of plays) {
     const date = localDate(p.at);
     let day = days[days.length - 1];
     if (day?.date !== date) days.push((day = { date, runs: [] }));
     const run = day.runs[day.runs.length - 1];
-    if (run?.source === p.source) {
+    if (run?.source === p.source && run.device === p.device) {
       run.tracks.push(p.track);
       run.at = p.at;
-    } else day.runs.push({ source: p.source, label: p.label, at: p.at, from: p.from, tracks: [p.track] });
+    } else day.runs.push({ source: p.source, label: p.label, device: p.device, at: p.at, from: p.from, tracks: [p.track] });
   }
   return days;
 }
@@ -128,7 +128,7 @@ function InThisApp() {
                 <ListMusic size={15} />
                 <span>{listTitle(run.source, run.label)}</span>
                 <span className="muted">
-                  · {time.format(run.at)} · {t.count.tracks(run.tracks.length)}
+                  {run.device && ` · ${t.sync.deviceName(run.device)}`} · {time.format(run.at)} · {t.count.tracks(run.tracks.length)}
                 </span>
               </div>
               <TrackList tracks={run.tracks} onPlay={(k) => playTracks(run.tracks, k, t.nav.history, run.from, HISTORY)} />

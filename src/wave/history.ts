@@ -44,6 +44,8 @@ const KEEP_DAYS = 365;
 
 export class ListenHistory {
   private entries: Record<string, HistoryEntry> = {};
+  /** The account's other devices (src/sync, Yandex Disk): read, never saved here nor sent back. */
+  private remote: Record<string, HistoryEntry>[] = [];
   private store: KeyValueStore;
   private key: string;
   private now: () => number;
@@ -61,17 +63,37 @@ export class ListenHistory {
   }
 
   get(trackId: string): HistoryEntry | undefined {
-    return this.entries[trackId];
+    const own = this.entries[trackId];
+    if (!this.remote.length) return own;
+    // Each field at its highest: the same play can be in two devices' entries (Yandex's history
+    // brings it to both), so counts are not added up.
+    let found = own;
+    for (const r of this.remote) {
+      const e = r[trackId];
+      if (!e) continue;
+      found = found ? { plays: Math.max(found.plays, e.plays), skips: Math.max(found.skips, e.skips), last: Math.max(found.last, e.last) } : e;
+    }
+    return found;
   }
 
   /** The track, or the same song under another id (songKeys): its most heard and latest entry. */
   of(track: Track): HistoryEntry | undefined {
-    let found = this.entries[String(track.id)];
+    let found = this.get(String(track.id));
     for (const key of songKeys(track)) {
-      const e = this.entries[key];
+      const e = this.get(key);
       if (e && (!found || e.plays > found.plays || (e.plays === found.plays && e.last > found.last))) found = e;
     }
     return found;
+  }
+
+  /** This device's entries, for its file on Yandex Disk. */
+  own(): Record<string, HistoryEntry> {
+    return this.entries;
+  }
+
+  /** The other devices' entries (src/sync): replaced as a whole on every read of the Disk. */
+  setRemote(devices: Record<string, HistoryEntry>[]) {
+    this.remote = devices;
   }
 
   /** Tracks remembered (the songs' entries are a second look at the same plays). */
@@ -131,7 +153,7 @@ export class ListenHistory {
   }
 
   daysSince(track: string | Track): number {
-    const e = typeof track === 'string' ? this.entries[track] : this.of(track);
+    const e = typeof track === 'string' ? this.get(track) : this.of(track);
     return e ? (this.now() - e.last) / DAY : Infinity;
   }
 

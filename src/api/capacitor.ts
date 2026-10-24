@@ -25,6 +25,9 @@ interface LoginPlugin {
 export const OniLogin = registerPlugin<LoginPlugin>('OniLogin');
 
 const TOKEN_KEY = 'yandex-oauth-token';
+const DISK_TOKEN_KEY = 'yandex-disk-token';
+/** Oni's own app at oauth.yandex.ru: only its folder on Yandex Disk (the shared history), as on the desktop. */
+const DISK_CLIENT_ID = 'e3a9ad75307d4369a7b9250d0be40af2';
 const OAUTH_CLIENT_ID = '23cabbbdc6cd418abb4b39c32c41195d'; // official Yandex Music client, as on the desktop
 const DEFAULT_CLIENT = 'YandexMusicAndroid/24023621';
 /** Downloaded tracks: Library/offline, kept by iOS (Caches could be purged when space runs low). */
@@ -61,6 +64,15 @@ export function capacitorTransport(): Transport {
   const saveToken = async (value: string | null) => {
     token = value;
     await Keychain.set({ key: TOKEN_KEY, value });
+  };
+  let diskToken: string | null | undefined;
+  const loadDiskToken = async () => {
+    if (diskToken === undefined) diskToken = (await Keychain.get({ key: DISK_TOKEN_KEY }).catch(() => ({ value: undefined }))).value ?? null;
+    return diskToken;
+  };
+  const saveDiskToken = async (value: string | null) => {
+    diskToken = value;
+    await Keychain.set({ key: DISK_TOKEN_KEY, value });
   };
 
   return {
@@ -101,6 +113,9 @@ export function capacitorTransport(): Transport {
         const t = await loadToken();
         if (t) headers.Authorization = `OAuth ${t}`;
         headers['X-Yandex-Music-Client'] ??= DEFAULT_CLIENT;
+      } else if (url.hostname === 'cloud-api.yandex.net') {
+        const t = await loadDiskToken();
+        if (t) headers.Authorization = `OAuth ${t}`;
       }
       let data: unknown;
       let dataType: 'formData' | undefined;
@@ -116,6 +131,8 @@ export function capacitorTransport(): Transport {
       } else if (req.json !== undefined) {
         data = req.json;
         headers['Content-Type'] = 'application/json';
+      } else if (req.body !== undefined) {
+        data = req.body;
       }
       const resp = await CapacitorHttp.request({
         url: url.href,
@@ -142,6 +159,19 @@ export function capacitorTransport(): Transport {
     },
 
     setToken: (value) => saveToken(value),
+
+    hasDiskToken: async () => Boolean(await loadDiskToken()),
+    setDiskToken: (value) => saveDiskToken(value),
+    async diskLogin(lang) {
+      try {
+        const { token: found } = await OniLogin.open({ url: `https://oauth.yandex.ru/authorize?response_type=token&client_id=${DISK_CLIENT_ID}`, lang });
+        if (!found) return false;
+        await saveDiskToken(found);
+        return true;
+      } catch {
+        return false;
+      }
+    },
 
     async login(lang) {
       try {

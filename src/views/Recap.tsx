@@ -10,7 +10,7 @@ import { Cover } from '../components/Common.tsx';
 import { useGenreTitles } from '../components/Mixes.tsx';
 import { Segmented } from '../components/Wave.tsx';
 import { useLang, useT } from '../i18n.ts';
-import { playLog, playTracks } from '../player/player.ts';
+import { playLog, playTracks, useRecent } from '../player/player.ts';
 import { errorText, navigate, refreshPlaylists, toast } from '../store.ts';
 import { isIos } from '../ui/platform.ts';
 import { RecapStories } from './RecapStories.tsx';
@@ -58,8 +58,10 @@ export function RecapView() {
   }, []);
   const periods = useMemo(() => (['month', 'last', 'year'] as Period[]).map((p) => [p, range(p, lang).name] as [Period, string]), [lang]);
   const { from, to, name } = range(period, lang);
-  // Summed up on every render (a year of plays is a few thousand): `version` re-renders it.
+  // Summed up on every render (a year of plays is a few thousand): `version` re-renders it, and so
+  // do the other devices' plays coming from Yandex Disk (src/sync).
   void version;
+  useRecent((s) => s.version);
   const recap = playLog.recap({ from, to });
   const top = recap.tracks.slice(0, TOP_TRACKS).map((x) => x.track);
   const title = r$.playlistTitle(name);

@@ -1,0 +1,69 @@
+// Oni's folder on the user's Yandex Disk ("Приложения/Oni"): the token reaches only that folder
+// (cloud_api:disk.app_folder, Oni's own app at oauth.yandex.ru). The shell adds the token, as it
+// does for Yandex Music; files go up and down through the links the API hands out.
+
+import type { Transport } from '../api/transport.ts';
+
+const API = 'https://cloud-api.yandex.net/v1/disk/resources';
+
+/** The token was refused (revoked, expired): Disk has to be connected again. */
+export class DiskAuthError extends Error {}
+
+export interface DiskFile {
+  name: string;
+  /** ISO time of the last change: a file not changed since the last read is not read again. */
+  modified: string;
+}
+
+/** What DeviceSync needs of Disk; tests give it a fake. */
+export interface DiskLike {
+  list(): Promise<DiskFile[]>;
+  read(name: string): Promise<string>;
+  write(name: string, text: string): Promise<void>;
+  remove(name: string): Promise<void>;
+}
+
+export class YandexDisk implements DiskLike {
+  private transport: Transport;
+
+  constructor(transport: Transport) {
+    this.transport = transport;
+  }
+
+  private async call<T = any>(method: 'GET' | 'DELETE', url: string, query: Record<string, string | number>): Promise<{ status: number; data: T }> {
+    const r = await this.transport.request<T>({ method, url, query });
+    if (r.status === 401) throw new DiskAuthError('Yandex Disk: not authorized');
+    return r;
+  }
+
+  private fail(what: string, r: { status: number; data: any }): never {
+    throw new Error(`Yandex Disk ${what}: HTTP ${r.status} ${r.data?.message ?? r.data?.error ?? ''}`.trim());
+  }
+
+  async list(): Promise<DiskFile[]> {
+    const r = await this.call('GET', API, { path: 'app:/', limit: 1000, fields: '_embedded.items.name,_embedded.items.modified,_embedded.items.type' });
+    if (r.status === 404) return []; // the folder comes with the first file
+    if (r.status !== 200) this.fail('list', r);
+    return ((r.data as any)?._embedded?.items ?? []).filter((x: any) => x.type === 'file').map((x: any) => ({ name: x.name, modified: x.modified }));
+  }
+
+  async read(name: string): Promise<string> {
+    const link = await this.call('GET', `${API}/download`, { path: `app:/${name}` });
+    if (link.status !== 200) this.fail('download', link);
+    const r = await this.transport.request<string>({ url: (link.data as any).href, responseType: 'text' });
+    if (!r.ok) this.fail('download', r);
+    return r.data;
+  }
+
+  async write(name: string, text: string): Promise<void> {
+    const link = await this.call('GET', `${API}/upload`, { path: `app:/${name}`, overwrite: 'true' });
+    if (link.status !== 200) this.fail('upload', link);
+    const r = await this.transport.request({ method: 'PUT', url: (link.data as any).href, body: text, headers: { 'Content-Type': 'application/json' }, responseType: 'text' });
+    if (r.status !== 201 && r.status !== 202 && !r.ok) this.fail('upload', r);
+  }
+
+  async remove(name: string): Promise<void> {
+    const r = await this.call('DELETE', API, { path: `app:/${name}`, permanently: 'true' });
+    if (r.status !== 202 && r.status !== 204 && r.status !== 404) this.fail('remove', r);
+  }
+}

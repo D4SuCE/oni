@@ -20,10 +20,13 @@ if (process.platform === 'win32') app.setAppUserModelId('local.wave.player');
 // In-memory session (no "persist:" prefix): Yandex cookies never reach the disk.
 const LOGIN_PARTITION = 'yandex-login';
 const OAUTH_CLIENT_ID = '23cabbbdc6cd418abb4b39c32c41195d'; // official Yandex Music client
+/** Oni's own app at oauth.yandex.ru (made by the user): only its folder on Yandex Disk, for the shared history. */
+const DISK_CLIENT_ID = 'e3a9ad75307d4369a7b9250d0be40af2';
 const DEFAULT_CLIENT = 'YandexMusicAndroid/24023621';
 
 let mainWindow = null;
 let token = null;
+let diskToken = null;
 /** Tests only (WAVE_E2E): every request fails as with no network. WAVE_E2E_OFFLINE=1 starts that way. */
 let networkDown = TEST_MODE && process.env.WAVE_E2E_OFFLINE === '1';
 
@@ -76,6 +79,24 @@ function saveToken(value) {
   fs.writeFileSync(tokenFile(), data);
 }
 
+// Yandex Disk (src/sync): a token of its own, kept the same way.
+const diskTokenFile = () => path.join(app.getPath('userData'), 'disk-token.bin');
+
+function loadDiskToken() {
+  try {
+    const raw = fs.readFileSync(diskTokenFile());
+    diskToken = safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(raw) : raw.toString('utf8');
+  } catch {
+    diskToken = (!app.isPackaged && process.env.YANDEX_DISK_TOKEN) || null;
+  }
+}
+
+function saveDiskToken(value) {
+  diskToken = value;
+  if (!value) return fs.rmSync(diskTokenFile(), { force: true });
+  fs.writeFileSync(diskTokenFile(), safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(value) : Buffer.from(value, 'utf8'));
+}
+
 // ------------------------------------------------------------------ transport
 
 function needsAuth(url) {
@@ -93,7 +114,7 @@ async function request(req) {
   if (needsAuth(url.href)) {
     if (token) headers.Authorization = `OAuth ${token}`;
     headers['X-Yandex-Music-Client'] ??= DEFAULT_CLIENT;
-  }
+  } else if (url.hostname === 'cloud-api.yandex.net' && diskToken) headers.Authorization = `OAuth ${diskToken}`;
 
   let body;
   if (req.form) {
@@ -102,6 +123,8 @@ async function request(req) {
   } else if (req.json !== undefined) {
     body = JSON.stringify(req.json);
     headers['Content-Type'] = 'application/json';
+  } else if (req.body !== undefined) {
+    body = req.body;
   } else if (req.multipart) {
     const { field, filename, contentType, data } = req.multipart;
     body = new FormData();
@@ -123,8 +146,11 @@ async function request(req) {
 
 // ---------------------------------------------------------------- OAuth login
 
-/** lang: the interface language ('ru' | 'en'); the Yandex sign-in page follows it, not the system's. */
-function login(lang) {
+/**
+ * lang: the interface language ('ru' | 'en'); the Yandex sign-in page follows it, not the system's.
+ * The same window gives the Disk token, with Oni's own client and its own store.
+ */
+function login(lang, clientId = OAUTH_CLIENT_ID, save = saveToken) {
   return new Promise((resolve) => {
     const win = new BrowserWindow({
       width: 480,
@@ -145,7 +171,7 @@ function login(lang) {
       const m = /[#&?]access_token=([^&]+)/.exec(target);
       if (m && !done) {
         done = true;
-        saveToken(decodeURIComponent(m[1]));
+        save(decodeURIComponent(m[1]));
         resolve(true);
         win.close();
       }
@@ -154,7 +180,7 @@ function login(lang) {
       win.webContents.on(ev, (_e, target) => check(target));
     }
     win.on('closed', () => !done && resolve(false));
-    win.loadURL(`https://oauth.yandex.ru/authorize?response_type=token&client_id=${OAUTH_CLIENT_ID}`);
+    win.loadURL(`https://oauth.yandex.ru/authorize?response_type=token&client_id=${clientId}`);
   });
 }
 
@@ -252,6 +278,9 @@ ipcMain.handle('ym:token:has', () => Boolean(token));
 ipcMain.on('wave:test-mode', (e) => (e.returnValue = TEST_MODE));
 ipcMain.handle('ym:token:set', (_e, value) => saveToken(value ? String(value).trim() : null));
 ipcMain.handle('ym:login', (_e, lang) => login(lang));
+ipcMain.handle('disk:token:has', () => Boolean(diskToken));
+ipcMain.handle('disk:token:set', (_e, value) => saveDiskToken(value ? String(value).trim() : null));
+ipcMain.handle('disk:login', (_e, lang) => login(lang, DISK_CLIENT_ID, saveDiskToken));
 ipcMain.on('wave:log', (_e, entry) => writeLog(entry?.level || 'error', entry?.source || 'ui', entry?.message));
 ipcMain.handle('wave:logs:open', () => {
   if (!fs.existsSync(logFile())) writeLog('info', 'main', 'log opened');
@@ -265,6 +294,7 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     allowAudioAnalysis();
     loadToken();
+    loadDiskToken();
     createWindow();
     updater.init(
       (level, message) => writeLog(level, 'update', message),
