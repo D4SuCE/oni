@@ -51,13 +51,19 @@ function frame(now: number) {
 /** Beats found in the bass the native player sent, waiting for the moment they are heard. */
 const pending: { t: number; strength: number }[] = [];
 let native = false;
-/** For the simulator run: what came from the native player, and what the tracker made of it. */
-const seen = { batches: 0, values: 0, maxFlux: 0, hits: 0, late: 0 };
+/** For the simulator run: what came from the native player, what the tracker made of it, and the
+ * highest throb the cover got (`peak`: kept here, as a check every 40 ms missed the few beats a
+ * slow cloud Mac finds — the throb rises and falls between two looks). */
+const seen = { batches: 0, values: 0, maxFlux: 0, hits: 0, late: 0, peak: 0 };
 export const pulseDebug = () => ({ native, ...seen, open: useApp.getState().nowPlayingOpen, enabled: usePulse.getState().enabled, playing: usePlayer.getState().playing });
+export function resetPulseDebug() {
+  Object.assign(seen, { batches: 0, values: 0, maxFlux: 0, hits: 0, late: 0, peak: 0 });
+}
 
 function nativeFrame() {
   const now = performance.now();
   while (pending.length && pending[0].t <= now) beat = Math.max(beat, pending.shift()!.strength);
+  seen.peak = Math.max(seen.peak, beat);
   beat *= 0.86;
   setBeat(beat.toFixed(3));
   raf = requestAnimationFrame(nativeFrame);

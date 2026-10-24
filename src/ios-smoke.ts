@@ -308,20 +308,17 @@ async function recap() {
  * Now Playing's cover throbs (Now Playing is open here, the music playing). */
 async function iosPulse() {
   const { setPulse } = await import('./ui/motion.ts');
-  const w = window as unknown as { __wave: { pulseLevel(): number; pulseTempo(): number | null } };
+  const { pulseDebug, resetPulseDebug } = await import('./player/pulse.ts');
+  const w = window as unknown as { __wave: { pulseTempo(): number | null } };
+  resetPulseDebug();
   setPulse(true);
-  await sleep(6000);
-  // Up to 15 s, done at the first beat seen: a cloud Mac's beats come late and few (5 s caught one
-  // or two, a quiet bar none, and the step failed now and then while the pulse worked).
-  let max = 0;
-  const end = Date.now() + 15000;
-  while (Date.now() < end && max <= 0.2) {
-    max = Math.max(max, w.__wave.pulseLevel());
-    await sleep(40);
-  }
+  // Up to 25 s, done at the first throb: a cloud Mac's beats come late and few (one to three in 20 s
+  // at times), so the cover's highest throb is kept by the pulse itself (pulseDebug().peak), not
+  // looked for every 40 ms, which missed them.
+  await until(() => pulseDebug().peak > 0.2, 25000);
   const cover = Number((document.querySelector('.np-cover') as HTMLElement | null)?.style.getPropertyValue('--beat') || -1);
-  const { pulseDebug } = await import('./player/pulse.ts');
-  report('ios-pulse', max > 0.2 && cover >= 0, `max ${max.toFixed(2)}, tempo ${w.__wave.pulseTempo()?.toFixed(0) ?? 'none'}, cover --beat ${cover} ${JSON.stringify(pulseDebug())}`);
+  const seen = pulseDebug();
+  report('ios-pulse', seen.peak > 0.2 && cover >= 0, `peak ${seen.peak.toFixed(2)}, tempo ${w.__wave.pulseTempo()?.toFixed(0) ?? 'none'}, cover --beat ${cover} ${JSON.stringify(seen)}`);
 }
 
 /**
