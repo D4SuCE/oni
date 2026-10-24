@@ -7,7 +7,6 @@ import { ApiError, trackKey } from './api/yandex.ts';
 import { tr, useLang } from './i18n.ts';
 import { dropFromQueue, offline, onNetworkLost, setDislikedCheck, setLikedCheck, setOfflineMode, usePlayer, warmWave, waveFeedback } from './player/player.ts';
 import { startSync } from './sync/index.ts';
-import { celebrateAdd, celebrateLike } from './ui/anim.ts';
 
 export type Route =
   | { name: 'home' }
@@ -265,7 +264,6 @@ export async function toggleLike(t: Track) {
   wasLiked ? liked.delete(id) : liked.add(id);
   const likedKeys = wasLiked ? get().likedKeys.filter((k) => k.split(':')[0] !== id) : [trackKey(t), ...get().likedKeys];
   set({ liked, likedKeys });
-  if (!wasLiked) celebrateLike();
   try {
     await api.setLiked([trackKey(t)], !wasLiked);
     if (!wasLiked) {
@@ -312,7 +310,6 @@ export async function addToPlaylist(pl: Playlist, t: Track) {
     const fresh = await api.playlist(pl.uid, pl.kind);
     await api.addToPlaylist(fresh, [t], fresh.trackCount);
     toast(tr().toast.added(pl.title));
-    celebrateAdd();
     refreshPlaylists();
   } catch (e) {
     toast(tr().toast.addFailed(errorText(e)));

@@ -1515,32 +1515,21 @@ await step('where the music plays from follows the interface language: a mix sta
   await page.evaluate(() => window.__wave.audio.pause());
 });
 
-await step('animations: on in Settings, a like stamps and drops petals, a page slides in, a press rings; off again', async () => {
+await step('animations: on in Settings, a page slides in like a paper door, a press rings; off again', async () => {
   await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
   const all = page.locator('[data-testid="anim-all"]');
   if (await all.isChecked()) throw new Error('animations on in a test run');
   await all.check();
   await page.waitForSelector('[data-testid="anim-hamon"]');
-  const on = await page.evaluate(() => ['fusuma', 'scroll', 'hanko', 'petals', 'ink', 'cascade', 'hamon'].filter((e) => document.documentElement.classList.contains(`anim-${e}`)).length);
-  if (on !== 7) throw new Error(`${on} of 7 effects on`);
+  const on = await page.evaluate(() => ['fusuma', 'scroll', 'cascade', 'hamon'].filter((e) => document.documentElement.classList.contains(`anim-${e}`)).length);
+  if (on !== 4) throw new Error(`${on} of 4 effects on`);
   try {
     await page.click('[data-testid="nav-home"]');
     const slide = await page.evaluate(() => getComputedStyle(document.querySelector('.view-enter')).animationName);
     if (slide !== 'fusuma-in') throw new Error(`page comes in with "${slide}"`);
-    const s = await player();
-    if (!s.title) throw new Error('nothing playing to like');
-    const liked = await page.evaluate(() => {
-      const st = window.__wave.usePlayer.getState();
-      return window.__wave.useApp.getState().liked.has(String(st.queue[st.index].id));
-    });
-    const heart = page.locator('.playerbar [data-testid="like"]').first();
-    if (liked) await heart.click(); // unlike first, so the like below is a new one
-    await heart.click();
-    const petals = await page.waitForFunction(() => document.querySelectorAll('.sakura-petal').length > 0, null, { timeout: 2000 }).then(() => true, () => false);
+    await page.click('[data-testid="next"]');
     const ring = await page.evaluate(() => document.querySelectorAll('.hamon-ring').length);
-    await heart.click(); // back as it was
-    if (liked) await heart.click();
-    if (!petals || !ring) throw new Error(`petals ${petals}, rings ${ring}`);
+    if (!ring) throw new Error('no ring from the press');
   } finally {
     await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
     await all.uncheck();

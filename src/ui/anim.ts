@@ -1,17 +1,17 @@
-// Japanese-style animations (the user's wish, 23.10.2026; tried on Windows before any release):
-// fusuma (pages slide in like a sliding paper door), scroll (Now Playing and the sheets unroll like a
-// hand scroll), hanko (a like is stamped like a red seal), petals (sakura petals fall from a like or
-// an add to a playlist), ink (covers and the banner bleed in like sumi ink), cascade (cards and rows
-// come in one after another), hamon (a ring spreads from where a button was pressed, as on water;
-// the user: "sometimes it is not clear whether a button was pressed"). Each has its own switch in Settings; all of them go with the system's
-// reduced motion, and the e2e runs start with them off (their own step turns them on). Short and
-// one-off only: nothing runs on its own in the background (the iPhone heats up).
+// Japanese-style animations (the user's wish, 23.10.2026; picked after a trial build on Windows,
+// 24.10.2026): fusuma (pages slide in like a sliding paper door), scroll (Now Playing and the
+// sheets unroll like a hand scroll), cascade (cards and rows come in one after another), hamon (a
+// ring spreads from where a button was pressed, as on water; the user: "sometimes it is not clear
+// whether a button was pressed"). Petals, the hanko stamp and ink were tried and left out (petals
+// off-key; the stamp and the ink hardly seen). Each has its own switch in Settings; all of them go
+// with the system's reduced motion, and the e2e runs start with them off (their own step turns them
+// on). Short and one-off only: nothing runs on its own in the background (the iPhone heats up).
 
 import { create } from 'zustand';
 import { transport } from '../api/client.ts';
 import { haptic } from './haptics.ts';
 
-export const ANIM_EFFECTS = ['fusuma', 'scroll', 'hanko', 'petals', 'ink', 'cascade', 'hamon'] as const;
+export const ANIM_EFFECTS = ['fusuma', 'scroll', 'cascade', 'hamon'] as const;
 export type AnimEffect = (typeof ANIM_EFFECTS)[number];
 
 interface AnimState {
@@ -67,16 +67,13 @@ export const animOn = (effect: AnimEffect) => {
   return s.enabled && s.effects[effect];
 };
 
-// Where the last press was: a like or an add to a playlist starts its stamp and petals there (the
-// press's button), whatever called it.
-let lastPress: { x: number; y: number; button: HTMLElement | null; at: number } | null = null;
+// A press of a button: its ring.
 if (typeof window !== 'undefined') {
   window.addEventListener(
     'pointerdown',
     (e) => {
-      const button = (e.target as Element | null)?.closest?.('button') as HTMLElement | null;
-      lastPress = { x: e.clientX, y: e.clientY, button, at: Date.now() };
-      if (button && !(button as HTMLButtonElement).disabled) hamon(e.clientX, e.clientY, button);
+      const button = (e.target as Element | null)?.closest?.('button') as HTMLButtonElement | null;
+      if (button && !button.disabled) hamon(e.clientX, e.clientY, button);
     },
     true,
   );
@@ -95,45 +92,4 @@ function hamon(x: number, y: number, button: HTMLElement) {
   ring.addEventListener('animationend', () => ring.remove(), { once: true });
   document.body.appendChild(ring);
   haptic('tick');
-}
-const recentPress = () => (lastPress && Date.now() - lastPress.at < 4000 ? lastPress : null);
-
-/** A track liked: its heart is stamped like a hanko, and petals fall from it. */
-export function celebrateLike() {
-  const press = recentPress();
-  if (!press) return;
-  if (animOn('hanko') && press.button?.isConnected) {
-    const b = press.button;
-    b.classList.remove('hanko');
-    void b.offsetWidth; // restart the animation on a second like
-    b.classList.add('hanko');
-    b.addEventListener('animationend', () => b.classList.remove('hanko'), { once: true });
-  }
-  petals(press.x, press.y);
-}
-
-/** A track added to a playlist: petals from where it was picked. */
-export function celebrateAdd() {
-  const press = recentPress();
-  if (press) petals(press.x, press.y, 7);
-}
-
-/** A few sakura petals that drift down from (x, y) and are gone in under two seconds. */
-export function petals(x: number, y: number, count = 6) {
-  if (!animOn('petals') || typeof document === 'undefined') return;
-  for (let i = 0; i < count; i++) {
-    const p = document.createElement('i');
-    p.className = 'sakura-petal';
-    const dx = (Math.random() - 0.5) * 140;
-    const dy = 70 + Math.random() * 110;
-    p.style.left = `${x}px`;
-    p.style.top = `${y}px`;
-    p.style.setProperty('--dx', `${dx.toFixed(0)}px`);
-    p.style.setProperty('--dy', `${dy.toFixed(0)}px`);
-    p.style.setProperty('--rot', `${((Math.random() - 0.5) * 540).toFixed(0)}deg`);
-    p.style.setProperty('--s', (0.7 + Math.random() * 0.6).toFixed(2));
-    p.style.animationDelay = `${(i * 45).toFixed(0)}ms`;
-    p.addEventListener('animationend', () => p.remove(), { once: true });
-    document.body.appendChild(p);
-  }
 }
