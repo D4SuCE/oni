@@ -109,6 +109,21 @@ async function longPressMenu() {
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
 }
 
+/** Text asked for comes as text, also when it is sent as JSON (a file from Yandex Disk is): the
+ * native side parsed it into an object, and the shared history skipped the PC's file. */
+async function textResponse() {
+  const { transport } = await import('./api/client.ts');
+  const r = await transport.request<string>({ url: 'https://httpbin.org/json', responseType: 'text' }).catch((e) => ({ ok: false, status: 0, data: String(e) }));
+  const text = typeof r.data === 'string';
+  let parsed = false;
+  try {
+    parsed = text && typeof JSON.parse(r.data) === 'object';
+  } catch {
+    /* not JSON */
+  }
+  report('text-response', r.ok && text && parsed, `HTTP ${r.status}, ${typeof r.data}`);
+}
+
 /** The phone's taps: one tap on a track plays it, and its artists are text, not links. */
 async function tapToPlay() {
   const rows = document.querySelectorAll<HTMLElement>('.track-row');
@@ -788,6 +803,7 @@ export async function runSmoke() {
     await sleep(1100); // past the hold's aftermath (src/ui/longPress.ts); a real tap would start a new touch
     await tapToPlay();
     await uploadForm();
+    await textResponse();
     await playlistActions();
     await swipeBack();
     await phoneTop();
