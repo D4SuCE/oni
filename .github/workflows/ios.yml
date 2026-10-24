@@ -110,6 +110,12 @@ jobs:
             MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="${{ github.run_number }}" build | tail -20
           mkdir -p Payload
           cp -R build/device/Build/Products/Release-iphoneos/App.app Payload/
+          # Signed here only to carry the entitlements (the app group the widget reads what plays
+          # from): SideStore reads them from the signature and signs it all again on the phone.
+          find Payload/App.app/Frameworks -maxdepth 1 \( -name '*.framework' -o -name '*.dylib' \) -exec codesign -f -s - {} \; 2>/dev/null || true
+          codesign -f -s - --entitlements ios/App/OniActivity/OniActivity.entitlements Payload/App.app/PlugIns/OniActivity.appex
+          codesign -f -s - --entitlements ios/App/App/App.entitlements Payload/App.app
+          codesign -d --entitlements - Payload/App.app 2>&1 | grep -c application-groups
           zip -qry "Oni-$VERSION.ipa" Payload
           ls -la *.ipa
 

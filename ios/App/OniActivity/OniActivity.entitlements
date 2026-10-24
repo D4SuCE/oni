@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- What plays, for the Home screen widget (NowPlayingShare.swift). SideStore renames the group under the user's team. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.local.wave.player</string>
+	</array>
+</dict>
+</plist>

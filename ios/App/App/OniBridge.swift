@@ -8,6 +8,7 @@ import AudioToolbox
 import UserNotifications
 import CryptoKit
 import ActivityKit
+import WidgetKit
 
 /// The app's own bridge controller: registers the plugins that live in this project.
 class OniViewController: CAPBridgeViewController {
@@ -344,6 +345,9 @@ public class RemotePlugin: CAPPlugin, CAPBridgedPlugin {
             MPNowPlayingInfoCenter.default().playbackState = playing ? .playing : .paused
             MPRemoteCommandCenter.shared().likeCommand.isActive = liked
             if artworkURL != self.artworkURL { self.loadArtwork(artworkURL) }
+            // The Home screen widget shows what plays (NowPlayingShare.swift).
+            let shared = NowPlayingShare.State(title: title, artist: artist, playing: playing, cover: artworkURL, coverSaved: NowPlayingShare.read()?.coverSaved)
+            if NowPlayingShare.write(shared) { WidgetCenter.shared.reloadTimelines(ofKind: "OniRemote") }
             call.resolve()
         }
     }
@@ -354,6 +358,7 @@ public class RemotePlugin: CAPPlugin, CAPBridgedPlugin {
         guard let address = address, let url = URL(string: address) else { return }
         URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
             guard let data = data, let image = UIImage(data: data) else { return }
+            if NowPlayingShare.saveCover(image, for: address) { WidgetCenter.shared.reloadTimelines(ofKind: "OniRemote") }
             DispatchQueue.main.async {
                 guard let self = self, self.artworkURL == address else { return }
                 let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
@@ -386,6 +391,10 @@ public class RemotePlugin: CAPPlugin, CAPBridgedPlugin {
         info[MPNowPlayingInfoPropertyPlaybackRate] = player.isPlaying ? 1.0 : 0.0
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         MPNowPlayingInfoCenter.default().playbackState = player.isPlaying ? .playing : .paused
+        if var shared = NowPlayingShare.read(), shared.playing != player.isPlaying {
+            shared.playing = player.isPlaying
+            if NowPlayingShare.write(shared) { WidgetCenter.shared.reloadTimelines(ofKind: "OniRemote") }
+        }
     }
 
     /// For the simulator run: a lock-screen button pressed ({ name }), handled as iOS would hand it

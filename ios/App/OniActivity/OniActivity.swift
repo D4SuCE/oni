@@ -146,14 +146,52 @@ struct DownloadActivity: Widget {
 
 struct RemoteEntry: TimelineEntry {
     let date: Date
+    /// What plays, as the app last wrote it (NowPlayingShare.swift); nil before anything played or
+    /// in a build signed without the app group.
+    var track: NowPlayingShare.State? = nil
+    var cover: UIImage? = nil
 }
 
-/// Nothing changes on it: one entry, never refreshed (the track playing is iOS's own Now Playing).
+/// One entry, drawn again when the app says the track changed (WidgetCenter.reloadTimelines).
 struct RemoteProvider: TimelineProvider {
+    private func entry() -> RemoteEntry {
+        let track = NowPlayingShare.read()
+        return RemoteEntry(date: Date(), track: track, cover: track.flatMap(NowPlayingShare.cover))
+    }
     func placeholder(in context: Context) -> RemoteEntry { RemoteEntry(date: Date()) }
-    func getSnapshot(in context: Context, completion: @escaping (RemoteEntry) -> Void) { completion(RemoteEntry(date: Date())) }
+    func getSnapshot(in context: Context, completion: @escaping (RemoteEntry) -> Void) { completion(entry()) }
     func getTimeline(in context: Context, completion: @escaping (Timeline<RemoteEntry>) -> Void) {
-        completion(Timeline(entries: [RemoteEntry(date: Date())], policy: .never))
+        completion(Timeline(entries: [entry()], policy: .never))
+    }
+}
+
+/// The track playing: its cover and names, where the brand stood.
+@available(iOS 17.0, *)
+private struct Playing: View {
+    @Environment(\.widgetRenderingMode) private var mode
+    let track: NowPlayingShare.State
+    let cover: UIImage?
+    var compact = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if let cover = cover, !compact {
+                Image(uiImage: cover)
+                    .resizable()
+                    .frame(width: 40, height: 40)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(track.title)
+                    .font(.system(size: compact ? 13 : 14, weight: .semibold))
+                    .foregroundColor(mode.inColor ? Palette.text : .primary)
+                    .lineLimit(1)
+                Text(track.artist)
+                    .font(.system(size: compact ? 11 : 12))
+                    .foregroundColor(mode.inColor ? Palette.muted : .secondary)
+                    .lineLimit(1)
+            }
+        }
     }
 }
 
@@ -165,18 +203,22 @@ private extension WidgetRenderingMode {
     var inColor: Bool { self == .fullColor }
 }
 
-/// A pressed button dims until the widget is drawn again (iOS reloads it after the action ran):
-/// the press is seen, the widget is not a picture.
+/// Each button opens Oni with what to do (oni://command?do=…, SceneDelegate.swift). On the user's
+/// phone (SideStore, free Apple ID) iOS takes no button of a widget for a button: every press only
+/// opened Oni, which did nothing (a trial build showed the press never reached the action). A link
+/// opens Oni too, and Oni then does it: one touch, the music paused or moved on.
+func command(_ name: String) -> URL { URL(string: "oni://command?do=\(name)")! }
+
 @available(iOS 17.0, *)
-private struct RoundButton<I: AppIntent>: View {
+private struct RoundButton: View {
     @Environment(\.widgetRenderingMode) private var mode
-    let intent: I
+    let name: String
     let symbol: String
     var size: CGFloat = 40
     var tint: Color = Palette.text
 
     var body: some View {
-        Button(intent: intent) {
+        Link(destination: command(name)) {
             Image(systemName: symbol)
                 .font(.system(size: size * 0.4, weight: .semibold))
                 .foregroundColor(mode.inColor ? tint : .primary)
@@ -189,51 +231,57 @@ private struct RoundButton<I: AppIntent>: View {
                     }
                 }
                 .widgetAccentable()
-                .invalidatableContent()
         }
-        .buttonStyle(.plain)
         .accessibilityLabel(Text(label))
     }
 
     private var label: String {
-        switch symbol {
-        case "playpause.fill": return "Пауза / продолжить"
-        case "forward.fill": return "Следующий трек"
-        case "heart.fill": return "Мне нравится"
-        default: return symbol
+        switch name {
+        case "toggle": return "Пауза / продолжить"
+        case "next": return "Следующий трек"
+        case "like": return "Мне нравится"
+        default: return name
         }
     }
 }
 
 @available(iOS 17.0, *)
 private struct WaveButton: View {
+    var compact = false
+
+    var body: some View {
+        Link(destination: command("wave")) {
+            WaveLabel(compact: compact)
+        }
+    }
+}
+
+/// "My Wave" on its red capsule (outlined on tinted Home screens).
+@available(iOS 17.0, *)
+private struct WaveLabel: View {
     @Environment(\.widgetRenderingMode) private var mode
     var compact = false
 
     var body: some View {
-        Button(intent: PlayWaveIntent()) {
-            HStack(spacing: 6) {
-                Image(systemName: "waveform")
-                    .font(.system(size: compact ? 13 : 15, weight: .bold))
-                Text("Моя волна")
-                    .font(.system(size: compact ? 13 : 15, weight: .bold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            .foregroundColor(mode.inColor ? Palette.text : .primary)
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity, minHeight: compact ? 34 : 40)
-            .background {
-                if mode.inColor {
-                    Capsule().fill(Palette.red)
-                } else {
-                    Capsule().strokeBorder(.primary, lineWidth: 1.5)
-                }
-            }
-            .widgetAccentable()
-            .invalidatableContent()
+        HStack(spacing: 6) {
+            Image(systemName: "waveform")
+                .font(.system(size: compact ? 13 : 15, weight: .bold))
+            Text("Моя волна")
+                .font(.system(size: compact ? 13 : 15, weight: .bold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
-        .buttonStyle(.plain)
+        .foregroundColor(mode.inColor ? Palette.text : .primary)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, minHeight: compact ? 34 : 40)
+        .background {
+            if mode.inColor {
+                Capsule().fill(Palette.red)
+            } else {
+                Capsule().strokeBorder(.primary, lineWidth: 1.5)
+            }
+        }
+        .widgetAccentable()
     }
 }
 
@@ -255,55 +303,78 @@ private struct Brand: View {
 @available(iOS 17.0, *)
 struct RemoteView: View {
     @Environment(\.widgetFamily) private var family
+    var entry = RemoteEntry(date: Date())
+
+    private var playing: Bool { entry.track?.playing ?? false }
+    private var hasTrack: Bool { !(entry.track?.title ?? "").isEmpty }
+    private var toggleSymbol: String { playing ? "pause.fill" : "play.fill" }
+    /// A small widget and the lock screen's have one place to touch (iOS gives them no separate
+    /// buttons): play or pause what plays, or My Wave before anything played.
+    private var oneTouch: URL { command(hasTrack ? "toggle" : "wave") }
+
+    /// The track playing, or the brand before anything played.
+    @ViewBuilder private func top(compact: Bool) -> some View {
+        if let track = entry.track, hasTrack {
+            Playing(track: track, cover: entry.cover, compact: compact)
+        } else {
+            Brand()
+        }
+    }
 
     var body: some View {
         switch family {
         case .accessoryCircular:
-            Button(intent: PlayWaveIntent()) {
-                ZStack {
-                    AccessoryWidgetBackground()
-                    Image(systemName: "waveform").font(.system(size: 20, weight: .bold))
-                }
+            ZStack {
+                AccessoryWidgetBackground()
+                Image(systemName: hasTrack ? toggleSymbol : "waveform").font(.system(size: 20, weight: .bold))
             }
-            .buttonStyle(.plain)
+            .widgetURL(oneTouch)
         case .accessoryRectangular:
             HStack(spacing: 8) {
-                Button(intent: PlayWaveIntent()) {
-                    Label("Волна", systemImage: "waveform").font(.system(size: 13, weight: .semibold))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(hasTrack ? entry.track!.title : "Моя волна").font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                    Text(hasTrack ? entry.track!.artist : "Oni").font(.system(size: 12)).lineLimit(1)
                 }
-                .buttonStyle(.plain)
                 Spacer(minLength: 0)
-                Button(intent: TogglePlaybackIntent()) { Image(systemName: "playpause.fill") }.buttonStyle(.plain)
-                Button(intent: NextTrackIntent()) { Image(systemName: "forward.fill") }.buttonStyle(.plain)
+                Image(systemName: hasTrack ? toggleSymbol : "waveform").font(.system(size: 18, weight: .bold))
             }
+            .widgetURL(oneTouch)
         case .systemMedium:
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 10) {
-                    Brand()
+                    top(compact: false)
                     Spacer(minLength: 0)
                     WaveButton()
                 }
                 HStack(spacing: 10) {
-                    RoundButton(intent: TogglePlaybackIntent(), symbol: "playpause.fill", size: 46)
-                    RoundButton(intent: NextTrackIntent(), symbol: "forward.fill", size: 46)
-                    RoundButton(intent: LikeIntent(), symbol: "heart.fill", size: 46, tint: Palette.red)
+                    RoundButton(name: "toggle", symbol: toggleSymbol, size: 46)
+                    RoundButton(name: "next", symbol: "forward.fill", size: 46)
+                    RoundButton(name: "like", symbol: "heart.fill", size: 46, tint: Palette.red)
                 }
             }
             .padding(16)
         default:
+            // One touch: what plays and its play/pause, or My Wave.
             VStack(alignment: .leading, spacing: 10) {
-                Brand()
+                top(compact: true)
                 Spacer(minLength: 0)
-                WaveButton(compact: true)
-                HStack(spacing: 0) {
-                    RoundButton(intent: TogglePlaybackIntent(), symbol: "playpause.fill", size: 36)
-                    Spacer(minLength: 0)
-                    RoundButton(intent: NextTrackIntent(), symbol: "forward.fill", size: 36)
-                    Spacer(minLength: 0)
-                    RoundButton(intent: LikeIntent(), symbol: "heart.fill", size: 36, tint: Palette.red)
+                if hasTrack {
+                    HStack {
+                        Spacer(minLength: 0)
+                        Image(systemName: toggleSymbol)
+                            .font(.system(size: 22, weight: .semibold))
+                            .frame(width: 52, height: 52)
+                            .background(Circle().fill(Palette.red))
+                            .foregroundColor(Palette.text)
+                            .widgetAccentable()
+                        Spacer(minLength: 0)
+                    }
+                } else {
+                    WaveLabel(compact: true)
                 }
             }
             .padding(14)
+            .widgetURL(oneTouch)
         }
     }
 }
@@ -311,14 +382,14 @@ struct RemoteView: View {
 @available(iOS 17.0, *)
 struct RemoteWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "OniRemote", provider: RemoteProvider()) { _ in
-            RemoteView()
+        StaticConfiguration(kind: "OniRemote", provider: RemoteProvider()) { entry in
+            RemoteView(entry: entry)
                 .containerBackground(for: .widget) {
                     LinearGradient(colors: [Palette.panel, Palette.glass], startPoint: .topLeading, endPoint: .bottomTrailing)
                 }
         }
         .configurationDisplayName("Oni")
-        .description("«Моя волна», пауза, следующий трек и «Мне нравится» одним нажатием.")
+        .description("Что играет; «Моя волна», пауза, следующий трек и «Мне нравится» одним нажатием (Oni откроется).")
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular])
         .contentMarginsDisabled()
     }
