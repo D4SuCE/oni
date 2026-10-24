@@ -5,11 +5,16 @@
 //
 //   YANDEX_MUSIC_TOKEN=… node scripts/ynison-probe.mjs [seconds to listen, default 5]
 //
+// YNISON_LOCAL_ADDRESS=192.168.0.100 (the network card's own address) sends everything past a VPN
+// that works as a network adapter (Happ's TUN): Windows sends a socket bound to an address out of
+// that address's own adapter.
+//
 // How the official app connects (its app.asar, 5.124): a WebSocket to the redirector, then to the
 // host it names; the device, the ticket and the OAuth token go in the third subprotocol, as JSON.
 
 import { randomUUID, randomBytes } from 'node:crypto';
 import https from 'node:https';
+import { Agent, WebSocket as UndiciWebSocket, fetch as undiciFetch } from 'undici';
 
 const token = process.env.YANDEX_MUSIC_TOKEN;
 if (!token) {
@@ -17,6 +22,11 @@ if (!token) {
   process.exit(1);
 }
 const listen = Number(process.argv[2] || 5) * 1000;
+const localAddress = process.env.YNISON_LOCAL_ADDRESS || undefined;
+const dispatcher = localAddress ? new Agent({ localAddress }) : undefined;
+const fetch = (url, init) => (dispatcher ? undiciFetch(url, { ...init, dispatcher }) : globalThis.fetch(url, init));
+const WebSocket = dispatcher ? UndiciWebSocket : globalThis.WebSocket;
+if (localAddress) console.log(`past the VPN: from ${localAddress}, out as ${await (await fetch('https://ifconfig.co/json')).json().then((j) => `${j.ip}, ${j.country}`)}`);
 const t0 = Date.now();
 const log = (what) => console.log(`  ${((Date.now() - t0) / 1000).toFixed(2)} s: ${what}`);
 // The account's number, as the official app sends it (X-Yandex-Music-Multi-Auth-User-Id).
@@ -36,7 +46,7 @@ const protocols = (extra) => ['Bearer', 'v2', encodeURIComponent(JSON.stringify(
 function handshake(url, extra) {
   const u = new URL(url.replace(/^wss:/, 'https:'));
   return new Promise((resolve) => {
-    const req = https.request({ host: u.host, path: u.pathname, headers: {
+    const req = https.request({ host: u.host, path: u.pathname, localAddress, headers: {
       Connection: 'Upgrade', Upgrade: 'websocket', 'Sec-WebSocket-Version': '13', 'Sec-WebSocket-Key': randomBytes(16).toString('base64'),
       'Sec-WebSocket-Protocol': protocols(extra).join(', '), Origin: 'https://music.yandex.ru' } });
     req.setTimeout(15000, () => { req.destroy(); resolve('no answer in 15 s'); });
@@ -52,7 +62,7 @@ function handshake(url, extra) {
 function byHand(url, extra, message) {
   const u = new URL(url.replace(/^wss:/, 'https:'));
   return new Promise((resolve) => {
-    const req = https.request({ host: u.host, path: u.pathname, headers: {
+    const req = https.request({ host: u.host, path: u.pathname, localAddress, headers: {
       Connection: 'Upgrade', Upgrade: 'websocket', 'Sec-WebSocket-Version': '13', 'Sec-WebSocket-Key': randomBytes(16).toString('base64'),
       'Sec-WebSocket-Protocol': protocols(extra).join(', '), Origin: 'https://music.yandex.ru' } });
     req.on('response', (r) => { log(`by hand: HTTP ${r.statusCode}`); resolve(); });
@@ -92,7 +102,7 @@ function byHand(url, extra, message) {
 function open(url, extra, onOpen) {
   return new Promise((resolve, reject) => {
     // Without the site's Origin the server answers 403 (a page of Oni's own origin would get it too).
-    const ws = new WebSocket(url, { protocols: protocols(extra), headers: { Origin: 'https://music.yandex.ru' } });
+    const ws = new WebSocket(url, { protocols: protocols(extra), headers: { Origin: 'https://music.yandex.ru' }, dispatcher });
     const messages = [];
     let sent = false;
     ws.addEventListener('open', () => { log(`open ${url.split('/')[2]}`); sent = Boolean(onOpen); onOpen?.(ws); });
