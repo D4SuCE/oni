@@ -123,7 +123,7 @@ const ru = {
   history: {
     hint: 'Последние дни из истории Яндекса: официальные приложения на всех устройствах и «Моя волна». Плейлисты, прослушанные в Oni, Яндекс сюда не записывает — они во вкладке «В этом приложении».',
     inThisApp: 'В этом приложении',
-    allDevices: 'Со всех устройств',
+    allDevices: 'Яндекс Музыка',
     emptyLocal: 'Здесь появится то, что вы слушаете в Oni',
     today: 'Сегодня',
     yesterday: 'Вчера',
@@ -684,7 +684,7 @@ const en: Dict = {
   history: {
     hint: "The last days of Yandex's history: the official apps on all your devices and My Wave. Playlists played in Oni are not recorded there by Yandex; see the In this app tab.",
     inThisApp: 'In this app',
-    allDevices: 'All devices',
+    allDevices: 'Yandex Music',
     emptyLocal: 'What you listen to in Oni will show up here',
     today: 'Today',
     yesterday: 'Yesterday',
