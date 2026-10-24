@@ -415,7 +415,8 @@ await step('hide a track from the mixes, then bring it back from Settings ("Skip
   const row = page.locator('.track-row').first();
   // By its id: rows off screen are drawn lazily (content-visibility), their text empty until then.
   const id = await row.getAttribute('data-track-id');
-  const title = await row.locator('.tr-title').innerText();
+  // The title's own text: an explicit track's badge ("Explicit", "E") is in the same element.
+  const title = await row.locator('.tr-title').evaluate((el) => [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join(' ').trim());
   const before = await page.locator('.track-row').count();
   await row.click({ button: 'right' });
   await page.getByText('Скрыть из подборок', { exact: true }).click();
@@ -425,7 +426,7 @@ await step('hide a track from the mixes, then bring it back from Settings ("Skip
   const note = await page.locator('[data-testid="mix-feedback"]').innerText();
   if (!/Пропущенное: \d/.test(note)) throw new Error(`settings: ${note}`);
   await page.click('[data-testid="skipped-toggle"]');
-  const listed = page.locator('[data-testid="skipped-row"]', { hasText: 'скрыт вами' }).filter({ hasText: title.split('\n')[0] });
+  const listed = page.locator('[data-testid="skipped-row"]', { hasText: 'скрыт вами' }).filter({ hasText: title });
   if ((await listed.count()) !== 1) throw new Error(`"${title}" not in the list: ${await page.locator('[data-testid="skipped-list"]').innerText()}`);
   await listed.locator('[data-testid="skipped-back"]').click();
   await listed.waitFor({ state: 'detached', timeout: 3000 });
