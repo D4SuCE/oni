@@ -57,6 +57,22 @@ function noZoom() {
   report('no-zoom', !small.length && /maximum-scale=1(?![\d.])/.test(viewport), `${fields.length} fields, small: ${small.join(',') || 'none'}`);
 }
 
+/** No magnifier on a double tap (the user): nothing selectable but fields, no callout, no
+ * double-tap gesture. Lyrics were selectable (user-select: text), a probe stands for them. */
+function noLoupe() {
+  const lyric = Object.assign(document.createElement('div'), { className: 'lyric', textContent: 'la' });
+  const field = Object.assign(document.createElement('input'), { className: 'input' });
+  document.body.append(lyric, field);
+  const sample = [lyric, ...document.querySelectorAll('.page-title, .track-row, .card, .nav-item, button')].slice(0, 30) as HTMLElement[];
+  const css = (el: Element) => getComputedStyle(el) as CSSStyleDeclaration & { webkitUserSelect: string; webkitTouchCallout?: string };
+  const selectable = sample.filter((el) => css(el).webkitUserSelect !== 'none' || (css(el).webkitTouchCallout ?? 'none') !== 'none');
+  const fieldOk = css(field).webkitUserSelect !== 'none';
+  const touch = getComputedStyle(document.body).touchAction;
+  lyric.remove();
+  field.remove();
+  report('no-loupe', !selectable.length && fieldOk && touch === 'manipulation', `${sample.length} checked, selectable: ${selectable.map((el) => el.className).join(',') || 'none'}, field ${fieldOk ? 'editable' : 'not selectable'}, body ${touch}`);
+}
+
 /** Now Playing on a phone: the collapse button below the status bar (taps up there belong to
  * iOS), then a downward swipe from the cover, which must close the screen. */
 function nowPlayingCloses() {
@@ -713,6 +729,7 @@ export async function runSmoke() {
   if (sessionStorage.getItem(REVIVE)) return revived();
   try {
     noZoom();
+    noLoupe();
     await loginRedirect();
     report('home', await until(() => document.querySelector('.wave-hero'), 30000));
     phoneLayout();

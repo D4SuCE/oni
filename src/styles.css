@@ -3721,3 +3721,17 @@ html.ios .q-row .icon-btn {
 .q-sheet .queue {
   overflow: visible;
 }
+
+/* iPhone: no magnifier over the finger on a double tap (the user: "on almost any page"). The page
+   already said user-select: none, but text that may be selected (lyrics, track details) and iOS's
+   double-tap gesture still brought up the loupe. Nothing is selected on the phone (copying is not
+   wanted there; fields keep it), no callout on a hold, and no double-tap gesture: taps are taps.
+   Elements that take touches themselves (touch-action: none) keep that. */
+html.ios body {
+  touch-action: manipulation;
+}
+html.ios *:not(input):not(textarea) {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
