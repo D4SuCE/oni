@@ -121,8 +121,8 @@ const ru = {
     gone: 'Этой подборки больше нет — на главной уже свежие',
   },
   history: {
-    hint: 'Последние дни из истории Яндекса: официальные приложения на всех устройствах и «Моя волна». Плейлисты, прослушанные в Oni, Яндекс сюда не записывает — они во вкладке «В этом приложении».',
-    inThisApp: 'В этом приложении',
+    hint: 'Последние дни из истории Яндекса: официальные приложения на всех устройствах и «Моя волна». Плейлисты, прослушанные в Oni, Яндекс сюда не записывает — они во вкладке «Oni».',
+    inThisApp: 'Oni',
     allDevices: 'Яндекс Музыка',
     emptyLocal: 'Здесь появится то, что вы слушаете в Oni',
     today: 'Сегодня',
@@ -682,8 +682,8 @@ const en: Dict = {
     gone: 'This mix is gone — Home has fresh ones',
   },
   history: {
-    hint: "The last days of Yandex's history: the official apps on all your devices and My Wave. Playlists played in Oni are not recorded there by Yandex; see the In this app tab.",
-    inThisApp: 'In this app',
+    hint: "The last days of Yandex's history: the official apps on all your devices and My Wave. Playlists played in Oni are not recorded there by Yandex; see the Oni tab.",
+    inThisApp: 'Oni',
     allDevices: 'Yandex Music',
     emptyLocal: 'What you listen to in Oni will show up here',
     today: 'Today',

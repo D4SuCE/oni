@@ -1,4 +1,4 @@
-// What was played in this app, in order, with times: the "In this app" tab of History.
+// What was played in this app, in order, with times: the "Oni" tab of History (once "In this app").
 // Yandex's own history only shows plays from its official clients and radio sessions.
 
 import type { Track } from '../api/types.ts';
