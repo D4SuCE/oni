@@ -10,6 +10,9 @@ import type { RecentPlay } from '../player/recent.ts';
 import { navigate, samePlaylist, useApp } from '../store.ts';
 import { cx, useAsync } from '../ui/util.ts';
 import { RecapView } from './Recap.tsx';
+import { useListTitle } from '../components/SourceTitle.ts';
+
+const HISTORY = { label: { key: 'history' } } as const;
 
 function dayTitle(date: string, lang: string) {
   const t = tr();
@@ -78,7 +81,7 @@ function Group({ group }: { group: HistoryGroup }) {
       </div>
       {/* Played from History, it is "History" on the banner and in the player, not the run's own source
           (the user: "My Wave" showed for a track started here). */}
-      <TrackList tracks={group.tracks} onPlay={(i) => playTracks(group.tracks, i, t.nav.history, playContext(group.context))} />
+      <TrackList tracks={group.tracks} onPlay={(i) => playTracks(group.tracks, i, t.nav.history, playContext(group.context), HISTORY)} />
     </div>
   );
 }
@@ -90,7 +93,7 @@ const localDate = (ms: number) => {
 
 /** Days of local plays, each split into runs of the same source. */
 function localDays(plays: RecentPlay[]) {
-  const days: { date: string; runs: { source: string; at: number; from?: RecentPlay['from']; tracks: RecentPlay['track'][] }[] }[] = [];
+  const days: { date: string; runs: { source: string; label?: RecentPlay['label']; at: number; from?: RecentPlay['from']; tracks: RecentPlay['track'][] }[] }[] = [];
   for (const p of plays) {
     const date = localDate(p.at);
     let day = days[days.length - 1];
@@ -99,13 +102,14 @@ function localDays(plays: RecentPlay[]) {
     if (run?.source === p.source) {
       run.tracks.push(p.track);
       run.at = p.at;
-    } else day.runs.push({ source: p.source, at: p.at, from: p.from, tracks: [p.track] });
+    } else day.runs.push({ source: p.source, label: p.label, at: p.at, from: p.from, tracks: [p.track] });
   }
   return days;
 }
 
 function InThisApp() {
   const t = useT();
+  const listTitle = useListTitle();
   const lang = useLang((s) => s.lang);
   useRecent((s) => s.version);
   const days = localDays(recentPlays.list());
@@ -122,12 +126,12 @@ function InThisApp() {
             <div className="history-group" key={i}>
               <div className="history-context">
                 <ListMusic size={15} />
-                <span>{run.source}</span>
+                <span>{listTitle(run.source, run.label)}</span>
                 <span className="muted">
                   · {time.format(run.at)} · {t.count.tracks(run.tracks.length)}
                 </span>
               </div>
-              <TrackList tracks={run.tracks} onPlay={(k) => playTracks(run.tracks, k, t.nav.history, run.from)} />
+              <TrackList tracks={run.tracks} onPlay={(k) => playTracks(run.tracks, k, t.nav.history, run.from, HISTORY)} />
             </div>
           ))}
         </section>

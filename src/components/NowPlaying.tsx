@@ -59,7 +59,7 @@ function Similar({ track }: { track: Track }) {
   if (error || !data?.length) return <div className="muted pad">{t.nowPlaying.noSimilar}</div>;
   return (
     <div className="similar">
-      <TrackList tracks={data} showAlbum={false} onPlay={(i) => playTracks(data, i, t.nowPlaying.similarTo(track.title))} />
+      <TrackList tracks={data} showAlbum={false} onPlay={(i) => playTracks(data, i, t.nowPlaying.similarTo(track.title), undefined, { label: { key: 'similar', arg: track.title } })} />
     </div>
   );
 }

@@ -15,7 +15,7 @@ export function DownloadsView({ embedded }: { embedded?: boolean }) {
   const entries = offline?.entries() ?? [];
   const tracks = entries.map((e) => e.track);
   const total = tracks.reduce((n, x) => n + (x.durationMs || 0), 0);
-  const extra = { list: 'downloads' };
+  const extra = { list: 'downloads', label: { key: 'downloads' } } as const;
   const play = () => playTracks(tracks, 0, t.nav.downloads, undefined, extra);
   const shuffle = () => playShuffled(tracks, t.nav.downloads, undefined, extra);
   const playButton = <ListPlayButton list={extra.list} onPlay={play} disabled={!tracks.length} testId="downloads-play" />;

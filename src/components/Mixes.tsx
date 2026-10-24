@@ -1,7 +1,7 @@
 import { Play } from 'lucide-react';
 import { api } from '../api/client.ts';
 import { tr, useLang } from '../i18n.ts';
-import { playTracks } from '../player/player.ts';
+import { playTracks, type MixName } from '../player/player.ts';
 import type { Slot } from '../recs/daylist.ts';
 import type { Mix } from '../recs/index.ts';
 import { navigate } from '../store.ts';
@@ -13,7 +13,10 @@ export function useGenreTitles() {
   return useAsync(() => api.genreTitles(), [lang]).data ?? {};
 }
 
-export function mixTitle(mix: Mix, genres: Record<string, string>) {
+/** What the title is built from, kept with the playing list (not the whole mix with its tracks). */
+export const mixName = ({ kind, genre, seedArtist, slot, slotStart, builtAt }: Mix): MixName => ({ kind, genre, seedArtist, slot, slotStart, builtAt });
+
+export function mixTitle(mix: MixName, genres: Record<string, string>) {
   const t = tr();
   if (mix.kind === 'daylist') return t.recs.daylist(mix.slot ?? 'day', new Date(mix.slotStart ?? mix.builtAt).getDay());
   if (mix.kind === 'discover') return t.recs.discover;
@@ -109,7 +112,7 @@ export function MixCard({ mix, genres }: { mix: Mix; genres: Record<string, stri
           title={tr().common.play}
           onClick={(e) => {
             e.stopPropagation();
-            playTracks(mix.tracks, 0, title, undefined, { origin: mix.kind, list: `mix:${mix.id}` });
+            playTracks(mix.tracks, 0, title, undefined, { origin: mix.kind, list: `mix:${mix.id}`, label: { key: 'mix', mix: mixName(mix) } });
           }}
         >
           <Play size={18} fill="currentColor" />

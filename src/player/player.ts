@@ -10,6 +10,7 @@ import { DEFAULT_TUNING, WaveEngine, waveSeeds, type WaveStats, type WaveTuning 
 import { HEARD_SECONDS, ListenHistory } from '../wave/history.ts';
 import { PlayLog } from './playLog.ts';
 import { playOutcome, RecsFeedback } from '../recs/feedback.ts';
+import type { Mix } from '../recs/index.ts';
 import { RecentPlays } from './recent.ts';
 import { levellingGain } from './loudness.ts';
 import { OfflineLibrary } from './offline.ts';
@@ -26,19 +27,34 @@ export interface PlayContext {
   playlist?: string;
   album?: number | string;
 }
+/**
+ * What a list is, so its title is put in the interface language when it shows: the language may
+ * change while it plays (the user switched to English, and the banner still said "Открытия недели").
+ * Lists named by Yandex or the user (playlists, albums, artists) need none: their names stay.
+ */
+export type ListLabel =
+  | { key: 'liked' | 'downloads' | 'history' | 'chart' | 'myWave' }
+  | { key: 'search' | 'similar'; arg: string }
+  | { key: 'mix'; mix: MixName }
+  /** A station: `of` names what it plays from when that has a label ("Radio: Liked songs"). */
+  | { key: 'radio'; title: string; of?: ListLabel };
+/** What a mix's title is built from (components/Mixes.tsx, mixTitle). */
+export type MixName = Pick<Mix, 'kind' | 'genre' | 'seedArtist' | 'slot' | 'slotStart' | 'builtAt'>;
+
 export type Source =
-  | { kind: 'wave'; station?: { seed: string; title: string } }
+  | { kind: 'wave'; station?: { seed: string; title: string; label?: ListLabel } }
   /**
    * `suggested`: ids Smart Shuffle added to the list (shown with ✦ in the queue);
    * `origin`: which recommendation it came from, for the stats in Settings.
    */
-  | { kind: 'list'; title: string; from?: PlayContext; suggested?: string[]; origin?: Origin; list?: string };
+  | { kind: 'list'; title: string; from?: PlayContext; suggested?: string[]; origin?: Origin; list?: string; label?: ListLabel };
 
 export interface PlayExtra {
   suggested?: string[];
   origin?: Origin;
   /** Which list this is, where `from` does not say (a mix, Downloads): its page shows it playing. */
   list?: string;
+  label?: ListLabel;
 }
 
 /** The list playing, as its page names it: "playlist:<uid>:<kind>", "album:<id>", "mix:<id>", … */
@@ -53,6 +69,13 @@ export function listKeyOf(source: Source | null) {
 export function sourceTitle(source: Source | null) {
   if (source?.kind === 'list') return source.title;
   return source?.station ? tr().common.radioOf(source.station.title) : tr().common.myWave;
+}
+
+/** The label of what plays (components/SourceTitle.ts puts it in words), for History's runs too. */
+export function labelOf(source: Source | null): ListLabel | undefined {
+  if (source?.kind === 'list') return source.label;
+  if (!source?.station) return { key: 'myWave' };
+  return { key: 'radio', title: source.station.title, of: source.station.label };
 }
 
 export const isMyWave = (source: Source | null) => source?.kind === 'wave' && !source.station;
@@ -447,7 +470,13 @@ function finishCurrent(ended: boolean) {
   reportPlay(t, ended);
   if (ended || listened >= 5) {
     const source = get().source;
-    recentPlays.add({ track: t, at: play.startedAt.getTime(), source: sourceTitle(source), from: source?.kind === 'list' ? source.from : undefined });
+    recentPlays.add({
+      track: t,
+      at: play.startedAt.getTime(),
+      source: sourceTitle(source),
+      label: labelOf(source),
+      from: source?.kind === 'list' ? source.from : undefined,
+    });
     useRecent.setState((s) => ({ version: s.version + 1 }));
   }
   if (get().source?.kind === 'wave') {
@@ -539,10 +568,10 @@ export async function playWave(tuning?: Partial<WaveTuning>) {
 }
 
 /** Endless radio from one seed, e.g. `track:123`, `artist:45`, `album:67`, `playlist:<uid>:<kind>`. Repeat filters apply. */
-export async function playRadio(seed: string, title: string) {
+export async function playRadio(seed: string, title: string, label?: ListLabel) {
   forgetResume();
   clearWavePicks();
-  await startWave({ kind: 'wave', station: { seed, title } });
+  await startWave({ kind: 'wave', station: { seed, title, label } });
 }
 
 /** Plays on the account's other devices, so the wave's repeat filter is the account's and not
@@ -1030,7 +1059,7 @@ function persistSoon() {
     const wave = s.source?.kind === 'wave' ? s.source : undefined;
     storage.setItem(
       'player.session',
-      JSON.stringify({ queue: s.queue.slice(from, from + 200), index: s.index - from, title: sourceTitle(s.source), wave }),
+      JSON.stringify({ queue: s.queue.slice(from, from + 200), index: s.index - from, title: sourceTitle(s.source), label: labelOf(s.source), wave }),
     );
   }, 1000);
 }
@@ -1046,13 +1075,13 @@ export function restoreSession() {
   try {
     const raw = storage.getItem('player.session');
     if (!raw) return;
-    const { queue, index, title, wave } = JSON.parse(raw);
+    const { queue, index, title, label, wave } = JSON.parse(raw);
     if (!Array.isArray(queue) || !queue[index]) return;
     if (wave?.kind === 'wave') {
       // The wave goes on from where it was: a new session with Yandex starts with the next fill.
       engine = new WaveEngine(waveApi, history, get().tuning, (id) => isDisliked(id), wave.station ? [wave.station.seed] : null);
       set({ queue, index, source: wave, duration: (queue[index].durationMs || 0) / 1000 });
-    } else set({ queue, index, source: { kind: 'list', title }, duration: (queue[index].durationMs || 0) / 1000 });
+    } else set({ queue, index, source: { kind: 'list', title, label }, duration: (queue[index].durationMs || 0) / 1000 });
     updateMediaSession(queue[index]);
   } catch {
     /* ignore */

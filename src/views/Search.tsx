@@ -128,7 +128,7 @@ export function Search() {
           {result.best && <BestResult best={result.best} />}
           {tracks.length > 0 && (
             <Section title={t.common.tracks}>
-              <TrackList tracks={tracks} onPlay={(i) => playTracks(tracks, i, t.search.source(query))} />
+              <TrackList tracks={tracks} onPlay={(i) => playTracks(tracks, i, t.search.source(query), undefined, { label: { key: 'search', arg: query } })} />
             </Section>
           )}
           {!!result.artists?.results.length && (

@@ -1,7 +1,7 @@
 import { EyeOff, Shuffle } from 'lucide-react';
 import { ListPlayButton } from '../components/Common.tsx';
 import { DownloadButton } from '../components/DownloadButton.tsx';
-import { MixArt, mixSubtitle, mixTitle, useGenreTitles } from '../components/Mixes.tsx';
+import { MixArt, mixName, mixSubtitle, mixTitle, useGenreTitles } from '../components/Mixes.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { useLang, useT } from '../i18n.ts';
 import { playShuffled, playTracks } from '../player/player.ts';
@@ -15,7 +15,7 @@ export function MixView({ id }: { id: string }) {
   const genres = useGenreTitles();
   if (!mix) return <div className="empty-hint">{t.recs.gone}</div>;
   const title = mixTitle(mix, genres);
-  const extra = { origin: mix.kind, list: `mix:${mix.id}` };
+  const extra = { origin: mix.kind, list: `mix:${mix.id}`, label: { key: 'mix', mix: mixName(mix) } } as const;
   const total = mix.tracks.reduce((s, x) => s + (x.durationMs || 0), 0);
   return (
     <div className="page">

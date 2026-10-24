@@ -3,6 +3,7 @@
 
 import type { Track } from '../api/types.ts';
 import type { KeyValueStore } from '../wave/history.ts';
+import type { ListLabel } from './player.ts';
 
 export interface RecentPlay {
   track: Track;
@@ -10,6 +11,8 @@ export interface RecentPlay {
   at: number;
   /** What the queue was ("Моя волна", a playlist title, …). */
   source: string;
+  /** What it was, for its name in the interface language (player.ts, ListLabel). */
+  label?: ListLabel;
   /** For playing it again from the same place. */
   from?: { playlist?: string; album?: number | string };
 }

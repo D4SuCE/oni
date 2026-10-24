@@ -117,7 +117,7 @@ export function Home() {
 
       <Section title={t.home.chart} action={<button className="btn ghost small" onClick={() => navigate({ name: 'search' })}>{t.home.findYours}</button>}>
         {chart.loading ? <Spinner /> : chart.error ? <ErrorBox error={chart.error} onRetry={chart.reload} /> : (
-          <TrackList tracks={chart.data!.slice(0, 20)} onPlay={(i) => playTracks(chart.data!, i, t.home.chart)} />
+          <TrackList tracks={chart.data!.slice(0, 20)} onPlay={(i) => playTracks(chart.data!, i, t.home.chart, undefined, { label: { key: 'chart' } })} />
         )}
       </Section>
     </div>

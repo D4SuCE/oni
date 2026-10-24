@@ -23,6 +23,8 @@ import { ApiError, trackKey } from '../api/yandex.ts';
 const TABS = ['playlists', 'albums', 'artists'] as const;
 
 const FIRST_PAGE = 100;
+/** Liked songs' title follows the interface language while it plays (player.ts, ListLabel). */
+const LIKED = { label: { key: 'liked' } } as const;
 
 
 /**
@@ -89,14 +91,14 @@ function LikedTracks() {
   const [reordering, setReordering] = useState(false);
   // Kept whole only: the first page alone is not Liked.
   useKeepForOffline('liked', t.common.liked, tracks && tracks.length >= keys.length ? tracks : null);
-  const radio = () => playRadio(`playlist:${from.playlist}`, t.common.liked);
+  const radio = () => playRadio(`playlist:${from.playlist}`, t.common.liked, LIKED.label);
   if (error) return <ErrorBox error={error} />;
   if (!tracks) return <Spinner label={t.library.loadingLikes} />;
   return (
     <>
       <div className="lib-actions">
-        <ListPlayButton list={`playlist:${from.playlist}`} onPlay={() => playTracks(tracks, 0, t.common.liked, from)} disabled={!tracks.length} />
-        <button className="btn glass-btn" onClick={() => playShuffled(tracks, t.common.liked, from)} disabled={!tracks.length}>
+        <ListPlayButton list={`playlist:${from.playlist}`} onPlay={() => playTracks(tracks, 0, t.common.liked, from, LIKED)} disabled={!tracks.length} />
+        <button className="btn glass-btn" onClick={() => playShuffled(tracks, t.common.liked, from, LIKED)} disabled={!tracks.length}>
           <Shuffle size={16} /> {t.common.shuffle}
         </button>
         <SmartShuffleButton tracks={tracks} title={t.common.liked} from={from} />
@@ -133,7 +135,7 @@ function LikedTracks() {
         <TrackList
           tracks={tracks}
           filter={search.query}
-          onPlay={(i) => playTracks(tracks, i, t.common.liked, from)}
+          onPlay={(i) => playTracks(tracks, i, t.common.liked, from, LIKED)}
           onMove={
             tracks.length >= keys.length
               ? async (a, b) => {

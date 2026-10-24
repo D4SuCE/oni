@@ -1419,6 +1419,39 @@ await step('recap as stories: cards one after another, the summary copied as a 1
   console.log(`       cards: ${seen.join(', ')}`);
 });
 
+await step('where the music plays from follows the interface language: a mix started in Russian reads in English', async () => {
+  // Found by the user: "Открытия недели" played, the language was switched to English, and Home
+  // still said "Открытия недели". The list keeps what it is (its label), its title is made when shown.
+  const language = async (name) => {
+    await page.locator('.sidebar > .nav-item', { hasText: /Настройки|Settings/ }).click();
+    await page.locator('.segmented button', { hasText: name }).click();
+    await page.click('[data-testid="nav-home"]');
+    await page.waitForSelector('[data-testid="mix-card"]', { timeout: 60000 });
+  };
+  const card = page.locator('[data-testid="mix-card"]').first();
+  await page.click('[data-testid="nav-home"]');
+  await page.waitForSelector('[data-testid="mix-card"]', { timeout: 60000 });
+  const ru = await card.locator('.card-title').innerText();
+  await card.hover();
+  await card.locator('.card-play').click();
+  await page.waitForFunction(() => window.__wave.usePlayer.getState().source?.label?.key === 'mix', null, { timeout: 10000 });
+  const shown = async () => ({
+    kicker: await page.locator('[data-testid="wave-kicker"]').textContent(), // innerText is upper case (CSS)
+    bar: await page.locator('.pb-source-text').innerText(),
+  });
+  try {
+    await language('English');
+    const en = await card.locator('.card-title').innerText();
+    const after = await shown();
+    if (en === ru || !after.kicker.includes(en) || after.bar !== en) throw new Error(`"${ru}" → card "${en}", banner "${after.kicker}", player bar "${after.bar}"`);
+  } finally {
+    await language('Русский');
+  }
+  const back = await shown();
+  if (!back.kicker.includes(ru) || back.bar !== ru) throw new Error(`back in Russian: banner "${back.kicker}", player bar "${back.bar}"`);
+  await page.evaluate(() => window.__wave.audio.pause());
+});
+
 await step('english interface has no Russian left', async () => {
   // Only the app's own chrome: titles, tabs, buttons, tooltips. Yandex data stays as it is
   // (also in the Home banner: the playing track, its artists, where it plays from).

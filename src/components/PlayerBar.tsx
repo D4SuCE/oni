@@ -2,8 +2,9 @@ import { useCover } from '../ui/offline.ts';
 import { Ban, Heart, ListMusic, Loader2, Maximize2, Moon, MoreHorizontal, Pause, PictureInPicture2, Play, Repeat, Repeat1, Shuffle, SlidersVertical, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Waves } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { Track } from '../api/types.ts';
-import { useLang, useT } from '../i18n.ts';
-import { cycleRepeat, next, prev, seek, setSleep, setVolume, sourceTitle, toggle, toggleShuffle, usePlayer } from '../player/player.ts';
+import { useT } from '../i18n.ts';
+import { cycleRepeat, next, prev, seek, setSleep, setVolume, toggle, toggleShuffle, usePlayer } from '../player/player.ts';
+import { useSourceTitle } from './SourceTitle.ts';
 import { dislike, toggleLike, useApp } from '../store.ts';
 import { cx, fmtTime } from '../ui/util.ts';
 import { useEq } from '../player/eq.ts';
@@ -170,8 +171,8 @@ export function PlayerBar() {
   const cover = useCover(track, 200);
   const isWave = usePlayer((s) => s.source?.kind === 'wave');
   const t = useT();
-  useLang((s) => s.lang); // the source title is localized
   const source = usePlayer((s) => s.source);
+  const sourceTitle = useSourceTitle(source);
   const openNow = () => useApp.setState({ nowPlayingOpen: true });
   const eqOn = useEq((s) => s.enabled);
 
@@ -216,7 +217,7 @@ export function PlayerBar() {
         {track && (
           <span className="pb-source" title={t.player.source}>
             {isWave && <Waves size={14} />}
-            <span className="pb-source-text">{sourceTitle(source)}</span>
+            <span className="pb-source-text">{sourceTitle}</span>
           </span>
         )}
         <SleepButton />

@@ -1,9 +1,10 @@
 import { Loader2, Pause, Play, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { api } from '../api/client.ts';
-import { useLang, useT } from '../i18n.ts';
+import { useT } from '../i18n.ts';
 import { artistNames } from '../api/yandex.ts';
-import { history, isMyWave, PLAIN_WAVE, playWave, retuneWave, sourceTitle, toggle, usePlayer } from '../player/player.ts';
+import { history, isMyWave, PLAIN_WAVE, playWave, retuneWave, toggle, usePlayer } from '../player/player.ts';
+import { useListTitle, useSourceTitle } from './SourceTitle.ts';
 import { useApp } from '../store.ts';
 import { useSwipeDown } from '../ui/swipe.ts';
 import { cx, useAsync } from '../ui/util.ts';
@@ -186,7 +187,8 @@ export function WaveHero() {
   const tuning = usePlayer((s) => s.tuning);
   const active = Boolean(track) && playing;
   const t = useT();
-  useLang((s) => s.lang); // the source title is localized
+  const listTitle = useListTitle();
+  const playingFrom = useSourceTitle(source);
   const w = t.wave;
   const settings = [
     tuning.context?.name,
@@ -199,8 +201,8 @@ export function WaveHero() {
     : myWave
       ? [t.common.myWave, ...settings].join(' · ')
       : station
-        ? w.stationOf(station.seed.split(':')[0], station.title)
-        : `${w.nowPlaying} · ${sourceTitle(source)}`;
+        ? w.stationOf(station.seed.split(':')[0], listTitle(station.title, station.label))
+        : `${w.nowPlaying} · ${playingFrom}`;
   const desc = track ? [artistNames(track)] : settings;
   const offerMyWave = Boolean(track) && !(myWave && !settings.length);
 
