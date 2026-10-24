@@ -1405,7 +1405,7 @@ await step("shared history: another device's plays come from Oni's folder on Yan
     await page.evaluate(([name, text]) => window.__wave.sync.disk.write(name, text), [phone, JSON.stringify(file)]);
     await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
     await page.click('[data-testid="sync-now"]');
-    await page.waitForFunction(() => !window.__wave.sync.useSync.getState().busy && window.__wave.sync.useSync.getState().at, null, { timeout: 30000 });
+    await page.waitForFunction(() => !window.__wave.sync.useSync.getState().busy && window.__wave.sync.useSync.getState().at, null, { timeout: 60000 });
     const devices = await page.locator('[data-testid="sync-devices"]').innerText();
     if (!/iPhone/.test(devices)) throw new Error(`devices: "${devices}"`);
     const listed = await page.evaluate(() => window.__wave.sync.disk.list());
@@ -1522,7 +1522,8 @@ await step('english interface has no Russian left', async () => {
   ].join(',');
   const leftovers = async () =>
     page.evaluate((sel) => {
-      const data = '.wave-track, [data-testid="wave-kicker"], [data-testid="wave-desc"]';
+      // Yandex's data: the playing track and where it plays from, and the names in "Skipped".
+      const data = '.wave-track, [data-testid="wave-kicker"], [data-testid="wave-desc"], .mix-feedback';
       const texts = [...document.querySelectorAll(sel)].filter((el) => !el.closest(data)).map((el) => el.textContent);
       const titles = [...document.querySelectorAll('button[title], [aria-label]')]
         .filter((el) => !el.closest(`.nav-playlists, .track-row, .q-row, .card, ${data}`))

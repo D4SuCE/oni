@@ -5,6 +5,14 @@
 import type { Transport } from '../api/transport.ts';
 
 const API = 'https://cloud-api.yandex.net/v1/disk/resources';
+/** A request that hangs (a stalled network) fails after this long; the next round tries again. */
+const TIMEOUT = 20_000;
+
+function timed<T>(what: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const late = new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error('Yandex Disk: no answer')), TIMEOUT)));
+  return Promise.race([what, late]).finally(() => clearTimeout(timer));
+}
 
 /** The token was refused (revoked, expired): Disk has to be connected again. */
 export class DiskAuthError extends Error {}
@@ -31,7 +39,7 @@ export class YandexDisk implements DiskLike {
   }
 
   private async call<T = any>(method: 'GET' | 'DELETE', url: string, query: Record<string, string | number>): Promise<{ status: number; data: T }> {
-    const r = await this.transport.request<T>({ method, url, query });
+    const r = await timed(this.transport.request<T>({ method, url, query }));
     if (r.status === 401) throw new DiskAuthError('Yandex Disk: not authorized');
     return r;
   }
@@ -50,7 +58,7 @@ export class YandexDisk implements DiskLike {
   async read(name: string): Promise<string> {
     const link = await this.call('GET', `${API}/download`, { path: `app:/${name}` });
     if (link.status !== 200) this.fail('download', link);
-    const r = await this.transport.request<string>({ url: (link.data as any).href, responseType: 'text' });
+    const r = await timed(this.transport.request<string>({ url: (link.data as any).href, responseType: 'text' }));
     if (!r.ok) this.fail('download', r);
     return r.data;
   }
@@ -58,7 +66,7 @@ export class YandexDisk implements DiskLike {
   async write(name: string, text: string): Promise<void> {
     const link = await this.call('GET', `${API}/upload`, { path: `app:/${name}`, overwrite: 'true' });
     if (link.status !== 200) this.fail('upload', link);
-    const r = await this.transport.request({ method: 'PUT', url: (link.data as any).href, body: text, headers: { 'Content-Type': 'application/json' }, responseType: 'text' });
+    const r = await timed(this.transport.request({ method: 'PUT', url: (link.data as any).href, body: text, headers: { 'Content-Type': 'application/json' }, responseType: 'text' }));
     if (r.status !== 201 && r.status !== 202 && !r.ok) this.fail('upload', r);
   }
 
