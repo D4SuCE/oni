@@ -88,9 +88,16 @@
   Секрет `RELEASES_TOKEN` в D4SuCE/oni — токен с правом выпусков D4SuCE/oni-releases (для `release.yml`).
   Обновления приложения Яндекса: `https://desktop.app.music.yandex.net/stable/latest.yml` (узлы CDN отвечают
   разными версиями, пока новая раскатывается — берётся самая новая из нескольких ответов).
-- Автопилот (с 25.10.2026 19:00 МСК): две routine «Oni — разработка» (дважды в час, до 31.10 UTC, Opus 5.5; trig_01HTfTUEwS3b5N4dz8q5yvBJ, trig_01Nbbsp4SLGd8gV2M98engab) делают
-  по одной задаче из «Автопилота» в ROADMAP по `docs/autopilot.md`; замок — ветка `autopilot`. Выключить — на
-  https://claude.ai/code/routines.
+- Автопилот: две routine «Oni — разработка» (дважды в час, Opus 5.5) делают по одной задаче из «Автопилота»
+  в ROADMAP по `docs/autopilot.md`; замок — ветка `autopilot`. Выключить — на https://claude.ai/code/routines.
+  24.10.2026 пользователь удалил их на аккаунте d4suce (сторож пока там); на d4suceusa ещё не созданы —
+  создать там (тот же текст задания, окружение с `GH_TOKEN` и `YANDEX_MUSIC_TOKEN`).
+- Аккаунты Claude (24.10.2026): Oni ведётся с **d4suceusa@gmail.com** — облачные routine, окружение и лимиты
+  там; d4suce@gmail.com — для других проектов. На ПК у второго аккаунта своя папка настроек
+  `~/.claude-oni` (`CLAUDE_CONFIG_DIR`: свой вход, история, память этого проекта); запуск — команда `oni`
+  (папка проекта + этот аккаунт), `claude-usa` (этот аккаунт в любой папке; обе — `~/.local/bin/*.cmd`) или
+  ярлык «Oni (d4suceusa)» на рабочем столе. Обычный `claude` — аккаунт d4suce, папка `~/.claude`.
+  Хуки уведомлений в обеих папках вызывают общий `~/.claude/notify.ps1`.
 - Сторож на ПК (запасной, задача Планировщика «Oni - Yandex Music watch», `scripts/ym-watch.ps1`,
   `scripts/ym-watch-install.ps1`; данные — `%LOCALAPPDATA%/oni-watch`) выключен, когда заработал облачный.
 - Официальное приложение Яндекс Музыки стоит у пользователя
