@@ -311,9 +311,11 @@ async function iosPulse() {
   const w = window as unknown as { __wave: { pulseLevel(): number; pulseTempo(): number | null } };
   setPulse(true);
   await sleep(6000);
+  // Up to 15 s, done at the first beat seen: a cloud Mac's beats come late and few (5 s caught one
+  // or two, a quiet bar none, and the step failed now and then while the pulse worked).
   let max = 0;
-  const end = Date.now() + 5000;
-  while (Date.now() < end) {
+  const end = Date.now() + 15000;
+  while (Date.now() < end && max <= 0.2) {
     max = Math.max(max, w.__wave.pulseLevel());
     await sleep(40);
   }
