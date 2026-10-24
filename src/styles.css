@@ -3788,3 +3788,209 @@ html.ios *:not(input):not(textarea) {
     transform: translateY(4px);
   }
 }
+
+/* ------------------------------------------------------------ animations (Settings → Animations)
+   Japanese-style, each under its own class on the root (src/ui/anim.ts), all short and one-off:
+   nothing runs on its own (the iPhone heats up). The system's reduced motion turns them off. */
+
+/* Fusuma: a page comes in like a sliding paper door, from the right going forward, from the left back. */
+html.anim-fusuma .view-enter {
+  animation: fusuma-in 0.42s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+html.anim-fusuma .view-enter.from-left {
+  animation-name: fusuma-in-left;
+}
+@keyframes fusuma-in {
+  from {
+    opacity: 0.2;
+    transform: translateX(56px);
+    clip-path: inset(0 0 0 30%);
+  }
+}
+@keyframes fusuma-in-left {
+  from {
+    opacity: 0.2;
+    transform: translateX(-56px);
+    clip-path: inset(0 30% 0 0);
+  }
+}
+
+/* Scroll: Now Playing unrolls from the top like a hanging scroll, the side panels from their edge. */
+html.anim-scroll .nowplaying {
+  animation: scroll-down 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+html.anim-scroll .drawer,
+html.anim-scroll .q-sheet {
+  animation: scroll-side 0.45s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+html.anim-scroll .q-sheet {
+  animation-name: scroll-up;
+}
+@keyframes scroll-down {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+}
+@keyframes scroll-side {
+  from {
+    clip-path: inset(0 0 0 100% round 24px);
+  }
+}
+@keyframes scroll-up {
+  from {
+    clip-path: inset(100% 0 0 0 round 20px);
+  }
+}
+
+/* Hanko: a like is stamped like a red seal: pressed down with a slight turn, a red halo around it. */
+html.anim-hanko .hanko {
+  animation: hanko 0.5s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+@keyframes hanko {
+  0% {
+    transform: scale(1.5) rotate(-12deg);
+    box-shadow: 0 0 0 0 rgba(217, 39, 46, 0.7);
+  }
+  45% {
+    transform: scale(0.88) rotate(4deg);
+  }
+  100% {
+    transform: none;
+    box-shadow: 0 0 0 14px rgba(217, 39, 46, 0);
+  }
+}
+
+/* Petals: a few sakura petals drift down from a like or an add to a playlist. */
+.sakura-petal {
+  position: fixed;
+  z-index: 3000;
+  width: 11px;
+  height: 8px;
+  margin: -4px 0 0 -5px;
+  border-radius: 70% 0 70% 0;
+  background: linear-gradient(135deg, #f6c6d0, #e58ea2);
+  box-shadow: 0 0 4px rgba(229, 142, 162, 0.5);
+  pointer-events: none;
+  animation: petal-fall 1.6s cubic-bezier(0.3, 0.2, 0.6, 1) both;
+}
+@keyframes petal-fall {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) rotate(0) scale(var(--s));
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(var(--s));
+  }
+}
+
+/* Ink: covers bleed in like sumi ink on paper, from the middle out of a grey wash. */
+html.anim-ink .cover img,
+html.anim-ink .card-cover img,
+html.anim-ink .np-cover img {
+  animation: ink-in 0.8s cubic-bezier(0.3, 0.6, 0.3, 1);
+}
+@keyframes ink-in {
+  from {
+    clip-path: circle(12% at 50% 50%);
+    filter: grayscale(1) contrast(1.4) blur(6px);
+    opacity: 0.4;
+  }
+  60% {
+    filter: grayscale(0.4) blur(1px);
+  }
+}
+
+/* Cascade: cards and rows come in one after another (the first dozen; the rest at once). */
+html.anim-cascade .card,
+html.anim-cascade .track-row {
+  animation: cascade-in 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes cascade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+html.anim-cascade .card:nth-child(1),
+html.anim-cascade .track-row:nth-child(1) {
+  animation-delay: 35ms;
+}
+html.anim-cascade .card:nth-child(2),
+html.anim-cascade .track-row:nth-child(2) {
+  animation-delay: 70ms;
+}
+html.anim-cascade .card:nth-child(3),
+html.anim-cascade .track-row:nth-child(3) {
+  animation-delay: 105ms;
+}
+html.anim-cascade .card:nth-child(4),
+html.anim-cascade .track-row:nth-child(4) {
+  animation-delay: 140ms;
+}
+html.anim-cascade .card:nth-child(5),
+html.anim-cascade .track-row:nth-child(5) {
+  animation-delay: 175ms;
+}
+html.anim-cascade .card:nth-child(6),
+html.anim-cascade .track-row:nth-child(6) {
+  animation-delay: 210ms;
+}
+html.anim-cascade .card:nth-child(7),
+html.anim-cascade .track-row:nth-child(7) {
+  animation-delay: 245ms;
+}
+html.anim-cascade .card:nth-child(8),
+html.anim-cascade .track-row:nth-child(8) {
+  animation-delay: 280ms;
+}
+html.anim-cascade .card:nth-child(9),
+html.anim-cascade .track-row:nth-child(9) {
+  animation-delay: 315ms;
+}
+html.anim-cascade .card:nth-child(10),
+html.anim-cascade .track-row:nth-child(10) {
+  animation-delay: 350ms;
+}
+html.anim-cascade .card:nth-child(11),
+html.anim-cascade .track-row:nth-child(11) {
+  animation-delay: 385ms;
+}
+html.anim-cascade .card:nth-child(12),
+html.anim-cascade .track-row:nth-child(12) {
+  animation-delay: 420ms;
+}
+
+/* Hamon: a ring spreads from where a button was pressed, as on water, and the button sinks a little. */
+.hamon-ring {
+  position: fixed;
+  z-index: 3000;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(199, 154, 84, 0.85);
+  pointer-events: none;
+  animation: hamon 0.32s ease-out forwards;
+}
+.hamon-ring.light {
+  border-color: rgba(242, 238, 232, 0.9);
+}
+@keyframes hamon {
+  from {
+    transform: scale(0.2);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+html.anim-hamon .btn:active,
+html.anim-hamon .icon-btn:active,
+html.anim-hamon .play-btn:active {
+  transform: scale(0.94);
+}

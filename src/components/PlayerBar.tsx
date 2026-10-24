@@ -125,7 +125,7 @@ export function LikeButton({ track, size = 18 }: { track: Track; size?: number }
   const liked = useApp((s) => s.liked.has(String(track.id)));
   const t = useT();
   return (
-    <button className={cx('icon-btn', liked && 'on like')} onClick={() => toggleLike(track)} title={t.common.like}>
+    <button className={cx('icon-btn', liked && 'on like')} onClick={() => toggleLike(track)} title={t.common.like} data-testid="like">
       <Heart size={size} fill={liked ? 'currentColor' : 'none'} />
     </button>
   );
