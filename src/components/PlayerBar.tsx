@@ -11,6 +11,7 @@ import { useEq } from '../player/eq.ts';
 import { isIos } from '../ui/platform.ts';
 import { ArtistLinks, Cover } from './Common.tsx';
 import { openMenu } from './Menu.tsx';
+import { DevicesButton, PlayingOn } from './Devices.tsx';
 import { isUpload, trackMenu } from './TrackList.tsx';
 
 /** The sleep timer: a moon, with the minutes left beside it while it runs; its menu sets it. */
@@ -194,6 +195,7 @@ export function PlayerBar() {
               <div className="pb-artists">
                 <ArtistLinks artists={track.artists} plain={isIos || isUpload(track)} />
               </div>
+              <PlayingOn />
             </div>
             <LikeButton track={track} />
             {isWave && (
@@ -220,6 +222,7 @@ export function PlayerBar() {
             <span className="pb-source-text">{sourceTitle}</span>
           </span>
         )}
+        <DevicesButton />
         <SleepButton />
         <button className="icon-btn" onClick={openNow} title={t.player.queue}>
           <ListMusic size={18} />

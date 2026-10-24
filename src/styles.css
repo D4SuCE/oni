@@ -727,6 +727,17 @@ html.acrylic .backdrop {
   white-space: nowrap;
   margin-top: 2px;
 }
+/* "Playing on PC": this device is the remote of another (components/Devices.tsx). */
+.playing-on {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+  color: var(--gold);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+}
 .pb-empty {
   color: var(--text-3);
   padding-left: 6px;

@@ -10,6 +10,7 @@ import { dislike, useApp } from '../store.ts';
 import { useSwipeDown } from '../ui/swipe.ts';
 import { cx, useAsync } from '../ui/util.ts';
 import { ArtistLinks, Cover, Spinner } from './Common.tsx';
+import { DevicesButton, PlayingOn } from './Devices.tsx';
 import { LikeButton, SeekBar, SleepButton, Transport, VolumeControl } from './PlayerBar.tsx';
 import { usePhoneSound } from '../player/phoneSound.ts';
 import { useEq } from '../player/eq.ts';
@@ -175,6 +176,7 @@ export function NowPlaying() {
                   <div className="np-artists">
                     <ArtistLinks artists={track.artists} plain={isUpload(track)} />
                   </div>
+                  <PlayingOn />
                 </div>
                 <div className="np-actions">
                   {isWave && (
@@ -184,6 +186,7 @@ export function NowPlaying() {
                   )}
                   <LikeButton track={track} size={22} />
                   <SleepButton size={20} />
+                  <DevicesButton size={20} />
                   {/* The equalizer on the iPhone, where the player bar has no room for it. */}
                   {isIos && (
                     <button className={cx('icon-btn', eqOn && 'on')} onClick={() => useApp.setState({ soundOpen: true })} title={t.sound.title} data-testid="np-sound">

@@ -421,6 +421,16 @@ const ru = {
     disconnectMessage: 'Прослушивания с других устройств пропадут из этого. Файлы на Диске останутся: подключите снова — и всё вернётся.',
     failed: 'Не удалось подключить Яндекс Диск',
   },
+  elsewhere: {
+    title: 'Устройства',
+    here: 'Это устройство',
+    playingOn: (name: string) => `Играет на ${name}`,
+    playHere: 'Играть здесь',
+    item: (name: string, what: string) => `${name}: ${what}`,
+    paused: 'пауза',
+    nothing: 'ничего не играет',
+    gone: (name: string) => `${name} не отвечает — трек остался здесь, на паузе`,
+  },
   settings: {
     account: 'Аккаунт',
     plusActive: 'Плюс активен',
@@ -997,6 +1007,16 @@ const en: Dict = {
     disconnectTitle: 'Disconnect Yandex Disk?',
     disconnectMessage: "Plays from other devices will leave this one. The files stay on Disk: connect again and it's all back.",
     failed: "Couldn't connect Yandex Disk",
+  },
+  elsewhere: {
+    title: 'Devices',
+    here: 'This device',
+    playingOn: (name) => `Playing on ${name}`,
+    playHere: 'Play here',
+    item: (name, what) => `${name}: ${what}`,
+    paused: 'paused',
+    nothing: 'nothing playing',
+    gone: (name) => `${name} doesn't answer — the track stayed here, paused`,
   },
   settings: {
     account: 'Account',

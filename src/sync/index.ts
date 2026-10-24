@@ -9,6 +9,7 @@ import { useLang } from '../i18n.ts';
 import { history, playLog, recentPlays, useRecent } from '../player/player.ts';
 import { DeviceSync, type Device } from './devices.ts';
 import { DiskAuthError, YandexDisk } from './disk.ts';
+import { startElsewhere, stopElsewhere } from './elsewhere.ts';
 
 const EVERY = 5 * 60_000;
 /** Back in view: the others are read again if it has been this long. */
@@ -80,6 +81,8 @@ function onVisibility() {
 
 function begin() {
   set({ connected: true, expired: false });
+  // What plays on the other devices (and this one's, for them): its own looks, more often.
+  startElsewhere(disk, deviceSync.device);
   // Automated tests sync when they say so: a test run's plays never go up by themselves.
   if (transport.testMode) return;
   timer ??= setInterval(syncNow, EVERY);
@@ -88,6 +91,7 @@ function begin() {
 }
 
 function stop() {
+  stopElsewhere();
   if (timer) clearInterval(timer);
   timer = null;
   document.removeEventListener('visibilitychange', onVisibility);

@@ -21,6 +21,8 @@ export interface DiskFile {
   name: string;
   /** ISO time of the last change: a file not changed since the last read is not read again. */
   modified: string;
+  /** The content's hash: two writes within one second have the same `modified`. */
+  md5?: string;
 }
 
 /** What DeviceSync needs of Disk; tests give it a fake. */
@@ -49,10 +51,10 @@ export class YandexDisk implements DiskLike {
   }
 
   async list(): Promise<DiskFile[]> {
-    const r = await this.call('GET', API, { path: 'app:/', limit: 1000, fields: '_embedded.items.name,_embedded.items.modified,_embedded.items.type' });
+    const r = await this.call('GET', API, { path: 'app:/', limit: 1000, fields: '_embedded.items.name,_embedded.items.modified,_embedded.items.md5,_embedded.items.type' });
     if (r.status === 404) return []; // the folder comes with the first file
     if (r.status !== 200) this.fail('list', r);
-    return ((r.data as any)?._embedded?.items ?? []).filter((x: any) => x.type === 'file').map((x: any) => ({ name: x.name, modified: x.modified }));
+    return ((r.data as any)?._embedded?.items ?? []).filter((x: any) => x.type === 'file').map((x: any) => ({ name: x.name, modified: x.modified, md5: x.md5 }));
   }
 
   async read(name: string): Promise<string> {

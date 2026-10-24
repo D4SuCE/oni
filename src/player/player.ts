@@ -18,6 +18,7 @@ import { PlayStats, type Origin } from './stats.ts';
 import { isIos } from '../ui/platform.ts';
 import { audio } from './audio.ts';
 import { audioExt, OniPlayer, type NativeAudio } from './nativeAudio.ts';
+import type { CommandName } from '../sync/playing.ts';
 
 export type Repeat = 'off' | 'all' | 'one';
 /** A wave without a station is My Wave; with one it is a radio seeded by a track, artist, album or playlist. */
@@ -388,6 +389,10 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
   if (!t) return;
   const seq = ++loadSeq;
   crossStarted = false;
+  stale = false;
+  // Taken over from another device: it goes on from where it was there.
+  const resume = resumeAt?.id === t.id ? resumeAt.seconds : 0;
+  resumeAt = null;
   set({ index, loading: true, position: 0, duration: (t.durationMs || 0) / 1000, error: null });
   opening = seq;
   listened = 0;
@@ -438,6 +443,11 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
       if (!local) setLocalAudio(null);
       set({ stream: { codec: stream.codec, bitrate: stream.bitrate } });
       applyVolume();
+      if (resume > 1) {
+        audio.currentTime = resume;
+        lastTime = resume;
+        set({ position: resume });
+      }
       if (autoplay) await audio.play();
     }
     if (opening === seq) opening = 0;
@@ -636,6 +646,7 @@ async function syncRemoteHistory() {
 let waveStarts = 0;
 
 async function startWave(source: Source & { kind: 'wave' }) {
+  elsewhere?.leave();
   const start = ++waveStarts;
   finishCurrent(false);
   // The old track plays on until the new wave's first one is ready (the user's choice).
@@ -732,6 +743,7 @@ export function extendList(list: string, tracks: Track[]) {
 }
 
 async function startList(tracks: Track[], start: number, title: string, from?: PlayContext, extra: PlayExtra = {}) {
+  elsewhere?.leave();
   // With no network only the downloaded ones, in the list's order; a pick that is not downloaded
   // starts the next one that is.
   const playable = tracks.filter(canPlay);
@@ -762,6 +774,7 @@ let heldLoad = 0;
 let opening = 0;
 
 export function toggle() {
+  if (elsewhere) return elsewhere.send('toggle', []);
   if (!current()) return;
   // The user's own play or pause: no longer a wait that ends by itself.
   waitingForYandex = false;
@@ -786,13 +799,14 @@ export function toggle() {
     return;
   }
   if (audio.paused) {
-    if (!audio.src) loadAt(get().index);
+    if (!audio.src || stale) loadAt(get().index);
     else audio.play().catch(() => {});
   } else audio.pause();
 }
 
 /** `fade`: the crossfade's seconds, when the track playing flows into the next. */
 export async function next(user = true, fade = 0) {
+  if (elsewhere) return void (user && elsewhere.send('next', []));
   const s = get();
   if (!s.queue.length) return;
   // The network is back (or Yandex gives the tracks again): the wave or list the downloads stood
@@ -815,7 +829,9 @@ export async function next(user = true, fade = 0) {
 }
 
 export function prev() {
+  if (elsewhere) return elsewhere.send('prev', []);
   const s = get();
+  if (stale) return seek(0);
   if (audio.currentTime > 3 || s.index <= 0) {
     audio.currentTime = 0;
     return;
@@ -825,6 +841,7 @@ export function prev() {
 }
 
 export function playAt(index: number) {
+  if (elsewhere) return elsewhere.send('playAt', [index]);
   if (index === get().index) return toggle();
   finishCurrent(false);
   loadAt(index);
@@ -832,6 +849,12 @@ export function playAt(index: number) {
 
 export function seek(seconds: number) {
   if (!Number.isFinite(seconds)) return;
+  if (elsewhere) return elsewhere.send('seek', [Math.max(0, seconds)]);
+  // Taken over and not started yet: it starts there.
+  if (stale && current()) {
+    resumeAt = { id: current()!.id, seconds: Math.max(0, seconds) };
+    return void set({ position: Math.max(0, seconds) });
+  }
   audio.currentTime = Math.max(0, seconds);
   set({ position: audio.currentTime });
 }
@@ -873,12 +896,14 @@ export function setCrossfade(seconds: number) {
 }
 
 export function cycleRepeat() {
+  if (elsewhere) return elsewhere.send('cycleRepeat', []);
   const order: Repeat[] = ['off', 'all', 'one'];
   set((s) => ({ repeat: order[(order.indexOf(s.repeat) + 1) % order.length] }));
   savePrefs();
 }
 
 export function toggleShuffle() {
+  if (elsewhere) return elsewhere.send('toggleShuffle', []);
   const s = get();
   if (s.source?.kind === 'wave' || !s.queue.length) return;
   const cur = s.queue[s.index];
@@ -895,6 +920,7 @@ export function toggleShuffle() {
 }
 
 export function playNext(t: Track) {
+  if (elsewhere) return elsewhere.send('playNext', [t]);
   set((s) => {
     const queue = [...s.queue];
     queue.splice(s.index + 1, 0, t);
@@ -905,12 +931,14 @@ export function playNext(t: Track) {
 }
 
 export function enqueue(t: Track) {
+  if (elsewhere) return elsewhere.send('enqueue', [t]);
   set((s) => ({ queue: [...s.queue, t] }));
   if (get().index < 0) loadAt(0);
 }
 
 /** A queued track to another place (dragged in the queue); the one playing stays playing. */
 export function moveInQueue(from: number, to: number) {
+  if (elsewhere) return elsewhere.send('moveInQueue', [from, to]);
   const s = get();
   if (from === s.index || to <= s.index || from <= s.index || from >= s.queue.length || to >= s.queue.length) return;
   const queue = [...s.queue];
@@ -921,6 +949,7 @@ export function moveInQueue(from: number, to: number) {
 }
 
 export function removeAt(i: number) {
+  if (elsewhere) return elsewhere.send('removeAt', [i]);
   const s = get();
   if (i === s.index) return;
   const queue = s.queue.filter((_, j) => j !== i);
@@ -930,6 +959,10 @@ export function removeAt(i: number) {
 export function dropFromQueue(trackId: string) {
   const s = get();
   const cur = s.queue[s.index];
+  if (elsewhere && cur?.id !== trackId) {
+    const i = s.queue.findIndex((t) => t.id === trackId);
+    return void (i >= 0 && removeAt(i));
+  }
   if (cur?.id === trackId) {
     next(true);
     return;
@@ -986,14 +1019,17 @@ audio.addEventListener('playing', () => {
   failedInRow = 0;
   set({ playing: true, loading: false });
 });
-audio.addEventListener('pause', () => set({ playing: false }));
-audio.addEventListener('waiting', () => set({ loading: true }));
-audio.addEventListener('canplay', () => set({ loading: false }));
+// While this device is another's remote, its own audio's last events (the pause that stopped it)
+// must not show over what plays there.
+audio.addEventListener('pause', () => !elsewhere && set({ playing: false }));
+audio.addEventListener('waiting', () => !elsewhere && set({ loading: true }));
+audio.addEventListener('canplay', () => !elsewhere && set({ loading: false }));
 audio.addEventListener('loadedmetadata', () => {
+  if (elsewhere) return;
   if (Number.isFinite(audio.duration)) set({ duration: audio.duration });
 });
 audio.addEventListener('timeupdate', () => {
-  if (crossLoading) return;
+  if (crossLoading || elsewhere) return;
   const t = audio.currentTime;
   const delta = t - lastTime;
   if (!audio.paused && delta > 0 && delta < 2) {
@@ -1100,7 +1136,7 @@ function persistSoon() {
   persistTimer = setTimeout(() => {
     persistTimer = null;
     const s = get();
-    if (!s.queue.length) return;
+    if (!s.queue.length || elsewhere) return;
     const from = Math.max(0, s.index - 20);
     // The wave (My Wave or a station) is kept as such: restored as a plain list it ran dry after
     // the few tracks it had ahead (the user).
@@ -1118,6 +1154,20 @@ export function warmWave() {
   if (get().source?.kind === 'wave' && engine) fillWave();
 }
 
+/** A queue put in place, paused, its track not loaded yet (Play loads it): the last run's, or
+ * another device's. A wave goes on from where it was: a new session with Yandex starts with the next fill. */
+function placeSession(queue: Track[], index: number, title: string, label?: ListLabel, wave?: Source) {
+  if (wave?.kind === 'wave') {
+    engine = new WaveEngine(waveApi, history, get().tuning, (id) => isDisliked(id), wave.station ? [wave.station.seed] : null);
+    engine.isSkipped = leftOut;
+    set({ queue, index, source: wave, duration: (queue[index].durationMs || 0) / 1000 });
+  } else {
+    engine = null;
+    set({ queue, index, source: { kind: 'list', title, label }, duration: (queue[index].durationMs || 0) / 1000 });
+  }
+  updateMediaSession(queue[index]);
+}
+
 /** Restore the last queue (paused) so the app opens where you left off. */
 export function restoreSession() {
   try {
@@ -1125,15 +1175,71 @@ export function restoreSession() {
     if (!raw) return;
     const { queue, index, title, label, wave } = JSON.parse(raw);
     if (!Array.isArray(queue) || !queue[index]) return;
-    if (wave?.kind === 'wave') {
-      // The wave goes on from where it was: a new session with Yandex starts with the next fill.
-      engine = new WaveEngine(waveApi, history, get().tuning, (id) => isDisliked(id), wave.station ? [wave.station.seed] : null);
-      engine.isSkipped = leftOut;
-      set({ queue, index, source: wave, duration: (queue[index].durationMs || 0) / 1000 });
-    } else set({ queue, index, source: { kind: 'list', title, label }, duration: (queue[index].durationMs || 0) / 1000 });
-    updateMediaSession(queue[index]);
+    placeSession(queue, index, title, label, wave);
   } catch {
     /* ignore */
   }
 }
 
+// ------------------------------------------- another device (sync/elsewhere.ts)
+
+/** This device is another's remote: what plays there shows here, and the controls go there. */
+export interface Elsewhere {
+  send(fn: CommandName, args: unknown[]): void;
+  /** Something is started here: this device plays its own again. */
+  leave(): void;
+}
+let elsewhere: Elsewhere | null = null;
+/** The queue shown is not what the audio holds (another device's, or taken over from one): Play loads its track. */
+let stale = false;
+/** Where the track taken over from another device starts when it is played. */
+let resumeAt: { id: string; seconds: number } | null = null;
+
+export const isElsewhere = () => elsewhere !== null;
+
+/** Becomes (or stops being) another device's remote. This device's own track stops, counted as heard so far. */
+export function controlElsewhere(e: Elsewhere | null) {
+  if (e && !elsewhere) {
+    finishCurrent(false);
+    listened = 0;
+    forgetResume();
+    ++loadSeq;
+    audio.pause();
+    stale = true;
+    unshuffled = null;
+  }
+  // The repeat shown was the other device's: this one's own again.
+  if (!e && elsewhere) set({ repeat: loadJson<Prefs>('player.prefs', prefs).repeat ?? 'off', playing: false });
+  elsewhere = e;
+}
+
+/** What plays on the device this one is the remote of, shown as if it played here. */
+export function mirror(s: { queue: Track[]; index: number; source: Source; playing: boolean; position: number; duration: number; shuffle: boolean; repeat: Repeat }) {
+  if (!elsewhere) return;
+  const t = s.queue[s.index];
+  if (t && t.id !== current()?.id) updateMediaSession(t);
+  set({ ...s, loading: false, error: null, stream: null });
+}
+
+/**
+ * Another device's track here ("continue on another device"): its queue, paused at its place,
+ * or playing on from there (`play`: "Play here" while this one was its remote).
+ */
+export function takeOver(s: { queue: Track[]; index: number; title: string; label?: ListLabel; wave?: Source }, seconds: number, play = false) {
+  const t = s.queue[s.index];
+  if (!t) return;
+  if (!elsewhere) {
+    finishCurrent(false);
+    listened = 0;
+    forgetResume();
+    ++loadSeq;
+    audio.pause();
+  }
+  unshuffled = null;
+  placeSession(s.queue, s.index, s.title, s.label, s.wave);
+  stale = true;
+  resumeAt = { id: t.id, seconds };
+  set({ playing: false, loading: false, position: seconds, shuffle: false, error: null, stream: null });
+  persistSoon();
+  if (play) void loadAt(s.index);
+}

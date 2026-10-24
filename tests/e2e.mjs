@@ -1426,6 +1426,75 @@ await step("shared history: another device's plays come from Oni's folder on Yan
   if (left.some((f) => f.name === phone || f.name === own)) throw new Error('files left on Disk');
 });
 
+await step('another device in the player: its paused track taken up at its second; its playing one shown with the time going, Next pressed there; "Play here"; a press from it done here (all removed again)', async () => {
+  // The user, 24.10.2026: "continue on another device" and the remote, through Oni's folder on Disk.
+  if (!(await page.evaluate(() => window.__wave.sync.useSync.getState().connected))) {
+    console.log('       skipped: no YANDEX_DISK_TOKEN');
+    return;
+  }
+  const phoneId = `e2ephone${Date.now()}`;
+  const ownId = await page.evaluate(() => window.__wave.sync.deviceSync.device.id);
+  const names = [`now-${phoneId}.json`, `cmd-${phoneId}-${ownId}.json`, `cmd-${ownId}-${phoneId}.json`, `now-${ownId}.json`];
+  const write = (name, file) => page.evaluate(([n, t]) => window.__wave.sync.disk.write(n, t), [name, JSON.stringify(file)]);
+  const read = (name) => page.evaluate((n) => window.__wave.sync.disk.read(n).then((t) => JSON.parse(t)), name);
+  try {
+    await page.evaluate(() => window.__wave.audio.pause());
+    await page.waitForFunction(() => !window.__wave.usePlayer.getState().playing);
+    const queue = await page.evaluate(() => window.__wave.usePlayer.getState().queue.slice(0, 3));
+    if (queue.length < 3) throw new Error(`only ${queue.length} tracks to work with`);
+    const phone = (over) => ({
+      v: 1, device: { id: phoneId, platform: 'ios' }, queue, index: 1, offset: 0, title: 'e2e phone list', playing: false, position: 40,
+      duration: (queue[1].durationMs || 180000) / 1000, shuffle: false, repeat: 'off', at: Date.now(), changed: Date.now() + 1000, test: true, ...over,
+    });
+
+    // 1. Paused there, changed later than here: taken up here, paused at the same second, no banner.
+    await write(names[0], phone());
+    await page.evaluate(() => window.__wave.sync.elsewhere.look(true));
+    const taken = await page.evaluate(() => { const s = window.__wave.usePlayer.getState(); return { id: s.queue[s.index]?.id, position: s.position, playing: s.playing, title: s.source?.title }; });
+    if (taken.id !== queue[1].id || Math.round(taken.position) !== 40 || taken.playing || taken.title !== 'e2e phone list') throw new Error(`taken up: ${JSON.stringify(taken)}`);
+    if (await page.locator('[data-testid="playing-on"]').count()) throw new Error('a remote, not a take-over');
+
+    // 2. Playing there: this one is its remote — its track, "Playing on iPhone", the time going on.
+    await write(names[0], phone({ playing: true, position: 60, changed: Date.now() + 2000 }));
+    await page.evaluate(() => window.__wave.sync.elsewhere.look(true));
+    await page.locator('[data-testid="playing-on"]').first().waitFor({ timeout: 5000 });
+    const on = await page.locator('[data-testid="playing-on"]').first().innerText();
+    if (!/iPhone/.test(on)) throw new Error(`playing on: "${on}"`);
+    const p1 = await page.evaluate(() => window.__wave.usePlayer.getState().position);
+    await page.waitForTimeout(1500);
+    const p2 = await page.evaluate(() => window.__wave.usePlayer.getState().position);
+    if (!(p1 >= 59 && p2 > p1 + 0.8)) throw new Error(`time: ${p1} → ${p2}`);
+    if (!(await page.evaluate(() => window.__wave.audio.paused))) throw new Error('this one plays too');
+
+    // Next goes there (its file), and shows here at once.
+    await page.click('[data-testid="next"]');
+    await page.waitForFunction((id) => { const s = window.__wave.usePlayer.getState(); return s.queue[s.index]?.id === id; }, queue[2].id, { timeout: 3000 });
+    await page.waitForFunction((n) => window.__wave.sync.disk.list().then((l) => l.some((f) => f.name === n)), names[1], { timeout: 15000, polling: 1000 });
+    const sent = await read(names[1]);
+    if (sent.commands.at(-1)?.fn !== 'next') throw new Error(`sent: ${JSON.stringify(sent.commands)}`);
+
+    // 3. "Play here": it plays here from where it was there.
+    await page.evaluate(() => window.__wave.sync.elsewhere.leave('here'));
+    await waitPlaying(1.5);
+    const here = await page.evaluate(() => ({ id: window.__wave.usePlayer.getState().queue[window.__wave.usePlayer.getState().index]?.id, at: window.__wave.audio.currentTime }));
+    if (here.id !== queue[2].id) throw new Error(`plays here: ${JSON.stringify(here)}`);
+    if (await page.locator('[data-testid="playing-on"]').count()) throw new Error('still a remote');
+
+    // 4. The phone as this one's remote: its Pause is done here.
+    await write(names[2], { v: 1, from: { id: phoneId, platform: 'ios' }, at: Date.now(), commands: [{ id: `${phoneId}.1`, at: Date.now(), fn: 'pause', args: [] }] });
+    await page.evaluate(() => window.__wave.sync.elsewhere.look());
+    await page.waitForFunction(() => window.__wave.audio.paused, null, { timeout: 5000 });
+    await page.evaluate(() => window.__wave.sync.elsewhere.publish());
+    const mine = await read(names[3]);
+    if (mine.playing || mine.queue[mine.index]?.id !== queue[2].id || !mine.test) throw new Error(`own file: playing ${mine.playing}, ${mine.queue[mine.index]?.id}, test ${mine.test}`);
+  } finally {
+    await page.evaluate(() => window.__wave.sync.elsewhere.leave('drop'));
+    await page.evaluate((list) => Promise.all(list.map((n) => window.__wave.sync.disk.remove(n))), names);
+  }
+  const left = await page.evaluate(() => window.__wave.sync.disk.list());
+  if (left.some((f) => names.includes(f.name))) throw new Error('files left on Disk');
+});
+
 await step('recap: the month summed up from the plays (here and, for the last days, everywhere); play it, save it as a playlist (removed again)', async () => {
   await page.click('[data-testid="history-recap"]');
   await page.waitForSelector('[data-testid="recap-track"]', { timeout: 30000 });
