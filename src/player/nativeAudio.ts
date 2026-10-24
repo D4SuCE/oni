@@ -33,6 +33,8 @@ interface PlayerPlugin {
   testThrottle(options: { bytesPerSecond: number }): Promise<void>;
   /** For the simulator run: what the system equalizer set up as Oni's does at each frequency (dB). */
   eqResponse(options: { gains: number[]; preamp: number; frequencies: number[] } & EqShape): Promise<{ db: number[] }>;
+  /** After a pause the engine runs on silent this long, keeping Oni awake for a remote (0: it stops at once). */
+  setAwake(options: { seconds: number }): Promise<void>;
   /** Listen to the bass for the beat pulse (src/player/pulse.ts), or stop. */
   pulse(options: { on: boolean }): Promise<void>;
   /** The bass's rise, ~60 a second, sent a few at a time: when each is heard (wall clock, ms). */

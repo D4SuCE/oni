@@ -11,6 +11,7 @@ import { OniPlayer, type EqShape } from './player/nativeAudio.ts';
 import { OniVolume } from './player/volume.ts';
 import { background } from './ui/offline.ts';
 import { EQ_PRESETS, EQ_Q, eqResponse } from './player/eqCurve.ts';
+import { registerPlugin } from '@capacitor/core';
 
 type Wave = {
   audio: HTMLAudioElement;
@@ -226,6 +227,50 @@ async function nativePlayer() {
   await sleep(1200);
   report('lock-screen-play', pressed.playing && followed && !stopped.playing && wave().audio.paused, JSON.stringify({ pressed, page: followed, toggled: stopped }));
   await wave().audio.play();
+}
+
+/** Kept awake after a pause (another device may play this one as a remote, sync/elsewhere.ts): the
+ * engine runs on silent for the time set, then stops; the lock screen's "pause" meanwhile plays. */
+async function awakeAfterPause() {
+  await OniPlayer.setAwake({ seconds: 3 });
+  wave().audio.pause();
+  await sleep(700);
+  const kept = await OniPlayer.state();
+  const pressed = await OniRemote.press({ name: 'pause' });
+  await sleep(500);
+  wave().audio.pause();
+  await sleep(4000);
+  const slept = await OniPlayer.state();
+  await OniPlayer.setAwake({ seconds: 0 });
+  report('awake-after-pause', !kept.playing && kept.engine === true && pressed.playing && slept.engine === false, JSON.stringify({ kept, pressed, slept }));
+  await wave().audio.play();
+}
+
+/** The link to the PC on the home network (sync/lan.ts, OniLan): the workflow runs a stand-in PC
+ * on the Mac (tests/lan-echo.mjs, the simulator shares its network); a hello with the key is
+ * welcomed, a message comes back, and how long that took. */
+async function lanLink() {
+  const lan = registerPlugin<{
+    open(o: { id: string; url: string; hello: string; timeout?: number }): Promise<void>;
+    send(o: { id: string; text: string }): Promise<void>;
+    close(o: { id: string }): Promise<void>;
+    addListener(e: 'message', cb: (m: { id: string; text: string }) => void): Promise<{ remove(): Promise<void> }>;
+  }>('OniLan');
+  const got: string[] = [];
+  const listener = await lan.addListener('message', (m) => got.push(m.text));
+  try {
+    const refused = await lan.open({ id: 'mac', url: 'ws://127.0.0.1:47999', hello: JSON.stringify({ t: 'hello', key: 'wrong', device: { id: 'sim' } }), timeout: 2000 }).then(() => false, () => true);
+    await lan.open({ id: 'mac', url: 'ws://127.0.0.1:47999', hello: JSON.stringify({ t: 'hello', key: 'smoke', device: { id: 'sim' } }), timeout: 3000 });
+    const at = performance.now();
+    await lan.send({ id: 'mac', text: '{"t":"ping"}' });
+    const back = await until(() => got.some((t) => t.includes('pong')), 3000);
+    report('lan-link', refused && Boolean(back), `wrong key ${refused ? 'refused' : 'let in'}, answer ${back ? `in ${(performance.now() - at).toFixed(0)} ms` : 'none'}`);
+    await lan.close({ id: 'mac' });
+  } catch (e) {
+    report('lan-link', false, String(e));
+  } finally {
+    await listener.remove();
+  }
 }
 
 /** Crossfade on the native player: near the end the next track starts on the other node while
@@ -818,6 +863,8 @@ export async function runSmoke() {
     const local = await until(() => wave().audio.src.startsWith('oni-sealed:') && !wave().audio.paused && wave().audio.currentTime > 1, 20000);
     report('offline-playback', local, wave().audio.src.slice(0, 12));
     await nativePlayer();
+    await awakeAfterPause();
+    await lanLink();
     await iosPulse();
     await crossfade();
     await fastStart();

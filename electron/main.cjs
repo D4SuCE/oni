@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const desktop = require('./desktop.cjs');
 const updater = require('./updater.cjs');
+const { setupLan } = require('./lan.cjs');
 
 // The app was called Wave before it became Oni; keep its data folder so the sign-in,
 // history and settings survive the rename.
@@ -281,6 +282,7 @@ ipcMain.handle('ym:login', (_e, lang) => login(lang));
 ipcMain.handle('disk:token:has', () => Boolean(diskToken));
 ipcMain.handle('disk:token:set', (_e, value) => saveDiskToken(value ? String(value).trim() : null));
 ipcMain.handle('disk:login', (_e, lang) => login(lang, DISK_CLIENT_ID, saveDiskToken));
+setupLan(() => mainWindow, { testMode: TEST_MODE, writeLog });
 ipcMain.on('wave:log', (_e, entry) => writeLog(entry?.level || 'error', entry?.source || 'ui', entry?.message));
 ipcMain.handle('wave:logs:open', () => {
   if (!fs.existsSync(logFile())) writeLog('info', 'main', 'log opened');

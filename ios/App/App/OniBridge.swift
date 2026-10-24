@@ -20,6 +20,7 @@ class OniViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(DownloadsPlugin())
         bridge?.registerPluginInstance(PlayerPlugin())
         bridge?.registerPluginInstance(HapticsPlugin())
+        bridge?.registerPluginInstance(LanPlugin())
         #if DEBUG
         // Automated runs on the simulator (.github/workflows/ios.yml): sign in with the token the
         // runner passes, and tell the page it is a test (no listening signals to the account,
@@ -379,7 +380,8 @@ public class RemotePlugin: CAPPlugin, CAPBridgedPlugin {
         let done: Bool
         switch name {
         case "play": done = player?.resume() ?? false
-        case "pause": done = player?.pauseNow() ?? false
+        // Kept awake after a pause, iOS shows "pause" on the lock screen still: pressed, it plays.
+        case "pause": done = player?.isAwake == true ? player?.resume() ?? false : player?.pauseNow() ?? false
         case "toggle": done = (player?.isPlaying ?? false) ? player?.pauseNow() ?? false : player?.resume() ?? false
         default: done = false
         }
@@ -1034,7 +1036,33 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         CAPPluginMethod(name: "testThrottle", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pulse", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "eqResponse", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setAwake", returnType: CAPPluginReturnPromise),
     ]
+
+    /// After a pause the engine runs on, silent, this long (0: it stops at once): iOS keeps Oni
+    /// awake then, so the PC can still play it as a remote with the phone locked (the user,
+    /// 25.10.2026: 10 minutes; src/sync/elsewhere.ts sets it when the account has other devices).
+    private var awakeFor: TimeInterval = 0
+    private var sleepTimer: Timer?
+
+    /// Paused, but still awake (the engine running silent).
+    var isAwake: Bool { !playing && sleepTimer != nil && engine.isRunning }
+
+    /// { seconds }
+    @objc func setAwake(_ call: CAPPluginCall) {
+        let seconds = call.getDouble("seconds") ?? 0
+        DispatchQueue.main.async {
+            self.awakeFor = max(0, seconds)
+            if self.awakeFor == 0, !self.playing, self.sleepTimer != nil { self.fallAsleep() }
+            call.resolve()
+        }
+    }
+
+    private func fallAsleep() {
+        sleepTimer?.invalidate()
+        sleepTimer = nil
+        if !playing { engine.pause() }
+    }
 
     /// The equalizer's bands, as on the desktop (src/player/eqCurve.ts) and in the official app.
     static let bands: [Float] = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000]
@@ -1638,6 +1666,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     }
 
     private func start() throws {
+        sleepTimer?.invalidate()
+        sleepTimer = nil
         try AVAudioSession.sharedInstance().setActive(true)
         if !engine.isRunning { try engine.start() }
         // A fade under way (another app's sound) gives way to the user's play; a crossfade goes on.
@@ -1685,9 +1715,16 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         node.pause()
         // The engine too: running, it fed the output silence, and iOS took the app for playing, so
         // the lock screen and the shade kept "pause" up after a pause in Oni (the user). Play
-        // starts it again; the node keeps its place.
-        engine.pause()
+        // starts it again; the node keeps its place. Kept awake (another device may play this one),
+        // it stops only after a while; the lock screen's "pause" meanwhile plays (RemotePlugin).
         playing = false
+        sleepTimer?.invalidate()
+        sleepTimer = nil
+        if awakeFor > 0 {
+            sleepTimer = Timer.scheduledTimer(withTimeInterval: awakeFor, repeats: false) { [weak self] _ in self?.fallAsleep() }
+        } else {
+            engine.pause()
+        }
         stopTimer()
         tick()
     }
@@ -1979,5 +2016,129 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
             }
             self.tick()
         }
+    }
+}
+
+/// The remote on the home network (src/sync/lan.ts): a WebSocket to Oni on the PC, whose address
+/// and key are in Oni's folder on Yandex Disk. Native, not the page's own WebSocket: the page's
+/// origin (capacitor://) may not open a plain ws:// one, and iOS keeps this one going while Oni
+/// plays in the background. JS: registerPlugin('OniLan').
+@objc(LanPlugin)
+public class LanPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "LanPlugin"
+    public let jsName = "OniLan"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "open", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "send", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "close", returnType: CAPPluginReturnPromise),
+    ]
+
+    private lazy var session = URLSession(configuration: .default)
+    /// The connections, by the id of the device at the other end.
+    private var sockets: [String: URLSessionWebSocketTask] = [:]
+    private var pings: [String: Timer] = [:]
+
+    /// { id, url, hello, timeout (ms) }: resolves once the other side answers the hello (its first
+    /// message, "welcome"); rejects if it does not in time or closes.
+    @objc func open(_ call: CAPPluginCall) {
+        guard let id = call.getString("id"), let raw = call.getString("url"), let url = URL(string: raw), let hello = call.getString("hello") else {
+            return call.reject("id, url and hello")
+        }
+        let timeout = (call.getDouble("timeout") ?? 2500) / 1000
+        DispatchQueue.main.async {
+            self.drop(id)
+            let task = self.session.webSocketTask(with: url)
+            task.maximumMessageSize = 4 * 1024 * 1024
+            self.sockets[id] = task
+            var settled = false
+            let settle: (String?) -> Void = { error in
+                DispatchQueue.main.async {
+                    guard !settled else { return }
+                    settled = true
+                    if let error = error {
+                        self.drop(id, task)
+                        call.reject(error)
+                    } else {
+                        call.resolve()
+                    }
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { settle("no answer") }
+            task.resume()
+            task.send(.string(hello)) { error in if let error = error { settle(error.localizedDescription) } }
+            task.receive { result in
+                switch result {
+                case .success(.string(let text)) where text.contains("\"welcome\""):
+                    settle(nil)
+                    self.listen(id, task)
+                    DispatchQueue.main.async { self.keepAlive(id, task) }
+                case .success:
+                    settle("unexpected answer")
+                case .failure(let error):
+                    settle(error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    /// { id, text }
+    @objc func send(_ call: CAPPluginCall) {
+        let id = call.getString("id") ?? ""
+        let text = call.getString("text") ?? ""
+        DispatchQueue.main.async {
+            guard let task = self.sockets[id] else { return call.reject("not connected") }
+            task.send(.string(text)) { error in
+                if let error = error {
+                    DispatchQueue.main.async { self.drop(id, task) }
+                    call.reject(error.localizedDescription)
+                } else {
+                    call.resolve()
+                }
+            }
+        }
+    }
+
+    /// { id }
+    @objc func close(_ call: CAPPluginCall) {
+        let id = call.getString("id") ?? ""
+        DispatchQueue.main.async {
+            self.drop(id)
+            call.resolve()
+        }
+    }
+
+    private func listen(_ id: String, _ task: URLSessionWebSocketTask) {
+        task.receive { [weak self] result in
+            guard let self = self else { return }
+            switch result {
+            case .success(.string(let text)):
+                self.notifyListeners("message", data: ["id": id, "text": text])
+                self.listen(id, task)
+            case .success:
+                self.listen(id, task)
+            case .failure:
+                DispatchQueue.main.async { self.drop(id, task) }
+            }
+        }
+    }
+
+    /// A connection gone quiet (the PC asleep, another network) is noticed within half a minute.
+    private func keepAlive(_ id: String, _ task: URLSessionWebSocketTask) {
+        pings[id]?.invalidate()
+        pings[id] = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in
+            task.sendPing { error in
+                if error != nil { DispatchQueue.main.async { self?.drop(id, task) } }
+            }
+        }
+    }
+
+    /// Closes the connection to `id` (only `task`, if given: a newer one stays) and tells the page.
+    private func drop(_ id: String, _ task: URLSessionWebSocketTask? = nil) {
+        guard let current = sockets[id], task == nil || current === task else { return }
+        sockets[id] = nil
+        pings[id]?.invalidate()
+        pings[id] = nil
+        current.cancel(with: .goingAway, reason: nil)
+        notifyListeners("closed", data: ["id": id])
     }
 }

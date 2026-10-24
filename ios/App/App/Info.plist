@@ -71,6 +71,13 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Oni на телефоне связывается с Oni на компьютере в домашней сети: пульт срабатывает сразу.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

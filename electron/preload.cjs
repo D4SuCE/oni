@@ -20,6 +20,13 @@ contextBridge.exposeInMainWorld('wave', {
   hasDiskToken: () => ipcRenderer.invoke('disk:token:has'),
   setDiskToken: (value) => ipcRenderer.invoke('disk:token:set', value),
   diskLogin: (lang) => ipcRenderer.invoke('disk:login', lang),
+  lan: {
+    start: (device) => ipcRenderer.invoke('lan:start', device),
+    stop: () => ipcRenderer.invoke('lan:stop'),
+    send: (to, text) => ipcRenderer.send('lan:send', { to, text }),
+    onMessage: (cb) => ipcRenderer.on('lan:message', (_e, m) => cb(m)),
+    onPeers: (cb) => ipcRenderer.on('lan:peers', (_e, ids) => cb(ids)),
+  },
   log: (level, source, message) => ipcRenderer.send('wave:log', { level, source, message }),
   openLogs: () => ipcRenderer.invoke('wave:logs:open'),
   onCommand: (cb) => ipcRenderer.on('wave:command', (_e, cmd) => cb(cmd)),

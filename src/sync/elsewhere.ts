@@ -3,7 +3,8 @@
 // while the PC plays, it is the PC's remote — the PC's track with its time going, as if it played
 // here, and Pause, Next, a seek go there. Starting anything here plays it here (the devices still
 // play different things on their own). The same the other way round. Through Oni's folder on Yandex
-// Disk (sync/playing.ts): a press arrives in 2–4 s.
+// Disk (sync/playing.ts): a press arrives in 2–4 s; on the home network the phone is linked to the
+// PC directly (sync/lan.ts), and a press and what plays go over the link at once, Disk as well.
 
 import { create } from 'zustand';
 import { storage, transport } from '../api/client.ts';
@@ -32,10 +33,13 @@ import {
   type Repeat,
   type Source,
 } from '../player/player.ts';
+import { OniPlayer } from '../player/nativeAudio.ts';
 import { toast } from '../store.ts';
+import { isIos } from '../ui/platform.ts';
 import type { Device } from './devices.ts';
 import { DiskAuthError, type DiskLike } from './disk.ts';
-import { isLive, PlayingSync, positionOf, RENEW, type Command, type CommandName, type NowFile } from './playing.ts';
+import { Lan } from './lan.ts';
+import { isLive, PlayingSync, positionOf, RENEW, type Command, type CommandName, type NowFile, type NowPlaying } from './playing.ts';
 
 export interface OtherDevice {
   device: Device;
@@ -59,6 +63,11 @@ const set = useElsewhere.setState;
 const FAST = 2_500;
 const OPEN = 8_000;
 const IDLE = 15_000;
+/** The iPhone stays awake this long after a pause while the account has other devices, so one can
+ * still play it as a remote with the phone locked (the user's pick, 25.10.2026: 10 minutes). */
+const AWAKE = 10 * 60;
+let awake = -1;
+
 /** After a press, a file older than it is not shown for this long (it would undo the press shown at once). */
 const QUIET = 8_000;
 /** A press not followed by the other device for this long: it is not there any more. */
@@ -79,16 +88,27 @@ let changedAt = Number(storage.getItem('now.changed')) || 0;
 let takenAt = Number(storage.getItem('now.taken')) || 0;
 let publishedAt = 0;
 let publishTimer: ReturnType<typeof setTimeout> | null = null;
+/** The link on the home network (made once: it listens to the shell for good). */
+let lan: Lan | null = null;
 
 /** Disk connected (sync/index.ts): the other devices are looked at, and this one's playing goes up. */
 export function startElsewhere(disk: DiskLike, device: Device) {
   if (sync) return;
   sync = new PlayingSync(disk, device, () => Date.now(), transport.testMode);
   lookAround = true;
+  if (Lan.possible) lan ??= new Lan(heard, linked);
   // Automated tests look when they say so (window.__wave): a test run never shows up on the user's devices by itself.
   if (transport.testMode) return;
+  void listen();
   document.addEventListener('visibilitychange', onVisibility);
   schedule(0);
+}
+
+/** The PC listens on the home network and says where in its file on Disk. */
+export async function listen() {
+  const info = sync && (await lan?.listen(sync.device));
+  if (info) await sync?.publishLan(info).catch((e) => console.warn('[lan]', e));
+  return info ?? null;
 }
 
 export function stopElsewhere() {
@@ -96,6 +116,9 @@ export function stopElsewhere() {
   timer = null;
   document.removeEventListener('visibilitychange', onVisibility);
   if (useElsewhere.getState().controlling) leave('keep');
+  void lan?.stop();
+  if (isIos && awake > 0) void OniPlayer.setAwake({ seconds: 0 }).catch(() => {});
+  awake = -1;
   sync?.clear();
   sync = null;
   set({ devices: [], controlling: null });
@@ -107,7 +130,10 @@ function schedule(ms = delay()) {
 }
 
 function delay() {
-  if (useElsewhere.getState().controlling || watched) return FAST;
+  const target = useElsewhere.getState().controlling;
+  // Linked on the home network: what plays there comes over the link, Disk is only looked at now and then.
+  if (target && lan?.isOpen(target.id)) return OPEN;
+  if (target || watched) return FAST;
   return !document.hidden || usePlayer.getState().playing ? OPEN : IDLE;
 }
 
@@ -133,6 +159,8 @@ export async function look(around = false) {
     if (commands.length) publishSoon(300);
     if (changed) showDevices();
     if (target) follow();
+    // The phone links to the PCs that listen (only tried again for a newer file, or after a while).
+    for (const f of sync.lanFiles()) void lan?.connect(sync.device, f);
     if (lookAround) {
       lookAround = false;
       takeUp();
@@ -150,6 +178,11 @@ export async function look(around = false) {
 function showDevices() {
   const now = Date.now();
   set({ devices: sync!.others().map((f) => ({ device: f.device, live: isLive(f, now), track: f.queue[f.index] })) });
+  const seconds = sync!.others().length ? AWAKE : 0;
+  if (isIos && seconds !== awake) {
+    awake = seconds;
+    void OniPlayer.setAwake({ seconds }).catch(() => {});
+  }
 }
 
 /** Opened, or back in view, with nothing playing here: the other device's track, or its remote. */
@@ -280,10 +313,39 @@ function send(fn: CommandName, args: unknown[]) {
   }
   sentAt = now;
   show();
+  // Over the link at once, if there is one; through Disk as well (the press is done once, by its id).
+  const command = sync.press(target.id, fn, sent);
+  const quick = lan?.send(target.id, JSON.stringify({ t: 'cmd', to: target.id, command }));
   void sync
-    .send(target.id, fn, sent)
+    .flush(target.id)
     .catch((e) => console.warn('[now]', e))
-    .finally(() => schedule(FAST));
+    .finally(() => !quick && schedule(FAST));
+}
+
+/** A message over the home network: what plays on a linked device, or a press for this one. */
+function heard(from: string, text: string) {
+  if (!sync) return;
+  let msg: { t?: string; file?: NowFile; to?: string; command?: Command } | null = null;
+  try {
+    msg = JSON.parse(text);
+  } catch {
+    return;
+  }
+  if (msg?.t === 'now' && msg.file && msg.file.device?.id === from && sync.receive(msg.file)) {
+    showDevices();
+    if (useElsewhere.getState().controlling?.id === from) follow();
+  }
+  if (msg?.t === 'cmd' && msg.to === sync.device.id && msg.command && sync.accept(msg.command)) {
+    run(msg.command);
+    // The answer at once, even if the press changed nothing (the remote takes no answer for "gone").
+    setTimeout(tell, 50);
+  }
+}
+
+/** A link came (or went): the linked device learns at once what plays here. */
+function linked() {
+  tell();
+  schedule();
 }
 
 /** A press from this device's remote. */
@@ -339,29 +401,41 @@ function publishSoon(ms = 600) {
   publishTimer = setTimeout(() => void publish(), ms);
 }
 
+/** What plays here, for the others (null: nothing, or this one shows another device's). */
+function nowPlaying(): NowPlaying | null {
+  const s = usePlayer.getState();
+  if (isElsewhere() || !s.queue[s.index]) return null;
+  return {
+    queue: s.queue,
+    index: s.index,
+    offset: 0,
+    title: sourceTitle(s.source),
+    label: labelOf(s.source),
+    wave: s.source?.kind === 'wave' ? s.source : undefined,
+    playing: s.playing,
+    position: s.position,
+    duration: s.duration,
+    shuffle: s.shuffle,
+    repeat: s.repeat,
+  };
+}
+
+/** What plays here to the devices linked on the home network, at once. */
+function tell() {
+  const state = nowPlaying();
+  if (!sync || !lan || !state) return;
+  lan.broadcast(JSON.stringify({ t: 'now', file: sync.fileFor(state, changedAt) }));
+}
+
 export async function publish() {
   if (publishTimer) clearTimeout(publishTimer);
   publishTimer = null;
-  const s = usePlayer.getState();
-  if (!sync || isElsewhere() || !s.queue[s.index]) return;
+  const state = nowPlaying();
+  if (!sync || !state) return;
   publishedAt = Date.now();
+  tell();
   try {
-    await sync.publish(
-      {
-        queue: s.queue,
-        index: s.index,
-        offset: 0,
-        title: sourceTitle(s.source),
-        label: labelOf(s.source),
-        wave: s.source?.kind === 'wave' ? s.source : undefined,
-        playing: s.playing,
-        position: s.position,
-        duration: s.duration,
-        shuffle: s.shuffle,
-        repeat: s.repeat,
-      },
-      changedAt,
-    );
+    await sync.publish(state, changedAt);
   } catch (e) {
     console.warn('[now]', e);
   }
@@ -377,12 +451,17 @@ usePlayer.subscribe((s, p) => {
       changedAt = Date.now();
       storage.setItem('now.changed', String(changedAt));
     }
+    tell();
     publishSoon(s.playing !== p.playing || sought ? 300 : 600);
-  } else if (s.queue.length !== p.queue.length || s.shuffle !== p.shuffle || s.repeat !== p.repeat) publishSoon(2000);
+  } else if (s.queue.length !== p.queue.length || s.shuffle !== p.shuffle || s.repeat !== p.repeat) {
+    tell();
+    publishSoon(2000);
+  }
 });
 
 /** For the automated tests (window.__wave). */
 export const elsewhereSync = () => sync;
+export const elsewhereLan = () => lan;
 
 /** A device's name in the interface language ("PC", "iPhone"). */
 export function deviceName(d: Device) {

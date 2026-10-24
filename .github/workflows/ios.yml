@@ -64,6 +64,8 @@ jobs:
           xcrun simctl boot "$DEVICE"
           xcrun simctl bootstatus "$DEVICE" -b
           xcrun simctl install "$DEVICE" build/sim/Build/Products/Debug-iphonesimulator/App.app
+          # A stand-in PC for the home-network link (src/ios-smoke.ts, lanLink).
+          node tests/lan-echo.mjs > lan-echo.log 2>&1 &
           xcrun simctl spawn "$DEVICE" log stream --level debug --style compact --predicate 'process == "App"' > app.log 2>&1 &
           LOG=$!
           # Capacitor prints the page's console to stdout, not to the system log.

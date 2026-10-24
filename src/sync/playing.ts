@@ -57,8 +57,21 @@ export interface CommandFile {
 
 const NOW = 'now-';
 const CMD = 'cmd-';
+const LAN = 'lan-';
 export const nowFileOf = (id: string) => `${NOW}${id}.json`;
 export const commandFileOf = (to: string, from: string) => `${CMD}${to}-${from}.json`;
+export const lanFileOf = (id: string) => `${LAN}${id}.json`;
+
+/** Where a PC listens on the home network (sync/lan.ts): its file, with the key a connection says. */
+export interface LanFile {
+  v: 1;
+  device: Device;
+  at: number;
+  hosts: string[];
+  port: number;
+  key: string;
+  test?: boolean;
+}
 
 /** A playing device renews its file this often; not renewed for LIVE, it has stopped (closed, no network). */
 export const RENEW = 30_000;
@@ -95,6 +108,8 @@ export class PlayingSync {
   private done = new Set<string>();
   /** This device's presses, per device it controls. */
   private outbox = new Map<string, CommandFile>();
+  /** Where the other devices listen on the home network (sync/lan.ts), by file name. */
+  private lans = new Map<string, { stamp: string; file: LanFile }>();
   private seq = 0;
 
   constructor(disk: DiskLike, device: Device, now = () => Date.now(), test = false) {
@@ -110,8 +125,15 @@ export class PlayingSync {
 
   /** Writes what plays here. `changed`: when it last changed (kept by the caller). */
   async publish(state: NowPlaying, changed: number) {
+    const file = this.fileFor(state, changed);
+    await this.disk.write(this.fileName, JSON.stringify(file));
+    return file;
+  }
+
+  /** What plays here, as it goes in the file (and over the home network). */
+  fileFor(state: NowPlaying, changed: number): NowFile {
     const from = Math.max(0, state.index - BEHIND);
-    const file: NowFile = {
+    return {
       v: 1,
       device: this.device,
       ...state,
@@ -122,8 +144,33 @@ export class PlayingSync {
       changed,
       ...(this.test ? { test: true } : {}),
     };
-    await this.disk.write(this.fileName, JSON.stringify(file));
-    return file;
+  }
+
+  /** Another device's file that came over the home network: kept if it is newer than the one known. */
+  receive(file: NowFile) {
+    if (file?.v !== 1 || !file.device || file.device.id === this.device.id || Boolean(file.test) !== this.test) return false;
+    const name = nowFileOf(file.device.id);
+    const known = this.theirs.get(name);
+    if (known && known.file.at >= file.at) return false;
+    this.theirs.set(name, { stamp: known?.stamp ?? '', file });
+    return true;
+  }
+
+  /** A press that came over the home network: true if it is to be done (not done yet). */
+  accept(c: Command) {
+    if (!c?.id || this.done.has(c.id)) return false;
+    this.done.add(c.id);
+    return true;
+  }
+
+  /** Where this device listens on the home network, for the others. */
+  async publishLan(info: Omit<LanFile, 'at'>) {
+    await this.disk.write(lanFileOf(this.device.id), JSON.stringify({ ...info, at: this.now() }));
+  }
+
+  /** Where the other devices listen, as last read. */
+  lanFiles(): LanFile[] {
+    return [...this.lans.values()].map((x) => x.file);
   }
 
   /**
@@ -142,6 +189,12 @@ export class PlayingSync {
       const file = await this.readJson<NowFile>(f.name);
       // A file of a later Oni (another format), a broken one, or a test run's (unless this is one).
       if (file?.v !== 1 || !file.device || file.device.id === this.device.id || Boolean(file.test) !== this.test) continue;
+      // What came over the home network meanwhile is newer than this file: kept.
+      const known = this.theirs.get(f.name);
+      if (known && known.file.at > file.at) {
+        known.stamp = stamp(f);
+        continue;
+      }
       this.theirs.set(f.name, { stamp: stamp(f), file });
       changed = true;
     }
@@ -150,6 +203,14 @@ export class PlayingSync {
         this.theirs.delete(name);
         changed = true;
       }
+    }
+
+    for (const f of listed) {
+      if (!f.name.startsWith(LAN) || !f.name.endsWith('.json') || f.name === lanFileOf(this.device.id)) continue;
+      if (this.lans.get(f.name)?.stamp === stamp(f)) continue;
+      const file = await this.readJson<LanFile>(f.name);
+      if (file?.v !== 1 || !file.device || !Array.isArray(file.hosts) || Boolean(file.test) !== this.test) continue;
+      this.lans.set(f.name, { stamp: stamp(f), file });
     }
 
     const commands: Command[] = [];
@@ -181,12 +242,25 @@ export class PlayingSync {
 
   /** A press for another device: it goes up with the ones of the last minutes. */
   async send(to: string, fn: CommandName, args: unknown[] = []) {
+    this.press(to, fn, args);
+    await this.flush(to);
+  }
+
+  /** A press made, kept for `to` (it goes up with flush); the same press may go over the home network too. */
+  press(to: string, fn: CommandName, args: unknown[] = []): Command {
     const now = this.now();
     const file = this.outbox.get(to) ?? { v: 1, from: this.device, at: now, commands: [] };
-    file.commands = [...file.commands.filter((c) => now - c.at < KEEP), { id: `${this.device.id}.${now}.${++this.seq}`, at: now, fn, args }];
+    const c: Command = { id: `${this.device.id}.${now}.${++this.seq}`, at: now, fn, args };
+    file.commands = [...file.commands.filter((x) => now - x.at < KEEP), c];
     file.at = now;
     this.outbox.set(to, file);
-    await this.disk.write(commandFileOf(to, this.device.id), JSON.stringify(file));
+    return c;
+  }
+
+  /** The presses for `to` up to Disk. */
+  async flush(to: string) {
+    const file = this.outbox.get(to);
+    if (file) await this.disk.write(commandFileOf(to, this.device.id), JSON.stringify(file));
   }
 
   /** Tells `to` this device still looks at it (it then looks for presses often); at most every STILL_WATCHING. */
@@ -203,6 +277,7 @@ export class PlayingSync {
   /** Forgets the others (Disk disconnected). */
   clear() {
     this.theirs.clear();
+    this.lans.clear();
     this.inbox.clear();
     this.outbox.clear();
   }

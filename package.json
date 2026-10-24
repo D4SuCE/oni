@@ -108,6 +108,7 @@
   "author": "D4SuCE",
   "dependencies": {
     "@capacitor/app": "^8.1.2",
-    "electron-updater": "^6.8.9"
+    "electron-updater": "^6.8.9",
+    "ws": "^8.22.0"
   }
 }

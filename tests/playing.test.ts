@@ -152,5 +152,44 @@ await test("a test run's device is seen by test runs only", async () => {
   assert(otherTest.others().length === 1, 'a test run did not see another');
 });
 
+await test('what came over the home network stays when an older file is read from Disk', async () => {
+  const { clock, pc, phone } = pair();
+  await pc.publish(state({ playing: true }), clock.t);
+  await phone.poll();
+  clock.t += 2_000;
+  // The PC paused: over the link at once (its Disk file goes up later).
+  const quick = pc.fileFor(state({ playing: false, position: 32 }), clock.t);
+  assert(phone.receive(quick), 'not taken');
+  assert(!phone.receive({ ...quick, at: quick.at - 1 }), 'an older one taken');
+  const before = phone.others()[0];
+  await phone.poll();
+  assert(phone.others()[0] === before && !phone.others()[0].playing, 'the older Disk file came back over it');
+});
+
+await test('a press over the home network and the same through Disk are done once', async () => {
+  const { pc, phone } = pair();
+  const c = phone.press('pc', 'toggle');
+  assert(pc.accept(c), 'not accepted');
+  assert(!pc.accept(c), 'accepted twice');
+  await phone.flush('pc');
+  const got = await pc.poll();
+  assert(got.commands.length === 0, `done again from Disk: ${JSON.stringify(got.commands)}`);
+});
+
+await test("where a PC listens is read from its file; a test run's is not for the user's devices", async () => {
+  const clock = { t: 1_000_000_000 };
+  const { disk } = fakeDisk(clock);
+  const pc = new PlayingSync(disk, { id: 'pc', platform: 'electron' }, () => clock.t);
+  const phone = new PlayingSync(disk, { id: 'phone', platform: 'ios' }, () => clock.t);
+  const e2e = new PlayingSync(disk, { id: 'e2e', platform: 'electron' }, () => clock.t, true);
+  await pc.publishLan({ v: 1, device: pc.device, hosts: ['192.168.0.100'], port: 50000, key: 'k' });
+  await e2e.publishLan({ v: 1, device: e2e.device, hosts: ['127.0.0.1'], port: 50001, key: 'k', test: true });
+  await phone.poll();
+  const files = phone.lanFiles();
+  assert(files.length === 1 && files[0].device.id === 'pc' && files[0].port === 50000 && files[0].at === clock.t, JSON.stringify(files));
+  await pc.poll();
+  assert(pc.lanFiles().length === 0, 'its own file read');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

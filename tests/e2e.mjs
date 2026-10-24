@@ -1506,6 +1506,66 @@ await step('another device in the player: its paused track taken up at its secon
   if (left.some((f) => names.includes(f.name))) throw new Error('files left on Disk');
 });
 
+await step('the home network: the PC listens where its file on Disk says; a phone with the key learns what plays at once and its Pause is done here in under a second; a wrong key is refused (removed again)', async () => {
+  // The user, 25.10.2026: the remote "as fast as possible" (electron/lan.cjs, src/sync/lan.ts).
+  if (!(await page.evaluate(() => window.__wave.sync.useSync.getState().connected))) {
+    console.log('       skipped: no YANDEX_DISK_TOKEN');
+    return;
+  }
+  const { WebSocket } = await import('ws');
+  const ownId = await page.evaluate(() => window.__wave.sync.deviceSync.device.id);
+  const lanName = `lan-${ownId}.json`;
+  const phone = { id: `e2ephone${Date.now()}`, platform: 'ios' };
+  let ws = null;
+  try {
+    const info = await page.evaluate(() => window.__wave.sync.elsewhere.listen());
+    if (!info?.port || !info.key || info.hosts?.[0] !== '127.0.0.1') throw new Error(`listening: ${JSON.stringify(info && { ...info, key: '…' })}`);
+    const file = await page.evaluate((n) => window.__wave.sync.disk.read(n).then((t) => JSON.parse(t)), lanName);
+    if (file.port !== info.port || file.key !== info.key || !file.test) throw new Error(`file on Disk: port ${file.port}, test ${file.test}`);
+
+    const connect = (key) => new Promise((resolve) => {
+      const s = new WebSocket(`ws://127.0.0.1:${info.port}`);
+      const got = [];
+      s.on('open', () => s.send(JSON.stringify({ t: 'hello', key, device: phone })));
+      s.on('message', (raw) => {
+        got.push(JSON.parse(String(raw)));
+        if (got.length === 1) resolve({ s, got, welcomed: got[0].t === 'welcome' });
+      });
+      s.on('close', (code) => resolve({ s, got, closed: code }));
+      setTimeout(() => resolve({ s, got }), 4000);
+    });
+    const wrong = await connect('not the key');
+    if (wrong.closed !== 4001) throw new Error(`a wrong key: ${JSON.stringify({ closed: wrong.closed, got: wrong.got })}`);
+
+    const tracks = await page.evaluate(() => window.__wave.api.chart().then((l) => l.filter((t) => t.available !== false).slice(0, 2)));
+    await page.evaluate((t) => window.__wave.playTracks(t, 0, 'e2e home network'), tracks);
+    await waitPlaying(1.5);
+    const link = await connect(info.key);
+    if (!link.welcomed) throw new Error(`not welcomed: ${JSON.stringify(link.got)}`);
+    ws = link.s;
+    const nowFile = (playing) => link.got.find((m) => m.t === 'now' && m.file?.playing === playing && m.file.queue[m.file.index]?.id === tracks[0].id);
+    const waitFor = async (what, ms) => {
+      for (const until = Date.now() + ms; Date.now() < until; await page.waitForTimeout(50)) if (what()) return what();
+      return null;
+    };
+    if (!(await waitFor(() => nowFile(true), 2000))) throw new Error(`what plays did not come: ${JSON.stringify(link.got.map((m) => m.t))}`);
+
+    const sent = Date.now();
+    ws.send(JSON.stringify({ t: 'cmd', to: ownId, command: { id: `${phone.id}.1`, at: sent, fn: 'pause', args: [] } }));
+    await page.waitForFunction(() => window.__wave.audio.paused, null, { timeout: 3000 });
+    const took = Date.now() - sent;
+    const back = await waitFor(() => nowFile(false), 2000);
+    const answered = Date.now() - sent;
+    if (took > 1000 || !back) throw new Error(`pause in ${took} ms, paused state ${back ? `back in ${answered} ms` : 'never came back'}`);
+    console.log(`       paused ${took} ms after the press, the paused state back in ${answered} ms`);
+  } finally {
+    ws?.close();
+    await page.evaluate((n) => window.__wave.sync.disk.remove(n), lanName);
+  }
+  const left = await page.evaluate(() => window.__wave.sync.disk.list());
+  if (left.some((f) => f.name === lanName)) throw new Error('file left on Disk');
+});
+
 await step('recap: the month summed up from the plays (here and, for the last days, everywhere); play it, save it as a playlist (removed again)', async () => {
   await page.click('[data-testid="history-recap"]');
   await page.waitForSelector('[data-testid="recap-track"]', { timeout: 30000 });
