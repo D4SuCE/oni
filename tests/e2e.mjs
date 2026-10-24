@@ -29,7 +29,14 @@ page.on('pageerror', (e) => consoleErrors.push(String(e)));
  * checks get this much more room there; on the PC they stay as they are. */
 const SLOW = process.env.CI ? 3 : 1;
 
+/** E2E_ONLY=<regex>: only the steps it matches, after the first (the app starts, signed in). For
+ * trying one step again; a finished change still runs them all. */
+const only = process.env.E2E_ONLY ? new RegExp(process.env.E2E_ONLY, 'i') : null;
+let first = true;
+
 async function step(name, fn) {
+  if (only && !first && !only.test(name)) return;
+  first = false;
   try {
     await fn();
     passed++;
@@ -1436,11 +1443,13 @@ await step('another device in the player: its paused track taken up at its secon
   const ownId = await page.evaluate(() => window.__wave.sync.deviceSync.device.id);
   const names = [`now-${phoneId}.json`, `cmd-${phoneId}-${ownId}.json`, `cmd-${ownId}-${phoneId}.json`, `now-${ownId}.json`];
   const write = (name, file) => page.evaluate(([n, t]) => window.__wave.sync.disk.write(n, t), [name, JSON.stringify(file)]);
-  const read = (name) => page.evaluate((n) => window.__wave.sync.disk.read(n).then((t) => JSON.parse(t)), name);
+  const read = (name) => page.evaluate((n) => window.__wave.sync.disk.read(n).then((t) => JSON.parse(t)), name).catch((e) => {
+    throw new Error(`${name}: ${e.message.split('\n')[0]}`);
+  });
   try {
     await page.evaluate(() => window.__wave.audio.pause());
     await page.waitForFunction(() => !window.__wave.usePlayer.getState().playing);
-    const queue = await page.evaluate(() => window.__wave.usePlayer.getState().queue.slice(0, 3));
+    const queue = await page.evaluate(() => window.__wave.api.chart().then((l) => l.filter((t) => t.available !== false).slice(0, 3)));
     if (queue.length < 3) throw new Error(`only ${queue.length} tracks to work with`);
     const phone = (over) => ({
       v: 1, device: { id: phoneId, platform: 'ios' }, queue, index: 1, offset: 0, title: 'e2e phone list', playing: false, position: 40,
@@ -1469,8 +1478,10 @@ await step('another device in the player: its paused track taken up at its secon
     // Next goes there (its file), and shows here at once.
     await page.click('[data-testid="next"]');
     await page.waitForFunction((id) => { const s = window.__wave.usePlayer.getState(); return s.queue[s.index]?.id === id; }, queue[2].id, { timeout: 3000 });
-    await page.waitForFunction((n) => window.__wave.sync.disk.list().then((l) => l.some((f) => f.name === n)), names[1], { timeout: 15000, polling: 1000 });
-    const sent = await read(names[1]);
+    // The press goes up on its own after it shows: read once it is there.
+    let sent = null;
+    for (let i = 0; i < 15 && !sent?.commands?.some((c) => c.fn === 'next'); i++) sent = await read(names[1]).catch(() => page.waitForTimeout(1000).then(() => null));
+    if (!sent) throw new Error('the press never went up');
     if (sent.commands.at(-1)?.fn !== 'next') throw new Error(`sent: ${JSON.stringify(sent.commands)}`);
 
     // 3. "Play here": it plays here from where it was there.
