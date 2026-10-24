@@ -88,7 +88,7 @@
   Секрет `RELEASES_TOKEN` в D4SuCE/oni — токен с правом выпусков D4SuCE/oni-releases (для `release.yml`).
   Обновления приложения Яндекса: `https://desktop.app.music.yandex.net/stable/latest.yml` (узлы CDN отвечают
   разными версиями, пока новая раскатывается — берётся самая новая из нескольких ответов).
-- Автопилот (с 25.10.2026 19:00 МСК): две routine «Oni — разработка» (:00 и :30 UTC, до 31.10, Opus 5.5) делают
+- Автопилот (с 25.10.2026 19:00 МСК): две routine «Oni — разработка» (дважды в час, до 31.10 UTC, Opus 5.5; trig_01HTfTUEwS3b5N4dz8q5yvBJ, trig_01Nbbsp4SLGd8gV2M98engab) делают
   по одной задаче из «Автопилота» в ROADMAP по `docs/autopilot.md`; замок — ветка `autopilot`. Выключить — на
   https://claude.ai/code/routines.
 - Сторож на ПК (запасной, задача Планировщика «Oni - Yandex Music watch», `scripts/ym-watch.ps1`,
