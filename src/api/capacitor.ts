@@ -144,6 +144,10 @@ export function capacitorTransport(): Transport {
         responseType: 'text',
       });
       let body: any = resp.data;
+      // Text asked for is text: the native side parses anything sent as application/json itself
+      // (CapacitorHttp, HttpRequestHandler.buildResponse), whatever responseType says. A file from
+      // Yandex Disk came as an object, and the shared history skipped the PC's file as broken.
+      if (req.responseType === 'text' && typeof body !== 'string') body = JSON.stringify(body);
       if (req.responseType !== 'text' && typeof body === 'string') {
         try {
           body = JSON.parse(body);

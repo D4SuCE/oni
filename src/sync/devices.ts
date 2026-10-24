@@ -86,8 +86,8 @@ export class DeviceSync {
         if (file?.v !== 1 || !file.device || file.device.id === this.device.id) continue;
         this.theirs.set(f.name, { modified: f.modified, file });
       } catch (e) {
-        if (e instanceof SyntaxError) continue;
-        throw e;
+        if (!(e instanceof SyntaxError)) throw e;
+        console.warn(`[sync] ${f.name} is not readable, left alone`, e); // in the log, not silently
       }
     }
     this.apply();
