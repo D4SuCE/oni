@@ -146,7 +146,8 @@ await step('after a restart My Wave goes on: next keeps loading new tracks', asy
 await step('after a restart quick skips do not stall: the wave fills up as Oni opens', async () => {
   // The user: after a restart, three or four quick skips and then "next" did nothing until the
   // wave had fetched more. It tops up as soon as Oni is open now, and keeps more ahead.
-  await page.evaluate(() => window.__wave.audio.play());
+  // A load the last step left under way may cut this play off (AbortError) — Oni ignores that too.
+  await page.evaluate(() => window.__wave.audio.play().catch(() => {}));
   await page.waitForTimeout(1500);
   await app.close();
   ({ app, page } = await launch());
