@@ -382,7 +382,7 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
   set({ index, loading: true, position: 0, duration: (t.durationMs || 0) / 1000, error: null });
   opening = seq;
   listened = 0;
-  play = { id: crypto.randomUUID(), startedAt: new Date() };
+  newPlay();
   lastTime = 0;
   updateMediaSession(t);
   try {
@@ -461,26 +461,56 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
   persistSoon();
 }
 
+/** What of the current play is written already: it is written as it plays, not only when the track
+ * changes (the user: a track heard almost to its end, then Oni closed, never reached History). */
+let written = { recent: false, heard: false, length: 0 };
+/** Seconds between updates of a counted play's length in the log (Recap's minutes). */
+const RELOG = 30;
+
+function addRecent(t: Track) {
+  const source = get().source;
+  recentPlays.add({
+    track: t,
+    at: play.startedAt.getTime(),
+    source: sourceTitle(source),
+    label: labelOf(source),
+    from: source?.kind === 'list' ? source.from : undefined,
+  });
+  useRecent.setState((s) => ({ version: s.version + 1 }));
+}
+
+/** In History after 5 s, counted as heard (repeat filter, Recap) after 30 s, its length kept up. */
+function writeAsItPlays() {
+  const t = current();
+  if (!t) return;
+  if (!written.recent && listened >= 5) {
+    written.recent = true;
+    addRecent(t);
+  }
+  if (!written.heard && listened >= HEARD_SECONDS) {
+    written.heard = true;
+    history.record(t, listened, false);
+  } else if (!written.heard || listened - written.length < RELOG) return;
+  written.length = listened;
+  playLog.record(t, play.startedAt.getTime(), listened);
+}
+
+/** A play starts: its own report to Yandex and its own entries in History and the log. */
+function newPlay() {
+  play = { id: crypto.randomUUID(), startedAt: new Date() };
+  written = { recent: false, heard: false, length: 0 };
+}
+
 /** Called whenever we leave the current track, before switching. */
 function finishCurrent(ended: boolean) {
   const t = current();
   if (!t || (listened < 1 && !ended)) return;
-  history.record(t, listened, ended);
+  if (!written.heard) history.record(t, listened, ended);
   if (ended || listened >= HEARD_SECONDS) playLog.record(t, play.startedAt.getTime(), listened);
   stats.record(originOf(t), listened, (t.durationMs || 0) / 1000, ended);
   recsFeedback.recordPlay(t, playOutcome(listened, (t.durationMs || 0) / 1000, ended), Date.now());
   reportPlay(t, ended);
-  if (ended || listened >= 5) {
-    const source = get().source;
-    recentPlays.add({
-      track: t,
-      at: play.startedAt.getTime(),
-      source: sourceTitle(source),
-      label: labelOf(source),
-      from: source?.kind === 'list' ? source.from : undefined,
-    });
-    useRecent.setState((s) => ({ version: s.version + 1 }));
-  }
+  if (!written.recent && (ended || listened >= 5)) addRecent(t);
   if (get().source?.kind === 'wave') {
     engine?.feedback(ended ? 'trackFinished' : 'skip', t, listened);
     set({ waveStats: engine ? { ...engine.stats } : null });
@@ -954,7 +984,10 @@ audio.addEventListener('timeupdate', () => {
   if (crossLoading) return;
   const t = audio.currentTime;
   const delta = t - lastTime;
-  if (!audio.paused && delta > 0 && delta < 2) listened += delta;
+  if (!audio.paused && delta > 0 && delta < 2) {
+    listened += delta;
+    writeAsItPlays();
+  }
   lastTime = t;
   set({ position: t });
   // Crossfade: the next track begins this many seconds before this one ends (not on repeat-one,
@@ -985,6 +1018,7 @@ audio.addEventListener('ended', () => {
   }
   if (get().repeat === 'one') {
     finishCurrent(true);
+    newPlay(); // the same track again is another play
     audio.currentTime = 0;
     audio.play();
     return;

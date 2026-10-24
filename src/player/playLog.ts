@@ -101,9 +101,14 @@ export class PlayLog {
     this.remote = devices;
   }
 
-  /** A play heard here: `seconds` it played. */
+  /** A play heard here: `seconds` it played. Written as it plays: the same play again (same start) only updates its length. */
   record(track: Track, at: number, seconds: number) {
-    this.add(track, { id: String(track.id), at, s: Math.round(seconds) });
+    const id = String(track.id);
+    const plays = this.data.plays;
+    let same: LoggedPlay | undefined;
+    for (let i = plays.length - 1; i >= 0 && !same; i--) if (plays[i].id === id && plays[i].at === at && !plays[i].r) same = plays[i];
+    if (same) same.s = Math.round(seconds);
+    else this.add(track, { id, at, s: Math.round(seconds) });
     this.save();
   }
 

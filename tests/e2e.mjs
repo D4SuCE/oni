@@ -1336,6 +1336,19 @@ await step('sound settings: equalizer hears the music', async () => {
   await page.evaluate(() => window.__wave.audio.pause());
 });
 
+await step('a track is in History after 5 s while it still plays, not only once the next one starts', async () => {
+  // Found by the user: a track heard almost to its end, then Oni closed, never reached History.
+  await page.click('[data-testid="next"]');
+  await page.waitForFunction(() => !window.__wave.audio.paused && window.__wave.audio.currentTime < 3, null, { timeout: 20000 });
+  const title = (await player()).title;
+  await waitPlaying(7, 30000);
+  await page.click('[data-testid="nav-history"]');
+  await page.click('[data-testid="history-app"]');
+  const first = await page.locator('.history-group .track-row .tr-title').first().innerText();
+  if (!first.includes(title)) throw new Error(`playing "${title}", History starts with "${first}"`);
+  if ((await player()).title !== title) throw new Error('the track changed meanwhile');
+});
+
 await step('history: this app and all devices', async () => {
   await page.click('[data-testid="nav-history"]');
   // Earlier steps played several tracks for longer than the 5 s that counts as a play.

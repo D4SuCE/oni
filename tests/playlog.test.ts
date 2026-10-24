@@ -92,5 +92,18 @@ await test('kept across a restart; plays older than ~13 months go; seeded from t
   assert(later.plays === 1 && later.tracks[0].track.id === 'd', `pruned: ${later.tracks.map((t) => t.track.id)}`);
 });
 
+await test('a play written as it plays: the same start again only updates its length', () => {
+  const log = new PlayLog(memory(), () => Date.parse('2026-10-24T20:00:00'));
+  const at = Date.parse('2026-10-24T19:00:00');
+  const t = track('7', [artist(1, 'A')]);
+  log.record(t, at, 30);
+  log.record(t, at, 60);
+  log.record(t, at, 185);
+  log.record(t, at + 200_000, 40); // played again
+  const r = log.recap({ from: at - 1, to: at + 86_400_000 });
+  assert(r.plays === 2, `plays ${r.plays}`);
+  assert(Math.round(r.minutes * 60) === 225, `seconds ${r.minutes * 60}`);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);
