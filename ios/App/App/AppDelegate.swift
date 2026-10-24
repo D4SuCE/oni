@@ -12,6 +12,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
         // Oni's actions (Siri, Shortcuts, the widget, Control Center) go the lock screen's way.
         OniCommands.send = { RemotePlugin.press($0) }
+        // The widget's buttons while Oni is awake (NowPlayingShare.sendCommand).
+        CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), nil, { _, _, _, _, _ in
+            DispatchQueue.main.async {
+                if let name = NowPlayingShare.takeCommand() { OniCommands.send?(name) }
+            }
+        }, NowPlayingShare.ring as CFString, nil, .deliverImmediately)
         return true
     }
 

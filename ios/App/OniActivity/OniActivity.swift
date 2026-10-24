@@ -152,6 +152,24 @@ struct RemoteEntry: TimelineEntry {
     var cover: UIImage? = nil
 }
 
+/// The widget's own buttons while Oni plays: done in the extension, which only rings the app
+/// (NowPlayingShare.sendCommand) — iOS is not asked to run anything in Oni, so it opens nothing.
+@available(iOS 17.0, *)
+struct WidgetCommandIntent: AppIntent {
+    static var title: LocalizedStringResource = "Oni"
+    static var isDiscoverable = false
+
+    @Parameter(title: "Команда") var name: String
+
+    init() {}
+    init(_ name: String) { self.name = name }
+
+    func perform() async throws -> some IntentResult {
+        NowPlayingShare.sendCommand(name)
+        return .result()
+    }
+}
+
 /// One entry, drawn again when the app says the track changed (WidgetCenter.reloadTimelines).
 struct RemoteProvider: TimelineProvider {
     private func entry() -> RemoteEntry {
@@ -235,7 +253,7 @@ private struct RoundButton<I: AppIntent>: View {
 
     private var label: String {
         switch symbol {
-        case "playpause.fill": return "Пауза / продолжить"
+        case "playpause.fill", "pause.fill", "play.fill": return "Пауза / продолжить"
         case "forward.fill": return "Следующий трек"
         case "heart.fill": return "Мне нравится"
         default: return symbol
@@ -295,6 +313,23 @@ struct RemoteView: View {
     @Environment(\.widgetFamily) private var family
     var entry = RemoteEntry(date: Date())
 
+    private var playing: Bool { entry.track?.playing ?? false }
+
+    /// Play/pause, next and like: straight to Oni while it plays; paused (Oni may be asleep) through
+    /// iOS, which wakes it (and on SideStore opens it).
+    @ViewBuilder private func button(_ name: String, size: CGFloat, tint: Color = Palette.text) -> some View {
+        let symbol = name == "toggle" ? (playing ? "pause.fill" : "play.fill") : name == "next" ? "forward.fill" : "heart.fill"
+        if playing {
+            RoundButton(intent: WidgetCommandIntent(name), symbol: symbol, size: size, tint: tint)
+        } else if name == "toggle" {
+            RoundButton(intent: TogglePlaybackIntent(), symbol: symbol, size: size, tint: tint)
+        } else if name == "next" {
+            RoundButton(intent: NextTrackIntent(), symbol: symbol, size: size, tint: tint)
+        } else {
+            RoundButton(intent: LikeIntent(), symbol: symbol, size: size, tint: tint)
+        }
+    }
+
     /// The track playing, or the brand before anything played.
     @ViewBuilder private func top(compact: Bool) -> some View {
         if let track = entry.track, !track.title.isEmpty {
@@ -332,9 +367,9 @@ struct RemoteView: View {
                     WaveButton()
                 }
                 HStack(spacing: 10) {
-                    RoundButton(intent: TogglePlaybackIntent(), symbol: "playpause.fill", size: 46)
-                    RoundButton(intent: NextTrackIntent(), symbol: "forward.fill", size: 46)
-                    RoundButton(intent: LikeIntent(), symbol: "heart.fill", size: 46, tint: Palette.red)
+                    button("toggle", size: 46)
+                    button("next", size: 46)
+                    button("like", size: 46, tint: Palette.red)
                 }
             }
             .padding(16)
@@ -344,11 +379,11 @@ struct RemoteView: View {
                 Spacer(minLength: 0)
                 WaveButton(compact: true)
                 HStack(spacing: 0) {
-                    RoundButton(intent: TogglePlaybackIntent(), symbol: "playpause.fill", size: 36)
+                    button("toggle", size: 36)
                     Spacer(minLength: 0)
-                    RoundButton(intent: NextTrackIntent(), symbol: "forward.fill", size: 36)
+                    button("next", size: 36)
                     Spacer(minLength: 0)
-                    RoundButton(intent: LikeIntent(), symbol: "heart.fill", size: 36, tint: Palette.red)
+                    button("like", size: 36, tint: Palette.red)
                 }
             }
             .padding(14)

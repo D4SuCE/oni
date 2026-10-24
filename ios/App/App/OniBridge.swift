@@ -346,7 +346,7 @@ public class RemotePlugin: CAPPlugin, CAPBridgedPlugin {
             MPRemoteCommandCenter.shared().likeCommand.isActive = liked
             if artworkURL != self.artworkURL { self.loadArtwork(artworkURL) }
             // The Home screen widget shows what plays (NowPlayingShare.swift).
-            let shared = NowPlayingShare.State(title: title, artist: artist, cover: artworkURL, coverSaved: NowPlayingShare.read()?.coverSaved)
+            let shared = NowPlayingShare.State(title: title, artist: artist, playing: playing, cover: artworkURL, coverSaved: NowPlayingShare.read()?.coverSaved)
             if NowPlayingShare.write(shared) { WidgetCenter.shared.reloadTimelines(ofKind: "OniRemote") }
             call.resolve()
         }
@@ -391,6 +391,10 @@ public class RemotePlugin: CAPPlugin, CAPBridgedPlugin {
         info[MPNowPlayingInfoPropertyPlaybackRate] = player.isPlaying ? 1.0 : 0.0
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         MPNowPlayingInfoCenter.default().playbackState = player.isPlaying ? .playing : .paused
+        if var shared = NowPlayingShare.read(), shared.playing != player.isPlaying {
+            shared.playing = player.isPlaying
+            if NowPlayingShare.write(shared) { WidgetCenter.shared.reloadTimelines(ofKind: "OniRemote") }
+        }
     }
 
     /// For the simulator run: a lock-screen button pressed ({ name }), handled as iOS would hand it
