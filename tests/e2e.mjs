@@ -1402,7 +1402,9 @@ await step("shared history: another device's plays come from Oni's folder on Yan
       log: { plays: [], tracks: {} },
       recent: [{ track, at, source: 'e2e phone' }],
     };
-    await page.evaluate(([name, text]) => window.__wave.sync.disk.write(name, text), [phone, JSON.stringify(file)]);
+    // Yandex's network fails now and then ("fetch failed"): one more try before the step fails.
+    const put = () => page.evaluate(([name, text]) => window.__wave.sync.disk.write(name, text), [phone, JSON.stringify(file)]);
+    await put().catch(() => page.waitForTimeout(3000).then(put));
     await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
     await page.click('[data-testid="sync-now"]');
     await page.waitForFunction(() => !window.__wave.sync.useSync.getState().busy && window.__wave.sync.useSync.getState().at, null, { timeout: 60000 });
