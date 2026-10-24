@@ -11,7 +11,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window?.rootViewController = OniViewController()
         window?.makeKeyAndVisible()
 
-        // Opened by a widget's button (oni://command?do=…): do it (the page ignores such a link).
+        // Opened by a link oni://command?do=… (a shortcut, the widget of trial 4): do it (the page ignores such a link).
         connectionOptions.urlContexts.forEach { _ = Self.runCommand($0.url) }
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)
     }
@@ -21,7 +21,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         if !links.isEmpty { SceneDelegateProxy.shared.scene(scene, openURLContexts: links) }
     }
 
-    /// A widget's button (OniActivity.swift): what it says, as the lock screen's buttons do it
+    /// A command link: what it says, as the lock screen's buttons do it
     /// (RemotePlugin.press: play and pause by the player, the rest by the page once it listens).
     static func runCommand(_ url: URL) -> Bool {
         guard url.scheme == "oni", url.host == "command",
