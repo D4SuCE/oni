@@ -435,12 +435,9 @@ const ru = {
     effects: {
       fusuma: ['Фусума', 'Страница выезжает сбоку, как раздвижная перегородка: вперёд — справа, назад — слева'],
       scroll: ['Свиток', '«Сейчас играет» и шторки раскрываются, как свиток'],
-      hanko: ['Печать', 'Лайк ставится красной печатью ханко'],
-      petals: ['Лепестки', 'От лайка и добавления в плейлист опадают лепестки сакуры'],
-      ink: ['Тушь', 'Обложки проявляются растекающейся тушью'],
       cascade: ['Каскад', 'Карточки и строки появляются друг за другом'],
       hamon: ['Круги на воде', 'От нажатой кнопки расходится тонкое кольцо — видно, что нажалось'],
-    } as Record<'fusuma' | 'scroll' | 'hanko' | 'petals' | 'ink' | 'cascade' | 'hamon', [string, string]>,
+    } as Record<'fusuma' | 'scroll' | 'cascade' | 'hamon', [string, string]>,
     liveCovers: 'Живые обложки',
     liveCoversHint: 'Видеообложки Яндекса там, где они есть, и плавное движение остальных обложек и фона',
     pulse: 'Пульсация в такт',
@@ -1015,9 +1012,6 @@ const en: Dict = {
     effects: {
       fusuma: ['Fusuma', 'A page slides in like a paper door: forward from the right, back from the left'],
       scroll: ['Scroll', 'Now Playing and the side panels unroll like a scroll'],
-      hanko: ['Seal', 'A like is stamped with a red hanko seal'],
-      petals: ['Petals', 'Sakura petals fall from a like or an add to a playlist'],
-      ink: ['Ink', 'Covers bleed in like sumi ink'],
       cascade: ['Cascade', 'Cards and rows come in one after another'],
       hamon: ['Ripples', 'A thin ring spreads from a pressed button, so you see it took'],
     },

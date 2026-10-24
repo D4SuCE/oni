@@ -3842,68 +3842,6 @@ html.anim-scroll .q-sheet {
   }
 }
 
-/* Hanko: a like is stamped like a red seal: pressed down with a slight turn, a red halo around it. */
-html.anim-hanko .hanko {
-  animation: hanko 0.5s cubic-bezier(0.3, 1.4, 0.5, 1);
-}
-@keyframes hanko {
-  0% {
-    transform: scale(1.5) rotate(-12deg);
-    box-shadow: 0 0 0 0 rgba(217, 39, 46, 0.7);
-  }
-  45% {
-    transform: scale(0.88) rotate(4deg);
-  }
-  100% {
-    transform: none;
-    box-shadow: 0 0 0 14px rgba(217, 39, 46, 0);
-  }
-}
-
-/* Petals: a few sakura petals drift down from a like or an add to a playlist. */
-.sakura-petal {
-  position: fixed;
-  z-index: 3000;
-  width: 11px;
-  height: 8px;
-  margin: -4px 0 0 -5px;
-  border-radius: 70% 0 70% 0;
-  background: linear-gradient(135deg, #f6c6d0, #e58ea2);
-  box-shadow: 0 0 4px rgba(229, 142, 162, 0.5);
-  pointer-events: none;
-  animation: petal-fall 1.6s cubic-bezier(0.3, 0.2, 0.6, 1) both;
-}
-@keyframes petal-fall {
-  0% {
-    opacity: 0;
-    transform: translate(0, 0) rotate(0) scale(var(--s));
-  }
-  12% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(var(--s));
-  }
-}
-
-/* Ink: covers bleed in like sumi ink on paper, from the middle out of a grey wash. */
-html.anim-ink .cover img,
-html.anim-ink .card-cover img,
-html.anim-ink .np-cover img {
-  animation: ink-in 0.8s cubic-bezier(0.3, 0.6, 0.3, 1);
-}
-@keyframes ink-in {
-  from {
-    clip-path: circle(12% at 50% 50%);
-    filter: grayscale(1) contrast(1.4) blur(6px);
-    opacity: 0.4;
-  }
-  60% {
-    filter: grayscale(0.4) blur(1px);
-  }
-}
-
 /* Cascade: cards and rows come in one after another (the first dozen; the rest at once). */
 html.anim-cascade .card,
 html.anim-cascade .track-row {
