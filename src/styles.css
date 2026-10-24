@@ -3327,6 +3327,32 @@ kbd {
   padding-top: 14px;
   border-top: 1px solid var(--line);
 }
+.skipped-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 10px;
+}
+.skipped-list > .hint {
+  margin-bottom: 8px;
+}
+.skipped-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+.skipped-name {
+  min-width: 0;
+}
+.skipped-title,
+.skipped-name .hint {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 
 /* iPhone zooms the page into a field whose text is under 16 px (the token field on the sign-in
    screen), and an app has no way to zoom back out. The viewport also forbids zooming (index.html). */

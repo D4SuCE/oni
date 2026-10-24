@@ -5,7 +5,7 @@ import type { Account, Playlist, Track } from './api/types.ts';
 import { api, loadJson, storage, transport } from './api/client.ts';
 import { ApiError, trackKey } from './api/yandex.ts';
 import { tr, useLang } from './i18n.ts';
-import { dropFromQueue, offline, onNetworkLost, setDislikedCheck, setOfflineMode, usePlayer, warmWave, waveFeedback } from './player/player.ts';
+import { dropFromQueue, offline, onNetworkLost, setDislikedCheck, setLikedCheck, setOfflineMode, usePlayer, warmWave, waveFeedback } from './player/player.ts';
 import { startSync } from './sync/index.ts';
 
 export type Route =
@@ -70,6 +70,7 @@ const set = useApp.setState;
 const get = useApp.getState;
 
 setDislikedCheck((id) => get().disliked.has(id));
+setLikedCheck((id) => get().liked.has(id));
 // The wave's filters ran dry and a known track plays after all: said once a wave, not silently
 // (the user, with "Only new" on: "tracks heard three times come again").
 usePlayer.subscribe((s, prev) => {

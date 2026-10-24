@@ -261,7 +261,7 @@ recsFeedback.subscribe(() => shown && useRecs.setState({ mixes: ordered(shown) }
 
 /** "Hide from mixes": gone from every mix at once and for good, without telling Yandex. */
 export function hideFromMixes(t: Track) {
-  recsFeedback.hide(t.id);
+  recsFeedback.hide(t);
   toast(tr().toast.hiddenFromMixes);
 }
 

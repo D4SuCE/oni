@@ -332,6 +332,15 @@ export const current = () => {
   return s.queue[s.index] as Track | undefined;
 };
 
+/** "Skipped" (recs/feedback.ts) leaves the wave too, when "Hide what I skip" is on (the user's choice). */
+const leftOut = (t: Track) => recsFeedback.isSkipped(t.id, Date.now());
+
+let isLiked: (id: string) => boolean = () => false;
+/** The library's likes (store.ts): a liked track's skips never leave it out ("Skipped"). */
+export function setLikedCheck(fn: (id: string) => boolean) {
+  isLiked = fn;
+}
+
 export function setDislikedCheck(fn: (id: string) => boolean) {
   isDisliked = fn;
 }
@@ -508,7 +517,9 @@ function finishCurrent(ended: boolean) {
   if (!written.heard) history.record(t, listened, ended);
   if (ended || listened >= HEARD_SECONDS) playLog.record(t, play.startedAt.getTime(), listened);
   stats.record(originOf(t), listened, (t.durationMs || 0) / 1000, ended);
-  recsFeedback.recordPlay(t, playOutcome(listened, (t.durationMs || 0) / 1000, ended), Date.now());
+  // A skip says something against a track only where it was offered (the wave, radios, mixes):
+  // not in a list of one's own choosing, nor for a liked track.
+  recsFeedback.recordPlay(t, playOutcome(listened, (t.durationMs || 0) / 1000, ended), Date.now(), originOf(t) === 'list' || isLiked(String(t.id)));
   reportPlay(t, ended);
   if (!written.recent && (ended || listened >= 5)) addRecent(t);
   if (get().source?.kind === 'wave') {
@@ -629,6 +640,7 @@ async function startWave(source: Source & { kind: 'wave' }) {
   finishCurrent(false);
   // The old track plays on until the new wave's first one is ready (the user's choice).
   const mine = new WaveEngine(waveApi, history, get().tuning, (id) => isDisliked(id), source.station ? [source.station.seed] : null);
+  mine.isSkipped = leftOut;
   engine = mine;
   set({ waveBusy: true, source, queue: [], index: -1, shuffle: false, error: null });
   unshuffled = null;
@@ -1116,6 +1128,7 @@ export function restoreSession() {
     if (wave?.kind === 'wave') {
       // The wave goes on from where it was: a new session with Yandex starts with the next fill.
       engine = new WaveEngine(waveApi, history, get().tuning, (id) => isDisliked(id), wave.station ? [wave.station.seed] : null);
+      engine.isSkipped = leftOut;
       set({ queue, index, source: wave, duration: (queue[index].durationMs || 0) / 1000 });
     } else set({ queue, index, source: { kind: 'list', title, label }, duration: (queue[index].durationMs || 0) / 1000 });
     updateMediaSession(queue[index]);

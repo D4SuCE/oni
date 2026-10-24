@@ -409,12 +409,13 @@ await step('daylist leads "For you" and fits the time of day', async () => {
   await page.click('[data-testid="nav-home"]');
 });
 
-await step('hide a track from the mixes, then bring it back from Settings', async () => {
+await step('hide a track from the mixes, then bring it back from Settings ("Skipped": the list, one back alone)', async () => {
   await page.locator('[data-testid="mix-card"]').first().click();
   await page.waitForSelector('.track-row');
   const row = page.locator('.track-row').first();
   // By its id: rows off screen are drawn lazily (content-visibility), their text empty until then.
   const id = await row.getAttribute('data-track-id');
+  const title = await row.locator('.tr-title').innerText();
   const before = await page.locator('.track-row').count();
   await row.click({ button: 'right' });
   await page.getByText('Скрыть из подборок', { exact: true }).click();
@@ -422,9 +423,13 @@ await step('hide a track from the mixes, then bring it back from Settings', asyn
   if (await page.locator(`.track-row[data-track-id="${id}"]`).count()) throw new Error(`track ${id} is still in the mix`);
   await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
   const note = await page.locator('[data-testid="mix-feedback"]').innerText();
-  if (!/Скрыто из подборок: 1 трек/.test(note)) throw new Error(`settings: ${note}`);
-  await page.click('[data-testid="mix-feedback-reset"]');
-  await page.waitForSelector('[data-testid="mix-feedback"]', { state: 'detached', timeout: 3000 });
+  if (!/Пропущенное: \d/.test(note)) throw new Error(`settings: ${note}`);
+  await page.click('[data-testid="skipped-toggle"]');
+  const listed = page.locator('[data-testid="skipped-row"]', { hasText: 'скрыт вами' }).filter({ hasText: title.split('
+')[0] });
+  if ((await listed.count()) !== 1) throw new Error(`"${title}" not in the list: ${await page.locator('[data-testid="skipped-list"]').innerText()}`);
+  await listed.locator('[data-testid="skipped-back"]').click();
+  await listed.waitFor({ state: 'detached', timeout: 3000 });
   await page.click('[data-testid="nav-home"]');
   await page.locator('[data-testid="mix-card"]').first().click();
   await page.waitForFunction((n) => document.querySelectorAll('.track-row').length === n, before, { timeout: 5000 });

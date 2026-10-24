@@ -325,7 +325,7 @@ await test('mix feedback: hidden tracks leave every mix, and stay hidden after a
   const [a, b] = [mk('rap', 1), mk('rap', 2)];
   let told = 0;
   fb.subscribe(() => told++);
-  fb.hide(a.id);
+  fb.hide(a);
   assert(!fb.keeps(a, NOW) && fb.keeps(b, NOW) && told === 1, 'hidden track dropped, listener told once');
   assert(!new RecsFeedback(store).keeps(a, NOW), 'survives a restart');
 });
@@ -355,6 +355,49 @@ await test('mix feedback: two skips in a row demote an artist for 30 days; a fin
 
   fb.reset();
   assert(fb.keeps(solo7, NOW) && fb.keeps(solo8, NOW) && fb.hiddenCount() === 0, 'reset brings everything back');
+});
+
+await test('skipped: a track skipped twice in the first 30 s from the wave or a mix, never heard, leaves the mixes and the wave for half a year', () => {
+  seq = 0;
+  const store = memory();
+  const fb = new RecsFeedback(store);
+  const [a, b, c] = [mk('rap', 1), mk('rap', 2), mk('rap', 3)];
+  fb.recordPlay(a, 'skipped', NOW);
+  assert(!fb.isSkipped(a.id, NOW), 'once is not enough');
+  fb.recordPlay(a, 'skipped', NOW + DAY);
+  assert(fb.isSkipped(a.id, NOW + DAY) && !fb.keeps(a, NOW + DAY), 'twice: out of the mixes and the wave');
+  assert(!new RecsFeedback(store).keeps(a, NOW + 2 * DAY), 'kept after a restart');
+  assert(fb.keeps(a, NOW + DAY + 183 * DAY) && !fb.isSkipped(a.id, NOW + DAY + 183 * DAY), 'back after half a year');
+
+  fb.recordPlay(b, 'skipped', NOW);
+  fb.recordPlay(b, 'partial', NOW);
+  fb.recordPlay(b, 'skipped', NOW);
+  fb.recordPlay(b, 'skipped', NOW);
+  assert(!fb.isSkipped(b.id, NOW), 'heard once (past 30 s): never left out for skips');
+
+  fb.recordPlay(c, 'skipped', NOW, true);
+  fb.recordPlay(c, 'skipped', NOW, true);
+  assert(!fb.isSkipped(c.id, NOW), 'skips in own playlists, Liked, or of a liked track do not count');
+});
+
+await test('skipped: the list holds what was hidden by hand (for good) and what was skipped (with its date); each comes back alone', () => {
+  seq = 0;
+  const fb = new RecsFeedback(memory());
+  const [a, b] = [mk('rap', 1), mk('rock', 2)];
+  fb.hide(a);
+  fb.recordPlay(b, 'skipped', NOW);
+  fb.recordPlay(b, 'skipped', NOW);
+  const list = fb.skippedList(NOW);
+  assert(list.length === 2 && fb.hiddenCount(NOW) === 2, `list ${list.length}`);
+  const hand = list.find((x) => x.track.id === a.id);
+  const auto = list.find((x) => x.track.id === b.id);
+  assert(hand?.manual && !hand.until && hand.track.title === a.title, 'hidden by hand: its card, no end');
+  assert(auto && !auto.manual && auto.until === NOW + 182 * DAY, 'skipped: until half a year');
+  assert(!fb.keeps(a, NOW + 400 * DAY), 'hidden by hand stays hidden');
+  fb.bringBack(b.id);
+  assert(!fb.isSkipped(b.id, NOW) && fb.skippedList(NOW).length === 1, 'brought back alone');
+  fb.recordPlay(b, 'skipped', NOW);
+  assert(!fb.isSkipped(b.id, NOW), 'brought back: its skips count from the start');
 });
 
 await test('mix feedback: play outcomes match the stats (skip under 30 s, finished at 85%)', () => {

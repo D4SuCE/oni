@@ -93,6 +93,12 @@ export class WaveEngine {
   private reserve: Track[] = [];
   private recentArtists: string[][] = [];
 
+  /**
+   * "Skipped" (recs/feedback.ts): hidden by hand, or skipped twice where offered and never heard.
+   * Set by the player; without it the wave goes by this device's skips alone, as it did.
+   */
+  isSkipped?: (t: Track) => boolean;
+
   /** Fixed seeds for a station radio (track:<id>, artist:<id>, …); My Wave derives them from the tuning. */
   private stationSeeds: string[] | null;
 
@@ -145,10 +151,11 @@ export class WaveEngine {
     const id = String(t.id);
     if (t.available === false) return 'unavailable';
     if (this.isDisliked(id)) return 'disliked';
+    const tune = this.tuning;
+    if (tune.hideSkipped && this.isSkipped?.(t)) return 'skipped';
     const h = this.history.of(t);
     if (!h) return null;
-    const tune = this.tuning;
-    if (tune.hideSkipped && h.skips >= 2 && h.plays === 0) return 'skipped';
+    if (tune.hideSkipped && !this.isSkipped && h.skips >= 2 && h.plays === 0) return 'skipped';
     if (tune.onlyNew && h.plays > 0) return 'recent';
     if (tune.maxPlays > 0 && h.plays >= tune.maxPlays) return 'overplayed';
     if (tune.noRepeatDays > 0 && h.plays > 0 && this.history.daysSince(t) < tune.noRepeatDays) return 'recent';

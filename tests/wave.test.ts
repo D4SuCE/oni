@@ -262,5 +262,14 @@ await test('onlyNew: when nothing new comes, the least heard plays, and the wave
   assert(engine.stats.relaxed === 1, `relaxed ${engine.stats.relaxed}`);
 });
 
+await test('"Skipped" from the mixes leaves the wave too while "hide what I skip" is on', async () => {
+  const engine = new WaveEngine(fakeYandex([]).api, new ListenHistory(memoryStore()), tuning({ hideSkipped: true }));
+  engine.isSkipped = (t) => t.id === mkTrack(1).id;
+  assert(engine.rejectReason(mkTrack(1)) === 'skipped' && engine.rejectReason(mkTrack(2)) === null, 'left out');
+  const off = new WaveEngine(fakeYandex([]).api, new ListenHistory(memoryStore()), tuning({ hideSkipped: false }));
+  off.isSkipped = engine.isSkipped;
+  assert(off.rejectReason(mkTrack(1)) === null, 'the switch off: it plays');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

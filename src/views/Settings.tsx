@@ -17,6 +17,7 @@ import { checkIosUpdate, installIosUpdate, installUpdateShortcut, setAutoUpdate,
 import { useUpdate } from '../ui/update.ts';
 import { addVoiceShortcut, VOICE_SHORTCUTS } from '../ui/voice.ts';
 import { cx } from '../ui/util.ts';
+import { artistNames } from '../api/yandex.ts';
 import { connectDisk, disconnectDisk, syncNow, useSync } from '../sync/index.ts';
 
 export function SettingsView() {
@@ -411,26 +412,64 @@ function DownloadsPanel() {
   );
 }
 
-/** Hidden tracks and demoted artists, with a way to bring them all back. */
+/** "Skipped": the hidden and the left out, each to bring back, and demoted artists; or all at once. */
 function MixFeedback() {
   const t = useT().stats;
+  const lang = useLang((s) => s.lang);
   const [, refresh] = useState(0);
+  const [open, setOpen] = useState(false);
   useEffect(() => {
     return recsFeedback.subscribe(() => refresh((n) => n + 1));
   }, []);
-  const hidden = recsFeedback.hiddenCount();
-  const artists = recsFeedback.demotedArtists(Date.now());
-  if (!hidden && !artists.length) return null;
+  const now = Date.now();
+  const list = recsFeedback.skippedList(now);
+  // Hidden before the list kept their names: counted, not listed.
+  const older = recsFeedback.hiddenCount(now) - list.length;
+  const artists = recsFeedback.demotedArtists(now);
+  if (!list.length && !older && !artists.length) return null;
   const names = artists.length > 3 ? t.andCount(artists.slice(0, 3).join(', '), artists.length - 3) : artists.join(', ');
+  const date = (ms: number) => new Date(ms).toLocaleDateString(lang, { day: 'numeric', month: 'short' });
   return (
-    <div className="settings-row mix-feedback" data-testid="mix-feedback">
-      <div className="hint">
-        {hidden > 0 && <div>{t.hiddenTracks(hidden)}</div>}
-        {artists.length > 0 && <div>{t.demoted(names)}</div>}
+    <div className="mix-feedback" data-testid="mix-feedback">
+      <div className="settings-row">
+        <div className="hint">
+          {list.length > 0 && (
+            <div>
+              {t.skippedList}: {list.length}
+            </div>
+          )}
+          {older > 0 && <div>{t.hiddenTracks(older)}</div>}
+          {artists.length > 0 && <div>{t.demoted(names)}</div>}
+        </div>
+        <div className="update-actions">
+          {list.length > 0 && (
+            <button className="btn ghost" onClick={() => setOpen((o) => !o)} data-testid="skipped-toggle">
+              {open ? t.hideList : t.showList}
+            </button>
+          )}
+          <button className="btn ghost" onClick={() => recsFeedback.reset()} data-testid="mix-feedback-reset">
+            <Undo2 size={16} /> {t.bringBack}
+          </button>
+        </div>
       </div>
-      <button className="btn ghost" onClick={() => recsFeedback.reset()} data-testid="mix-feedback-reset">
-        <Undo2 size={16} /> {t.bringBack}
-      </button>
+      {open && (
+        <div className="skipped-list" data-testid="skipped-list">
+          <div className="hint">{t.skippedHint}</div>
+          {list.map(({ track, manual, until }) => (
+            <div className="skipped-row" key={track.id} data-testid="skipped-row">
+              <div className="skipped-name">
+                <div className="skipped-title">{track.title}</div>
+                <div className="hint">
+                  {artistNames(track)} · {manual ? t.byHand : t.until(date(until ?? now))}
+                </div>
+              </div>
+              <button className="btn ghost small" onClick={() => recsFeedback.bringBack(track.id)} data-testid="skipped-back">
+                <Undo2 size={14} /> {t.back}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
