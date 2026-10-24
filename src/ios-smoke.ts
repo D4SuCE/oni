@@ -109,6 +109,37 @@ async function longPressMenu() {
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
 }
 
+/** Holding an icon-only button shows what it does above it, and lifting the finger does not press
+ * it ("Next" stays on the same track). */
+async function holdHint() {
+  const shown = (b: HTMLElement) => b.offsetParent && b.getBoundingClientRect().width > 0;
+  const next = document.querySelector<HTMLElement>('[data-testid="next"]');
+  const button = next && shown(next) ? next : [...document.querySelectorAll<HTMLElement>('button[title]')].find((b) => shown(b) && !b.textContent?.trim());
+  if (!button) return report('hold-hint', false, 'no icon button on screen');
+  const before = wave().usePlayer.getState().index;
+  const box = button.getBoundingClientRect();
+  const at = { pointerId: 11, pointerType: 'touch', isPrimary: true, clientX: box.left + box.width / 2, clientY: box.top + box.height / 2, bubbles: true };
+  button.dispatchEvent(new PointerEvent('pointerdown', at));
+  await until(() => document.querySelector('.hold-hint'), 1500);
+  const hint = document.querySelector<HTMLElement>('.hold-hint');
+  const text = hint?.textContent ?? '';
+  const above = Boolean(hint && hint.getBoundingClientRect().bottom <= box.top + 1);
+  button.dispatchEvent(new PointerEvent('pointerup', at));
+  button.dispatchEvent(new MouseEvent('click', { ...at, bubbles: true }));
+  await sleep(400);
+  const pressed = wave().usePlayer.getState().index !== before;
+  const gone = Boolean(await until(() => !document.querySelector('.hold-hint'), 3000));
+  report('hold-hint', text === button.getAttribute('title') && !pressed && gone, `"${text}" for "${button.getAttribute('title')}"${above ? ' above' : ' below'}${pressed ? ', pressed anyway' : ''}${gone ? '' : ', stayed'}`);
+}
+
+/** Every icon-only button on screen has a name VoiceOver reads (its title or aria-label). */
+function buttonNames(where: string) {
+  const unnamed = [...document.querySelectorAll<HTMLElement>('button, [role="button"]')].filter(
+    (b) => b.offsetParent && !b.textContent?.trim() && !b.getAttribute('aria-label')?.trim() && !b.getAttribute('title')?.trim(),
+  );
+  report(`button-names-${where}`, !unnamed.length, unnamed.map((b) => b.className || b.dataset.testid || b.tagName).slice(0, 8).join(', ') || 'all named');
+}
+
 /** The phone's taps: one tap on a track plays it, and its artists are text, not links. */
 async function tapToPlay() {
   const rows = document.querySelectorAll<HTMLElement>('.track-row');
@@ -733,6 +764,7 @@ export async function runSmoke() {
     await loginRedirect();
     report('home', await until(() => document.querySelector('.wave-hero'), 30000));
     phoneLayout();
+    buttonNames('home');
     const mixes = await until(() => document.querySelectorAll('[data-testid="mix-card"]').length, 60000);
     report('mixes', mixes, String(document.querySelectorAll('[data-testid="mix-card"]').length));
 
@@ -787,6 +819,10 @@ export async function runSmoke() {
     await longPressMenu();
     await sleep(1100); // past the hold's aftermath (src/ui/longPress.ts); a real tap would start a new touch
     await tapToPlay();
+    await sleep(1100);
+    await holdHint();
+    buttonNames('search');
+    await sleep(1100);
     await uploadForm();
     await playlistActions();
     await swipeBack();

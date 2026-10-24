@@ -3734,4 +3734,29 @@ html.ios *:not(input):not(textarea) {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+/* iPhone: what an icon-only button does, shown while it is held (src/ui/longPress.ts). */
+.hold-hint {
+  position: fixed;
+  z-index: 1000;
+  max-width: 70vw;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(33, 24, 22, 0.96);
+  border: 1px solid var(--line-strong);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.3;
+  pointer-events: none;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  animation: hold-hint-in 0.15s ease-out;
+  transition: opacity 0.2s;
+}
+.hold-hint.gone {
+  opacity: 0;
+}
+@keyframes hold-hint-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
 }

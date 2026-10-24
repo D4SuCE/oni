@@ -1,6 +1,8 @@
 // Touch: holding a finger on a track (or anything else with a menu) opens that menu, as a right
 // click does on the desktop. iOS sends no contextmenu event for a long press, so one is sent
-// here; the menus' own onContextMenu handlers do the rest.
+// here; the menus' own onContextMenu handlers do the rest. A button with only an icon and no
+// menu says instead what it does, in a small hint above it (the desktop's tooltip; the user:
+// "clearer, but don't pile it up"), and does not go off.
 
 import { haptic } from './haptics.ts';
 
@@ -11,6 +13,47 @@ const SLOP = 10;
  * pick a menu item (the sheet may lie under the finger): they are swallowed until the next touch
  * starts, or this long at most. */
 const AFTERMATH = 1000;
+
+/** How long the hint stays after the finger lifts. */
+const HINT_FOR = 1500;
+let hint: { el: HTMLElement; timer?: ReturnType<typeof setTimeout> } | null = null;
+
+/** What an icon-only button does, as its tooltip says; null for a button with words on it. */
+export function buttonHint(target: Element): { button: Element; text: string } | null {
+  const button = target.closest('button, [role="button"]');
+  if (!button || button.closest('.menu') || button.textContent?.trim()) return null;
+  const text = (button.getAttribute('aria-label') || button.getAttribute('title') || '').trim();
+  return text ? { button, text } : null;
+}
+
+function showHint(target: Element) {
+  const found = buttonHint(target);
+  if (!found) return false;
+  if (hint) {
+    clearTimeout(hint.timer);
+    hint.el.remove();
+  }
+  const el = Object.assign(document.createElement('div'), { className: 'hold-hint', textContent: found.text });
+  el.setAttribute('role', 'tooltip');
+  document.body.append(el);
+  const r = found.button.getBoundingClientRect();
+  const w = el.offsetWidth;
+  const left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2));
+  // Above the finger, or below the button when there is no room (the top bar).
+  const above = r.top - el.offsetHeight - 10;
+  el.style.left = `${left}px`;
+  el.style.top = `${above > 8 ? above : r.bottom + 10}px`;
+  const shown: NonNullable<typeof hint> = { el };
+  const hide = () => {
+    el.classList.add('gone');
+    setTimeout(() => el.remove(), 200);
+    if (hint === shown) hint = null;
+  };
+  // Gone a while after the finger lifts.
+  window.addEventListener('pointerup', () => (shown.timer = setTimeout(hide, HINT_FOR)), { once: true, capture: true });
+  hint = shown;
+  return true;
+}
 
 export function connectLongPress() {
   let press: { id: number; x: number; y: number; timer: ReturnType<typeof setTimeout> } | null = null;
@@ -40,7 +83,7 @@ export function connectLongPress() {
           press = null;
           const menu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y });
           target.dispatchEvent(menu);
-          held = menu.defaultPrevented; // a handler opened a menu
+          held = menu.defaultPrevented || showHint(target); // a handler opened a menu, or a hint shows
           if (held) haptic('pick');
         }, HOLD),
       };
