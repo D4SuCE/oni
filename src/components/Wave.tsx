@@ -66,7 +66,7 @@ export function WaveStatsLine() {
   const r = stats.rejected;
   const repeats = r.recent + r.overplayed + r.duplicate + r.skipped;
   return (
-    <span className="wave-stats" title={t.wave.statsTitle({ received: stats.received, ...r })}>
+    <span className="wave-stats" title={t.wave.statsTitle({ received: stats.received, ...r, relaxed: stats.relaxed })}>
       {t.wave.statsLine(repeats, stats.received)}
     </span>
   );

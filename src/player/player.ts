@@ -310,6 +310,8 @@ export const recentPlays = new RecentPlays(storage);
 /** Every play heard, with its date and length: "Recap" (History). Filled once from the recent plays. */
 export const playLog = new PlayLog(storage);
 playLog.seed(recentPlays.list());
+// The same song under another id counts as heard for "Only new" from the start, not only for new plays.
+history.learnSongs(playLog.cards());
 export const stats = new PlayStats(storage);
 /** Bumped on every new entry so the History page re-reads the list. */
 export const useRecent = create<{ version: number }>(() => ({ version: 0 }));

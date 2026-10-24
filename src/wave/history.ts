@@ -18,6 +18,27 @@ export interface HistoryEntry {
 }
 
 export const HEARD_SECONDS = 30;
+
+/** A version that only says how a song was released, not another take of it (a remix, a live one). */
+const RELEASE = /remaster|mono|stereo|radio edit|single version|album version|original version|explicit|clean|deluxe|bonus|anniversary|edition/i;
+
+/**
+ * The song a track is, whichever release it comes from: an album's, a single's and a compilation's
+ * have their own ids, and Yandex's wave offers them as different tracks (the user: with "Only new"
+ * on, songs heard three times came again). One key per artist, so a featured artist listed or not
+ * still matches. None for a remix or a live take: that is a song of its own.
+ */
+export function songKeys(t: Track): string[] {
+  if (t.version && !RELEASE.test(t.version)) return [];
+  const title = t.title
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[([][^)\]]*(feat\.?|ft\.|with |remaster)[^)\]]*[)\]]/g, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+  if (!title) return [];
+  return (t.artists || []).filter((a) => a.id && !a.various).map((a) => `song:${a.id}:${title}`);
+}
 const DAY = 24 * 60 * 60 * 1000;
 const KEEP_DAYS = 365;
 
@@ -43,17 +64,29 @@ export class ListenHistory {
     return this.entries[trackId];
   }
 
+  /** The track, or the same song under another id (songKeys): its most heard and latest entry. */
+  of(track: Track): HistoryEntry | undefined {
+    let found = this.entries[String(track.id)];
+    for (const key of songKeys(track)) {
+      const e = this.entries[key];
+      if (e && (!found || e.plays > found.plays || (e.plays === found.plays && e.last > found.last))) found = e;
+    }
+    return found;
+  }
+
+  /** Tracks remembered (the songs' entries are a second look at the same plays). */
   get size() {
-    return Object.keys(this.entries).length;
+    return Object.keys(this.entries).filter((k) => !k.startsWith('song:')).length;
   }
 
   /** Call when playback of a track ends for any reason. */
   record(track: Track, playedSeconds: number, finished: boolean) {
-    const id = String(track.id);
-    const e = (this.entries[id] ??= { plays: 0, skips: 0, last: 0 });
-    if (finished || playedSeconds >= HEARD_SECONDS) e.plays++;
-    else e.skips++;
-    e.last = this.now();
+    for (const key of [String(track.id), ...songKeys(track)]) {
+      const e = (this.entries[key] ??= { plays: 0, skips: 0, last: 0 });
+      if (finished || playedSeconds >= HEARD_SECONDS) e.plays++;
+      else e.skips++;
+      e.last = this.now();
+    }
     this.save();
   }
 
@@ -78,8 +111,27 @@ export class ListenHistory {
     if (changed) this.save();
   }
 
-  daysSince(trackId: string): number {
-    const e = this.entries[trackId];
+  /**
+   * The songs of tracks heard before songs were kept (cards from the play log, which has their
+   * titles): each song as heard as its most heard track. Run at every start: it changes nothing twice.
+   */
+  learnSongs(cards: Track[]) {
+    let changed = false;
+    for (const card of cards) {
+      const e = this.entries[String(card.id)];
+      if (!e) continue;
+      for (const key of songKeys(card)) {
+        const s = (this.entries[key] ??= { plays: 0, skips: 0, last: 0 });
+        if (s.plays >= e.plays && s.skips >= e.skips && s.last >= e.last) continue;
+        Object.assign(s, { plays: Math.max(s.plays, e.plays), skips: Math.max(s.skips, e.skips), last: Math.max(s.last, e.last) });
+        changed = true;
+      }
+    }
+    if (changed) this.save();
+  }
+
+  daysSince(track: string | Track): number {
+    const e = typeof track === 'string' ? this.entries[track] : this.of(track);
     return e ? (this.now() - e.last) / DAY : Infinity;
   }
 

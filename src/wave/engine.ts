@@ -57,6 +57,8 @@ export interface WaveStats {
   given: number;
   rejected: Record<RejectReason, number>;
   deferredByArtist: number;
+  /** Heard tracks played after all, Yandex having nothing that passes the filters (the player says so). */
+  relaxed: number;
 }
 
 const MAX_FETCHES_PER_NEXT = 6;
@@ -77,6 +79,7 @@ export class WaveEngine {
     given: 0,
     rejected: { recent: 0, overplayed: 0, skipped: 0, disliked: 0, duplicate: 0, unavailable: 0 },
     deferredByArtist: 0,
+    relaxed: 0,
   };
 
   private api: WaveApi;
@@ -119,8 +122,12 @@ export class WaveEngine {
       if (attempt < MAX_FETCHES_PER_NEXT) await this.fetchMore();
     }
     // Filters are too strict for what Yandex offers right now: relax gracefully.
-    const fallback = this.pending.shift() || this.takeOldestReserve();
-    return fallback ? this.give(fallback) : null;
+    const waiting = this.pending.shift();
+    if (waiting) return this.give(waiting);
+    const fallback = this.takeOldestReserve();
+    if (!fallback) return null;
+    this.stats.relaxed++;
+    return this.give(fallback);
   }
 
   /** The Yandex session the tracks came from, for the play reports that fill the history. */
@@ -138,13 +145,13 @@ export class WaveEngine {
     const id = String(t.id);
     if (t.available === false) return 'unavailable';
     if (this.isDisliked(id)) return 'disliked';
-    const h = this.history.get(id);
+    const h = this.history.of(t);
     if (!h) return null;
     const tune = this.tuning;
     if (tune.hideSkipped && h.skips >= 2 && h.plays === 0) return 'skipped';
     if (tune.onlyNew && h.plays > 0) return 'recent';
     if (tune.maxPlays > 0 && h.plays >= tune.maxPlays) return 'overplayed';
-    if (tune.noRepeatDays > 0 && h.plays > 0 && this.history.daysSince(id) < tune.noRepeatDays) return 'recent';
+    if (tune.noRepeatDays > 0 && h.plays > 0 && this.history.daysSince(t) < tune.noRepeatDays) return 'recent';
     return null;
   }
 
@@ -186,6 +193,15 @@ export class WaveEngine {
   }
 
   private takeAllowed(): Track | null {
+    // Checked again: it may have been heard since it came (the account's history comes in late,
+    // a play on another device, the same song under another id played meanwhile).
+    this.pending = this.pending.filter((t) => {
+      const reason = this.rejectReason(t);
+      if (!reason) return true;
+      this.stats.rejected[reason]++;
+      if (reason === 'recent' || reason === 'overplayed') this.reserve.push(t);
+      return false;
+    });
     const i = this.pending.findIndex((t) => this.artistAllowed(t));
     if (i < 0) {
       if (this.pending.length) this.stats.deferredByArtist++;
@@ -197,7 +213,9 @@ export class WaveEngine {
 
   private takeOldestReserve(): Track | null {
     if (!this.reserve.length) return null;
-    this.reserve.sort((a, b) => this.history.daysSince(String(b.id)) - this.history.daysSince(String(a.id)));
+    // "Only new": the least heard first (once before three times), then the longest ago.
+    const plays = (t: Track) => (this.tuning.onlyNew ? (this.history.of(t)?.plays ?? 0) : 0);
+    this.reserve.sort((a, b) => plays(a) - plays(b) || this.history.daysSince(b) - this.history.daysSince(a));
     return this.reserve.shift()!;
   }
 

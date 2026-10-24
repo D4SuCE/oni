@@ -196,5 +196,71 @@ await test("the engine keeps its own copy of the settings: re-tuning it leaves t
   assert(waveSeeds(before).join() !== waveSeeds(engine.tuning).join(), 'the change is seen');
 });
 
+// Found by the user: with "Only new" on, tracks heard three times came again.
+const song = (id: number, title: string, artist: number, version?: string): Track => ({
+  id: String(id),
+  title,
+  version,
+  artists: [{ id: artist, name: `Artist ${artist}` }],
+  albums: [{ id: id + 1, title: 'A', artists: [] }],
+  available: true,
+});
+
+await test('onlyNew: the same song from another release (another id) is not new; a remix or a live one is', async () => {
+  const store = memoryStore();
+  const history = new ListenHistory(store);
+  history.record(song(1, 'Nightcall', 7), 200, true); // heard from the album
+  const engine = new WaveEngine(fakeYandex([]).api, history, tuning({ onlyNew: true }));
+  assert(engine.rejectReason(song(2, 'Nightcall', 7)) === 'recent', 'the single, same title and artist');
+  assert(engine.rejectReason(song(3, 'Nightcall', 7, 'Remastered 2021')) === 'recent', 'a remaster');
+  assert(engine.rejectReason(song(4, 'NIGHTCALL ', 7)) === 'recent', 'spelt a little otherwise');
+  assert(engine.rejectReason(song(5, 'Nightcall', 7, 'Remix')) === null, 'a remix is its own');
+  assert(engine.rejectReason(song(6, 'Nightcall', 7, 'Live')) === null, 'a live one is its own');
+  assert(engine.rejectReason(song(7, 'Nightcall', 8)) === null, "another artist's song of that name");
+  const again = new WaveEngine(fakeYandex([]).api, new ListenHistory(store), tuning({ onlyNew: true }));
+  assert(again.rejectReason(song(2, 'Nightcall', 7)) === 'recent', 'kept after a restart');
+});
+
+await test('songs heard before songs were kept are learnt from the play log, once', async () => {
+  const history = new ListenHistory(memoryStore());
+  const album = song(1, 'Nightcall', 7);
+  history.mergeRemote([{ id: album.id, at: Date.now() }]); // only the id known, as in an old history
+  const engine = new WaveEngine(fakeYandex([]).api, history, tuning({ onlyNew: true }));
+  assert(engine.rejectReason(song(2, 'Nightcall', 7)) === null, 'nothing to match it by yet');
+  history.learnSongs([album]);
+  history.learnSongs([album]);
+  assert(engine.rejectReason(song(2, 'Nightcall', 7)) === 'recent', 'the single is the song heard');
+  assert(history.of(song(2, 'Nightcall', 7))?.plays === 1, 'learnt twice, counted once');
+  assert(history.size === 1, `size ${history.size}: songs are not tracks`);
+});
+
+await test('a track waiting in the wave is checked again when its turn comes: heard meanwhile, it is dropped', async () => {
+  const history = new ListenHistory(memoryStore());
+  const pool = Array.from({ length: 10 }, (_, i) => mkTrack(i));
+  const engine = new WaveEngine(fakeYandex(pool, 10).api, history, tuning({ onlyNew: true, artistGap: 0 }));
+  const first = (await engine.next())!;
+  // The account's history came in late (a slow answer does not hold the wave up), after the batch.
+  history.mergeRemote(pool.filter((t) => t.id !== first.id).slice(0, 5).map((t) => ({ id: String(t.id), at: Date.now() })));
+  for (let i = 0; i < 4; i++) {
+    const t = (await engine.next())!;
+    assert(!history.get(String(t.id)), `${t.title} was heard meanwhile and still played`);
+  }
+});
+
+await test('onlyNew: when nothing new comes, the least heard plays, and the wave counts it (the player says so)', async () => {
+  let now = 10 * DAY;
+  const history = new ListenHistory(memoryStore(), 'h', () => now);
+  const pool = [mkTrack(0), mkTrack(1)];
+  now = 1 * DAY;
+  for (let i = 0; i < 3; i++) history.record(pool[0], 100, true); // three times, long ago
+  now = 5 * DAY;
+  history.record(pool[1], 100, true); // once, later
+  now = 10 * DAY;
+  const engine = new WaveEngine(fakeYandex(pool).api, history, tuning({ onlyNew: true, artistGap: 0 }));
+  const t = (await engine.next())!;
+  assert(t.id === pool[1].id, `the one heard three times came first (${t.title})`);
+  assert(engine.stats.relaxed === 1, `relaxed ${engine.stats.relaxed}`);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

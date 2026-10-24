@@ -483,14 +483,15 @@ const ru = {
     hideSkipped: 'Скрывать то, что я пропускаю',
     hideSkippedHint: 'Трек, пропущенный в первые 30 секунд дважды, больше не попадётся',
     onlyNew: 'Только новое',
-    onlyNewHint: 'Только треки, которых вы ещё не слышали в этом приложении',
+    onlyNewHint: 'Только треки, которых вы ещё не слышали: в Oni и, за последние дни, на других устройствах',
     history: 'История прослушиваний',
     historyInfo: (tracks: string) => `В памяти ${tracks}. Хранится только на этом устройстве.`,
     clearHistoryTitle: 'Очистить историю?',
     clearHistoryMessage: 'Фильтр повторов начнёт учиться заново.',
     statsLine: (repeats: number, received: number) => `отсеяно повторов: ${repeats} из ${received}`,
-    statsTitle: (s: { received: number; recent: number; overplayed: number; duplicate: number; skipped: number; disliked: number }) =>
-      `Получено от Яндекса: ${s.received}. Недавно звучали: ${s.recent}, заиграны: ${s.overplayed}, повторы в сессии: ${s.duplicate}, пропущенные: ${s.skipped}, дизлайки: ${s.disliked}`,
+    statsTitle: (s: { received: number; recent: number; overplayed: number; duplicate: number; skipped: number; disliked: number; relaxed: number }) =>
+      `Получено от Яндекса: ${s.received}. Недавно звучали: ${s.recent}, заиграны: ${s.overplayed}, повторы в сессии: ${s.duplicate}, пропущенные: ${s.skipped}, дизлайки: ${s.disliked}. Сыграно знакомых (нового не было): ${s.relaxed}`,
+    nothingNew: 'Нового у Яндекса сейчас нет — играю из знакомого',
   },
   stats: {
     title: 'Как работают рекомендации',
@@ -1023,14 +1024,15 @@ const en: Dict = {
     hideSkipped: 'Hide what I skip',
     hideSkippedHint: 'A track skipped within the first 30 seconds twice won’t come up again',
     onlyNew: 'Only new',
-    onlyNewHint: "Only tracks you haven't heard in this app yet",
+    onlyNewHint: "Only tracks you haven't heard yet: in Oni and, for the last days, on your other devices",
     history: 'Listening history',
     historyInfo: (tracks) => `${tracks} remembered. Stored only on this device.`,
     clearHistoryTitle: 'Clear history?',
     clearHistoryMessage: 'The repeat filter will start learning from scratch.',
     statsLine: (repeats, received) => `repeats filtered: ${repeats} of ${received}`,
     statsTitle: (s) =>
-      `Received from Yandex: ${s.received}. Played recently: ${s.recent}, overplayed: ${s.overplayed}, repeats this session: ${s.duplicate}, skipped: ${s.skipped}, disliked: ${s.disliked}`,
+      `Received from Yandex: ${s.received}. Played recently: ${s.recent}, overplayed: ${s.overplayed}, repeats this session: ${s.duplicate}, skipped: ${s.skipped}, disliked: ${s.disliked}. Known ones played (nothing new came): ${s.relaxed}`,
+    nothingNew: 'Yandex has nothing new right now — playing something you know',
   },
   stats: {
     title: 'How recommendations do',

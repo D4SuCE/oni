@@ -76,6 +76,11 @@ export class PlayLog {
     this.prune();
   }
 
+  /** The card of every track in the log. */
+  cards(): Track[] {
+    return Object.values(this.data.tracks);
+  }
+
   /** A play heard here: `seconds` it played. */
   record(track: Track, at: number, seconds: number) {
     this.add(track, { id: String(track.id), at, s: Math.round(seconds) });
