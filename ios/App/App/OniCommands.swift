@@ -19,7 +19,6 @@ struct PlayWaveIntent: AudioPlaybackIntent {
     @MainActor
     func perform() async throws -> some IntentResult {
         OniCommands.send?("wave")
-        NowPlayingShare.mark(OniCommands.send == nil ? "press wave (в виджете, без Oni)" : "press wave (в Oni)")
         return .result()
     }
 }
@@ -32,7 +31,6 @@ struct PauseIntent: AudioPlaybackIntent {
     @MainActor
     func perform() async throws -> some IntentResult {
         OniCommands.send?("pause")
-        NowPlayingShare.mark(OniCommands.send == nil ? "press pause (в виджете, без Oni)" : "press pause (в Oni)")
         return .result()
     }
 }
@@ -45,7 +43,6 @@ struct ResumeIntent: AudioPlaybackIntent {
     @MainActor
     func perform() async throws -> some IntentResult {
         OniCommands.send?("play")
-        NowPlayingShare.mark(OniCommands.send == nil ? "press play (в виджете, без Oni)" : "press play (в Oni)")
         return .result()
     }
 }
@@ -58,7 +55,6 @@ struct TogglePlaybackIntent: AudioPlaybackIntent {
     @MainActor
     func perform() async throws -> some IntentResult {
         OniCommands.send?("toggle")
-        NowPlayingShare.mark(OniCommands.send == nil ? "press toggle (в виджете, без Oni)" : "press toggle (в Oni)")
         return .result()
     }
 }
@@ -71,7 +67,6 @@ struct NextTrackIntent: AudioPlaybackIntent {
     @MainActor
     func perform() async throws -> some IntentResult {
         OniCommands.send?("next")
-        NowPlayingShare.mark(OniCommands.send == nil ? "press next (в виджете, без Oni)" : "press next (в Oni)")
         return .result()
     }
 }
@@ -84,7 +79,6 @@ struct PreviousTrackIntent: AudioPlaybackIntent {
     @MainActor
     func perform() async throws -> some IntentResult {
         OniCommands.send?("prev")
-        NowPlayingShare.mark(OniCommands.send == nil ? "press prev (в виджете, без Oni)" : "press prev (в Oni)")
         return .result()
     }
 }
@@ -97,7 +91,6 @@ struct LikeIntent: AudioPlaybackIntent {
     @MainActor
     func perform() async throws -> some IntentResult {
         OniCommands.send?("like")
-        NowPlayingShare.mark(OniCommands.send == nil ? "press like (в виджете, без Oni)" : "press like (в Oni)")
         return .result()
     }
 }

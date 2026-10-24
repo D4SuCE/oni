@@ -15,11 +15,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // The widget's buttons while Oni is awake (NowPlayingShare.sendCommand).
         CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), nil, { _, _, _, _, _ in
             DispatchQueue.main.async {
-                NowPlayingShare.mark("звонок в Oni")
-                if let name = NowPlayingShare.takeCommand() {
-                    NowPlayingShare.mark("Oni выполняет \(name)")
-                    OniCommands.send?(name)
-                }
+                if let name = NowPlayingShare.takeCommand() { OniCommands.send?(name) }
             }
         }, NowPlayingShare.ring as CFString, nil, .deliverImmediately)
         return true

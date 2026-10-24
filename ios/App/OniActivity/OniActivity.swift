@@ -150,8 +150,6 @@ struct RemoteEntry: TimelineEntry {
     /// in a build signed without the app group.
     var track: NowPlayingShare.State? = nil
     var cover: UIImage? = nil
-    /// Trial: where the last press got to.
-    var trace: String = ""
 }
 
 /// The widget's own buttons while Oni plays: done in the extension, which only rings the app
@@ -176,7 +174,7 @@ struct WidgetCommandIntent: AppIntent {
 struct RemoteProvider: TimelineProvider {
     private func entry() -> RemoteEntry {
         let track = NowPlayingShare.read()
-        return RemoteEntry(date: Date(), track: track, cover: track.flatMap(NowPlayingShare.cover), trace: NowPlayingShare.trace)
+        return RemoteEntry(date: Date(), track: track, cover: track.flatMap(NowPlayingShare.cover))
     }
     func placeholder(in context: Context) -> RemoteEntry { RemoteEntry(date: Date()) }
     func getSnapshot(in context: Context, completion: @escaping (RemoteEntry) -> Void) { completion(entry()) }
@@ -362,7 +360,6 @@ struct RemoteView: View {
                 Button(intent: NextTrackIntent()) { Image(systemName: "forward.fill") }.buttonStyle(.plain)
             }
         case .systemMedium:
-            VStack(spacing: 0) {
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 10) {
                     top(compact: false)
@@ -374,12 +371,6 @@ struct RemoteView: View {
                     button("next", size: 46)
                     button("like", size: 46, tint: Palette.red)
                 }
-            }
-            Text(entry.trace.isEmpty ? "нажатий пока не было" : entry.trace)
-                .font(.system(size: 8))
-                .foregroundColor(Palette.muted)
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(16)
         default:
