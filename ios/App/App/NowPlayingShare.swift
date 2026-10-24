@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import WidgetKit
 
 /// What plays, for the Home screen widget (OniActivity.swift): the app writes the track and its
 /// cover into the app group it shares with the extension, then asks the widget to draw again.
@@ -71,6 +72,7 @@ enum NowPlayingShare {
     static let ring = "local.wave.player.widget-command"
 
     static func sendCommand(_ name: String) {
+        mark("press \(name) (виджет)")
         guard let defaults = defaults else { return }
         defaults.set(["name": name, "at": Date().timeIntervalSince1970], forKey: "command")
         CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), CFNotificationName(ring as CFString), nil, nil, true)
@@ -84,6 +86,21 @@ enum NowPlayingShare {
         guard let name = command["name"] as? String, let at = command["at"] as? Double, Date().timeIntervalSince1970 - at < 5 else { return nil }
         return name
     }
+
+    // MARK: - Trial: where a widget press gets to (shown on the widget itself)
+
+    /// "toggle: widget 21:58:03 · app 21:58:03": the extension ran the button's action, the app got it.
+    static func mark(_ step: String) {
+        guard let defaults = defaults else { return }
+        let time = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
+        var line = defaults.string(forKey: "trace") ?? ""
+        if step.hasPrefix("press ") { line = "" }
+        line += (line.isEmpty ? "" : " · ") + "\(step) \(time)"
+        defaults.set(String(line.suffix(90)), forKey: "trace")
+        WidgetCenter.shared.reloadTimelines(ofKind: "OniRemote")
+    }
+
+    static var trace: String { defaults?.string(forKey: "trace") ?? "" }
 
     /// The cover of the track in `state`, when it is saved.
     static func cover(_ state: State) -> UIImage? {
