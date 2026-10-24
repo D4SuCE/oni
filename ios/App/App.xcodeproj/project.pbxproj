@@ -22,8 +22,8 @@
 		A0C1B2D3E4F5061728394A8D /* OniCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0C1B2D3E4F5061728394A8B /* OniCommands.swift */; };
 		0A1B2C3D4E5F607182930001 /* DownloadAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1B2C3D4E5F607182930011 /* DownloadAttributes.swift */; };
 		0A1B2C3D4E5F607182930002 /* DownloadAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1B2C3D4E5F607182930011 /* DownloadAttributes.swift */; };
-		0A1B2C3D4E5F607182930021 /* NowPlayingShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1B2C3D4E5F607182930031 /* NowPlayingShare.swift */; };
-		0A1B2C3D4E5F607182930022 /* NowPlayingShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1B2C3D4E5F607182930031 /* NowPlayingShare.swift */; };
+		B1C2D3E4F5A6B7C8D9E0F101 /* NowPlayingShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5A6B7C8D9E0F103 /* NowPlayingShare.swift */; };
+		B1C2D3E4F5A6B7C8D9E0F102 /* NowPlayingShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5A6B7C8D9E0F103 /* NowPlayingShare.swift */; };
 		0A1B2C3D4E5F607182930003 /* OniActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1B2C3D4E5F607182930012 /* OniActivity.swift */; };
 		0A1B2C3D4E5F607182930004 /* OniActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 0A1B2C3D4E5F607182930014 /* OniActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
@@ -44,7 +44,7 @@
 		A0C1B2D3E4F5061728394A8B /* OniCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OniCommands.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		0A1B2C3D4E5F607182930011 /* DownloadAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadAttributes.swift; sourceTree = "<group>"; };
-		0A1B2C3D4E5F607182930031 /* NowPlayingShare.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingShare.swift; sourceTree = "<group>"; };
+		B1C2D3E4F5A6B7C8D9E0F103 /* NowPlayingShare.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingShare.swift; sourceTree = "<group>"; };
 		0A1B2C3D4E5F607182930012 /* OniActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OniActivity.swift; sourceTree = "<group>"; };
 		0A1B2C3D4E5F607182930013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		0A1B2C3D4E5F607182930014 /* OniActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OniActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -120,7 +120,7 @@
 				A0C1B2D3E4F5061728394A7B /* OniIntents.swift */,
 				A0C1B2D3E4F5061728394A8B /* OniCommands.swift */,
 				0A1B2C3D4E5F607182930011 /* DownloadAttributes.swift */,
-				0A1B2C3D4E5F607182930031 /* NowPlayingShare.swift */,
+				B1C2D3E4F5A6B7C8D9E0F103 /* NowPlayingShare.swift */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -260,7 +260,7 @@
 				A0C1B2D3E4F5061728394A7C /* OniIntents.swift in Sources */,
 				A0C1B2D3E4F5061728394A8C /* OniCommands.swift in Sources */,
 				0A1B2C3D4E5F607182930001 /* DownloadAttributes.swift in Sources */,
-				0A1B2C3D4E5F607182930021 /* NowPlayingShare.swift in Sources */,
+				B1C2D3E4F5A6B7C8D9E0F101 /* NowPlayingShare.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -271,7 +271,7 @@
 				0A1B2C3D4E5F607182930003 /* OniActivity.swift in Sources */,
 				A0C1B2D3E4F5061728394A8D /* OniCommands.swift in Sources */,
 				0A1B2C3D4E5F607182930002 /* DownloadAttributes.swift in Sources */,
-				0A1B2C3D4E5F607182930022 /* NowPlayingShare.swift in Sources */,
+				B1C2D3E4F5A6B7C8D9E0F102 /* NowPlayingShare.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
