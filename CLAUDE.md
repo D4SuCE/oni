@@ -48,9 +48,11 @@
   включительно выпускали им). Подробно — README, «Выпуск версии».
 - e2e на машине GitHub (Windows): `gh workflow run e2e.yml --ref <ветка>` — так проверяет облачный агент.
 - Состояние проекта после работы — в сводку ROADMAP (что сделано / в работе / осталось).
-- Уведомления Windows — **выключены** (решение пользователя 24.10.2026: «Выключи уведомления»; с 23.10 были
-  включены). Хуки `Stop` / `Notification` убраны из `~/.claude/settings.json` и `~/.claude-accounts/d4suceusa/
-  settings.json`; `~/.claude/notify.ps1` остался, но не вызывать его. Включить снова — только по просьбе пользователя.
+- Уведомления Windows (решение пользователя 24.10.2026): **только когда сборка выложена в облако и её можно
+  скачать** — выпуск в D4SuCE/oni-releases готов целиком (Windows + IPA, `sidestore.json` обновлён) или пробная сборка
+  (артефакт) готова к скачиванию. Больше ни о чём (тесты, ожидание ответа, конец работы) — не уведомлять. Хуки
+  `Stop` / `Notification` убраны из `~/.claude/settings.json` и `~/.claude-accounts/d4suceusa/settings.json`. Слать так:
+  `powershell -NoProfile -ExecutionPolicy Bypass -File ~/.claude/notify.ps1 -Title "Oni 1.x.y выложен" -Text "…"`.
 
 ## Окружение
 
