@@ -100,6 +100,7 @@ function useShortcuts() {
 
 function Main() {
   const route = useApp((s) => s.route);
+  const navDir = useApp((s) => s.navDir);
   const offline = useApp((s) => s.offline);
   const t = useT();
   const ref = useRef<HTMLElement>(null);
@@ -153,7 +154,7 @@ function Main() {
           <WifiOff size={15} /> {t.downloads.offlineBanner}
         </div>
       )}
-      <div key={JSON.stringify(route)} className="view-enter">
+      <div key={JSON.stringify(route)} className={cx('view-enter', navDir === 'back' && 'from-left')}>
         <ErrorBoundary kind="view">{view}</ErrorBoundary>
       </div>
     </main>

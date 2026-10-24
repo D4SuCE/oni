@@ -17,6 +17,7 @@ import { checkIosUpdate, installIosUpdate, installUpdateShortcut, setAutoUpdate,
 import { useUpdate } from '../ui/update.ts';
 import { addVoiceShortcut, VOICE_SHORTCUTS } from '../ui/voice.ts';
 import { cx } from '../ui/util.ts';
+import { ANIM_EFFECTS, setAnimEffect, setAnimEnabled, useAnim } from '../ui/anim.ts';
 import { artistNames } from '../api/yandex.ts';
 import { connectDisk, disconnectDisk, syncNow, useSync } from '../sync/index.ts';
 
@@ -62,6 +63,8 @@ export function SettingsView() {
           <Segmented options={LANGS} value={lang} onChange={setLang} />
         </div>
       </div>
+
+      <AnimationsPanel />
 
       <div className="panel glass">
         <h3>{s.appearance}</h3>
@@ -408,6 +411,34 @@ function DownloadsPanel() {
         </div>
         <input type="checkbox" className="switch" checked={autoLikes} onChange={(e) => setAutoLikes(e.target.checked)} data-testid="auto-likes" />
       </label>
+    </div>
+  );
+}
+
+/** Settings → Animations: all of them at once, and each on its own (src/ui/anim.ts). */
+function AnimationsPanel() {
+  const s = useT().settings;
+  const { enabled, effects } = useAnim();
+  return (
+    <div className="panel glass" data-testid="animations">
+      <h3>{s.animations}</h3>
+      <label className="toggle-row">
+        <div>
+          <div>{s.animationsAll}</div>
+          <div className="hint">{s.animationsHint}</div>
+        </div>
+        <input type="checkbox" className="switch" checked={enabled} onChange={(e) => setAnimEnabled(e.target.checked)} data-testid="anim-all" />
+      </label>
+      {enabled &&
+        ANIM_EFFECTS.map((effect) => (
+          <label className="toggle-row" key={effect}>
+            <div>
+              <div>{s.effects[effect][0]}</div>
+              <div className="hint">{s.effects[effect][1]}</div>
+            </div>
+            <input type="checkbox" className="switch" checked={effects[effect]} onChange={(e) => setAnimEffect(effect, e.target.checked)} data-testid={`anim-${effect}`} />
+          </label>
+        ))}
     </div>
   );
 }
