@@ -2024,7 +2024,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
 /// origin (capacitor://) may not open a plain ws:// one, and iOS keeps this one going while Oni
 /// plays in the background. JS: registerPlugin('OniLan').
 @objc(LanPlugin)
-public class LanPlugin: CAPPlugin, CAPBridgedPlugin {
+public class LanPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDelegate {
     public let identifier = "LanPlugin"
     public let jsName = "OniLan"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -2033,10 +2033,18 @@ public class LanPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "close", returnType: CAPPluginReturnPromise),
     ]
 
-    private lazy var session = URLSession(configuration: .default)
+    private lazy var session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
     /// The connections, by the id of the device at the other end.
     private var sockets: [String: URLSessionWebSocketTask] = [:]
     private var pings: [String: Timer] = [:]
+    /// What a connection says first (its hello), by task, said once it is open: sent before that, it
+    /// was lost now and then (the stand-in PC in the cloud check saw connections and never a hello,
+    /// 25.10.2026), and the link was given up for Disk.
+    private var hellos: [Int: () -> Void] = [:]
+
+    public func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
+        DispatchQueue.main.async { self.hellos.removeValue(forKey: webSocketTask.taskIdentifier)?() }
+    }
 
     /// { id, url, hello, timeout (ms) }: resolves once the other side answers the hello (its first
     /// message, "welcome"); rejects if it does not in time or closes.
@@ -2055,6 +2063,7 @@ public class LanPlugin: CAPPlugin, CAPBridgedPlugin {
                 DispatchQueue.main.async {
                     guard !settled else { return }
                     settled = true
+                    self.hellos[task.taskIdentifier] = nil
                     if let error = error {
                         self.drop(id, task)
                         call.reject(error)
@@ -2064,8 +2073,10 @@ public class LanPlugin: CAPPlugin, CAPBridgedPlugin {
                 }
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { settle("no answer") }
+            self.hellos[task.taskIdentifier] = {
+                task.send(.string(hello)) { error in if let error = error { settle(error.localizedDescription) } }
+            }
             task.resume()
-            task.send(.string(hello)) { error in if let error = error { settle(error.localizedDescription) } }
             task.receive { result in
                 switch result {
                 case .success(.string(let text)) where text.contains("\"welcome\""):
