@@ -95,6 +95,8 @@
   `trig_01AB2cC8ZymgrLdFpaCSZN57` и «(:40)» `trig_011V6qEhea3p3dmS1y5zspDd`, Opus 5.5, окружение `Default`
   (`env_01FQFjofqG7StSuhtPrd7bLD`: `GH_TOKEN`, `YANDEX_MUSIC_TOKEN` есть, `YANDEX_DISK_TOKEN` нет — шаги пульта в облаке
   пропускаются). Облаку открыт только D4SuCE/oni (oni-releases — нет; выпуски выкладывает `release.yml`).
+  **Метки (`vX.Y.Z`) облако создать не может** (25.10.2026: посредник обрывает `git push` метки, API `git/refs` — 403):
+  автопилот доводит выпуск до коммита «Release x.y.z» в `main`, метку ставит и отправляет пользователь на ПК.
   Запись в GitHub из облака d4suceusa заработала 25.10.2026 в 11:56 МСК (пользователь подключил GitHub на claude.ai).
   **25.10.2026, 11:57 МСК — обе routine выключены** (пользователь работает в чате); включить — по его команде
   (RemoteTrigger `update` `{"enabled": true}` или на https://claude.ai/code/routines).
