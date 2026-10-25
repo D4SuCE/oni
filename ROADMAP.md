@@ -239,6 +239,10 @@ pavel_hope, обложки в авиарежиме, «остров».
 Облачный агент делает задачи по порядку, **одна задача — один запуск** (свежий чат), правила — `docs/autopilot.md`.
 Routine «Oni — разработка» (две на аккаунте d4suceusa, каждая раз в час со сдвигом 30 мин; созданы 25.10.2026 ночью),
 сообщения — задача GitHub с меткой `autopilot`.
+**25.10.2026, ночь (04:40–11:42 МСК):** 15 запусков, ни одного шага — облаку d4suceusa закрыта запись в D4SuCE/oni
+(`git push` и создание задачи — 403 «Claude doesn't have GitHub access to D4SuCE/oni for your organization»; читать
+можно). Нужно подключить GitHub на claude.ai под d4suceusa (https://claude.ai/customize/connectors) и дать приложению
+Claude доступ к D4SuCE/oni (https://github.com/apps/claude/installations/select_target). Задача 9 не начата.
 Отметки: `[~]` — начато (ветка, что сделано, что осталось), `[x]` — готово.
 
 1. [x] **Название источника на языке интерфейса** — «Запросы 24.10.2026 (вечер)», пункт 1. Выпуск (PATCH).
