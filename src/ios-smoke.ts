@@ -32,7 +32,26 @@ async function until(what: () => unknown, timeout: number) {
   return false;
 }
 
-const report = (step: string, ok: boolean, detail = '') => console.log(`SMOKE ${step} ${ok ? 'ok' : 'FAIL'}${detail ? ` ${detail}` : ''}`);
+/** Report lines held while a step may still get its second try (twice). */
+let held: string[] | null = null;
+const report = (step: string, ok: boolean, detail = '') => {
+  const line = `SMOKE ${step} ${ok ? 'ok' : 'FAIL'}${detail ? ` ${detail}` : ''}`;
+  if (held) held.push(line);
+  else console.log(line);
+};
+
+/** Steps that hang on the cloud Mac's speed (they passed and failed on the same code; ROADMAP,
+ * «Хвосты»): a failure gets one more try. The first try's failures are printed as SMOKE-SLOW (seen in
+ * the log, not failing the run); the second try's count. */
+async function twice(fn: () => Promise<void>) {
+  held = [];
+  await fn().catch((e) => held!.push(`SMOKE step-crash FAIL ${e}`));
+  const first = held;
+  held = null;
+  if (!first.some((l) => / FAIL( |$)/.test(l))) return first.forEach((l) => console.log(l));
+  first.forEach((l) => console.log(l.replace(/^SMOKE (\S+) FAIL/, 'SMOKE-SLOW $1 first try failed:')));
+  await fn();
+}
 const click = (selector: string) => (document.querySelector(selector) as HTMLElement | null)?.click();
 
 /** Sign-in: the redirect to music.yandex.ru with the token is caught in the app's sheet (on a phone
@@ -592,7 +611,8 @@ const REVIVE = 'oni-smoke-revive';
 async function revived() {
   sessionStorage.removeItem(REVIVE);
   const shown = await until(() => document.querySelector('[data-testid="nav-home"]'), 30000);
-  const playing = await until(() => wave()?.audio && !wave().audio.paused, 20000);
+  // Slow on the cloud Mac: the page loads anew and takes the playing track up (45 s of the run's 60).
+  const playing = await until(() => wave()?.audio && !wave().audio.paused, 45000);
   report('revived', shown && playing, `page ${shown ? 'shown' : 'not shown'}, music ${playing ? 'playing' : 'not seen playing'}`);
 }
 
@@ -995,12 +1015,12 @@ export async function runSmoke() {
     report('offline-playback', local, wave().audio.src.slice(0, 12));
     await nativePlayer();
     await awakeAfterPause();
-    await lanLink();
-    await iosPulse();
+    await twice(lanLink);
+    await twice(iosPulse);
     await crossfade();
     await levelling();
     await uploadPlays();
-    await fastStart();
+    await twice(fastStart);
     await intents();
     await backgroundDownload();
 
@@ -1029,7 +1049,7 @@ export async function runSmoke() {
     const { OniHaptics } = await import('./ui/haptics.ts');
     const tapped = await OniHaptics.tap({ kind: 'pick' }).then(() => '', (e) => String(e));
     report('haptics', !tapped, tapped);
-    await recap();
+    await twice(recap);
     await eqMatch().catch((e) => report('eq-match', false, String(e)));
     await eqButton().catch((e) => report('eq-button', false, String(e)));
     await voiceShortcuts();
