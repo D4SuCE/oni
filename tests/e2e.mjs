@@ -1523,7 +1523,11 @@ await step('another device in the player: its paused track taken up at its secon
 
     // 2. Playing there: this one is its remote — its track, "Playing on iPhone", the time going on.
     await write(names[0], phone({ playing: true, position: 60, changed: Date.now() + 2000 }));
-    await page.evaluate(() => window.__wave.sync.elsewhere.look(true));
+    // Disk lists a file just written a little late at times (a full run, 25.10.2026): looked at again, as Oni does.
+    for (let i = 0; i < 8 && !(await page.locator('[data-testid="playing-on"]').count()); i++) {
+      await page.evaluate(() => window.__wave.sync.elsewhere.look(true));
+      await page.waitForTimeout(i ? 1000 : 300);
+    }
     await page.locator('[data-testid="playing-on"]').first().waitFor({ timeout: 5000 });
     const on = await page.locator('[data-testid="playing-on"]').first().innerText();
     if (!/iPhone/.test(on)) throw new Error(`playing on: "${on}"`);
@@ -1616,7 +1620,11 @@ await step('who controls whom: a phone that is this one\'s remote is never made 
     // takes up its track nor becomes its remote, and says who controls it.
     await write(names[0], phone({ playing: false, remoteOf: ownId }));
     await write(names[2], { v: 1, from: { id: phoneId, platform: 'ios' }, at: Date.now(), commands: [] });
-    await look();
+    // Disk lists a file just written a little late at times: looked at again, as Oni does.
+    for (let i = 0; i < 8 && !(await page.evaluate(() => window.__wave.sync.elsewhere.useElsewhere.getState().remotes.length)); i++) {
+      await look();
+      await page.waitForTimeout(i ? 1000 : 300);
+    }
     await page.waitForFunction(() => window.__wave.sync.elsewhere.useElsewhere.getState().remotes.length, null, { timeout: 5000 });
     const shown = await playingOn();
     if (!/Управляет iPhone/.test(shown) || (await currentId()) !== mine) throw new Error(`with the phone as its remote: "${shown}", track ${await currentId()} (was ${mine})`);
