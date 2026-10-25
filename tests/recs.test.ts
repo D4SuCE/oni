@@ -351,6 +351,11 @@ await test('mix feedback: two skips in a row demote an artist for 30 days; a fin
   fb.recordPlay(solo8, 'skipped', NOW);
   assert(fb.isDemoted(8, NOW), 'A8: the duo skip and this one make two in a row');
   assert(!fb.isDemoted(7, NOW + 31 * DAY) && fb.keeps(solo7, NOW + 31 * DAY), 'back after 30 days');
+  // Listed one by one, each to bring back alone (the user, 25.10.2026: the phone showed "and 16 more", no list).
+  const listed = fb.demotedList(NOW);
+  assert(listed.map((a) => `${a.id}:${a.name}`).join() === '7:A7,8:A8' && listed.every((a) => a.until === NOW + 30 * DAY), `listed: ${JSON.stringify(listed)}`);
+  fb.liftArtist(7);
+  assert(!fb.isDemoted(7, NOW) && fb.keeps(solo7, NOW) && fb.isDemoted(8, NOW), 'A7 alone back');
 
   fb.reset();
   assert(fb.keeps(solo7, NOW) && fb.keeps(solo8, NOW) && fb.hiddenCount() === 0, 'reset brings everything back');

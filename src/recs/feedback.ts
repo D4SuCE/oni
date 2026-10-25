@@ -33,6 +33,13 @@ interface Saved {
   cards?: Record<string, Track>;
 }
 
+export interface DemotedArtist {
+  id: string;
+  name: string;
+  /** Back in the mixes then (ms). */
+  until: number;
+}
+
 export interface SkippedEntry {
   track: Track;
   /** Hidden by hand: for good. */
@@ -159,6 +166,20 @@ export class RecsFeedback {
     return Object.entries(this.artists)
       .filter(([id]) => this.isDemoted(id, now))
       .map(([, s]) => s.name);
+  }
+
+  /** Demoted artists, each with the day it ends, for the list in Settings (by name). */
+  demotedList(now: number): DemotedArtist[] {
+    return Object.entries(this.artists)
+      .filter(([id]) => this.isDemoted(id, now))
+      .map(([id, s]) => ({ id, name: s.name, until: s.demotedUntil! }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /** An artist back in the mixes before its 30 days are up; its skips count from the start. */
+  liftArtist(artistId: string | number) {
+    delete this.artists[String(artistId)];
+    this.save(true);
   }
 
   /** The hidden and the left out, by name, for the list in Settings. */

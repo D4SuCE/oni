@@ -49,6 +49,28 @@ await step('hide a track from the mixes, then bring it back from Settings ("Skip
   await page.click('[data-testid="nav-home"]');
 });
 
+await step('an artist left out of the mixes is listed in Settings by name and comes back alone (no track skipped needed)', async () => {
+  // The user, 25.10.2026: the phone showed "… and 16 more" with nothing to open (no track was skipped there).
+  await page.evaluate(() => {
+    const t = { id: 'e2e-demoted', title: 'e2e', artists: [{ id: 'e2e-artist', name: 'E2E Artist' }], albums: [] };
+    window.__wave.recsFeedback.recordPlay(t, 'skipped', Date.now());
+    window.__wave.recsFeedback.recordPlay(t, 'skipped', Date.now());
+  });
+  try {
+    await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
+    await page.click('[data-testid="skipped-toggle"]');
+    const row = page.locator('[data-testid="demoted-row"]', { hasText: 'E2E Artist' });
+    await row.waitFor({ timeout: 3000 });
+    if (!/до /.test(await row.innerText())) throw new Error(`row: ${await row.innerText()}`);
+    await row.locator('[data-testid="demoted-back"]').click();
+    await row.waitFor({ state: 'detached', timeout: 3000 });
+    if (await page.evaluate(() => window.__wave.recsFeedback.isDemoted('e2e-artist', Date.now()))) throw new Error('still demoted');
+  } finally {
+    await page.evaluate(() => window.__wave.recsFeedback.liftArtist('e2e-artist'));
+    await page.click('[data-testid="nav-home"]');
+  }
+});
+
 await step('smart playlists: a section of their own on Home; "Liked this month" is the last 30 days of likes, plays as itself, and a new like is in it at once (reverted)', async () => {
   await page.click('[data-testid="nav-home"]');
   const section = page.locator('[data-testid="smart-playlists"]');

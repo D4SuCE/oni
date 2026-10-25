@@ -468,7 +468,8 @@ function MixFeedback() {
   const list = recsFeedback.skippedList(now);
   // Hidden before the list kept their names: counted, not listed.
   const older = recsFeedback.hiddenCount(now) - list.length;
-  const artists = recsFeedback.demotedArtists(now);
+  const demoted = recsFeedback.demotedList(now);
+  const artists = demoted.map((a) => a.name);
   if (!list.length && !older && !artists.length) return null;
   const names = artists.length > 3 ? t.andCount(artists.slice(0, 3).join(', '), artists.length - 3) : artists.join(', ');
   const date = (ms: number) => new Date(ms).toLocaleDateString(lang, { day: 'numeric', month: 'short' });
@@ -485,7 +486,8 @@ function MixFeedback() {
           {artists.length > 0 && <div>{t.demoted(names)}</div>}
         </div>
         <div className="update-actions">
-          {list.length > 0 && (
+          {/* The artists too: with no track skipped the phone showed only "… and 16 more", nothing to open (the user, 25.10.2026). */}
+          {(list.length > 0 || demoted.length > 0) && (
             <button className="btn ghost" onClick={() => setOpen((o) => !o)} data-testid="skipped-toggle">
               {open ? t.hideList : t.showList}
             </button>
@@ -497,7 +499,19 @@ function MixFeedback() {
       </div>
       {open && (
         <div className="skipped-list" data-testid="skipped-list">
-          <div className="hint">{t.skippedHint}</div>
+          {demoted.length > 0 && <div className="hint">{t.demotedHint}</div>}
+          {demoted.map((a) => (
+            <div className="skipped-row" key={`artist-${a.id}`} data-testid="demoted-row">
+              <div className="skipped-name">
+                <div className="skipped-title">{a.name}</div>
+                <div className="hint">{t.until(date(a.until))}</div>
+              </div>
+              <button className="btn ghost small" onClick={() => recsFeedback.liftArtist(a.id)} data-testid="demoted-back">
+                <Undo2 size={14} /> {t.back}
+              </button>
+            </div>
+          ))}
+          {list.length > 0 && <div className="hint">{t.skippedHint}</div>}
           {list.map(({ track, manual, until }) => (
             <div className="skipped-row" key={track.id} data-testid="skipped-row">
               <div className="skipped-name">

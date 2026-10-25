@@ -33,8 +33,9 @@ export const SLOW = process.env.CI ? 3 : 1;
 const only = process.env.E2E_ONLY ? new RegExp(process.env.E2E_ONLY, 'i') : null;
 let first = true;
 
-/** A broken connection to Yandex or Disk, not the app: the step is worth one more try. */
-const NETWORK = /fetch failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket hang up|Yandex Disk: no answer|net::ERR_/i;
+/** A broken connection to Yandex or Disk, not the app: the step is worth one more try. Disk also
+ * answers 404 for a file just written now and then, and 5xx when busy. */
+const NETWORK = /fetch failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket hang up|Yandex Disk: no answer|Yandex Disk[^:]*: HTTP (404|5\d\d)|net::ERR_/i;
 
 /** After a failed step: menus, dialogs and sheets it left open are closed, so the next steps are
  * not blocked by them (one failure took the rest down with it). What plays is left as it is. */
