@@ -382,7 +382,9 @@ async function ownWave() {
   click('[data-testid="own-wave"]');
   const player = (wave() as unknown as { usePlayer: { getState(): { source?: { station?: { seed: string } } } } }).usePlayer;
   const playing = await until(() => player.getState().source?.station?.seed === 'oni:own' && !wave().audio.paused && wave().audio.currentTime > 1, 60000);
-  report('own-wave', Boolean(button) && oneRow && playing, `buttons at ${tops.join('/')}; ${playing ? 'playing' : 'not playing'} "${wave().usePlayer.getState().queue[wave().usePlayer.getState().index]?.title ?? ''}"`);
+  const widths = [...document.querySelectorAll<HTMLElement>('.wave-actions .btn')].map((b) => Math.round(b.getBoundingClientRect().width));
+  const error = (wave().usePlayer.getState() as { error?: string | null }).error ?? '';
+  report('own-wave', Boolean(button) && oneRow && playing, `buttons at ${tops.join('/')}, ${widths.join('+')} wide in ${Math.round(document.querySelector('.wave-actions')?.getBoundingClientRect().width ?? 0)}; ${playing ? 'playing' : `not playing (${error})`} "${wave().usePlayer.getState().queue[wave().usePlayer.getState().index]?.title ?? ''}"`);
 }
 
 /** The account's own upload Yandex keeps as "aac" (MP4 inside) plays: it would not open (the user, 25.10.2026). */

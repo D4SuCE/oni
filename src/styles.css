@@ -1473,9 +1473,11 @@ html.ios .card-play {
 html.ios .wave-actions .own-wave .btn-label {
   display: none;
 }
-html.ios .wave-actions .own-wave {
-  padding-left: 16px;
-  padding-right: 16px;
+html.ios .wave-actions {
+  gap: 8px;
+}
+html.ios .wave-actions .btn.big {
+  padding: 0 16px;
 }
 .wave-footer {
   margin-top: 18px;

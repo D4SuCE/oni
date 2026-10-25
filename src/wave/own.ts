@@ -134,12 +134,13 @@ export class OwnWave implements Station {
     }
     // Much played, not liked: a favourite too.
     for (const h of heard) if (h.plays >= 3) this.add({ track: h.track, pool: 'favorite', score: 1 + Math.min(h.plays, 10) / 4 });
-    // Similar to what is played now and to the latest likes.
+    // Similar to what is played now and to the latest likes: asked now, not waited for (the first
+    // track is a favourite; the player gives a wave 15 s to start, and the cloud iPhone missed it).
     const seeds = [
       ...heard.filter((h) => now - h.last < 14 * DAY).sort((a, b) => b.plays - a.plays).slice(0, START_SEEDS - 2).map((h) => h.track),
       ...likes.slice(0, 2).map((l) => l.track),
     ];
-    await Promise.all([...new Map(seeds.map((t) => [String(t.id), t])).values()].map((t) => this.askSimilar(t, 1)));
+    for (const t of new Map(seeds.map((t) => [String(t.id), t])).values()) void this.askSimilar(t, 1);
     // Releases come in their own time (a request per artist): the station does not wait for them.
     this.sources
       .releases()
