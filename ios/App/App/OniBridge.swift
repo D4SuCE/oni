@@ -10,6 +10,7 @@ import CryptoKit
 import ActivityKit
 import WidgetKit
 import Network
+import Accelerate
 
 /// The app's own bridge controller: registers the plugins that live in this project.
 class OniViewController: CAPBridgeViewController {
@@ -2014,7 +2015,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         if let fetch = stream, !fetch.state.done { return }
         let url = stream?.target ?? file.url
         endSearch = true
-        DispatchQueue.global(qos: .utility).async { [weak self] in
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let end = musicEndIn(url)
             DispatchQueue.main.async {
                 guard let self = self else { return }
@@ -2243,28 +2244,58 @@ func showOnLockScreen(playing: Bool, at time: Double) {
 /// Quieter than this is silence: -50 dBFS.
 private let silentLevel: Float = 0.00316
 
-/// The frame just after the last sound in [from, to) of a file (`last`), or of the first sound (not `last`).
-private func soundIn(_ file: AVAudioFile, from: AVAudioFramePosition, to: AVAudioFramePosition, last: Bool) -> AVAudioFramePosition? {
-    let chunk: AVAudioFrameCount = 8192
+/// The loudest sample of a chunk, all channels (Accelerate: quick even where the build is not optimized).
+private func peak(_ buffer: AVAudioPCMBuffer) -> Float {
+    guard let data = buffer.floatChannelData else { return 0 }
+    var top: Float = 0
+    for c in 0..<Int(buffer.format.channelCount) {
+        var m: Float = 0
+        vDSP_maxmgv(data[c], 1, &m, vDSP_Length(buffer.frameLength))
+        top = max(top, m)
+    }
+    return top
+}
+
+/// Reads `count` frames at `at` into `buffer`; false when nothing could be read.
+private func readChunk(_ file: AVAudioFile, at: AVAudioFramePosition, count: AVAudioFrameCount, into buffer: AVAudioPCMBuffer) -> Bool {
+    file.framePosition = at
+    return (try? file.read(into: buffer, frameCount: count)) != nil && buffer.frameLength > 0
+}
+
+/// The frame of the first sound in [from, to) of a file, looked at chunk by chunk from the start.
+private func firstSound(_ file: AVAudioFile, from: AVAudioFramePosition, to: AVAudioFramePosition) -> AVAudioFramePosition? {
+    let chunk: AVAudioFrameCount = 4096
     guard let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: chunk) else { return nil }
-    let channels = Int(file.processingFormat.channelCount)
-    file.framePosition = from
     var at = from
-    var found: AVAudioFramePosition?
     while at < to {
-        let want = AVAudioFrameCount(min(AVAudioFramePosition(chunk), to - at))
-        guard (try? file.read(into: buffer, frameCount: want)) != nil, buffer.frameLength > 0, let data = buffer.floatChannelData else { break }
-        let count = Int(buffer.frameLength)
-        for i in 0..<count {
-            for c in 0..<channels where abs(data[c][i]) > silentLevel {
-                if !last { return at + AVAudioFramePosition(i) }
-                found = at + AVAudioFramePosition(i) + 1
-                break
+        guard readChunk(file, at: at, count: AVAudioFrameCount(min(AVAudioFramePosition(chunk), to - at)), into: buffer) else { return nil }
+        if peak(buffer) > silentLevel, let data = buffer.floatChannelData {
+            for i in 0..<Int(buffer.frameLength) {
+                for c in 0..<Int(buffer.format.channelCount) where abs(data[c][i]) > silentLevel { return at + AVAudioFramePosition(i) }
             }
         }
-        at += AVAudioFramePosition(count)
+        at += AVAudioFramePosition(buffer.frameLength)
     }
-    return found
+    return nil
+}
+
+/// The frame just after the last sound in [from, to) of a file, looked at chunk by chunk from the end
+/// (a track's silence at its end is short: a few chunks are read, not the whole stretch).
+private func lastSound(_ file: AVAudioFile, from: AVAudioFramePosition, to: AVAudioFramePosition) -> AVAudioFramePosition? {
+    let chunk: AVAudioFrameCount = 8192
+    guard let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: chunk) else { return nil }
+    var end = to
+    while end > from {
+        let at = max(from, end - AVAudioFramePosition(chunk))
+        guard readChunk(file, at: at, count: AVAudioFrameCount(end - at), into: buffer) else { return nil }
+        if peak(buffer) > silentLevel, let data = buffer.floatChannelData {
+            for i in stride(from: Int(buffer.frameLength) - 1, through: 0, by: -1) {
+                for c in 0..<Int(buffer.format.channelCount) where abs(data[c][i]) > silentLevel { return at + AVAudioFramePosition(i) + 1 }
+            }
+        }
+        end = at
+    }
+    return nil
 }
 
 /// Seconds into the file where its music ends (its last 30 s looked at); nil if it cannot be read.
@@ -2272,7 +2303,7 @@ private func musicEndIn(_ url: URL) -> Double? {
     guard let file = try? AVAudioFile(forReading: url) else { return nil }
     let rate = file.processingFormat.sampleRate
     let from = max(0, file.length - AVAudioFramePosition(30 * rate))
-    return Double(soundIn(file, from: from, to: file.length, last: true) ?? from) / rate
+    return Double(lastSound(file, from: from, to: file.length) ?? from) / rate
 }
 
 /// Where to start a track in a crossfade: past its silence at the start (at least 0.25 s of it, at
@@ -2281,7 +2312,7 @@ private func leadIn(_ url: URL) -> Double {
     guard let file = try? AVAudioFile(forReading: url) else { return 0 }
     let rate = file.processingFormat.sampleRate
     let head = min(file.length, AVAudioFramePosition(8 * rate))
-    guard let first = soundIn(file, from: 0, to: head, last: false) else { return 0 }
+    guard let first = firstSound(file, from: 0, to: head) else { return 0 }
     let lead = Double(first) / rate
     return lead >= 0.25 ? lead : 0
 }
