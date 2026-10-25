@@ -74,6 +74,20 @@ export class RecentPlays {
 
   add(play: RecentPlay) {
     this.items = [{ ...play, track: trimTrack(play.track) }, ...this.items].slice(0, LIMIT);
+    this.save();
+  }
+
+  /** This device's own plays as its file on Disk keeps them: those missing here come back (src/sync). */
+  restore(plays: RecentPlay[]) {
+    const key = (p: RecentPlay) => `${p.track?.id}@${p.at}`;
+    const have = new Set(this.items.map(key));
+    const back = plays.filter((p) => p?.track && !have.has(key(p)));
+    if (!back.length) return;
+    this.items = [...this.items, ...back.map((p) => ({ ...p, track: trimTrack(p.track) }))].sort((a, b) => b.at - a.at).slice(0, LIMIT);
+    this.save();
+  }
+
+  private save() {
     try {
       this.store.setItem(KEY, JSON.stringify(this.items));
     } catch {

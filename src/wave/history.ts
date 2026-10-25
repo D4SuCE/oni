@@ -133,6 +133,18 @@ export class ListenHistory {
     if (changed) this.save();
   }
 
+  /** This device's own counts as its file on Disk keeps them: what is missing here comes back (src/sync). */
+  restore(entries: Record<string, HistoryEntry>) {
+    let changed = false;
+    for (const [key, d] of Object.entries(entries ?? {})) {
+      const e = this.entries[key];
+      if (e && e.plays >= d.plays && e.skips >= d.skips && e.last >= d.last) continue;
+      this.entries[key] = { plays: Math.max(e?.plays ?? 0, d.plays), skips: Math.max(e?.skips ?? 0, d.skips), last: Math.max(e?.last ?? 0, d.last) };
+      changed = true;
+    }
+    if (changed) this.save();
+  }
+
   /**
    * The songs of tracks heard before songs were kept (cards from the play log, which has their
    * titles): each song as heard as its most heard track. Run at every start: it changes nothing twice.

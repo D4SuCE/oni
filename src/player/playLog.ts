@@ -96,6 +96,22 @@ export class PlayLog {
     return { plays, tracks };
   }
 
+  /** This device's own plays as its file on Disk keeps them: those missing here come back (src/sync). */
+  restore(log: DeviceLog) {
+    const have = new Set(this.data.plays.filter((p) => !p.r).map((p) => `${p.id}@${p.at}`));
+    let back = false;
+    for (const p of log.plays ?? []) {
+      const track = log.tracks?.[p.id];
+      if (p.r || !track || have.has(`${p.id}@${p.at}`)) continue;
+      have.add(`${p.id}@${p.at}`);
+      this.add(track, { id: p.id, at: p.at, s: p.s });
+      back = true;
+    }
+    if (!back) return;
+    this.data.plays.sort((a, b) => a.at - b.at);
+    this.save();
+  }
+
   /** The other devices' logs: recaps count their plays, read, never saved here. */
   setRemote(devices: DeviceLog[]) {
     this.remote = devices;

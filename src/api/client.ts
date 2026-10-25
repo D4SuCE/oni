@@ -23,11 +23,27 @@ export const storage = {
   setItem(key: string, value: string) {
     try {
       localStorage.setItem(key, value);
-    } catch {
-      /* ignore */
+    } catch (e) {
+      // Full (the iPhone's page has about 5 MB): what is only a cache makes room, and it is tried
+      // again. It went by silently, and a night of plays was never kept on the phone (the user, 25.10.2026).
+      for (const cache of CACHES) {
+        if (cache === key) continue;
+        try {
+          localStorage.removeItem(cache);
+          localStorage.setItem(key, value);
+          console.warn(`[storage] full: ${cache} let go for ${key}`);
+          return;
+        } catch {
+          /* still full: the next one */
+        }
+      }
+      console.warn(`[storage] ${key} not kept (${value.length} characters)`, e);
     }
   },
 };
+
+/** Kept only to be quick: made again when gone. */
+const CACHES = ['recs.v1'];
 
 export function loadJson<T>(key: string, fallback: T): T {
   try {

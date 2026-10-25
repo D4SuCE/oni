@@ -27,9 +27,9 @@ export interface DeviceFile {
 
 /** The parts of this device's memory that are shared. */
 export interface Shared {
-  history: { own(): Record<string, HistoryEntry>; setRemote(devices: Record<string, HistoryEntry>[]): void };
-  playLog: { own(): DeviceLog; setRemote(devices: DeviceLog[]): void };
-  recent: { own(): RecentPlay[]; setRemote(plays: RecentPlay[]): void };
+  history: { own(): Record<string, HistoryEntry>; setRemote(devices: Record<string, HistoryEntry>[]): void; restore(entries: Record<string, HistoryEntry>): void };
+  playLog: { own(): DeviceLog; setRemote(devices: DeviceLog[]): void; restore(log: DeviceLog): void };
+  recent: { own(): RecentPlay[]; setRemote(plays: RecentPlay[]): void; restore(plays: RecentPlay[]): void };
 }
 
 const PREFIX = 'device-';
@@ -40,6 +40,10 @@ export class DeviceSync {
   private theirs = new Map<string, { modified: string; file: DeviceFile }>();
   /** What this device last sent (without its time): unchanged, it is not sent again. */
   private sent = '';
+  /** This device's own file on Disk has been read (and what this one lost taken back from it). Until
+   * then nothing is sent: what is here may be less than the file there (the user, 25.10.2026: the
+   * phone's storage lost a night of plays, Oni started anew and sent the rest over the file). */
+  private restored = false;
 
   private disk: DiskLike;
   private shared: Shared;
@@ -64,6 +68,7 @@ export class DeviceSync {
 
   /** Sends this device's file if anything changed since the last time; true when sent. */
   async push(): Promise<boolean> {
+    if (!this.restored) return false;
     const body = { history: this.shared.history.own(), log: this.shared.playLog.own(), recent: this.shared.recent.own() };
     const key = JSON.stringify(body);
     if (key === this.sent) return false;
@@ -75,7 +80,9 @@ export class DeviceSync {
 
   /** Reads the files changed since the last time, and lays the other devices beside this one. */
   async pull(): Promise<void> {
-    const listed = (await this.disk.list()).filter((f) => f.name.startsWith(PREFIX) && f.name.endsWith('.json') && f.name !== this.fileName);
+    const all = await this.disk.list();
+    if (!this.restored) await this.restore(all.some((f) => f.name === this.fileName));
+    const listed = all.filter((f) => f.name.startsWith(PREFIX) && f.name.endsWith('.json') && f.name !== this.fileName);
     const names = new Set(listed.map((f) => f.name));
     for (const name of this.theirs.keys()) if (!names.has(name)) this.theirs.delete(name);
     for (const f of listed) {
@@ -93,10 +100,30 @@ export class DeviceSync {
     this.apply();
   }
 
+  /** This device's own file, once: what it keeps and this one lost comes back here. */
+  private async restore(exists: boolean) {
+    if (exists) {
+      let file: DeviceFile | null = null;
+      try {
+        file = JSON.parse(await this.disk.read(this.fileName)) as DeviceFile;
+      } catch (e) {
+        if (!(e instanceof SyntaxError)) throw e; // no network: not read, nothing sent; the next round tries again
+        console.warn(`[sync] ${this.fileName} is not readable, left alone`, e);
+      }
+      if (file?.v === 1 && file.device?.id === this.device.id) {
+        this.shared.history.restore(file.history ?? {});
+        this.shared.playLog.restore(file.log ?? { plays: [], tracks: {} });
+        this.shared.recent.restore(file.recent ?? []);
+      }
+    }
+    this.restored = true;
+  }
+
   /** Forgets the other devices (Disk disconnected). */
   clear() {
     this.theirs.clear();
     this.sent = '';
+    this.restored = false;
     this.apply();
   }
 
