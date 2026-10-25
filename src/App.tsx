@@ -31,6 +31,7 @@ import { Search } from './views/Search.tsx';
 import { SettingsView } from './views/Settings.tsx';
 import { isIos } from './ui/platform.ts';
 import { ownToKeep } from './ui/ownOffline.ts';
+import { leadingSilence } from './player/silence.ts';
 import { useSwipeBack } from './ui/swipe.ts';
 import { useCover } from './ui/offline.ts';
 
@@ -224,5 +225,5 @@ export function App() {
 
 // Handy for debugging and for the automated UI test.
 Object.assign(window, {
-  __wave: { offline, storage, ownToKeep, usePlayer, useApp, audio, api, navigate, playTracks, setSleep, setVolume, toggleLike, eqOutputLevel, pulseLevel, pulseTempo, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } } },
+  __wave: { offline, storage, ownToKeep, silence: { leadingSilence }, usePlayer, useApp, audio, api, navigate, playTracks, setSleep, setVolume, toggleLike, eqOutputLevel, pulseLevel, pulseTempo, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } } },
 });

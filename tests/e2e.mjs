@@ -1230,6 +1230,34 @@ await step('crossfade: the next track starts before this one ends, both sound fo
   }
 });
 
+await step("smart crossfade: the next track's silence at its start is found and skipped (a made-up track: 1.5 s silence, then a tone)", async () => {
+  // The user's pick, 24.10.2026: the next track comes in with its first sound, not with silence.
+  const got = await page.evaluate(async () => {
+    const rate = 44100;
+    const n = rate * 4;
+    const pcm = new Int16Array(n);
+    for (let i = Math.round(1.5 * rate); i < n; i++) pcm[i] = Math.round(12000 * Math.sin((2 * Math.PI * 440 * i) / rate));
+    const wav = new DataView(new ArrayBuffer(44 + n * 2));
+    const text = (o, t) => [...t].forEach((ch, k) => wav.setUint8(o + k, ch.charCodeAt(0)));
+    text(0, 'RIFF'); wav.setUint32(4, 36 + n * 2, true); text(8, 'WAVEfmt '); wav.setUint32(16, 16, true); wav.setUint16(20, 1, true); wav.setUint16(22, 1, true);
+    wav.setUint32(24, rate, true); wav.setUint32(28, rate * 2, true); wav.setUint16(32, 2, true); wav.setUint16(34, 16, true); text(36, 'data'); wav.setUint32(40, n * 2, true);
+    pcm.forEach((v, k) => wav.setInt16(44 + k * 2, v, true));
+    const url = URL.createObjectURL(new Blob([wav.buffer], { type: 'audio/wav' }));
+    const lead = await window.__wave.silence.leadingSilence(url);
+    // The desktop's crossfade starts it from there.
+    const a = window.__wave.audio;
+    a.volume = 0;
+    await a.crossfade(url, 300, () => {}, lead);
+    const at = a.currentTime;
+    a.pause();
+    a.volume = window.__wave.usePlayer.getState().volume;
+    URL.revokeObjectURL(url);
+    return { lead, at };
+  });
+  if (Math.abs(got.lead - 1.5) > 0.05 || got.at < 1.4) throw new Error(JSON.stringify(got));
+  console.log(`       silence at the start found: ${got.lead.toFixed(2)} s, started at ${got.at.toFixed(2)} s`);
+});
+
 await step('crossfade, the next track slow to load: the old one ends meanwhile, and the next still plays (not skipped)', async () => {
   // The user's worry: tracks often load slowly. The crossing starts 4 s before the end, the next
   // track's address takes 5 s, so the old one ends first; its end must not count as a skip. Its

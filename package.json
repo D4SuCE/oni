@@ -17,7 +17,7 @@
     "dist": "vite build && electron-builder --win --publish never",
     "test:wave": "node --experimental-strip-types tests/wave.test.ts",
     "lint": "oxlint",
-    "check": "npm run typecheck && npm run lint && npm run test:wave && npm run test:recs && npm run test:beat && npm run test:offline && npm run test:links && npm run test:background && npm run test:playlog && npm run test:plays && npm run test:eq && npm run test:sync && npm run test:playing && npm run test:lyrics",
+    "check": "npm run typecheck && npm run lint && npm run test:wave && npm run test:recs && npm run test:beat && npm run test:offline && npm run test:links && npm run test:background && npm run test:playlog && npm run test:plays && npm run test:eq && npm run test:sync && npm run test:playing && npm run test:lyrics && npm run test:silence",
     "icons": "node scripts/icons.mjs",
     "test:recs": "node --experimental-strip-types tests/recs.test.ts",
     "brush-font": "python scripts/brush-font.py node_modules/@fontsource/yuji-boku",
@@ -31,6 +31,7 @@
     "test:sync": "node --experimental-strip-types tests/sync.test.ts",
     "test:playing": "node --experimental-strip-types tests/playing.test.ts",
     "test:lyrics": "node --experimental-strip-types tests/lyrics.test.ts",
+    "test:silence": "node --experimental-strip-types tests/silence.test.ts",
     "release": "node scripts/release.mjs",
     "screenshots": "vite build && node scripts/screenshots.mjs"
   },

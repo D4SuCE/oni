@@ -48,11 +48,13 @@ export class DualAudio extends EventTarget {
    * Starts `url` on the other element and crosses over to it in `ms`. Resolves when it plays;
    * `ended` is called once the old one is silent (for freeing what it played).
    */
-  async crossfade(url: string, ms: number, ended: () => void = () => {}) {
+  async crossfade(url: string, ms: number, ended: () => void = () => {}, startAt = 0) {
     this.endFade();
     const from = this.el;
     const to = this.other;
     to.src = url;
+    // Past its silence at the start (the smart crossfade, silence.ts).
+    if (startAt > 0) to.currentTime = startAt;
     to.volume = 0;
     this.active = 1 - this.active;
     this.dispatchEvent(new Event('emptied'));

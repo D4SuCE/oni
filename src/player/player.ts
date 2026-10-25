@@ -18,6 +18,7 @@ import { PlayStats, type Origin } from './stats.ts';
 import { isIos } from '../ui/platform.ts';
 import { audio } from './audio.ts';
 import { audioExt, OniPlayer, type NativeAudio } from './nativeAudio.ts';
+import { leadingSilence, QuietTail } from './silence.ts';
 import type { CommandName } from '../sync/playing.ts';
 
 export type Repeat = 'off' | 'all' | 'one';
@@ -395,10 +396,28 @@ function applyVolume() {
 }
 
 /** The audio element can cross from one track into the next (dualAudio.ts; the iPhone's native player). */
-type Crossfading = { crossfade(url: string, ms: number, ended?: () => void): Promise<void> };
+type Crossfading = { crossfade(url: string, ms: number, ended?: () => void, startAt?: number): Promise<void>; musicEnd?: number };
 const canCrossfade = () => typeof (audio as unknown as Partial<Crossfading>).crossfade === 'function';
 /** This track's crossfade has begun (it is set off once, near its end). */
 let crossStarted = false;
+
+/** The desktop's ear for this track's end (silence.ts): the level after its two elements (eq.ts),
+ * asked for the first time a crossfade could use it (that sets up the audio graph). */
+const tail = new QuietTail();
+let ear: AnalyserNode | null = null;
+let earAsked = false;
+function quietTail(t: number) {
+  if (!ear) {
+    if (!earAsked) {
+      earAsked = true;
+      import('./eq.ts').then((m) => void (m.canAnalyzeAudio() && (ear = m.tapAnalyser()))).catch(() => {});
+    }
+    return false;
+  }
+  const data = new Float32Array(ear.fftSize);
+  ear.getFloatTimeDomainData(data);
+  return tail.feed(t, Math.sqrt(data.reduce((sum, v) => sum + v * v, 0) / data.length), audio.volume);
+}
 /** The crossfade's next track is still loading (a slow address or file): the old track plays on
  * meanwhile, and its clock and its end are not the next one's — its end would skip the next. */
 let crossLoading = false;
@@ -409,6 +428,7 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
   if (!t) return;
   const seq = ++loadSeq;
   crossStarted = false;
+  tail.reset();
   stale = false;
   // Taken over from another device: it goes on from where it was there.
   const resume = resumeAt?.id === t.id ? resumeAt.seconds : 0;
@@ -453,9 +473,13 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
       const old = localUrl;
       localUrl = local ? URL.createObjectURL(local.blob) : null;
       set({ stream: { codec: stream.codec, bitrate: stream.bitrate } });
-      await (audio as unknown as Crossfading).crossfade(sealedKey ? `oni-sealed:${t.id}` : (localUrl ?? stream.url), fade * 1000, () => {
+      const url = sealedKey ? `oni-sealed:${t.id}` : (localUrl ?? stream.url);
+      // The desktop starts it past its silence at the start (the iPhone's player does that itself).
+      const lead = isIos ? 0 : await leadingSilence(url);
+      if (seq !== loadSeq) return;
+      await (audio as unknown as Crossfading).crossfade(url, fade * 1000, () => {
         if (old) URL.revokeObjectURL(old);
-      });
+      }, lead);
       // After the crossing has begun: this track's level (normalization) leads the fade, not the old one's.
       applyVolume();
     } else {
@@ -1064,7 +1088,12 @@ audio.addEventListener('timeupdate', () => {
   // not when the sleep timer stops after this track, not for tracks too short for it).
   const fade = get().crossfade;
   const d = audio.duration;
-  if (fade > 0 && !crossStarted && !audio.paused && canCrossfade() && Number.isFinite(d) && d > fade * 3 && d - t <= fade && get().repeat !== 'one' && !get().sleep.afterTrack) {
+  // Smart: where the music really ends, not the file (silence.ts): the iPhone's player finds it in the
+  // file; the desktop hears it, quiet in the last stretch.
+  const found = (audio as unknown as Crossfading).musicEnd;
+  const end = Number.isFinite(found) && found! > fade * 2 && found! < d ? found! : d;
+  const heard = fade > 0 && !isIos && !crossStarted && Number.isFinite(d) && d - t <= fade + 30 && quietTail(t);
+  if (fade > 0 && !crossStarted && !audio.paused && canCrossfade() && Number.isFinite(d) && d > fade * 3 && (end - t <= fade || heard) && get().repeat !== 'one' && !get().sleep.afterTrack) {
     crossStarted = true;
     crossLoading = true;
     void next(false, fade).finally(() => (crossLoading = false));

@@ -1155,6 +1155,11 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     private var opens = 0
     /// The track playing, while it is still arriving (nil once whole, or for a file from disk).
     private var stream: TrackFetch?
+    /// Where the music ends in the track playing, its silence after it left out (the smart crossfade,
+    /// src/player/silence.ts): looked for once its file is whole; `endOf` the file it is for.
+    private var musicEnd: Double?
+    private var endOf: AVAudioFile?
+    private var endSearch = false
     /// Its length as the page knows it (the file's own is only known once whole).
     private var durationHint: Double = 0
     /// Frames handed to the node so far, pieces not yet played, and whether it waits for data.
@@ -1513,6 +1518,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         pausedAt = 0
         connect(file)
         self.file = file
+        musicEnd = nil
+        endOf = file
         schedule(from: 0)
     }
 
@@ -1538,8 +1545,12 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         node.volume = 0
         connect(file)
         self.file = file
-        pausedAt = 0
-        schedule(from: 0)
+        musicEnd = nil
+        endOf = file
+        // From its first sound, past the silence at its start (the smart crossfade).
+        let lead = leadIn(file.url)
+        pausedAt = lead
+        schedule(from: AVAudioFramePosition(lead * file.processingFormat.sampleRate))
         if !stalled { node.play() }
         tail = old
         let start = Date()
@@ -1982,8 +1993,28 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     }
 
     private func tick() {
-        notifyListeners("time", data: ["time": position, "duration": duration, "playing": playing, "waiting": playing && stalled])
+        var data: [String: Any] = ["time": position, "duration": duration, "playing": playing, "waiting": playing && stalled]
+        if let end = musicEnd { data["musicEnd"] = end }
+        notifyListeners("time", data: data)
+        findMusicEnd()
         if playing && fading == nil && tail == nil { watchOthers() }
+    }
+
+    /// The track's music end, looked for in the background once its file is whole (a track still
+    /// arriving has no end to look at yet).
+    private func findMusicEnd() {
+        guard musicEnd == nil, !endSearch, let file = file, endOf === file else { return }
+        if let fetch = stream, !fetch.state.done { return }
+        let url = stream?.target ?? file.url
+        endSearch = true
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let end = musicEndIn(url)
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.endSearch = false
+                if self.endOf === file { self.musicEnd = end }
+            }
+        }
     }
 
     /// Whether another app played the last time the clock looked.
@@ -2197,4 +2228,52 @@ func showOnLockScreen(playing: Bool, at time: Double) {
         shared.playing = playing
         if NowPlayingShare.write(shared) { WidgetCenter.shared.reloadTimelines(ofKind: "OniRemote") }
     }
+}
+
+// The smart crossfade (src/player/silence.ts): where a track's music is, read from its file.
+
+/// Quieter than this is silence: -50 dBFS.
+private let silentLevel: Float = 0.00316
+
+/// The frame just after the last sound in [from, to) of a file (`last`), or of the first sound (not `last`).
+private func soundIn(_ file: AVAudioFile, from: AVAudioFramePosition, to: AVAudioFramePosition, last: Bool) -> AVAudioFramePosition? {
+    let chunk: AVAudioFrameCount = 8192
+    guard let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: chunk) else { return nil }
+    let channels = Int(file.processingFormat.channelCount)
+    file.framePosition = from
+    var at = from
+    var found: AVAudioFramePosition?
+    while at < to {
+        let want = AVAudioFrameCount(min(AVAudioFramePosition(chunk), to - at))
+        guard (try? file.read(into: buffer, frameCount: want)) != nil, buffer.frameLength > 0, let data = buffer.floatChannelData else { break }
+        let count = Int(buffer.frameLength)
+        for i in 0..<count {
+            for c in 0..<channels where abs(data[c][i]) > silentLevel {
+                if !last { return at + AVAudioFramePosition(i) }
+                found = at + AVAudioFramePosition(i) + 1
+                break
+            }
+        }
+        at += AVAudioFramePosition(count)
+    }
+    return found
+}
+
+/// Seconds into the file where its music ends (its last 30 s looked at); nil if it cannot be read.
+private func musicEndIn(_ url: URL) -> Double? {
+    guard let file = try? AVAudioFile(forReading: url) else { return nil }
+    let rate = file.processingFormat.sampleRate
+    let from = max(0, file.length - AVAudioFramePosition(30 * rate))
+    return Double(soundIn(file, from: from, to: file.length, last: true) ?? from) / rate
+}
+
+/// Where to start a track in a crossfade: past its silence at the start (at least 0.25 s of it, at
+/// most 8 s looked at); 0 when there is none, or it cannot be read.
+private func leadIn(_ url: URL) -> Double {
+    guard let file = try? AVAudioFile(forReading: url) else { return 0 }
+    let rate = file.processingFormat.sampleRate
+    let head = min(file.length, AVAudioFramePosition(8 * rate))
+    guard let first = soundIn(file, from: 0, to: head, last: false) else { return 0 }
+    let lead = Double(first) / rate
+    return lead >= 0.25 ? lead : 0
 }

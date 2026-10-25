@@ -40,7 +40,7 @@ interface PlayerPlugin {
   /** The bass's rise, ~60 a second, sent a few at a time: when each is heard (wall clock, ms). */
   addListener(event: 'beat', cb: (e: { at: number[]; flux: number[] }) => void): Promise<unknown>;
   /** `waiting`: playing, but the track (still arriving) ran short: it goes on when more comes. */
-  addListener(event: 'time', cb: (e: { time: number; duration: number; playing: boolean; waiting?: boolean }) => void): Promise<unknown>;
+  addListener(event: 'time', cb: (e: { time: number; duration: number; playing: boolean; waiting?: boolean; musicEnd?: number }) => void): Promise<unknown>;
   addListener(event: 'ended', cb: () => void): Promise<unknown>;
   /** A track playing while it arrived could not be fetched to its end. */
   addListener(event: 'error', cb: (e: { message: string }) => void): Promise<unknown>;
@@ -83,6 +83,8 @@ export class NativeAudio extends EventTarget {
    * are the old track's, not this one's (a slow track would let the old one end, and its end
    * would skip this one). */
   private crossing = false;
+  /** Where the track's music ends, the silence after it left out (the native player finds it; NaN: not yet). */
+  musicEnd = NaN;
   /** The player waits for more of a track still arriving (fast start): its clock stands. */
   private short = false;
 
@@ -96,6 +98,7 @@ export class NativeAudio extends EventTarget {
         this.short = Boolean(e.waiting);
         this.emit(this.short ? 'waiting' : 'playing');
       }
+      this.musicEnd = e.musicEnd ?? NaN;
       if (e.duration && e.duration !== this.length) {
         this.length = e.duration;
         this.emit('durationchange');
@@ -127,6 +130,7 @@ export class NativeAudio extends EventTarget {
   }
 
   set src(value: string) {
+    this.musicEnd = NaN;
     this.crossing = false;
     this.short = false;
     this.source = value;
@@ -147,6 +151,7 @@ export class NativeAudio extends EventTarget {
    * out into it over `ms`. Resolves when it plays; `ended` is called once the old one is silent.
    */
   async crossfade(url: string, ms: number, ended: () => void = () => {}) {
+    this.musicEnd = NaN;
     this.source = url;
     this.over = false;
     this.time = 0;
