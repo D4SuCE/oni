@@ -417,6 +417,43 @@ await step('now playing screen', async () => {
   await page.waitForSelector('.nowplaying', { state: 'detached' });
 });
 
+await step('a track Yandex has no lyrics for gets them from LRCLIB, saying so; "Wrong lyrics" takes them away and Genius is offered', async () => {
+  // The user, 24.10.2026: lyrics not only from Yandex (LRCLIB; Genius only as a button). A track of
+  // Yandex's with its lyrics flags taken off stands for one Yandex has none for.
+  const id = await page.evaluate(async () => {
+    const r = await window.__wave.api.search('Rammstein Du hast', 'track');
+    const t = r.tracks?.results?.find((x) => x.available !== false && /^du hast$/i.test(x.title) && (x.durationMs ?? 0) > 200000);
+    if (!t) return null;
+    const bare = { ...t, lyricsInfo: { hasAvailableSyncLyrics: false, hasAvailableTextLyrics: false } };
+    await window.__wave.playTracks([bare], 0, 'e2e lyrics');
+    window.__wave.audio.pause();
+    return String(t.id);
+  });
+  if (!id) throw new Error('"Du hast" not found on Yandex');
+  try {
+    await page.click('.pb-cover');
+    await page.waitForSelector('.nowplaying');
+    await page.click('[data-testid="tab-lyrics"]');
+    const source = page.locator('[data-testid="lyrics-source"]');
+    await source.waitFor({ timeout: 20000 });
+    const lines = await page.locator('.np-side .lyric').count();
+    if (!/LRCLIB/.test(await source.innerText()) || lines < 5) throw new Error(`source "${await source.innerText()}", ${lines} synced lines`);
+    await page.click('[data-testid="lyrics-wrong"]');
+    await page.waitForSelector('[data-testid="lyrics-genius"]', { timeout: 5000 });
+    if (await page.locator('.np-side .lyric').count()) throw new Error('the wrong lyrics still show');
+    console.log(`       ${lines} synced lines from LRCLIB; taken away, Genius offered`);
+  } finally {
+    // Not left marked wrong, nor kept, for the user's own Oni (a test run has its own storage anyway).
+    await page.evaluate((i) => {
+      const all = JSON.parse(window.__wave.storage.getItem('lyrics.v1') || '{}');
+      delete all[i];
+      window.__wave.storage.setItem('lyrics.v1', JSON.stringify(all));
+    }, id);
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('.nowplaying', { state: 'detached' });
+  }
+});
+
 await step('daylist leads "For you" and fits the time of day', async () => {
   await page.click('[data-testid="nav-home"]');
   await page.waitForSelector('[data-testid="mix-card"]', { timeout: 60000 });

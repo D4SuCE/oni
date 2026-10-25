@@ -802,14 +802,17 @@ async function moveTracks() {
   click('.pb-cover');
   await until(() => document.querySelector('[data-testid="np-queue"]'), 5000);
   // The lyrics as a sheet too (the user, 25.10.2026, found none on the phone): a track that has them.
+  // Yandex's, LRCLIB's, or none (then Genius's search is offered).
   const lyricsButton = document.querySelector<HTMLButtonElement>('[data-testid="np-lyrics"]');
-  if (lyricsButton && !lyricsButton.disabled) {
+  if (lyricsButton) {
     click('[data-testid="np-lyrics"]');
-    const sung = await until(() => document.querySelector('[data-testid="lyrics-sheet"] .lyric, [data-testid="lyrics-sheet"] .lyrics-plain'), 10000);
-    report('lyrics-sheet', Boolean(sung), sung ? `${document.querySelectorAll('[data-testid="lyrics-sheet"] .lyric').length} lines` : 'no lyrics shown');
+    const sung = await until(() => document.querySelector('[data-testid="lyrics-sheet"] .lyric, [data-testid="lyrics-sheet"] .lyrics-plain, [data-testid="lyrics-sheet"] [data-testid="lyrics-genius"]'), 20000);
+    const lines = document.querySelectorAll('[data-testid="lyrics-sheet"] .lyric').length;
+    const from = document.querySelector('[data-testid="lyrics-sheet"] [data-testid="lyrics-source"]') ? 'LRCLIB' : 'Yandex';
+    report('lyrics-sheet', Boolean(sung), !sung ? 'nothing shown' : lines ? `${lines} lines, ${from}` : document.querySelector('[data-testid="lyrics-sheet"] .lyrics-plain') ? `plain, ${from}` : 'none: Genius offered');
     click('.q-sheet-backdrop');
     await until(() => !document.querySelector('[data-testid="lyrics-sheet"]'), 3000);
-  } else report('lyrics-sheet', Boolean(lyricsButton), lyricsButton ? 'this track has no lyrics: the button is off' : 'no lyrics button');
+  } else report('lyrics-sheet', false, 'no lyrics button');
   click('[data-testid="np-queue"]');
   const sheet = await until(() => document.querySelector('[data-testid="queue-sheet"] [data-testid="drag-handle"]'), 3000);
   // Each handle on its track's line, at the right (it fell under the track: the user's screenshot).

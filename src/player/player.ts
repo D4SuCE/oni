@@ -167,6 +167,7 @@ export const offline =
           const url = trackCover(t, 400);
           return url ? transport.fetchBytes!(url) : null;
         },
+        fetchLyrics: (t) => import('./lyrics.ts').then((m) => m.lyricsOf(t)),
       })
     : null;
 // The room rules (Settings → Downloads) once the files are counted; the track playing is kept.

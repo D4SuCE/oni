@@ -14,6 +14,7 @@ import { DevicesButton, PlayingOn } from './Devices.tsx';
 import { LikeButton, SeekBar, SleepButton, Transport, VolumeControl } from './PlayerBar.tsx';
 import { usePhoneSound } from '../player/phoneSound.ts';
 import { useEq } from '../player/eq.ts';
+import { geniusSearch, lyricsKnown, lyricsOf, useLyrics, wrongLyrics } from '../player/lyrics.ts';
 import { useElsewhere } from '../sync/elsewhere.ts';
 import { isIos } from '../ui/platform.ts';
 import { BackgroundVideo, LiveCover, useCoverVideo } from './LiveCover.tsx';
@@ -30,8 +31,10 @@ function parseLrc(text: string) {
   return lines;
 }
 
-function Lyrics({ trackId }: { trackId: string }) {
-  const { data, loading, error } = useAsync(() => api.lyrics(trackId), [trackId]);
+function Lyrics({ track }: { track: Track }) {
+  // Asked again when what is known changes ("Wrong lyrics"): it comes from what is kept then.
+  const known = useLyrics((s) => s.v);
+  const { data, loading, error } = useAsync(() => lyricsOf(track), [track.id, known]);
   const position = usePlayer((s) => s.position);
   const lines = useMemo(() => (data?.synced ? parseLrc(data.text) : []), [data]);
   const active = lines.findLastIndex((l) => l.t <= position + 0.3);
@@ -41,8 +44,35 @@ function Lyrics({ trackId }: { trackId: string }) {
     box.current?.querySelector('.lyric.active')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }, [active]);
   if (loading) return <Spinner />;
-  if (error || !data) return <div className="muted pad">{t.nowPlaying.noLyrics}</div>;
-  if (!data.synced) return <div className="lyrics-plain">{data.text}</div>;
+  const genius = (
+    <button className="btn small" onClick={() => geniusSearch(track)} data-testid="lyrics-genius">
+      {t.nowPlaying.findOnGenius}
+    </button>
+  );
+  if (error || !data)
+    return (
+      <div className="muted pad lyrics-none">
+        {t.nowPlaying.noLyrics}
+        {genius}
+      </div>
+    );
+  // Not Yandex's: where it is from, and a way out if it is another song's.
+  const source = data.source === 'lrclib' && (
+    <div className="lyrics-source" data-testid="lyrics-source">
+      <span>{t.nowPlaying.lyricsFrom('LRCLIB')}</span>
+      <button className="btn small" onClick={() => wrongLyrics(track)} data-testid="lyrics-wrong">
+        {t.nowPlaying.wrongLyrics}
+      </button>
+      {genius}
+    </div>
+  );
+  if (!data.synced)
+    return (
+      <div className="lyrics-plain">
+        {data.text}
+        {source}
+      </div>
+    );
   return (
     <div className="lyrics" ref={box}>
       {lines.map((l, i) => (
@@ -50,6 +80,7 @@ function Lyrics({ trackId }: { trackId: string }) {
           {l.text || '♪'}
         </p>
       ))}
+      {source}
     </div>
   );
 }
@@ -193,9 +224,16 @@ export function NowPlaying() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [close]);
-  const hasLyrics = Boolean(track?.lyricsInfo?.hasAvailableSyncLyrics || track?.lyricsInfo?.hasAvailableTextLyrics);
+  // Yandex's, or LRCLIB's where Yandex has none: off only once both said "none" (asked once per track).
+  useLyrics((s) => s.v);
+  const hasLyrics = lyricsKnown(track) !== 'no';
+  useEffect(() => {
+    if (track && lyricsKnown(track) === 'unknown') lyricsOf(track).catch(() => {});
+  }, [track]);
   // A track without lyrics shows the queue; the lyrics tab comes back with the next track that has them.
-  const tab = picked === 'lyrics' && !hasLyrics ? 'queue' : picked;
+  // None found: the tab and the button are dim but open "none" with Genius's search (it was off, and
+  // Genius could not be reached at all).
+  const tab = picked;
   const art = useRef<HTMLDivElement>(null);
   useCoverFit(art);
 
@@ -239,7 +277,7 @@ export function NowPlaying() {
                   )}
                   {/* The lyrics on the iPhone too (the user, 25.10.2026: "is there a page with the lyrics?"). */}
                   {isIos && (
-                    <button className="icon-btn" onClick={() => setSheet('lyrics')} disabled={!hasLyrics} title={hasLyrics ? t.nowPlaying.lyrics : t.nowPlaying.lyricsMissing} data-testid="np-lyrics">
+                    <button className={cx('icon-btn', !hasLyrics && 'dim')} onClick={() => setSheet('lyrics')} title={hasLyrics ? t.nowPlaying.lyrics : t.nowPlaying.lyricsMissing} data-testid="np-lyrics">
                       <MicVocal size={21} />
                     </button>
                   )}
@@ -265,14 +303,14 @@ export function NowPlaying() {
             <button className={cx('tab', tab === 'queue' && 'active')} onClick={() => setTab('queue')}>
               {t.player.queue}
             </button>
-            <button className={cx('tab', tab === 'lyrics' && 'active')} onClick={() => setTab('lyrics')} disabled={!hasLyrics} title={hasLyrics ? '' : t.nowPlaying.lyricsMissing}>
+            <button className={cx('tab', tab === 'lyrics' && 'active', !hasLyrics && 'dim')} onClick={() => setTab('lyrics')} title={hasLyrics ? '' : t.nowPlaying.lyricsMissing} data-testid="tab-lyrics">
               {t.nowPlaying.lyrics}
             </button>
             <button className={cx('tab', tab === 'similar' && 'active')} onClick={() => setTab('similar')} data-testid="tab-similar">
               {t.nowPlaying.similar}
             </button>
           </div>
-          {tab === 'queue' || !track ? <Queue /> : tab === 'lyrics' ? <Lyrics trackId={track.id} /> : <Similar track={track} />}
+          {tab === 'queue' || !track ? <Queue /> : tab === 'lyrics' ? <Lyrics track={track} /> : <Similar track={track} />}
         </aside>
         {sheetOpen && (
           <div className="q-sheet-backdrop" onClick={() => setSheet(null)}>
@@ -283,7 +321,7 @@ export function NowPlaying() {
                   <X size={20} />
                 </button>
               </div>
-              <div className="q-sheet-list">{sheetOpen === 'queue' ? <Queue /> : track && hasLyrics ? <Lyrics trackId={track.id} /> : <div className="muted pad">{t.nowPlaying.noLyrics}</div>}</div>
+              <div className="q-sheet-list">{sheetOpen === 'queue' ? <Queue /> : track ? <Lyrics track={track} /> : null}</div>
             </div>
           </div>
         )}

@@ -26,6 +26,8 @@ export interface OfflineDeps {
   crypto: Crypto;
   /** The track's cover (one size, ~30 KB), kept beside it so it shows with no network too. */
   fetchCover?(track: Track): Promise<ArrayBuffer | null>;
+  /** The track's lyrics, kept with it so they show with no network too (player/lyrics.ts). */
+  fetchLyrics?(track: Track): Promise<unknown>;
   /** The clock (tests run their own). */
   now?(): number;
 }
@@ -178,6 +180,7 @@ export class OfflineLibrary {
       const { url, codec, bitrate } = await this.deps.stream(id);
       await this.seal(track, await this.deps.fetchBytes(url), codec, bitrate);
       await this.saveCover(track);
+      this.deps.fetchLyrics?.(track).catch(() => {}); // none, or no network: the track is kept all the same
     })().finally(() => {
       this.busy.delete(id);
       this.changed();
@@ -195,6 +198,7 @@ export class OfflineLibrary {
     await this.seal(track, audio, codec, bitrate);
     this.changed();
     await this.saveCover(track);
+    this.deps.fetchLyrics?.(track).catch(() => {});
   }
 
   /** Keeps the track's cover beside it; without one (or with no network) it simply has none. */

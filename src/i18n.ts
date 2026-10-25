@@ -200,6 +200,9 @@ const ru = {
   },
   nowPlaying: {
     noLyrics: 'Текст для этого трека недоступен',
+    lyricsFrom: (source: string) => `Текст: ${source}`,
+    wrongLyrics: 'Не тот текст',
+    findOnGenius: 'Найти на Genius',
     now: 'Сейчас',
     upNext: 'Далее',
     wavePicking: 'Волна подбирает треки…',
@@ -791,6 +794,9 @@ const en: Dict = {
   },
   nowPlaying: {
     noLyrics: 'Lyrics are not available for this track',
+    lyricsFrom: (source) => `Lyrics: ${source}`,
+    wrongLyrics: 'Wrong lyrics',
+    findOnGenius: 'Find on Genius',
     now: 'Now playing',
     upNext: 'Up next',
     wavePicking: 'My Wave is picking tracks…',

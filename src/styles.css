@@ -2288,6 +2288,28 @@ html.ios .wave-blobs i {
   color: var(--text);
   transform: scale(1.03);
 }
+/* No lyrics found: the lyrics tab and button stay, dim (they open "none" with Genius's search). */
+.tab.dim,
+.icon-btn.dim {
+  opacity: 0.45;
+}
+/* Lyrics not from Yandex: where they are from, "Wrong lyrics" and Genius under them; Genius with none. */
+.lyrics-source,
+.lyrics-none {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.lyrics-source {
+  margin: 28px 0 0;
+}
+.lyrics-none {
+  flex-direction: column;
+  align-items: flex-start;
+}
 
 /* -------------------------------------------------------- menu / dialog */
 
