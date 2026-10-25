@@ -19,6 +19,8 @@ export function useListTitle() {
         return t.nav.history;
       case 'chart':
         return t.home.chart;
+      case 'yearAgo':
+        return t.home.yearAgo;
       case 'myWave': {
         const p = label.picks;
         const w = t.wave;

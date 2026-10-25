@@ -105,5 +105,23 @@ await test('a play written as it plays: the same start again only updates its le
   assert(Math.round(r.minutes * 60) === 225, `seconds ${r.minutes * 60}`);
 });
 
+await test('"a year ago": the most played of the same days last year, none with fewer than five tracks', () => {
+  let now = at(2027, 10, 25);
+  const log = new PlayLog(memory(), () => now);
+  const old = [0, 1, 2, 3, 4, 5].map((i) => track(`y${i}`, [kino]));
+  for (const [i, t] of old.entries()) log.record(t, at(2026, 10, 23 + (i % 4)), 180);
+  log.record(old[2], at(2026, 10, 24, 18), 180); // twice: first
+  log.record(track('far', [aria]), at(2026, 10, 1), 180); // not these days
+  log.record(track('now', [aria]), at(2027, 10, 24), 180); // this year
+  const got = log.yearAgo().map((t) => t.id);
+  assert(got.length === 6 && got[0] === 'y2' && !got.includes('far') && !got.includes('now'), JSON.stringify(got));
+  now = at(2027, 12, 1);
+  assert(log.yearAgo().length === 0, 'a card with nothing a year ago');
+  now = at(2027, 10, 25);
+  const few = new PlayLog(memory(), () => now);
+  for (const t of old.slice(0, 4)) few.record(t, at(2026, 10, 25), 180);
+  assert(few.yearAgo().length === 0, 'a card with four tracks');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

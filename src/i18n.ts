@@ -351,6 +351,8 @@ const ru = {
     yourPlaylists: 'Ваши плейлисты',
     newReleases: 'Новые релизы',
     chart: 'Чарт',
+    yearAgo: 'Год назад вы слушали',
+    yearAgoDays: (from: string, to: string) => `${from} — ${to} прошлого года`,
     findYours: 'Найти своё',
   },
   artist: {
@@ -947,6 +949,8 @@ const en: Dict = {
     yourPlaylists: 'Your playlists',
     newReleases: 'New releases',
     chart: 'Chart',
+    yearAgo: 'A year ago you listened to',
+    yearAgoDays: (from, to) => `${from} – ${to} last year`,
     findYours: 'Find your own',
   },
   artist: {

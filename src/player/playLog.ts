@@ -33,6 +33,8 @@ export interface Recap {
 const KEY = 'player.playlog.v1';
 const DAY = 24 * 60 * 60 * 1000;
 const KEEP_DAYS = 400;
+/** Fewer different tracks than this a year ago: no "A year ago" card. */
+const YEAR_AGO_MIN = 5;
 
 interface Stored {
   plays: LoggedPlay[];
@@ -155,6 +157,16 @@ export class PlayLog {
       }
     }
     if (added) this.save();
+  }
+
+  /**
+   * "A year ago you listened to": the most played of the same days a year ago (three days either
+   * side), here and on the other devices; none below YEAR_AGO_MIN tracks (no card then).
+   */
+  yearAgo(): Track[] {
+    const center = this.now() - 365 * DAY;
+    const { tracks } = this.recap({ from: center - 3 * DAY, to: center + 4 * DAY });
+    return tracks.length >= YEAR_AGO_MIN ? tracks.slice(0, 20).map((x) => x.track) : [];
   }
 
   /** Sums up the plays in [from, to). */

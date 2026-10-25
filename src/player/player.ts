@@ -34,7 +34,7 @@ export interface PlayContext {
  * Lists named by Yandex or the user (playlists, albums, artists) need none: their names stay.
  */
 export type ListLabel =
-  | { key: 'liked' | 'downloads' | 'history' | 'chart' }
+  | { key: 'liked' | 'downloads' | 'history' | 'chart' | 'yearAgo' }
   /** With what was picked in "Tune" at the time (History says "My Wave · Rock · Upbeat": the user, 25.10.2026). */
   | { key: 'myWave'; picks?: WavePicks }
   | { key: 'search' | 'similar'; arg: string }

@@ -1,13 +1,13 @@
 import { RefreshCw, Search, Settings } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { api } from '../api/client.ts';
 import { MixCard, useGenreTitles } from '../components/Mixes.tsx';
 import { loadRecs, useRecs } from '../recs/index.ts';
 import { AlbumCard, ErrorBox, PlaylistCard, Section, Shelf, Spinner } from '../components/Common.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { WaveHero } from '../components/Wave.tsx';
-import { useT } from '../i18n.ts';
-import { playTracks } from '../player/player.ts';
+import { useLang, useT } from '../i18n.ts';
+import { playLog, playTracks } from '../player/player.ts';
 import { isOwn, navigate, useApp } from '../store.ts';
 import { isIos } from '../ui/platform.ts';
 import { useUpdate } from '../ui/update.ts';
@@ -55,6 +55,24 @@ function ForYou() {
   );
 }
 
+/** "A year ago you listened to" (the user's pick, 24.10.2026): the most played of these days a year ago,
+ * from Oni's own log (Yandex keeps about ten days); no card until there is a year of plays. */
+function YearAgo() {
+  const t = useT();
+  const lang = useLang((s) => s.lang);
+  // Once per visit of Home: a year ago does not change while one looks.
+  const tracks = useMemo(() => playLog.yearAgo(), []);
+  if (!tracks.length) return null;
+  const day = (offset: number) => new Date(Date.now() - (365 + offset) * 86_400_000).toLocaleDateString(lang, { day: 'numeric', month: 'long' });
+  return (
+    <Section title={t.home.yearAgo} action={<span className="muted small">{t.home.yearAgoDays(day(3), day(-3))}</span>}>
+      <div data-testid="year-ago">
+        <TrackList tracks={tracks} onPlay={(i) => playTracks(tracks, i, t.home.yearAgo, undefined, { label: { key: 'yearAgo' } })} />
+      </div>
+    </Section>
+  );
+}
+
 export function Home() {
   const account = useApp((s) => s.account);
   // Own playlists, liked songs and the playlists liked from others: all of the user's music.
@@ -90,6 +108,7 @@ export function Home() {
       </div>
       <WaveHero />
       <ForYou />
+      <YearAgo />
 
       {account && (
         <Section title={t.home.yourPlaylists}>
