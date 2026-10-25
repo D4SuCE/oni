@@ -260,11 +260,19 @@ async function lanLink() {
   const listener = await lan.addListener('message', (m) => got.push(m.text));
   try {
     const refused = await lan.open({ id: 'mac', url: 'ws://127.0.0.1:47999', hello: JSON.stringify({ t: 'hello', key: 'wrong', device: { id: 'sim' } }), timeout: 2000 }).then(() => false, () => true);
-    await lan.open({ id: 'mac', url: 'ws://127.0.0.1:47999', hello: JSON.stringify({ t: 'hello', key: 'smoke', device: { id: 'sim' } }), timeout: 3000 });
+    // The runner's Mac is slow now and then (2 of 3 runs on 25.10.2026 had no welcome within 3 s):
+    // more time, and once more; how long it took is in the report (the stand-in's log, in ios.yml).
+    const opening = performance.now();
+    const hello = { id: 'mac', url: 'ws://127.0.0.1:47999', hello: JSON.stringify({ t: 'hello', key: 'smoke', device: { id: 'sim' } }), timeout: 8000 };
+    const tries = await lan.open(hello).then(
+      () => 1,
+      () => lan.open(hello).then(() => 2),
+    );
+    const opened = performance.now() - opening;
     const at = performance.now();
     await lan.send({ id: 'mac', text: '{"t":"ping"}' });
     const back = await until(() => got.some((t) => t.includes('pong')), 3000);
-    report('lan-link', refused && Boolean(back), `wrong key ${refused ? 'refused' : 'let in'}, answer ${back ? `in ${(performance.now() - at).toFixed(0)} ms` : 'none'}`);
+    report('lan-link', refused && Boolean(back), `wrong key ${refused ? 'refused' : 'let in'}, open in ${opened.toFixed(0)} ms (try ${tries}), answer ${back ? `in ${(performance.now() - at).toFixed(0)} ms` : 'none'}`);
     await lan.close({ id: 'mac' });
   } catch (e) {
     report('lan-link', false, String(e));

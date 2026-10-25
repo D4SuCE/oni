@@ -3,10 +3,14 @@
 import { WebSocketServer } from 'ws';
 
 const server = new WebSocketServer({ host: '127.0.0.1', port: 47999 });
+const at = () => new Date().toISOString().slice(11, 23);
 server.on('connection', (ws) => {
   let ok = false;
+  console.log(`${at()} connection`);
+  ws.on('close', (code) => console.log(`${at()} closed ${code}`));
   ws.on('message', (raw) => {
     const msg = JSON.parse(String(raw));
+    console.log(`${at()} ${msg.t}${msg.t === 'hello' ? ` (key ${msg.key === 'smoke' ? 'right' : 'wrong'})` : ''}`);
     if (!ok) {
       if (msg.t !== 'hello' || msg.key !== 'smoke') return ws.close(4001, 'bad key');
       ok = true;

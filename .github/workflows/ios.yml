@@ -94,6 +94,8 @@ jobs:
           scrub
           echo "--- smoke ---"
           grep "SMOKE" console.log || true
+          echo "--- the stand-in PC (lan-echo) ---"
+          cat lan-echo.log || true
           echo "--- errors ---"
           grep -E "not implemented|TypeError|ReferenceError|SyntaxError|keychain\] read failed|\[error\]" console.log | head -20 || true
           grep -q "SMOKE done" console.log || { echo "::error::the smoke run did not finish"; exit 1; }
