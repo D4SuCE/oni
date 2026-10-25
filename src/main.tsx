@@ -4,6 +4,7 @@
 import './fonts.css';
 import './styles.css';
 
+import { loadStorage } from './api/storage.ts';
 import { isIos } from './ui/platform.ts';
 
 // Electron windows use Windows acrylic, so the page itself must stay see-through.
@@ -13,8 +14,11 @@ if (isIos) document.documentElement.classList.add('ios');
 // a page that shows nothing (or does not answer) is loaded anew instead of staying black.
 (window as { __oniAlive?: () => boolean }).__oniAlive = () => (document.getElementById('root')?.childElementCount ?? 0) > 0;
 
+// The data first (api/storage.ts): the app's parts read it as they load.
 if (location.hash === '#mini') import('./mini/MiniPlayer.tsx').then((m) => m.mountMini());
-else import('./boot.tsx');
-
-// iOS simulator runs in CI (Debug builds only set the flag): walk the main path once.
-if ((window as { __oniTest?: boolean }).__oniTest) import('./ios-smoke.ts').then((m) => m.runSmoke());
+else
+  void loadStorage().then(async () => {
+    await import('./boot.tsx');
+    // iOS simulator runs in CI (Debug builds only set the flag): walk the main path once.
+    if ((window as { __oniTest?: boolean }).__oniTest) import('./ios-smoke.ts').then((m) => m.runSmoke());
+  });

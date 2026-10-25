@@ -129,7 +129,7 @@ await step('downloaded tracks of Liked and of a playlist: both lists are kept wh
   });
   await page.waitForSelector('[data-testid="saved-mark"]', { timeout: 30000 });
   await page.waitForTimeout(500);
-  const kept = await page.evaluate((key) => JSON.parse(localStorage.getItem('offline.lists.v1') || '{}')[key]?.tracks.length, `playlist:${playlist.uid}:${playlist.kind}`);
+  const kept = await page.evaluate((key) => JSON.parse(window.__wave.storage.getItem('offline.lists.v1') || '{}')[key]?.tracks.length, `playlist:${playlist.uid}:${playlist.kind}`);
   if (!kept) throw new Error('the playlist was not kept');
 });
 

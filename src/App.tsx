@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { WifiOff } from 'lucide-react';
 import { useT } from './i18n.ts';
-import { api } from './api/client.ts';
+import { api, storage } from './api/client.ts';
 import { Spinner } from './components/Common.tsx';
 import { DialogHost } from './components/Dialog.tsx';
 import { TrackSheetHost } from './components/TrackSheet.tsx';
@@ -223,5 +223,5 @@ export function App() {
 
 // Handy for debugging and for the automated UI test.
 Object.assign(window, {
-  __wave: { offline, usePlayer, useApp, audio, api, navigate, playTracks, setSleep, setVolume, toggleLike, eqOutputLevel, pulseLevel, pulseTempo, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } } },
+  __wave: { offline, storage, usePlayer, useApp, audio, api, navigate, playTracks, setSleep, setVolume, toggleLike, eqOutputLevel, pulseLevel, pulseTempo, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } } },
 });
