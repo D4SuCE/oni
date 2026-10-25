@@ -24,6 +24,8 @@ interface DownloadsPlugin {
   progress(options: { done: number; total: number; title: string }): Promise<void>;
   /** For the smoke test: the Live Activity and the count. */
   state(): Promise<{ activity: boolean; done: number; total: number; queued: number; running: number }>;
+  /** The network now: `expensive` mobile data or a hotspot, `constrained` Low Data Mode. */
+  network(): Promise<{ satisfied: boolean; expensive: boolean; constrained: boolean }>;
   addListener(event: 'done' | 'failed', cb: (e: { id: string }) => void): Promise<unknown>;
   addListener(event: 'progress', cb: (e: { id: string; written: number; total: number }) => void): Promise<unknown>;
 }

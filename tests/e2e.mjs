@@ -481,6 +481,21 @@ await step('an upload Yandex has found in the catalog: its artist is a link, its
   console.log(`       upload ${found.id} found as ${found.matched}: ${items.length} menu items`);
 });
 
+await step('"keep mine offline" would keep On Repeat and the latest 30 likes not downloaded yet, each once', async () => {
+  // The user's pick, 24.10.2026. Nothing is downloaded here (that is offline.download's, tested apart): what would be.
+  await page.waitForFunction(() => window.__wave.useApp.getState().libraryReady, null, { timeout: 30000 });
+  const plan = await page.evaluate(async () => {
+    const tracks = await window.__wave.ownToKeep();
+    const ids = tracks.map((t) => String(t.id));
+    const latest = window.__wave.useApp.getState().likedKeys.slice(0, 30).map((k) => k.split(':')[0]).filter((id) => !window.__wave.offline.has(id));
+    return { n: ids.length, unique: new Set(ids).size, downloaded: ids.filter((id) => window.__wave.offline.has(id)).length, latestIn: latest.filter((id) => ids.includes(id)).length, latest: latest.length };
+  });
+  if (!plan.n || plan.unique !== plan.n || plan.downloaded || plan.n > 30 + 50) throw new Error(JSON.stringify(plan));
+  // The latest likes that play (a few may not) are among them.
+  if (plan.latestIn < plan.latest - 5) throw new Error(`latest likes: ${plan.latestIn} of ${plan.latest}`);
+  console.log(`       ${plan.n} tracks to keep (${plan.latestIn} of the latest likes)`);
+});
+
 await step('daylist leads "For you" and fits the time of day', async () => {
   await page.click('[data-testid="nav-home"]');
   await page.waitForSelector('[data-testid="mix-card"]', { timeout: 60000 });

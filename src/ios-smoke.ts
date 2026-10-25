@@ -902,6 +902,11 @@ export async function runSmoke() {
     noLoupe();
     await loginRedirect();
     report('home', await until(() => document.querySelector('.wave-hero'), 30000));
+    // "Keep mine offline": Wi-Fi known (the simulator's network is not mobile data), its switch on by default.
+    const { OniDownloads } = await import('./player/iosDownloads.ts');
+    const net = await OniDownloads.network().catch((e) => ({ error: String(e) }));
+    const { useAutoOwn } = await import('./ui/ownOffline.ts');
+    report('own-offline', 'satisfied' in net && net.satisfied && !net.expensive && useAutoOwn.getState().on, JSON.stringify({ ...net, on: useAutoOwn.getState().on }));
     // Oni's data in IndexedDB, not the page's ~5 MB localStorage (it filled up on the user's phone, 25.10.2026).
     report('storage', storage.kind === 'indexeddb', `${storage.kind}; in localStorage: ${Object.keys(localStorage).filter((k) => !k.startsWith('ui.')).length} of Oni's entries`);
     phoneLayout();

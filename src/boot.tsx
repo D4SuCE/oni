@@ -10,6 +10,7 @@ import { connectLinks } from './ui/links.ts';
 import { connectLongPress } from './ui/longPress.ts';
 import { isIos } from './ui/platform.ts';
 import { connectTapRescue } from './ui/tap.ts';
+import { watchOwnOffline } from './ui/ownOffline.ts';
 import { connectTouchRanges } from './ui/touchRange.ts';
 import { installGlobalErrorLogging } from './ui/log.ts';
 
@@ -19,6 +20,7 @@ startBeatPulse();
 connectLinks();
 connectLongPress();
 connectTapRescue();
+watchOwnOffline();
 if (isIos) {
   connectTouchRanges();
   import('./ui/iosUpdate.ts').then((m) => m.watchIosUpdates());

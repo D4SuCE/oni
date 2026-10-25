@@ -9,6 +9,7 @@ import UserNotifications
 import CryptoKit
 import ActivityKit
 import WidgetKit
+import Network
 
 /// The app's own bridge controller: registers the plugins that live in this project.
 class OniViewController: CAPBridgeViewController {
@@ -521,7 +522,21 @@ public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDel
         CAPPluginMethod(name: "notifications", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "progress", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "state", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "network", returnType: CAPPluginReturnPromise),
     ]
+
+    /// The network as iOS sees it now: "Keep mine offline" downloads over Wi-Fi only, not on mobile
+    /// data or a phone's hotspot (expensive), nor in Low Data Mode (constrained).
+    private static let paths: NWPathMonitor = {
+        let monitor = NWPathMonitor()
+        monitor.start(queue: DispatchQueue(label: "oni.network"))
+        return monitor
+    }()
+
+    @objc func network(_ call: CAPPluginCall) {
+        let path = DownloadsPlugin.paths.currentPath
+        call.resolve(["satisfied": path.status == .satisfied, "expensive": path.isExpensive, "constrained": path.isConstrained])
+    }
 
     /// Files fetched at once.
     static let parallel = 4
@@ -574,6 +589,7 @@ public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDel
     private weak var page: DownloadsPlugin?
 
     override public func load() {
+        _ = DownloadsPlugin.paths // watching from the start: its first answer takes a moment
         // Capacitor makes this instance; events go out through it, the session lives in `shared`.
         DownloadsPlugin.shared.page = self
         DownloadsPlugin.shared.restore()

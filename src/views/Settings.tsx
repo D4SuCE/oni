@@ -1,6 +1,7 @@
 import { Cloud, Download, ExternalLink, FileText, HardDriveDownload, LogOut, Mic, RefreshCw, Trash2, Undo2 } from 'lucide-react';
 import { confirmDialog } from '../components/Dialog.tsx';
 import { formatSize, setAutoLikes, useAutoLikes, useOfflineVersion } from '../ui/offline.ts';
+import { setAutoOwn, useAutoOwn } from '../ui/ownOffline.ts';
 import { useEffect, useState } from 'react';
 import { Segmented } from '../components/Wave.tsx';
 import { LANGS, setLang, useLang, useT } from '../i18n.ts';
@@ -344,6 +345,7 @@ function DownloadsPanel() {
   const d = t.downloads;
   useOfflineVersion((v) => v.v);
   const autoLikes = useAutoLikes((s) => s.on);
+  const autoOwn = useAutoOwn((s) => s.on);
   const count = offline?.entries().length ?? 0;
   const [rules, setRules] = useState(() => offline?.space() ?? { limit: 0, forgetDays: 0 });
   const used = offline?.totalSize() ?? 0;
@@ -411,6 +413,16 @@ function DownloadsPanel() {
         </div>
         <input type="checkbox" className="switch" checked={autoLikes} onChange={(e) => setAutoLikes(e.target.checked)} data-testid="auto-likes" />
       </label>
+      {/* The iPhone has its own switch (over Wi-Fi); the desktop's comes with new likes. */}
+      {isIos && (
+        <label className="toggle-row">
+          <div>
+            <div>{d.autoOwn}</div>
+            <div className="hint">{d.autoOwnHint}</div>
+          </div>
+          <input type="checkbox" className="switch" checked={autoOwn} onChange={(e) => setAutoOwn(e.target.checked)} data-testid="auto-own" />
+        </label>
+      )}
     </div>
   );
 }
