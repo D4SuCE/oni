@@ -7,13 +7,20 @@
 // PC directly (sync/lan.ts), and a press and what plays go over the link at once, Disk as well.
 
 import { create } from 'zustand';
-import { storage, transport } from '../api/client.ts';
+import { api, storage, transport } from '../api/client.ts';
 import type { Track } from '../api/types.ts';
 import { tr } from '../i18n.ts';
 import {
   controlElsewhere,
   cycleRepeat,
   enqueue,
+  extendList,
+  playOwnWave,
+  playRadio,
+  playTracks,
+  playWave,
+  retuneWave,
+  setOwnMode,
   isElsewhere,
   mirror,
   moveInQueue,
@@ -31,6 +38,9 @@ import {
   labelOf,
   sourceTitle,
   type ListLabel,
+  type PlayContext,
+  type PlayExtra,
+  type RemoteList,
   type Repeat,
   type Source,
 } from '../player/player.ts';
@@ -435,6 +445,21 @@ function linked() {
   schedule();
 }
 
+/** Tracks fetched for the remote's lists, kept for the parts of a big list that come after. */
+const fetched = new Map<string, Track>();
+
+/** A list the remote started: its tracks as they came, or fetched by their keys (in parallel
+ * pieces), in the list's order. */
+async function tracksOf(list: RemoteList | undefined): Promise<Track[]> {
+  if (list?.tracks) return list.tracks;
+  const keys = list?.keys ?? [];
+  const id = (k: string) => k.split(':')[0];
+  const missing = keys.filter((k) => !fetched.has(id(k)));
+  const pieces = Array.from({ length: Math.ceil(missing.length / 200) }, (_, i) => missing.slice(i * 200, i * 200 + 200));
+  for (const tracks of await Promise.all(pieces.map((p) => api.tracks(p)))) for (const t of tracks) fetched.set(String(t.id), t);
+  return keys.map((k) => fetched.get(id(k))).filter((t): t is Track => Boolean(t));
+}
+
 /** A press from this device's remote. */
 function run(c: Command) {
   // This one is itself a remote, and yet a press came: the other device saw this one play (each was
@@ -479,6 +504,22 @@ function run(c: Command) {
       return cycleRepeat();
     case 'toggleShuffle':
       return toggleShuffle();
+    case 'playTracks':
+      return void tracksOf(a as RemoteList).then((tracks) => {
+        if (tracks.length) void playTracks(tracks, Number(b) || 0, d as string | undefined, c.args[3] as PlayContext | undefined, (c.args[4] ?? {}) as PlayExtra);
+      });
+    case 'extendList':
+      return void tracksOf(b as RemoteList).then((tracks) => extendList(String(a), tracks));
+    case 'playWave':
+      return void playWave(a as Parameters<typeof playWave>[0]);
+    case 'playRadio':
+      return void playRadio(String(a), String(b), d as ListLabel | undefined);
+    case 'playOwnWave':
+      return void playOwnWave();
+    case 'retuneWave':
+      return void retuneWave(a as Parameters<typeof retuneWave>[0]);
+    case 'setOwnMode':
+      return setOwnMode(a as Parameters<typeof setOwnMode>[0]);
   }
 }
 

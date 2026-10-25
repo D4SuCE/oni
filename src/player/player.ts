@@ -5,13 +5,13 @@ import { create } from 'zustand';
 import type { Track } from '../api/types.ts';
 import { api, loadJson, storage, transport } from '../api/client.ts';
 import { tr } from '../i18n.ts';
-import { artistNames, heardSeconds, NetworkError, trackCover, type StreamQuality } from '../api/yandex.ts';
+import { artistNames, heardSeconds, NetworkError, trackCover, trackKey, type StreamQuality } from '../api/yandex.ts';
 import { DEFAULT_TUNING, WaveEngine, waveSeeds, type Station, type WaveStats, type WaveTuning } from '../wave/engine.ts';
 import { OWN_SEED, OwnWave, type OwnMode, type OwnSources } from '../wave/own.ts';
 import { HEARD_SECONDS, ListenHistory } from '../wave/history.ts';
 import { PlayLog } from './playLog.ts';
 import { playOutcome, RecsFeedback } from '../recs/feedback.ts';
-import { RecentPlays } from './recent.ts';
+import { RecentPlays, trimTrack } from './recent.ts';
 import { albumLoudness, levellingGain, type Loudness } from './loudness.ts';
 import { OfflineLibrary } from './offline.ts';
 import { PlayStats, type Origin } from './stats.ts';
@@ -617,13 +617,15 @@ function fillWave(min = WAVE_AHEAD): Promise<void> {
 }
 
 export async function playWave(tuning?: Partial<WaveTuning>) {
-  forgetResume();
   if (tuning) saveTuning(tuning);
+  if (elsewhere) return elsewhere.send('playWave', [tuning]);
+  forgetResume();
   await startWave({ kind: 'wave' });
 }
 
 /** Endless radio from one seed, e.g. `track:123`, `artist:45`, `album:67`, `playlist:<uid>:<kind>`. Repeat filters apply. */
 export async function playRadio(seed: string, title: string, label?: ListLabel) {
+  if (elsewhere) return elsewhere.send('playRadio', [seed, title, label]);
   forgetResume();
   clearWavePicks();
   await startWave({ kind: 'wave', station: { seed, title, label } });
@@ -662,6 +664,7 @@ function makeStation(source: Source & { kind: 'wave' }): Station {
 
 /** «Своя волна» (wave/own.ts): Oni's own station from the user's music. */
 export async function playOwnWave() {
+  if (elsewhere) return elsewhere.send('playOwnWave', []);
   forgetResume();
   clearWavePicks();
   await startWave({ kind: 'wave', station: { seed: OWN_SEED, title: tr().own.title, label: { key: 'ownWave' } } });
@@ -671,6 +674,7 @@ export async function playOwnWave() {
 export function setOwnMode(ownMode: OwnMode) {
   set({ ownMode });
   savePrefs();
+  if (elsewhere) return elsewhere.send('setOwnMode', [ownMode]);
   if (engine instanceof OwnWave && isOwnWave(get().source)) {
     engine.mode = ownMode;
     set((s) => ({ queue: s.queue.slice(0, s.index + 1) }));
@@ -734,6 +738,7 @@ function saveTuning(patch: Partial<WaveTuning>) {
  * away, as Yandex's app does, whatever was playing: a list, My Wave, or a station radio. */
 export async function retuneWave(patch: Partial<WaveTuning>) {
   const seedsChanged = saveTuning(patch);
+  if (elsewhere) return elsewhere.send('retuneWave', [patch]);
   const source = get().source;
   // Local filters only: the wave (My Wave or a station) keeps its seed and drops what fails them.
   if (source?.kind === 'wave' && !seedsChanged) {
@@ -754,7 +759,14 @@ export function waveFeedback(type: 'like' | 'dislike', t: Track) {
 
 // ------------------------------------------------------------------ controls
 
+/** A list for the device this one controls: a small one as its tracks, a big one as their keys (it
+ * fetches them itself: a 1,600-track playlist whole would be megabytes through Disk). */
+export type RemoteList = { tracks?: Track[]; keys?: string[] };
+const listForRemote = (tracks: Track[]): RemoteList => (tracks.length <= 150 ? { tracks: tracks.map(trimTrack) } : { keys: tracks.map(trackKey) });
+
 export async function playTracks(tracks: Track[], start = 0, title = tr().common.list, from?: PlayContext, extra: PlayExtra = {}) {
+  // A remote: it plays on the device controlled (the user, 25.10.2026: "the remote in full").
+  if (elsewhere) return elsewhere.send('playTracks', [listForRemote(tracks), start, title, from, extra]);
   // Picked by the user: the wave (or list) the downloads stood in for does not come back over it.
   forgetResume();
   clearWavePicks();
@@ -767,6 +779,7 @@ const canPlay = (t: Track) => t.available !== false && (!offlineMode || Boolean(
 /** A list still coming in parts (a big playlist, ui/listLoader.ts): its later tracks join the
  * queue as they come, if it is what plays, in its order (not shuffled). */
 export function extendList(list: string, tracks: Track[]) {
+  if (elsewhere) return elsewhere.send('extendList', [list, { keys: tracks.map(trackKey) }]);
   const s = get();
   if (listKeyOf(s.source) !== list || s.shuffle) return;
   const queue = tracks.filter(canPlay);

@@ -42,7 +42,10 @@ export interface NowFile extends NowPlaying {
   test?: boolean;
 }
 
-export type CommandName = 'toggle' | 'play' | 'pause' | 'next' | 'prev' | 'seek' | 'volume' | 'playAt' | 'playNext' | 'enqueue' | 'moveInQueue' | 'removeAt' | 'cycleRepeat' | 'toggleShuffle';
+export type CommandName =
+  | 'toggle' | 'play' | 'pause' | 'next' | 'prev' | 'seek' | 'volume' | 'playAt' | 'playNext' | 'enqueue' | 'moveInQueue' | 'removeAt' | 'cycleRepeat' | 'toggleShuffle'
+  // The full remote (the user, 25.10.2026): what the remote starts plays on the device it controls.
+  | 'playTracks' | 'extendList' | 'playWave' | 'playRadio' | 'playOwnWave' | 'retuneWave' | 'setOwnMode';
 
 export interface Command {
   id: string;

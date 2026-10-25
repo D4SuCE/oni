@@ -203,6 +203,77 @@ await step('another device in the player: its paused track taken up at its secon
   if (left.some((f) => names.includes(f.name))) throw new Error('files left on Disk');
 });
 
+await step('the full remote: what a remote starts (a list, «Своя волна», a My Wave pick) goes to the device it controls and plays there, not here; a list sent by its keys and «Своя волна» from a phone play here (all removed again)', async () => {
+  // The user, 25.10.2026: "connected from the phone to the PC, I want to do everything there".
+  if (!(await page.evaluate(() => window.__wave.sync.useSync.getState().connected))) {
+    console.log('       skipped: no YANDEX_DISK_TOKEN');
+    return;
+  }
+  const phoneId = `e2efull${Date.now()}`;
+  const ownId = await page.evaluate(() => window.__wave.sync.deviceSync.device.id);
+  const names = [`now-${phoneId}.json`, `cmd-${phoneId}-${ownId}.json`, `cmd-${ownId}-${phoneId}.json`];
+  const write = (name, file) => page.evaluate(([n, t]) => window.__wave.sync.disk.write(n, t), [name, JSON.stringify(file)]);
+  const read = (name) => page.evaluate((n) => window.__wave.sync.disk.read(n).then((t) => JSON.parse(t)), name);
+  /** The command sent there, once it is up (a press goes up on its own a moment after). */
+  const sent = async (fn) => {
+    for (let i = 0; i < 15; i++) {
+      const c = await read(names[1]).then((f) => f.commands.filter((x) => x.fn === fn).at(-1), () => null);
+      if (c) return c;
+      await page.waitForTimeout(1000);
+    }
+    throw new Error(`"${fn}" never went up`);
+  };
+  try {
+    await page.evaluate(() => window.__wave.audio.pause());
+    const chart = await page.evaluate(() => window.__wave.api.chart().then((l) => l.filter((t) => t.available !== false).slice(0, 4)));
+    await write(names[0], {
+      v: 1, device: { id: phoneId, platform: 'ios' }, queue: chart, index: 0, offset: 0, title: 'e2e phone', playing: true, position: 30,
+      duration: (chart[0].durationMs || 180000) / 1000, shuffle: false, repeat: 'off', at: Date.now(), changed: Date.now() + 5000, test: true,
+    });
+    for (let i = 0; i < 8 && !(await page.locator('[data-testid="playing-on"]').count()); i++) {
+      await page.evaluate(() => window.__wave.sync.elsewhere.look(true));
+      await page.waitForTimeout(i ? 1000 : 300);
+    }
+    await page.locator('[data-testid="playing-on"]').first().waitFor({ timeout: 5000 });
+
+    // 1. This one is the remote: a list started here goes there, with its tracks; nothing plays here.
+    await page.evaluate((list) => window.__wave.playTracks(list, 1, 'e2e remote list'), chart.slice(0, 3));
+    const list = await sent('playTracks');
+    if (list.args[0]?.tracks?.length !== 3 || list.args[1] !== 1 || list.args[2] !== 'e2e remote list') throw new Error(`list sent: ${JSON.stringify(list.args).slice(0, 200)}`);
+    // «Своя волна» by its button, and a My Wave pick in "Tune".
+    await page.click('[data-testid="nav-home"]');
+    await page.click('[data-testid="own-wave"]');
+    await sent('playOwnWave');
+    await page.click('[data-testid="wave-tune"]');
+    await page.locator('.segmented').nth(1).locator('button', { hasText: 'Грустное' }).click();
+    const pick = await sent('retuneWave');
+    if (pick.args[0]?.mood !== 'sad') throw new Error(`pick sent: ${JSON.stringify(pick.args)}`);
+    await page.locator('.segmented').nth(1).locator('button', { hasText: 'Любое' }).click();
+    await page.keyboard.press('Escape');
+    await page.locator('.drawer-backdrop').click({ position: { x: 5, y: 5 } }).catch(() => {});
+    if (!(await page.evaluate(() => window.__wave.audio.paused))) throw new Error('it played here too');
+    if (!(await page.locator('[data-testid="playing-on"]').count())) throw new Error('no longer a remote');
+
+    // 2. The phone as this one's remote: a list sent by its keys plays here, then «Своя волна».
+    const keys = chart.map((t) => (t.albums?.[0]?.id ? `${t.id}:${t.albums[0].id}` : String(t.id)));
+    const at = Date.now();
+    await write(names[2], { v: 1, from: { id: phoneId, platform: 'ios' }, at, commands: [{ id: `${phoneId}.1`, at, fn: 'playTracks', args: [{ keys }, 2, 'e2e from the phone', undefined, {}] }] });
+    await page.evaluate(() => window.__wave.sync.elsewhere.look());
+    await page.waitForFunction(() => window.__wave.usePlayer.getState().source?.title === 'e2e from the phone', null, { timeout: 15000 });
+    const here = await page.evaluate(() => { const s = window.__wave.usePlayer.getState(); return { n: s.queue.length, id: String(s.queue[s.index]?.id) }; });
+    if (here.n !== 4 || here.id !== String(chart[2].id)) throw new Error(`the phone's list here: ${JSON.stringify(here)}`);
+    await waitPlaying(0.5);
+    await write(names[2], { v: 1, from: { id: phoneId, platform: 'ios' }, at: Date.now(), commands: [{ id: `${phoneId}.2`, at: Date.now(), fn: 'playOwnWave', args: [] }] });
+    await page.evaluate(() => window.__wave.sync.elsewhere.look());
+    await page.waitForFunction(() => window.__wave.usePlayer.getState().source?.station?.seed === 'oni:own', null, { timeout: 15000 });
+    await waitPlaying(0.5, 60000);
+  } finally {
+    await page.evaluate(() => window.__wave.audio.pause());
+    await page.evaluate(() => window.__wave.sync.elsewhere.leave('drop'));
+    await page.evaluate((list) => Promise.all(list.map((n) => window.__wave.sync.disk.remove(n).catch(() => {}))), names);
+  }
+});
+
 await step('who controls whom: a phone that is this one\'s remote is never made its remote ("Controlled from iPhone"); becoming a remote says so on Disk; a press while each is the other\'s remote is done; "Disconnect" leaves the phone playing and is not undone by itself (all removed again)', async () => {
   // The user, 25.10.2026: Pause from the phone did nothing until Oni was opened again (each device was
   // the other's remote), and leaving the remote on the phone paused the PC and played on the phone.
