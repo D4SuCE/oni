@@ -72,7 +72,21 @@ export function waveSeeds(t: WaveTuning): string[] {
   return seeds;
 }
 
-export class WaveEngine {
+/** What the player plays a wave from: Yandex's (WaveEngine: My Wave, a station radio) or Oni's own
+ * (own.ts: «Своя волна»). */
+export interface Station {
+  readonly tuning: WaveTuning;
+  stats: WaveStats;
+  isSkipped?: (t: Track) => boolean;
+  start(): Promise<void>;
+  next(): Promise<Track | null>;
+  feedback(type: WaveEventType, track?: Track, playedSeconds?: number): void;
+  /** The Yandex session the tracks came from (none for Oni's own wave). */
+  readonly radio: { sessionId: string; batchId: string; seeds: string[] } | undefined;
+  rejectReason(t: Track): RejectReason | null;
+}
+
+export class WaveEngine implements Station {
   readonly tuning: WaveTuning;
   stats: WaveStats = {
     received: 0,
