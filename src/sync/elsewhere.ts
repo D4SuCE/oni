@@ -207,7 +207,10 @@ function showDevices(changed = true) {
   // The device let go has stopped: played again, it may be taken up as before.
   if (declined && !others.some((f) => f.device.id === declined && isLive(f, now))) declined = null;
   showRemotes();
-  const seconds = sync!.others().length ? AWAKE : 0;
+  // Kept awake only while Oni is open on another device (it may play this one as a remote): the engine
+  // running silent leaves "pause" on the lock screen though nothing plays (a user's screenshot, 25.10.2026),
+  // and with the PC off or Oni closed there that was for nothing.
+  const seconds = there.length ? AWAKE : 0;
   if (isIos && seconds !== awake) {
     awake = seconds;
     void OniPlayer.setAwake({ seconds }).catch(() => {});
