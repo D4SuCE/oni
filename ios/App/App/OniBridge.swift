@@ -1828,7 +1828,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
             let st = self.stream?.state
             call.resolve([
                 "time": self.position, "duration": self.duration, "playing": self.playing, "eq": !self.eq.bypass, "engine": self.engine.isRunning,
-                "crossing": self.tail != nil, "streaming": self.stream != nil, "waiting": self.stalled,
+                "crossing": self.tail != nil, "lift": self.lift.globalGain, "streaming": self.stream != nil, "waiting": self.stalled,
                 "received": st?.received ?? 0, "expected": st?.expected ?? 0, "trace": self.trace,
                 "musicEnd": self.musicEnd ?? -1, "endOf": self.endOf, "tracksOpened": self.tracksOpened, "endSearch": self.endSearch, "hasFile": self.file != nil,
             ])

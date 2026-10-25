@@ -309,6 +309,26 @@ async function crossfade() {
   }
 }
 
+/** Volume levelling on the native player: a quiet track is raised above full volume (its lift unit,
+ * 5 dB for −20 LUFS with its peak at −6) and still plays; a loud one is not raised. */
+async function levelling() {
+  const chart = (await (wave() as unknown as { api: { chart(): Promise<Track[]> } }).api.chart().catch(() => [] as Track[])).filter((t) => t.available !== false).slice(0, 2);
+  if (chart.length < 2) return report('levelling', false, 'no tracks to try');
+  const audio = wave().audio;
+  const lift = async (t: Track) => {
+    await wave().playTracks([t], 0, 'smoke levelling');
+    const t0 = await until(() => !audio.paused && audio.currentTime > 0.5, 60000);
+    const at = audio.currentTime;
+    await sleep(1500);
+    const st = (await OniPlayer.state()) as { lift?: number; playing: boolean; time: number };
+    return { lift: st.lift ?? NaN, playing: t0 && st.playing && audio.currentTime > at + 0.5 };
+  };
+  const quiet = await lift({ ...chart[0], r128: { i: -20, tp: -6 } });
+  const loud = await lift({ ...chart[1], r128: { i: -5, tp: 1 } });
+  audio.pause();
+  report('levelling', Math.abs(quiet.lift - 5) < 0.05 && quiet.playing && loud.lift === 0 && loud.playing, JSON.stringify({ quiet, loud }));
+}
+
 /** The account's own upload Yandex keeps as "aac" (MP4 inside) plays: it would not open (the user, 25.10.2026). */
 async function uploadPlays() {
   const w = wave() as unknown as { api: { uid(): Promise<number>; playlist(uid: unknown, kind: unknown): Promise<{ tracks?: { track?: Track }[] }>; stream(id: string, q: string): Promise<{ codec: string }> }; useApp: { getState(): { playlists: { uid: number; kind: number; owner?: { uid: number } }[] } } };
@@ -978,6 +998,7 @@ export async function runSmoke() {
     await lanLink();
     await iosPulse();
     await crossfade();
+    await levelling();
     await uploadPlays();
     await fastStart();
     await intents();

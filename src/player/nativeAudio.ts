@@ -28,7 +28,7 @@ interface PlayerPlugin {
   seek(options: { time: number }): Promise<void>;
   setEq(options: { enabled: boolean; preamp: number; gains: number[] }): Promise<void>;
   setGain(options: { value: number }): Promise<void>;
-  state(): Promise<{ time: number; duration: number; playing: boolean; eq: boolean; engine?: boolean; crossing?: boolean; streaming?: boolean; waiting?: boolean; received?: number; expected?: number }>;
+  state(): Promise<{ time: number; duration: number; playing: boolean; eq: boolean; engine?: boolean; crossing?: boolean; lift?: number; streaming?: boolean; waiting?: boolean; received?: number; expected?: number }>;
   /** For the simulator run: downloads held to a slow network's pace (0: off). */
   testThrottle(options: { bytesPerSecond: number }): Promise<void>;
   /** For the simulator run: what the system equalizer set up as Oni's does at each frequency (dB). */
