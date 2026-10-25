@@ -1685,6 +1685,12 @@ await step('another device in the player: its paused track taken up at its secon
     // user, 25.10.2026: the PC's track shown on the phone with the PC off).
     // (A second phone: a file older than one already read is not taken, so the first cannot be aged.)
     const listed = (id) => page.evaluate((i) => window.__wave.sync.elsewhere.useElsewhere.getState().devices.some((d) => d.device.id === i), id);
+    // The phone renews its file while open (its last one may be older than a minute by now).
+    await write(names[0], phone({ at: Date.now(), changed: Date.now() + 20_000 }));
+    for (let i = 0; i < 8 && !(await listed(phoneId)); i++) {
+      await page.evaluate(() => window.__wave.sync.elsewhere.look());
+      await page.waitForTimeout(i ? 1000 : 300);
+    }
     if (!(await listed(phoneId))) throw new Error('the phone, open, not listed');
     await write(names[4], phone({ device: { id: `${phoneId}b`, platform: 'ios' }, at: Date.now() - 200_000 }));
     await page.evaluate(() => window.__wave.sync.elsewhere.look());
