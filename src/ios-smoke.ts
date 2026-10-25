@@ -133,11 +133,12 @@ async function longPressMenu() {
  * it ("Next" stays on the same track). */
 /** A round button whose words the iPhone hides (Shuffle on a page's row, as in Liked) names itself
  * when held, by those words (the user, 25.10.2026: "many buttons show nothing, one has to guess").
- * On the album of what plays (Liked may be left in its "Move" mode by the steps before). */
+ * On a chart track's album (Liked may be left in its "Move" mode by the steps before, and what plays
+ * may be an upload, whose album is no page). */
 async function holdHintRound() {
-  const w = wave() as unknown as { navigate(r: unknown): void; usePlayer: { getState(): { queue: Track[]; index: number } } };
-  const { queue, index } = w.usePlayer.getState();
-  const album = queue[index]?.albums?.[0]?.id ?? queue.find((t) => t.albums?.[0]?.id)?.albums?.[0]?.id;
+  const w = wave() as unknown as { navigate(r: unknown): void; api: { chart(): Promise<Track[]> } };
+  const chart = await w.api.chart().catch(() => [] as Track[]);
+  const album = chart.find((t) => t.available !== false && t.albums?.[0]?.id)?.albums?.[0]?.id;
   if (!album) return report('hold-hint-round', false, 'no album to open');
   w.navigate({ name: 'album', id: album });
   const button = (await until(() => [...document.querySelectorAll<HTMLElement>('.lib-actions .btn:not(.primary), .page-actions .btn:not(.primary)')].find((b) => b.textContent?.includes('Вперемешку')), 15000))
