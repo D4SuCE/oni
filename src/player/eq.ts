@@ -33,6 +33,8 @@ let ctx: AudioContext | null = null;
 let input: GainNode | null = null;
 let preamp: GainNode | null = null;
 let filters: BiquadFilterNode[] = [];
+/** The volume levelling's lift above full volume (loudness.ts), on the preamp: an element can't play louder than 1. */
+let boost = 1;
 
 /** Web Audio hears the stream only where the desktop shell arranges CORS (the beat pulse needs it). */
 export const canAnalyzeAudio = () => Boolean(transport.canAnalyzeAudio);
@@ -65,11 +67,11 @@ function apply() {
     OniPlayer.setEq({ enabled: s.enabled, preamp: s.preamp, gains: s.gains }).catch(() => {});
     return;
   }
-  if (!s.enabled && !ctx) return; // never switched on: leave the element untouched
+  if (!s.enabled && !ctx && boost <= 1) return; // never needed: leave the element untouched
   build();
   if (!ctx) return;
   // Switched off after being on: the graph stays (an element can't be detached), set flat.
-  preamp!.gain.value = s.enabled ? Math.pow(10, s.preamp / 20) : 1;
+  preamp!.gain.value = (s.enabled ? Math.pow(10, s.preamp / 20) : 1) * boost;
   filters.forEach((f, i) => (f.gain.value = s.enabled ? (s.gains[i] ?? 0) : 0));
   if (ctx!.state === 'suspended') ctx!.resume().catch(() => {});
 }
@@ -86,6 +88,16 @@ export function tapAnalyser(): AnalyserNode {
   input!.connect(a);
   return a;
 }
+
+/** The desktop's levelling above full volume (1: none); only where Web Audio hears the stream. */
+export function setBoost(value: number) {
+  if (isIos || value === boost) return;
+  boost = value;
+  apply();
+}
+
+/** The lift the audio graph gives now (1: none, or no graph): for the e2e run. */
+export const levelLift = () => (ctx ? boost : 1);
 
 function save() {
   const { enabled, preamp: p, gains, preset } = useEq.getState();

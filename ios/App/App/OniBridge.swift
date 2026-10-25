@@ -1106,6 +1106,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     /// Both nodes meet here (each on a bus of its own), before the equalizer.
     private let mix = AVAudioMixerNode()
     private let eq = AVAudioUnitEQ(numberOfBands: 10)
+    /// The loudness levelling's lift above full volume (a mixer's volume stops at 1): a plain gain, no bands.
+    private let lift = AVAudioUnitEQ(numberOfBands: 0)
     private var file: AVAudioFile?
     /// The format each node is connected with (its file's).
     private var formats: [AVAudioFormat?] = [nil, nil]
@@ -1191,8 +1193,10 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         for n in nodes { engine.attach(n) }
         engine.attach(mix)
         engine.attach(eq)
+        engine.attach(lift)
         engine.connect(mix, to: eq, format: nil)
-        engine.connect(eq, to: engine.mainMixerNode, format: nil)
+        engine.connect(eq, to: lift, format: nil)
+        engine.connect(lift, to: engine.mainMixerNode, format: nil)
         let center = NotificationCenter.default
         center.addObserver(self, selector: #selector(interrupted(_:)), name: AVAudioSession.interruptionNotification, object: nil)
         center.addObserver(self, selector: #selector(routeChanged(_:)), name: AVAudioSession.routeChangeNotification, object: nil)
@@ -1809,11 +1813,12 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         }
     }
 
-    /// { value: 0…1 } — the loudness levelling; the volume itself is the phone's (OniVolume).
+    /// { value } — the loudness levelling (above 1: a quiet track raised); the volume itself is the phone's (OniVolume).
     @objc func setGain(_ call: CAPPluginCall) {
-        let value = Float(call.getDouble("value") ?? 1)
+        let value = max(0, Float(call.getDouble("value") ?? 1))
         DispatchQueue.main.async {
-            self.engine.mainMixerNode.outputVolume = value
+            self.engine.mainMixerNode.outputVolume = min(1, value)
+            self.lift.globalGain = value > 1 ? min(24, 20 * log10(value)) : 0
             call.resolve()
         }
     }

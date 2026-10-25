@@ -11,13 +11,13 @@ import { NowPlaying } from './components/NowPlaying.tsx';
 import { PlayerBar } from './components/PlayerBar.tsx';
 import { Sidebar, useSidebar } from './components/Sidebar.tsx';
 import { SoundPanel } from './components/SoundPanel.tsx';
-import { eqOutputLevel } from './player/eq.ts';
+import { eqOutputLevel, levelLift } from './player/eq.ts';
 import { pulseLevel, pulseTempo } from './player/pulse.ts';
 import { cx } from './ui/util.ts';
 import { deviceSync, disk, syncNow, useSync } from './sync/index.ts';
 import { disconnect, elsewhereSync, leave, listen, look, publish, useElsewhere } from './sync/elsewhere.ts';
 import { TuningPanel } from './components/Wave.tsx';
-import { audio, current, next, offline, playTracks, prev, restoreSession, setSleep, setVolume, toggle, usePlayer } from './player/player.ts';
+import { audio, current, next, offline, playTracks, prev, restoreSession, setSleep, setVolume, toggle, toggleShuffle, usePlayer } from './player/player.ts';
 import { back, historyStep, init, navigate, toast, toggleLike, useApp } from './store.ts';
 import { AlbumView } from './views/Album.tsx';
 import { ArtistView } from './views/Artist.tsx';
@@ -225,5 +225,5 @@ export function App() {
 
 // Handy for debugging and for the automated UI test.
 Object.assign(window, {
-  __wave: { offline, storage, ownToKeep, silence: { leadingSilence }, usePlayer, useApp, audio, api, navigate, playTracks, setSleep, setVolume, toggleLike, eqOutputLevel, pulseLevel, pulseTempo, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } } },
+  __wave: { offline, storage, ownToKeep, silence: { leadingSilence }, usePlayer, useApp, audio, api, navigate, playTracks, setSleep, setVolume, toggleShuffle, toggleLike, eqOutputLevel, levelLift, pulseLevel, pulseTempo, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } } },
 });

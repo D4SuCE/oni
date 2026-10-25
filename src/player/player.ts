@@ -12,13 +12,14 @@ import { PlayLog } from './playLog.ts';
 import { playOutcome, RecsFeedback } from '../recs/feedback.ts';
 import type { Mix } from '../recs/index.ts';
 import { RecentPlays } from './recent.ts';
-import { levellingGain } from './loudness.ts';
+import { albumLoudness, levellingGain, type Loudness } from './loudness.ts';
 import { OfflineLibrary } from './offline.ts';
 import { PlayStats, type Origin } from './stats.ts';
 import { isIos } from '../ui/platform.ts';
 import { audio } from './audio.ts';
 import { audioExt, OniPlayer, type NativeAudio } from './nativeAudio.ts';
 import { leadingSilence, QuietTail } from './silence.ts';
+import { setBoost } from './eq.ts';
 import type { CommandName } from '../sync/playing.ts';
 
 export type Repeat = 'off' | 'all' | 'one';
@@ -387,12 +388,30 @@ function prefetchNext() {
   else if (!prefetched.has(next.id)) streamUrl(next).catch(() => {});
 }
 
-function applyVolume() {
+/** An album's loudness, for the queue it was worked out for (the queue changes as a whole). */
+let albumLevel: { queue: Track[]; r128: Loudness | undefined } | null = null;
+
+/** The levelling for what plays now (loudness.ts): an album played in order keeps one level. */
+function levelling() {
   const s = get();
-  const gain = s.normalize ? levellingGain(current()?.r128?.i) : 1;
+  if (!s.normalize) return 1;
+  if (s.source?.kind === 'list' && s.source.from?.album !== undefined && !s.shuffle) {
+    if (albumLevel?.queue !== s.queue) albumLevel = { queue: s.queue, r128: albumLoudness(s.queue) };
+    if (albumLevel.r128) return levellingGain(albumLevel.r128);
+  }
+  return levellingGain(current()?.r128);
+}
+
+/** The volume and the levelling, `k` of it (the sleep timer's fade). Above full volume the
+ * levelling is lifted by the iPhone's player or the desktop's audio graph (eq.ts). */
+function applyVolume(k = 1) {
+  const gain = levelling();
   // On the iPhone the volume is the phone's (volume.ts): only the levelling is ours, on its player.
-  if (isIos) OniPlayer.setGain({ value: Math.min(1, gain) }).catch(() => {});
-  else audio.volume = Math.max(0, Math.min(1, s.volume * gain));
+  if (isIos) OniPlayer.setGain({ value: gain * k }).catch(() => {});
+  else {
+    audio.volume = Math.max(0, Math.min(1, get().volume * Math.min(1, gain) * k));
+    setBoost(Math.max(1, gain));
+  }
 }
 
 /** The audio element can cross from one track into the next (dualAudio.ts; the iPhone's native player). */
@@ -962,6 +981,7 @@ export function toggleShuffle() {
     unshuffled = null;
     set({ shuffle: false, queue: original, index: Math.max(0, original.indexOf(cur)) });
   }
+  applyVolume(); // an album in order is levelled as one, shuffled track by track
   prefetchNext();
 }
 
@@ -1047,12 +1067,8 @@ async function fallAsleep() {
   set({ sleep: { until: null, afterTrack: false } });
   if (audio.paused) return;
   const steps = 16;
-  const gain = (k: number) => {
-    if (isIos) OniPlayer.setGain({ value: Math.min(1, (get().normalize ? levellingGain(current()?.r128?.i) : 1) * k) }).catch(() => {});
-    else audio.volume = Math.max(0, Math.min(1, get().volume * (get().normalize ? levellingGain(current()?.r128?.i) : 1) * k));
-  };
   for (let i = steps - 1; i >= 0; i--) {
-    gain(i / steps);
+    applyVolume(i / steps);
     await new Promise((r) => setTimeout(r, 250));
   }
   audio.pause();

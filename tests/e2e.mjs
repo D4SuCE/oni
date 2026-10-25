@@ -408,6 +408,40 @@ await step('sleep timer: after this track it stops at its end; in minutes it fad
   if (await page.locator('.playerbar [data-testid="sleep"] .sleep-left').count()) throw new Error('the timer still shows');
 });
 
+await step('volume levelling: a loud track turned down, a quiet one raised while its peak stays clean, an album in order at one level (shuffled: each its own)', async () => {
+  // The user, 25.10.2026: like Apple's Sound Check, only the track's overall level. Two chart
+  // tracks stand in, their loudness data set here.
+  const r = await page.evaluate(async () => {
+    const w = window.__wave;
+    const chart = await w.api.chart();
+    const [a, b] = chart.filter((t) => t.available !== false).slice(0, 2);
+    const at = async (tracks, from) => {
+      await w.playTracks(tracks, 0, 'e2e levelling', from);
+      w.audio.pause();
+      await new Promise((r) => setTimeout(r, 300));
+      return { el: w.audio.volume / w.usePlayer.getState().volume, lift: w.levelLift() };
+    };
+    const quiet = { ...a, r128: { i: -20, tp: -6 }, durationMs: 60_000 };
+    const loud = { ...b, r128: { i: -5, tp: 1 }, durationMs: 240_000 };
+    const res = { loud: await at([loud]), quiet: await at([quiet]), clipping: await at([{ ...a, r128: { i: -20, tp: -0.5 } }]) };
+    // An album (−8.9 LUFS as one, its peak −0.5): the quiet intro keeps the album's level.
+    const album = [quiet, { ...loud, r128: { i: -8, tp: -0.5 } }];
+    res.album = await at(album, { album: a.albums?.[0]?.id ?? 1 });
+    w.toggleShuffle();
+    await new Promise((r) => setTimeout(r, 300));
+    res.shuffled = { lift: w.levelLift(), shuffle: w.usePlayer.getState().shuffle };
+    if (w.usePlayer.getState().shuffle) w.toggleShuffle();
+    return res;
+  });
+  const near = (x, y) => Math.abs(x - y) < 0.01;
+  if (!near(r.loud.el, 10 ** (-3 / 20)) || r.loud.lift !== 1) throw new Error(`loud: ${JSON.stringify(r)}`);
+  // −20 LUFS, peak −6: 5 dB of room under −1 dBTP (the target is 12 dB away).
+  if (!near(r.quiet.el, 1) || !near(r.quiet.lift, 10 ** (5 / 20))) throw new Error(`quiet: ${JSON.stringify(r)}`);
+  if (!near(r.clipping.el, 1) || r.clipping.lift !== 1) throw new Error(`raised into clipping: ${JSON.stringify(r)}`);
+  if (!near(r.album.el, 1) || r.album.lift !== 1) throw new Error(`album: ${JSON.stringify(r)}`);
+  if (!r.shuffled.shuffle || !near(r.shuffled.lift, 10 ** (5 / 20))) throw new Error(`shuffled album: ${JSON.stringify(r)}`);
+});
+
 await step('now playing screen', async () => {
   await page.click('.pb-cover');
   await page.waitForSelector('.nowplaying');
