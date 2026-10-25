@@ -1801,11 +1801,13 @@ await step('animations: on in Settings, a page slides in like a paper door, a pr
       const b = document.querySelector('[data-testid="nav-home"]');
       const at = b.getBoundingClientRect();
       const o = { bubbles: true, clientX: at.left + 5, clientY: at.top + 5 };
+      // The press's ring may still be there on a slow machine: only new ones count.
+      const before = document.querySelectorAll('.hamon-ring').length;
       b.dispatchEvent(new PointerEvent('pointerdown', { ...o, pointerType: 'touch', isPrimary: true, pointerId: 7 }));
-      const onTouch = document.querySelectorAll('.hamon-ring').length;
+      const onTouch = document.querySelectorAll('.hamon-ring').length - before;
       b.dispatchEvent(new PointerEvent('pointerup', { ...o, pointerType: 'touch', isPrimary: true, pointerId: 7 }));
       b.dispatchEvent(new MouseEvent('click', { ...o, detail: 1 }));
-      return { onTouch, onClick: document.querySelectorAll('.hamon-ring').length };
+      return { onTouch, onClick: document.querySelectorAll('.hamon-ring').length - before };
     });
     if (touch.onTouch || !touch.onClick) throw new Error(`a tap's ring: ${JSON.stringify(touch)}`);
     // A long list: only the first rows come in one after another (all of them at once took the
