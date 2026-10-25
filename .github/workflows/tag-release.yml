@@ -1,0 +1,49 @@
+# A "Release x.y.z" commit on main is released without a tag pushed by hand: the cloud autopilot
+# cannot push tags (25.10.2026: 1.16.1 waited in main). Here the tag vX.Y.Z is made for the version in
+# package.json, and the Windows and iPhone builds are started on it. A tag made with GITHUB_TOKEN
+# starts no workflow by itself, so both are started by hand (workflow_dispatch is the exception).
+# A tag pushed from the PC as before (CLAUDE.md, "Выпуск") starts them by itself; then nothing is done here.
+name: tag-release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  tag:
+    if: startsWith(github.event.head_commit.message, 'Release ')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Tag and start the builds
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          tag="v$version"
+          title=$(head -1 <<<"$MESSAGE")
+          if [ "$title" != "Release $version" ]; then
+            echo "The commit says \"$title\", package.json $version: not released"
+            exit 1
+          fi
+          # A tag pushed from the PC (it starts the builds itself) comes a moment after the commit.
+          sleep 30
+          git fetch --tags --quiet
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "$tag is there already: its push started the builds"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "Oni $version" "$GITHUB_SHA"
+          git push origin "$tag"
+          gh workflow run ios.yml --ref "$tag" -f smoke=false
+          gh workflow run release.yml --ref "$tag"
+          echo "$tag tagged; the Windows and iPhone builds started"
