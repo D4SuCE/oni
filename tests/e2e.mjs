@@ -492,7 +492,7 @@ await step('track details can be copied: a click, a selection with Ctrl+C, the r
     await page.locator('.track-row').nth(1).click({ button: 'right' });
     await page.locator('.menu-item', { hasText: 'Информация о треке' }).click();
     await page.waitForSelector('[data-testid="track-info"]', { timeout: 15000 });
-    const row = (label) => page.locator('.info-row', { has: page.locator('dt', { hasText: label }) }).locator('dd');
+    const row = (label) => page.locator('.info-row', { has: page.locator('dt', { hasText: new RegExp(`^${label}$`) }) }).locator('dd');
     // A click on a value copies it, and says so.
     await reset();
     const artists = (await row('Исполнители').innerText()).trim();
@@ -523,9 +523,11 @@ await step('track details can be copied: a click, a selection with Ctrl+C, the r
     if ((await clip()) !== selection) throw new Error(`Ctrl+C copied "${await clip()}", selected "${selection}"`);
   } finally {
     await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), saved);
+    // Left open, the sheet would cover the window for the steps after this one.
+    if (await page.locator('.menu').count()) await page.keyboard.press('Escape');
+    if (await page.locator('.track-sheet').count()) await page.locator('.track-sheet button', { hasText: 'Закрыть' }).click();
+    await page.waitForSelector('.track-sheet', { state: 'detached' });
   }
-  await page.locator('.track-sheet button', { hasText: 'Закрыть' }).click();
-  await page.waitForSelector('.track-sheet', { state: 'detached' });
 });
 
 await step('share a track: its link goes to the clipboard', async () => {
