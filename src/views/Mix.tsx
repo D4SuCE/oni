@@ -11,7 +11,7 @@ import { fmtTotal } from '../ui/util.ts';
 export function MixView({ id }: { id: string }) {
   const t = useT();
   const lang = useLang((s) => s.lang);
-  const mix = useRecs((s) => s.mixes.find((m) => m.id === id));
+  const mix = useRecs((s) => s.mixes.find((m) => m.id === id) ?? s.smart.find((m) => m.id === id));
   const genres = useGenreTitles();
   if (!mix) return <div className="empty-hint">{t.recs.gone}</div>;
   const title = mixTitle(mix, genres);
@@ -27,8 +27,11 @@ export function MixView({ id }: { id: string }) {
           <div className="kicker">{t.recs.kicker[mix.kind]}</div>
           <h1 title={title}>{title}</h1>
           <div className="page-meta">
-            {mixSubtitle(mix, genres)} · {t.count.tracks(mix.tracks.length)}, {fmtTotal(total)}
+            {/* A smart playlist's subtitle is its count already. */}
+            {mix.kind !== 'auto' && `${mixSubtitle(mix, genres)} · `}
+            {t.count.tracks(mix.tracks.length)}, {fmtTotal(total)}
             <div className="muted desc">
+              {mix.rule ? `${t.recs.smartAbout[mix.rule]} · ` : ''}
               {t.recs.refreshes[mix.kind]}
               {mix.slotEnd ? ` · ${t.recs.until(new Date(mix.slotEnd).toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' }))}` : ''}
             </div>
@@ -45,7 +48,8 @@ export function MixView({ id }: { id: string }) {
       <TrackList
         tracks={mix.tracks}
         onPlay={(i) => playTracks(mix.tracks, i, title, undefined, extra)}
-        rowMenu={(track) => [{ label: t.menu.hideFromMixes, icon: <EyeOff size={15} />, onClick: () => hideFromMixes(track) }]}
+        // A smart playlist is the user's own music by a rule: there is nothing to hide it from.
+        rowMenu={mix.kind === 'auto' ? undefined : (track) => [{ label: t.menu.hideFromMixes, icon: <EyeOff size={15} />, onClick: () => hideFromMixes(track) }]}
       />
     </div>
   );

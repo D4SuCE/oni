@@ -44,7 +44,7 @@ export type ListLabel =
   /** A station: `of` names what it plays from when that has a label ("Radio: Liked songs"). */
   | { key: 'radio'; title: string; of?: ListLabel };
 /** What a mix's title is built from (components/Mixes.tsx, mixTitle). */
-export type MixName = Pick<Mix, 'kind' | 'genre' | 'seedArtist' | 'slot' | 'slotStart' | 'builtAt'>;
+export type MixName = Pick<Mix, 'kind' | 'genre' | 'seedArtist' | 'slot' | 'slotStart' | 'builtAt' | 'rule'>;
 
 export type Source =
   | { kind: 'wave'; station?: { seed: string; title: string; label?: ListLabel } }

@@ -2,7 +2,7 @@ import { RefreshCw, Search, Settings } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import { api } from '../api/client.ts';
 import { MixCard, useGenreTitles } from '../components/Mixes.tsx';
-import { loadRecs, useRecs } from '../recs/index.ts';
+import { loadRecs, loadSmart, shownSmart, useRecs } from '../recs/index.ts';
 import { AlbumCard, ErrorBox, PlaylistCard, Section, Shelf, Spinner } from '../components/Common.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { WaveHero } from '../components/Wave.tsx';
@@ -52,6 +52,38 @@ function ForYou() {
         )}
       </Section>
     </>
+  );
+}
+
+/** Smart playlists (the user's pick, 24.10.2026): a section of their own, not in "For you" (it has
+ * plenty); built by rules from the user's music, again when the likes change. */
+function SmartPlaylists() {
+  const t = useT();
+  const ready = useApp((s) => s.libraryReady);
+  const likes = useApp((s) => s.likedKeys);
+  const smartStatus = useRecs((s) => s.smartStatus);
+  const all = useRecs((s) => s.smart);
+  const mixes = useRecs((s) => s.mixes);
+  const smart = useMemo(() => shownSmart(all, mixes), [all, mixes]);
+  const genres = useGenreTitles();
+  useEffect(() => {
+    if (ready) loadSmart();
+  }, [ready, likes]);
+  if (smartStatus !== 'loading' && !smart.length) return null;
+  return (
+    <Section title={t.recs.smart} action={<span className="muted small">{t.recs.smartHint}</span>}>
+      {smartStatus === 'loading' ? (
+        <Spinner />
+      ) : (
+        <div data-testid="smart-playlists">
+          <Shelf>
+            {smart.map((m) => (
+              <MixCard key={m.id} mix={m} genres={genres} />
+            ))}
+          </Shelf>
+        </div>
+      )}
+    </Section>
   );
 }
 
@@ -108,6 +140,7 @@ export function Home() {
       </div>
       <WaveHero />
       <ForYou />
+      <SmartPlaylists />
       <YearAgo />
 
       {account && (

@@ -14,7 +14,7 @@ export function useGenreTitles() {
 }
 
 /** What the title is built from, kept with the playing list (not the whole mix with its tracks). */
-export const mixName = ({ kind, genre, seedArtist, slot, slotStart, builtAt }: Mix): MixName => ({ kind, genre, seedArtist, slot, slotStart, builtAt });
+export const mixName = ({ kind, genre, seedArtist, slot, slotStart, builtAt, rule }: Mix): MixName => ({ kind, genre, seedArtist, slot, slotStart, builtAt, rule });
 
 export function mixTitle(mix: MixName, genres: Record<string, string>) {
   const t = tr();
@@ -24,6 +24,7 @@ export function mixTitle(mix: MixName, genres: Record<string, string>) {
   if (mix.kind === 'repeat') return t.recs.repeat;
   if (mix.kind === 'rewind') return t.recs.rewind;
   if (mix.kind === 'because') return t.recs.because(mix.seedArtist ?? '');
+  if (mix.kind === 'auto') return t.recs.smartTitle[mix.rule ?? 'likedMonth'];
   return t.recs.mix(genres[mix.genre ?? ''] ?? mix.genre ?? '');
 }
 
@@ -33,6 +34,8 @@ const lowerFirst = (s: string) => (s.length > 1 && s[1] !== s[1].toUpperCase() ?
 /** Leading artists; for the daylist, its character and genres ("Бодрое · рэп, рок"). */
 export function mixSubtitle(mix: Mix, genres: Record<string, string>) {
   const t = tr();
+  // A smart playlist is all that fits its rule: how many there are says more than who.
+  if (mix.kind === 'auto') return t.count.tracks(mix.tracks.length);
   if (mix.kind === 'daylist' && mix.slot) {
     const names = (mix.genres ?? []).map((g) => genres[g]).filter(Boolean).map(lowerFirst);
     return [t.recs.daylistMood[mix.slot], names.join(', ')].filter(Boolean).join(' · ');
@@ -45,6 +48,7 @@ export function mixSubtitle(mix: Mix, genres: Record<string, string>) {
  * 発見 discovery, 新作 new works, 反復 repetition, 回想 recollection, 縁 connection; genres: 和風 rap (as in the mockup), 電子 electronic, 代替
  * alternative, 人気 pop, 激音 rock, 鋼鉄 metal, 舞踏 dance, 独立 indie, 民謡 folk, 映画 soundtrack,
  * 古典 classical, 魂歌 R&B, 歌謡 estrada, 反逆 punk, 即興 jazz, 哀歌 blues, 太陽 reggae, 日本 J-pop.
+ * Smart playlists: 今月 this month, 去年 last year, 愛聴 listened to with love, 新譜 new records.
  */
 const SEALS: Record<string, string> = {
   discover: '発見',
@@ -74,11 +78,15 @@ const SEALS: Record<string, string> = {
   blues: '哀歌',
   reggae: '太陽',
   japanesepop: '日本',
+  likedMonth: '今月',
+  likedYearAgo: '去年',
+  mostPlayed: '愛聴',
+  newFromArtists: '新譜',
 };
 /** Daylist: 朝 morning, 昼 afternoon, 夕 evening, 夜 night, 深夜 late night. */
 const SLOT_SEALS: Record<Slot, string> = { morning: '朝', day: '昼', evening: '夕', night: '夜', late: '深夜' };
 const seal = (mix: Mix) =>
-  mix.kind === 'daylist' ? SLOT_SEALS[mix.slot ?? 'day'] : (SEALS[mix.kind === 'mix' ? (mix.genre ?? '') : mix.kind] ?? '音楽');
+  mix.kind === 'daylist' ? SLOT_SEALS[mix.slot ?? 'day'] : (SEALS[mix.kind === 'mix' ? (mix.genre ?? '') : mix.kind === 'auto' ? (mix.rule ?? '') : mix.kind] ?? '音楽');
 
 /** Cover art with a brush seal: the oni for discoveries, a red sun for the radar, a duotone collage for mixes. */
 export function MixArt({ mix, title, big }: { mix: Mix; title: string; big?: boolean }) {

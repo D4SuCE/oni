@@ -578,6 +578,53 @@ await step('hide a track from the mixes, then bring it back from Settings ("Skip
   await page.click('[data-testid="nav-home"]');
 });
 
+await step('smart playlists: a section of their own on Home; "Liked this month" is the last 30 days of likes, plays as itself, and a new like is in it at once (reverted)', async () => {
+  await page.click('[data-testid="nav-home"]');
+  const section = page.locator('[data-testid="smart-playlists"]');
+  await section.waitFor({ timeout: 60000 });
+  const titles = await section.locator('.card-title').allInnerTexts();
+  const month = section.locator('[data-testid="mix-card"]', { hasText: 'Лайки за месяц' });
+  if (!(await month.count())) throw new Error(`cards: ${titles.join(', ')}`);
+  console.log(`       ${titles.join(', ')}`);
+  // What Yandex has: the likes of the last 30 days that play.
+  const want = await page.evaluate(async () => {
+    const w = window.__wave;
+    const dates = (await w.api.likedTrackDates()).filter((d) => Date.now() - d.at <= 30 * 86_400_000);
+    const tracks = await w.api.tracks(dates.map((d) => d.key));
+    return tracks.filter((t) => t.available !== false).length;
+  });
+  await month.click();
+  await page.waitForSelector('.track-row');
+  const kicker = await page.locator('.kicker').first().innerText();
+  const meta = await page.locator('.page-meta').innerText();
+  const rows = await page.locator('.track-row').count();
+  if (!/умный плейлист/i.test(kicker) || !/30 дней/.test(meta) || /треков · \d+ треков/.test(meta) || Math.abs(rows - want) > 1) throw new Error(`kicker "${kicker}", meta "${meta}", ${rows} rows, ${want} liked this month`);
+  if ((await page.locator('.mix-seal').first().innerText()) !== '今月') throw new Error('seal');
+  await shot('16-smart-playlist');
+  await page.click('[data-testid="mix-play"]');
+  await page.waitForFunction(() => window.__wave.usePlayer.getState().source?.origin === 'auto', null, { timeout: 10000 });
+  const source = await page.evaluate(() => window.__wave.usePlayer.getState().source?.title);
+  if (source !== 'Лайки за месяц') throw new Error(`playing from "${source}"`);
+  await page.evaluate(() => window.__wave.audio.pause());
+  // A like: it is at the top at once (the likes changed, the lists made of them are built again).
+  const liked = await page.evaluate(async () => {
+    const w = window.__wave;
+    const t = (await w.api.chart()).find((x) => x.available !== false && !w.useApp.getState().liked.has(String(x.id)));
+    if (!t) return null;
+    await w.toggleLike(t);
+    return t;
+  });
+  if (!liked) throw new Error('no chart track left to like');
+  try {
+    await page.click('[data-testid="nav-home"]');
+    await page.waitForFunction((id) => window.__wave.findMix?.('auto-likedMonth')?.tracks[0]?.id == id, liked.id, { timeout: 30000 });
+  } finally {
+    await page.evaluate(async (t) => {
+      if (window.__wave.useApp.getState().liked.has(String(t.id))) await window.__wave.toggleLike(t);
+    }, liked);
+  }
+});
+
 await step('search and play a track', async () => {
   await page.click('[data-testid="nav-search"]');
   await page.fill('[data-testid="search-input"]', 'Кино');

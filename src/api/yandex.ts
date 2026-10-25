@@ -332,6 +332,12 @@ export class YandexMusic {
     return r.library.tracks.map((t: any) => (t.albumId ? `${t.id}:${t.albumId}` : String(t.id)));
   }
 
+  /** The liked tracks' keys with the date of each like (ms), newest first. */
+  async likedTrackDates(): Promise<{ key: string; at: number }[]> {
+    const r = await this.call<any>(`/users/${await this.uid()}/likes/tracks`);
+    return r.library.tracks.map((t: any) => ({ key: t.albumId ? `${t.id}:${t.albumId}` : String(t.id), at: Date.parse(t.timestamp) || 0 }));
+  }
+
   async dislikedTrackIds(): Promise<string[]> {
     const r = await this.call<any>(`/users/${await this.uid()}/dislikes/tracks`);
     return r.library.tracks.map((t: any) => String(t.id));

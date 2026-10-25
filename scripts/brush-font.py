@@ -16,7 +16,7 @@ from fontTools.merge import Merger
 from fontTools.ttLib import TTFont
 
 # Every kanji/kana the interface draws with the brush font. Keep in sync with src/recs seals.
-CHARS = '鬼波音楽で生きる発見新作反復回想縁和風電子代替人気激鋼鉄舞踏独立民謡映画古典魂歌反逆即興哀太陽日本韓流朝昼夕夜深'
+CHARS = '鬼波音楽で生きる発見新作反復回想縁和風電子代替人気激鋼鉄舞踏独立民謡映画古典魂歌反逆即興哀太陽日本韓流朝昼夕夜深今月去年愛聴譜'
 
 pkg = sys.argv[1]
 out = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(__file__), '..', 'src', 'assets', 'brush.woff2')

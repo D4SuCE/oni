@@ -19,15 +19,19 @@ import { assembleDaylist, playedInSlot, SLOT_SEEDS, slotAt, topGenres, type Slot
 import { buildProfile, type Profile, type TasteInput } from './profile.ts';
 import { becauseYouListened, forgottenFavourites, onRepeat, recentArtists } from './personal.ts';
 import { radarArtists, radarTracks, recentReleases } from './radar.ts';
+import { differs, likedMonth, likedYearAgo, mostPlayed, myArtists, newFromArtists, SMART_RULES, type Like, type SmartRule } from './smart.ts';
 import { DAY, dayKey, mapLimit, seededRandom, shelfOrder, weekKey } from './util.ts';
 
-export type MixKind = 'daylist' | 'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because';
+/** `auto`: a smart playlist (smart.ts), in a section of its own on Home. */
+export type MixKind = 'daylist' | 'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because' | 'auto';
 
 export interface Mix {
   id: string;
   kind: MixKind;
   /** For taste mixes: the genre id the mix is built around. */
   genre?: string;
+  /** Smart playlists: the rule it is made by. */
+  rule?: SmartRule;
   /** Leading artists, for the subtitle. */
   artists: string[];
   /** "Because you listened to": the artist the mix starts from. */
@@ -48,9 +52,12 @@ interface RecsState {
   /** A forced rebuild ("Refresh") is running: the button spins, a toast says when it is done. */
   refreshing: boolean;
   error: string | null;
+  /** The smart playlists, in SMART_RULES order (those with too few tracks left out). */
+  smart: Mix[];
+  smartStatus: 'idle' | 'loading' | 'ready' | 'error';
 }
 
-export const useRecs = create<RecsState>(() => ({ status: 'idle', mixes: [], refreshing: false, error: null }));
+export const useRecs = create<RecsState>(() => ({ status: 'idle', mixes: [], refreshing: false, error: null, smart: [], smartStatus: 'idle' }));
 
 const CACHE_KEY = 'recs.v1';
 const CONCURRENCY = 4;
@@ -93,16 +100,8 @@ const makeMix = (id: string, kind: MixKind, tracks: Track[], artists: string[], 
   builtAt: Date.now(),
 });
 
-/** Everything the profile and the filters need, fetched once per build. */
-async function gather() {
-  const app = useApp.getState();
-  const [liked, server, tree] = await Promise.all([
-    api.tracks(app.likedKeys).catch(() => [] as Track[]),
-    api.musicHistory().catch(() => []),
-    api.genreTree().catch((): GenreTree => ({ parent: {}, title: {} })),
-  ]);
-
-  // Plays from Yandex's history (other devices) and this app's own history.
+/** Plays from Yandex's history (other devices) and this app's own, and how long since each was heard. */
+function collectHeard(server: Awaited<ReturnType<typeof api.musicHistory>>) {
   const heard = new Map<string, { track: Track; plays: number; skips: number; last: number }>();
   for (const day of server) {
     const at = Date.parse(day.date);
@@ -128,6 +127,20 @@ async function gather() {
     const remote = serverLast.has(id) ? (now - serverLast.get(id)!) / DAY : Infinity;
     return Math.min(local, remote);
   };
+
+  return { heard, daysSinceHeard, now };
+}
+
+/** Everything the profile and the filters need, fetched once per build. */
+async function gather() {
+  const app = useApp.getState();
+  const [liked, server, tree] = await Promise.all([
+    api.tracks(app.likedKeys).catch(() => [] as Track[]),
+    api.musicHistory().catch(() => []),
+    api.genreTree().catch((): GenreTree => ({ parent: {}, title: {} })),
+  ]);
+
+  const { heard, daysSinceHeard, now } = collectHeard(server);
 
   const input: TasteInput = { liked, heard: [...heard.values()], disliked: app.disliked, now };
   return {
@@ -340,6 +353,121 @@ export function loadRecs(force = false): Promise<void> {
   return running;
 }
 
-export const findMix = (id: string) => useRecs.getState().mixes.find((m) => m.id === id);
+/** The smart playlists to show: "Most played" only once it is not "On repeat" again. */
+export function shownSmart(smart: Mix[], mixes: Mix[]) {
+  const repeat = mixes.find((m) => m.kind === 'repeat')?.tracks ?? [];
+  return smart.filter((m) => m.rule !== 'mostPlayed' || differs(m.tracks, repeat));
+}
+
+export const findMix = (id: string) => [...useRecs.getState().mixes, ...useRecs.getState().smart].find((m) => m.id === id);
+
+// ------------------------------------------------------------------ smart playlists
+
+const SMART_KEY = 'recs.smart.v1';
+/** A smart playlist with fewer tracks is not shown (a list of two is no list). */
+const SMART_MIN = 5;
+
+interface SmartCache {
+  uid: string;
+  day: string;
+  /** The likes it was built from: a like or unlike rebuilds the lists made of likes. */
+  likes: string;
+  lists: Mix[];
+  /** "New from my artists" costs a request per artist and a release: once a day. */
+  releasesDay?: string;
+  releases?: Mix;
+}
+
+const likesKey = (keys: string[]) => `${keys.length}:${keys.slice(0, 30).join(',')}`;
+
+function readSmart(uid: string): SmartCache | null {
+  try {
+    const c = JSON.parse(storage.getItem(SMART_KEY) || 'null') as SmartCache | null;
+    return c?.uid === uid ? c : null;
+  } catch {
+    return null;
+  }
+}
+
+const smartMix = (rule: SmartRule, tracks: Track[]): Mix => ({
+  ...makeMix(`auto-${rule}`, 'auto', tracks, [...new Set(tracks.flatMap((t) => t.artists.map((a) => a.name)))]),
+  rule,
+});
+
+const smartShown = (c: SmartCache) => {
+  const all = [...c.lists, c.releases].filter(Boolean) as Mix[];
+  return SMART_RULES.map((r) => all.find((m) => m.rule === r)).filter((m): m is Mix => !!m && m.tracks.length >= SMART_MIN);
+};
+
+/** The likes with their dates and the plays: what every smart playlist is made of. */
+async function gatherSmart() {
+  const [dates, server] = await Promise.all([api.likedTrackDates(), api.musicHistory().catch(() => [])]);
+  const tracks = await api.tracks(dates.map((d) => d.key));
+  const at = new Map(dates.map((d) => [d.key.split(':')[0], d.at]));
+  const likes: Like[] = tracks.filter((t) => at.has(String(t.id))).map((t) => ({ track: t, at: at.get(String(t.id))! }));
+  const { heard, now } = collectHeard(server);
+  // Plays: this app counts all of them (on every device), Yandex's history only the last days.
+  const plays = [...heard.values()].map((h) => ({ ...h, plays: Math.max(h.plays, history.get(String(h.track.id))?.plays ?? 0) }));
+  return { likes, heard: plays, now, disliked: useApp.getState().disliked };
+}
+
+async function buildReleases(g: Awaited<ReturnType<typeof gatherSmart>>): Promise<Mix> {
+  const followed = await api.likedArtists().catch(() => []);
+  const artists = myArtists(g.likes, g.heard, followed, 30);
+  const albums = (await mapLimit(artists, CONCURRENCY, (id) => api.artistAlbums(id, 4))).flat().filter(Boolean);
+  const recent = recentReleases(albums as NonNullable<(typeof albums)[number]>[], g.now, 30).slice(0, 25);
+  const full = await mapLimit(recent, CONCURRENCY, async (album) => ({ album, tracks: (await api.album(album.id)).volumes?.flat() ?? [] }));
+  return smartMix('newFromArtists', newFromArtists(full.filter(Boolean) as { album: (typeof recent)[number]; tracks: Track[] }[], g.disliked, g.now));
+}
+
+let smartRunning: Promise<void> | null = null;
+/** Asked again while building (a like came in): built once more after. */
+let smartAgain = false;
+
+/** Shows the cached smart playlists at once and rebuilds them when the day or the likes changed. */
+export function loadSmart(force = false): Promise<void> {
+  if (smartRunning) {
+    smartAgain = true;
+    return smartRunning;
+  }
+  smartRunning = (async () => {
+    const app = useApp.getState();
+    const uid = String(app.account?.uid ?? '');
+    if (!uid) return;
+    const day = dayKey(Date.now());
+    const likes = likesKey(app.likedKeys);
+    const cache = readSmart(uid);
+    if (cache) useRecs.setState({ smart: smartShown(cache), smartStatus: 'ready' });
+    const releasesDue = force || cache?.releasesDay !== day;
+    if (!force && cache && cache.day === day && cache.likes === likes && !releasesDue) return;
+    if (!cache) useRecs.setState({ smartStatus: 'loading' });
+    try {
+      const g = await gatherSmart();
+      const lists = [
+        smartMix('likedMonth', likedMonth(g.likes, g.disliked, g.now)),
+        smartMix('likedYearAgo', likedYearAgo(g.likes, g.disliked, g.now)),
+        smartMix('mostPlayed', mostPlayed(g.heard, g.disliked)),
+      ];
+      let next: SmartCache = { ...cache, uid, day, likes, lists };
+      storage.setItem(SMART_KEY, JSON.stringify(next));
+      useRecs.setState({ smart: smartShown(next), smartStatus: 'ready' });
+      if (releasesDue) {
+        next = { ...next, releases: await buildReleases(g), releasesDay: day };
+        storage.setItem(SMART_KEY, JSON.stringify(next));
+        useRecs.setState({ smart: smartShown(next) });
+      }
+    } catch (e) {
+      console.warn('smart playlists failed', e);
+      if (!cache) useRecs.setState({ smartStatus: 'error' });
+    }
+  })().finally(() => {
+    smartRunning = null;
+    if (smartAgain) {
+      smartAgain = false;
+      void loadSmart();
+    }
+  });
+  return smartRunning;
+}
 
 export type { Profile };

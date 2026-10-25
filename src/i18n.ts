@@ -4,6 +4,7 @@
 
 import { create } from 'zustand';
 import type { Slot } from './recs/daylist.ts';
+import type { SmartRule } from './recs/smart.ts';
 import type { Diversity, Language, Mood } from './wave/engine.ts';
 
 export type Lang = 'ru' | 'en';
@@ -108,7 +109,8 @@ const ru = {
       repeat: 'Что вы слушаете чаще всего',
       rewind: 'Любимое, которое давно не звучало',
       because: 'Похожие исполнители',
-    } as Record<'daylist' | 'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because', string>,
+      auto: 'Умный плейлист',
+    } as Record<'daylist' | 'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because' | 'auto', string>,
     refreshes: {
       daylist: 'Меняется с временем суток',
       mix: 'Обновляется каждый день',
@@ -117,8 +119,23 @@ const ru = {
       repeat: 'Обновляется каждый день',
       rewind: 'Обновляется по понедельникам',
       because: 'Обновляется каждый день',
-    } as Record<'daylist' | 'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because', string>,
+      auto: 'Собирается сам, обновляется каждый день',
+    } as Record<'daylist' | 'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because' | 'auto', string>,
     gone: 'Этой подборки больше нет — на главной уже свежие',
+    smart: 'Умные плейлисты',
+    smartHint: 'Собираются сами из вашей музыки',
+    smartTitle: {
+      likedMonth: 'Лайки за месяц',
+      likedYearAgo: 'Лайки год назад',
+      mostPlayed: 'Самое слушаемое',
+      newFromArtists: 'Новинки моих артистов',
+    } as Record<SmartRule, string>,
+    smartAbout: {
+      likedMonth: 'Всё, что вы лайкнули за последние 30 дней, — от новых к старым',
+      likedYearAgo: 'Что вы лайкали в эти же недели год назад',
+      mostPlayed: 'Треки, которые вы включаете чаще всего (три раза и больше)',
+      newFromArtists: 'Релизы ваших исполнителей за последние 30 дней — целиком, сначала самые свежие',
+    } as Record<SmartRule, string>,
   },
   history: {
     hint: 'Последние дни из истории Яндекса: официальные приложения на всех устройствах и «Моя волна». Плейлисты, прослушанные в Oni, Яндекс сюда не записывает — они во вкладке «Oni».',
@@ -572,8 +589,9 @@ const ru = {
       rewind: 'Забытые хиты',
       because: '«Потому что вы слушали»',
       smart: 'Умное перемешивание (✦)',
+      auto: 'Умные плейлисты',
       list: 'Плейлисты, альбомы, поиск',
-    } as Record<'wave' | 'radio' | 'daylist' | 'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because' | 'smart' | 'list', string>,
+    } as Record<'wave' | 'radio' | 'daylist' | 'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because' | 'smart' | 'auto' | 'list', string>,
   },
   sound: {
     title: 'Настройки звука',
@@ -706,6 +724,7 @@ const en: Dict = {
       repeat: 'What you play the most',
       rewind: 'Loved, but quiet for a while',
       because: 'Similar artists',
+      auto: 'Smart playlist',
     },
     refreshes: {
       daylist: 'Changes as the day goes on',
@@ -715,8 +734,23 @@ const en: Dict = {
       repeat: 'Refreshed every day',
       rewind: 'Refreshed every Monday',
       because: 'Refreshed every day',
+      auto: 'Builds itself, refreshed every day',
     },
     gone: 'This mix is gone — Home has fresh ones',
+    smart: 'Smart playlists',
+    smartHint: 'Built by themselves from your music',
+    smartTitle: {
+      likedMonth: 'Liked this month',
+      likedYearAgo: 'Liked a year ago',
+      mostPlayed: 'Most played',
+      newFromArtists: 'New from my artists',
+    },
+    smartAbout: {
+      likedMonth: 'Everything you liked in the last 30 days, newest first',
+      likedYearAgo: 'What you liked in these same weeks a year ago',
+      mostPlayed: 'The tracks you play the most (three times or more)',
+      newFromArtists: 'Releases from your artists in the last 30 days, whole, the newest first',
+    },
   },
   history: {
     hint: "The last days of Yandex's history: the official apps on all your devices and My Wave. Playlists played in Oni are not recorded there by Yandex; see the Oni tab.",
@@ -1169,6 +1203,7 @@ const en: Dict = {
       rewind: 'Forgotten Favourites',
       because: '"Because you listened to"',
       smart: 'Smart Shuffle (✦)',
+      auto: 'Smart playlists',
       list: 'Playlists, albums, search',
     },
   },
