@@ -102,12 +102,6 @@ export function TuningPanel() {
           </div>
         </div>
 
-        <div className="drawer-group" data-testid="own-modes">
-          <h3>{t.own.group}</h3>
-          <p className="hint">{t.own.groupHint}</p>
-          <Segmented options={labeled(OWN_MODES, t.own.modes)} value={ownMode} onChange={setOwnMode} />
-        </div>
-
         <div className="drawer-group">
           <h3>{w.yandexPicks}</h3>
           <div className="field-label">{w.activity}</div>
@@ -176,6 +170,11 @@ export function TuningPanel() {
               <Trash2 size={14} /> {t.common.clear}
             </button>
           </div>
+        </div>
+        <div className="drawer-group" data-testid="own-modes">
+          <h3>{t.own.group}</h3>
+          <p className="hint">{t.own.groupHint}</p>
+          <Segmented options={labeled(OWN_MODES, t.own.modes)} value={ownMode} onChange={setOwnMode} />
         </div>
       </aside>
     </div>
