@@ -131,14 +131,19 @@ async function longPressMenu() {
 
 /** Holding an icon-only button shows what it does above it, and lifting the finger does not press
  * it ("Next" stays on the same track). */
-/** A round button whose words the iPhone hides (Shuffle in Liked) names itself when held, by those
- * words (the user, 25.10.2026: "many buttons show nothing, one has to guess"). */
+/** A round button whose words the iPhone hides (Shuffle on a page's row, as in Liked) names itself
+ * when held, by those words (the user, 25.10.2026: "many buttons show nothing, one has to guess").
+ * On the album of what plays (Liked may be left in its "Move" mode by the steps before). */
 async function holdHintRound() {
-  click('[data-testid="nav-liked"]');
+  const w = wave() as unknown as { navigate(r: unknown): void; usePlayer: { getState(): { queue: Track[]; index: number } } };
+  const { queue, index } = w.usePlayer.getState();
+  const album = queue[index]?.albums?.[0]?.id ?? queue.find((t) => t.albums?.[0]?.id)?.albums?.[0]?.id;
+  if (!album) return report('hold-hint-round', false, 'no album to open');
+  w.navigate({ name: 'album', id: album });
   const button = (await until(() => [...document.querySelectorAll<HTMLElement>('.lib-actions .btn:not(.primary), .page-actions .btn:not(.primary)')].find((b) => b.textContent?.includes('Вперемешку')), 15000))
     ? [...document.querySelectorAll<HTMLElement>('.lib-actions .btn:not(.primary), .page-actions .btn:not(.primary)')].find((b) => b.textContent?.includes('Вперемешку'))
     : null;
-  if (!button) return report('hold-hint-round', false, 'no Shuffle in Liked');
+  if (!button) return report('hold-hint-round', false, 'no Shuffle on the album');
   const box = button.getBoundingClientRect();
   const at = { pointerId: 12, pointerType: 'touch', isPrimary: true, clientX: box.left + box.width / 2, clientY: box.top + box.height / 2, bubbles: true };
   button.dispatchEvent(new PointerEvent('pointerdown', at));
@@ -391,7 +396,8 @@ async function uploadPlays() {
 function voiceShortcuts() {
   const app = (window as unknown as { __wave: { navigate(r: unknown): void } }).__wave;
   app.navigate({ name: 'settings' });
-  return until(() => document.querySelectorAll('[data-testid="voice-shortcut"]').length, 5000).then((ok) => {
+  // Slow on the cloud Mac after a long page: 15 s (a run, 25.10.2026, had them at 5.x s).
+  return until(() => document.querySelectorAll('[data-testid="voice-shortcut"]').length, 15000).then((ok) => {
     const n = document.querySelectorAll('[data-testid="voice-shortcut"]').length;
     const over = [...document.querySelectorAll<HTMLElement>('[data-testid="voice-shortcut"]')].filter((b) => b.getBoundingClientRect().right > window.innerWidth + 1).length;
     report('voice-shortcuts', Boolean(ok) && n === 2 && over === 0, `${n} buttons, ${over} off screen`);
