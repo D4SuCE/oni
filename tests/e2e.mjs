@@ -1810,6 +1810,22 @@ await step('animations: on in Settings, a page slides in like a paper door, a pr
       return { onTouch, onClick: document.querySelectorAll('.hamon-ring').length - before };
     });
     if (touch.onTouch || !touch.onClick) throw new Error(`a tap's ring: ${JSON.stringify(touch)}`);
+    // A tap iOS sends no click for (rows still coming in under the finger: it took the tap for a
+    // hover, the user, 25.10.2026) is a press all the same; its click coming late is not a second one.
+    const rescued = await page.evaluate(async () => {
+      const b = document.querySelector('[data-testid="nav-history"]');
+      const at = b.getBoundingClientRect();
+      const o = { bubbles: true, clientX: at.left + 5, clientY: at.top + 5, pointerType: 'touch', isPrimary: true, pointerId: 8 };
+      b.dispatchEvent(new PointerEvent('pointerdown', o));
+      b.dispatchEvent(new PointerEvent('pointerup', o));
+      await new Promise((r) => setTimeout(r, 500));
+      const route = window.__wave.useApp.getState().route.name;
+      let clicks = 0;
+      b.addEventListener('click', () => clicks++);
+      b.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: o.clientX, clientY: o.clientY, detail: 1 }));
+      return { route, clicks };
+    });
+    if (rescued.route !== 'history' || rescued.clicks) throw new Error(`a tap with no click: ${JSON.stringify(rescued)}`);
     // A long list: only the first rows come in one after another (all of them at once took the
     // iPhone's memory, and iOS closed the page).
     await page.click('[data-testid="nav-liked"]');

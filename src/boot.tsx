@@ -9,6 +9,7 @@ import { connectDesktopShell } from './player/shell.ts';
 import { connectLinks } from './ui/links.ts';
 import { connectLongPress } from './ui/longPress.ts';
 import { isIos } from './ui/platform.ts';
+import { connectTapRescue } from './ui/tap.ts';
 import { connectTouchRanges } from './ui/touchRange.ts';
 import { installGlobalErrorLogging } from './ui/log.ts';
 
@@ -17,6 +18,7 @@ connectDesktopShell();
 startBeatPulse();
 connectLinks();
 connectLongPress();
+connectTapRescue();
 if (isIos) {
   connectTouchRanges();
   import('./ui/iosUpdate.ts').then((m) => m.watchIosUpdates());

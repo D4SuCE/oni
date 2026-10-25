@@ -73,7 +73,7 @@ export const animOn = (effect: AnimEffect) => {
 if (typeof window !== 'undefined') {
   const pressed = (e: PointerEvent | MouseEvent) => {
     const button = (e.target as Element | null)?.closest?.('button') as HTMLButtonElement | null;
-    if (button && !button.disabled) hamon(e.clientX, e.clientY, button);
+    if (button && !button.disabled) pressRing(e.clientX, e.clientY, button);
   };
   let touch = false;
   window.addEventListener(
@@ -90,7 +90,7 @@ if (typeof window !== 'undefined') {
 
 /** A thin ring spreads from the press and is gone in a third of a second: gold over dark buttons,
  * light over red ones. On the iPhone a light tap goes with it. */
-function hamon(x: number, y: number, button: HTMLElement) {
+export function pressRing(x: number, y: number, button: HTMLElement) {
   if (!animOn('hamon')) return;
   const ring = document.createElement('i');
   const bg = getComputedStyle(button).backgroundColor;
