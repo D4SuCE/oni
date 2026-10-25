@@ -1894,6 +1894,32 @@ await step('animations: on in Settings, a page slides in like a paper door, a pr
   if (left) throw new Error(`${left} effects still on`);
 });
 
+await step('a long list opens with its first rows and draws the rest a moment later (Liked)', async () => {
+  // The user, 25.10.2026: on the iPhone a tab opened only once all of Liked (or History) was drawn.
+  await page.click('[data-testid="nav-home"]');
+  const seen = await page.evaluate(async () => {
+    const total = window.__wave.useApp.getState().likedKeys.length;
+    const first = new Promise((resolve) => {
+      const watch = new MutationObserver(() => {
+        const n = document.querySelectorAll('.track-row').length;
+        if (n) {
+          watch.disconnect();
+          resolve(n);
+        }
+      });
+      watch.observe(document.body, { childList: true, subtree: true });
+    });
+    window.__wave.navigate({ name: 'library', tab: 'tracks' });
+    const atFirst = await first;
+    const until = Date.now() + 15000;
+    while (document.querySelectorAll('.track-row').length < total && Date.now() < until) await new Promise((r) => setTimeout(r, 100));
+    return { total, atFirst, atLast: document.querySelectorAll('.track-row').length };
+  });
+  if (seen.total > 40 && seen.atFirst > 40) throw new Error(`first drawn: ${seen.atFirst} of ${seen.total}`);
+  if (seen.atLast < seen.total) throw new Error(`drawn in the end: ${seen.atLast} of ${seen.total}`);
+  console.log(`       ${seen.atFirst} rows at first, ${seen.atLast} of ${seen.total} a moment later`);
+});
+
 await step('english interface has no Russian left', async () => {
   // Only the app's own chrome: titles, tabs, buttons, tooltips. Yandex data stays as it is
   // (also in the Home banner: the playing track, its artists, where it plays from).

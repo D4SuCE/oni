@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { api } from '../api/client.ts';
 import type { HistoryContext, HistoryGroup } from '../api/types.ts';
 import { ErrorBox, Spinner } from '../components/Common.tsx';
-import { TrackList } from '../components/TrackList.tsx';
+import { TrackList, useRowsShown } from '../components/TrackList.tsx';
 import { tr, useLang, useT } from '../i18n.ts';
 import { playTracks, recentPlays, useRecent } from '../player/player.ts';
 import type { RecentPlay } from '../player/recent.ts';
@@ -108,17 +108,36 @@ function localDays(plays: RecentPlay[]) {
   return days;
 }
 
+/** The days and runs whose first track is among the first `rows`. */
+function withinRows(days: ReturnType<typeof localDays>, rows: number) {
+  const shown: typeof days = [];
+  let before = 0;
+  for (const day of days) {
+    const runs = [];
+    for (const run of day.runs) {
+      if (before < rows) runs.push(run);
+      before += run.tracks.length;
+    }
+    if (runs.length) shown.push({ ...day, runs });
+  }
+  return shown;
+}
+
 function InThisApp() {
   const t = useT();
   const listTitle = useListTitle();
   const lang = useLang((s) => s.lang);
   useRecent((s) => s.version);
   const days = localDays(recentPlays.list());
+  // The runs that start within the rows drawn so far; the rest come in the next moments (a long
+  // history drawn whole delayed the tab's opening: the user, 25.10.2026).
+  const drawn = useRowsShown(days.reduce((n, d) => n + d.runs.reduce((m, r) => m + r.tracks.length, 0), 0));
   if (!days.length) return <div className="empty-hint">{t.history.emptyLocal}</div>;
   const time = new Intl.DateTimeFormat(lang, { hour: '2-digit', minute: '2-digit' });
+  const upTo = withinRows(days, drawn);
   return (
     <>
-      {days.map((day) => (
+      {upTo.map((day) => (
         <section className="section" key={day.date}>
           <div className="section-head">
             <h2 className="history-day">{dayTitle(day.date, lang)}</h2>

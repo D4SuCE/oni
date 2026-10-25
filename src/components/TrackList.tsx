@@ -1,4 +1,4 @@
-import { memo, useRef } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { useDragSort } from '../ui/dragSort.ts';
 import { ArrowDownToLine, ArrowUp, Ban, GripVertical, CircleCheck, Disc3, Download, Info, Loader2, Pencil, Heart, Link, ListEnd, ListPlus, ListStart, MoreHorizontal, Play, Plus, Radio, Share, Trash2, User } from 'lucide-react';
 import type { Track } from '../api/types.ts';
@@ -204,6 +204,23 @@ function DownloadMark({ id, saved, label }: { id: string | number; saved: Offlin
   );
 }
 
+/** Rows drawn with the page; the rest come this many at a time in the next moments. A tab opened
+ * only once all of a long list (Liked, History: hundreds of rows) was drawn, and on the iPhone a tap
+ * waited for it (the user, 25.10.2026: "the tab opens with a delay"). */
+const FIRST_ROWS = 40;
+const MORE_ROWS = 120;
+
+/** How many rows of `total` are drawn: FIRST_ROWS at once, then more after each paint. */
+export function useRowsShown(total: number) {
+  const [shown, setShown] = useState(FIRST_ROWS);
+  useEffect(() => {
+    if (shown >= total) return;
+    const timer = setTimeout(() => setShown((n) => n + MORE_ROWS), 16);
+    return () => clearTimeout(timer);
+  }, [shown, total]);
+  return shown;
+}
+
 export function TrackList({
   tracks,
   onPlay,
@@ -241,6 +258,9 @@ export function TrackList({
   const list = useRef<HTMLDivElement>(null);
   const sortable = Boolean(onMove) && !filter;
   useDragSort(list, { enabled: sortable && (!isIos || reordering), mode: isIos ? 'handle' : 'row', hold: true, onMove: (from, to) => onMove?.(from, to) });
+  // All of them while searching the list or putting it in order.
+  const drawn = useRowsShown(tracks.length);
+  const limit = filter || reordering ? tracks.length : drawn;
   return (
     <div ref={list} className={cx('track-list', !showAlbum && 'no-album', reordering && 'reordering')}>
       {reordering && (
@@ -252,7 +272,7 @@ export function TrackList({
         </div>
       )}
       {tracks.map((t, i) =>
-        filter && !trackMatches(t, filter) ? null : (
+        i >= limit || (filter && !trackMatches(t, filter)) ? null : (
           <TrackRow
             key={`${t.id}-${i}`}
             track={t}
