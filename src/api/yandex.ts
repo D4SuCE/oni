@@ -67,6 +67,12 @@ export function trackKey(t: Track) {
   return album ? `${t.id}:${album}` : String(t.id);
 }
 
+/** The catalog's track an upload stands for, where Yandex has found it (the user, 24.10.2026: the
+ * artist, "Similar", the radio and the lyrics go by it; the file still plays, never replaced). */
+export function catalogTrack(t: Track): Track | null {
+  return t.trackSource === 'UGC' && t.matchedTrack?.id ? t.matchedTrack : null;
+}
+
 export function artistNames(t: { artists?: Artist[] }) {
   return (t.artists || []).map((a) => a.name).join(', ');
 }

@@ -12,7 +12,7 @@ import { isIos } from '../ui/platform.ts';
 import { ArtistLinks, Cover } from './Common.tsx';
 import { openMenu } from './Menu.tsx';
 import { DevicesButton, PlayingOn } from './Devices.tsx';
-import { isUpload, trackMenu } from './TrackList.tsx';
+import { plainArtists, trackMenu } from './TrackList.tsx';
 
 /** The sleep timer: a moon, with the minutes left beside it while it runs; its menu sets it. */
 export function SleepButton({ size = 18 }: { size?: number }) {
@@ -193,7 +193,7 @@ export function PlayerBar() {
                 {track.version && <span className="tr-version"> {track.version}</span>}
               </div>
               <div className="pb-artists">
-                <ArtistLinks artists={track.artists} plain={isIos || isUpload(track)} />
+                <ArtistLinks artists={track.artists} plain={isIos || plainArtists(track)} />
               </div>
               <PlayingOn />
             </div>

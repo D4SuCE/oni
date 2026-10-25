@@ -7,7 +7,7 @@
 import { create } from 'zustand';
 import { api, storage, transport } from '../api/client.ts';
 import type { Track } from '../api/types.ts';
-import { artistNames } from '../api/yandex.ts';
+import { artistNames, catalogTrack } from '../api/yandex.ts';
 import { pickLrclib, type LrclibHit } from './lrclib.ts';
 
 export type { Lyrics } from './lrclib.ts';
@@ -49,7 +49,11 @@ function keep(id: string, entry: Entry) {
   useLyrics.setState((s) => ({ v: s.v + 1 }));
 }
 
-export const yandexHas = (t: Track) => Boolean(t.lyricsInfo?.hasAvailableSyncLyrics || t.lyricsInfo?.hasAvailableTextLyrics);
+/** Yandex's lyrics are there (an upload Yandex has found: the catalog track's). */
+export const yandexHas = (t: Track) => {
+  const s = catalogTrack(t) ?? t;
+  return Boolean(s.lyricsInfo?.hasAvailableSyncLyrics || s.lyricsInfo?.hasAvailableTextLyrics);
+};
 
 /** Whether the track has lyrics: 'no' only once both Yandex and LRCLIB have said so. */
 export function lyricsKnown(t: Track | undefined): 'yes' | 'no' | 'unknown' {
@@ -80,7 +84,7 @@ export function lyricsOf(t: Track): Promise<Lyrics | null> {
 async function find(t: Track): Promise<Lyrics | null> {
   const id = String(t.id);
   if (yandexHas(t)) {
-    const y = await api.lyrics(id);
+    const y = await api.lyrics(String((catalogTrack(t) ?? t).id));
     if (y) {
       const found: Lyrics = { ...y, source: 'yandex' };
       keep(id, found);
@@ -94,9 +98,11 @@ async function find(t: Track): Promise<Lyrics | null> {
 
 /** LRCLIB, searched by the title and the first artist; the one of the same length, synced first. */
 async function fromLrclib(t: Track): Promise<Lyrics | null> {
-  const artist = t.artists?.[0]?.name || artistNames(t);
-  if (!t.title || !artist) return null;
-  const req = { url: LRCLIB, query: { track_name: t.title, artist_name: artist }, headers: { 'Lrclib-Client': 'Oni (https://github.com/D4SuCE/oni-releases)' } };
+  // An upload Yandex has found goes by the catalog's names (the file's may be anything); its length is the file's.
+  const named = catalogTrack(t) ?? t;
+  const artist = named.artists?.[0]?.name || artistNames(named);
+  if (!named.title || !artist) return null;
+  const req = { url: LRCLIB, query: { track_name: named.title, artist_name: artist }, headers: { 'Lrclib-Client': 'Oni (https://github.com/D4SuCE/oni-releases)' } };
   let r = await transport.request<LrclibHit[]>(req);
   // Busy now and then (503): once more a moment later, and not kept as "none" if it still is.
   if (r.status === 503 || r.status === 429) {

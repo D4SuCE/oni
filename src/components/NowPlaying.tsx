@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } fro
 import { Ban, ChevronDown, GripVertical, ListMusic, MicVocal, MoreHorizontal, SlidersVertical, X } from 'lucide-react';
 import { api } from '../api/client.ts';
 import type { Track } from '../api/types.ts';
-import { trackCover } from '../api/yandex.ts';
+import { catalogTrack, trackCover } from '../api/yandex.ts';
 import { useT } from '../i18n.ts';
 import { moveInQueue, playAt, playTracks, removeAt, seek, usePlayer } from '../player/player.ts';
 import { useDragSort } from '../ui/dragSort.ts';
@@ -19,7 +19,7 @@ import { useElsewhere } from '../sync/elsewhere.ts';
 import { isIos } from '../ui/platform.ts';
 import { BackgroundVideo, LiveCover, useCoverVideo } from './LiveCover.tsx';
 import { openMenu } from './Menu.tsx';
-import { isUpload, TrackList, trackMenu } from './TrackList.tsx';
+import { plainArtists, TrackList, trackMenu } from './TrackList.tsx';
 import { WaveStatsLine } from './Wave.tsx';
 
 function parseLrc(text: string) {
@@ -86,7 +86,8 @@ function Lyrics({ track }: { track: Track }) {
 }
 
 function Similar({ track }: { track: Track }) {
-  const { data, loading, error } = useAsync(() => api.similarTracks(track.id), [track.id]);
+  // An upload Yandex has found: the catalog track's similar ones.
+  const { data, loading, error } = useAsync(() => api.similarTracks(catalogTrack(track)?.id ?? track.id), [track.id]);
   const t = useT();
   if (loading) return <Spinner />;
   if (error || !data?.length) return <div className="muted pad">{t.nowPlaying.noSimilar}</div>;
@@ -256,7 +257,7 @@ export function NowPlaying() {
                     {track.title}
                   </h1>
                   <div className="np-artists">
-                    <ArtistLinks artists={track.artists} plain={isUpload(track)} />
+                    <ArtistLinks artists={track.artists} plain={plainArtists(track)} />
                   </div>
                   <PlayingOn />
                 </div>

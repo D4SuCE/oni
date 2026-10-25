@@ -2,7 +2,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { useDragSort } from '../ui/dragSort.ts';
 import { ArrowDownToLine, ArrowUp, Ban, GripVertical, CircleCheck, Disc3, Download, Info, Loader2, Pencil, Heart, Link, ListEnd, ListPlus, ListStart, MoreHorizontal, Play, Plus, Radio, Share, Trash2, User } from 'lucide-react';
 import type { Track } from '../api/types.ts';
-import { artistNames } from '../api/yandex.ts';
+import { artistNames, catalogTrack } from '../api/yandex.ts';
 import { tr, useT } from '../i18n.ts';
 import { enqueue, offline, playNext, playRadio, toggle, usePlayer } from '../player/player.ts';
 import { addToPlaylist, createPlaylist, dislike, isOwn, navigate, toggleLike, useApp } from '../store.ts';
@@ -18,6 +18,8 @@ import { editUpload, showTrackInfo } from './TrackSheet.tsx';
 
 /** A file the user uploaded: marked in lists, with a short menu (its link opens for nobody else). */
 export const isUpload = (t: Track) => t.trackSource === 'UGC';
+/** An upload whose artist is no link: one Yandex has not found in the catalog. */
+export const plainArtists = (t: Track) => isUpload(t) && !catalogTrack(t);
 
 export function trackMenu(t: Track, extra: MenuItem[] = []): MenuItem[] {
   const app = useApp.getState();
@@ -50,16 +52,33 @@ export function trackMenu(t: Track, extra: MenuItem[] = []): MenuItem[] {
       : state === 'busy' || state === 'queued'
         ? [{ label: tx.menu.downloading, icon: <Loader2 size={15} className="spin" /> }]
         : [{ label: tx.menu.download, icon: <Download size={15} />, onClick: () => downloadTrack(t) }];
-  if (isUpload(t))
+  if (isUpload(t)) {
+    // Found in the catalog by Yandex: its radio and its artist, as for that track (the file plays).
+    const found = catalogTrack(t);
+    const artist = found?.artists?.[0] && !found.artists[0].various ? found.artists[0] : null;
+    const linked: MenuItem[] = found
+      ? [
+          { label: tx.menu.radio, icon: <Radio size={15} />, onClick: () => playRadio(`track:${found.id}`, `${t.title} — ${artistNames(found)}`) },
+          ...(artist
+            ? [
+                { label: tx.menu.artistRadio, icon: <Radio size={15} />, onClick: () => playRadio(`artist:${artist.id}`, artist.name) },
+                { label: tx.menu.goToArtist, icon: <User size={15} />, onClick: () => navigate({ name: 'artist', id: artist.id }) },
+              ]
+            : []),
+          ...(found.albums?.[0]?.id ? [{ label: tx.menu.goToAlbum, icon: <Disc3 size={15} />, onClick: () => navigate({ name: 'album', id: found.albums[0].id }) }] : []),
+        ]
+      : [];
     return [
       like,
       ...download,
+      ...linked,
       dontRecommend,
       addTo,
       { label: tx.menu.edit, icon: <Pencil size={15} />, onClick: () => editUpload(t) },
       details,
       ...(extra.length ? [{ label: '', separator: true }, ...extra] : []),
     ];
+  }
 
   const items: MenuItem[] = [
     { label: tx.menu.playNext, icon: <ListStart size={15} />, onClick: () => playNext(t) },
@@ -152,7 +171,7 @@ const TrackRow = memo(function TrackRow({ track: t, index, active, playing, like
           {t.contentWarning === 'explicit' && <span className="badge">E</span>}
         </div>
         <div className="tr-artists">
-          <ArtistLinks artists={t.artists} plain={isIos || isUpload(t)} />
+          <ArtistLinks artists={t.artists} plain={isIos || plainArtists(t)} />
         </div>
       </div>
       {showAlbum && (

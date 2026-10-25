@@ -39,6 +39,8 @@ export interface Track {
   contentWarning?: string;
   /** 'UGC' for a file the user uploaded themselves (it has no album and no public page). */
   trackSource?: string;
+  /** An upload Yandex has found in the catalog: that track (it may not play, the file does). */
+  matchedTrack?: Track;
   lyricsInfo?: { hasAvailableSyncLyrics?: boolean; hasAvailableTextLyrics?: boolean };
   r128?: { i: number; tp: number };
   derivedColors?: { average: string; waveText: string; miniPlayer: string; accent: string };

@@ -454,6 +454,33 @@ await step('a track Yandex has no lyrics for gets them from LRCLIB, saying so; "
   }
 });
 
+await step('an upload Yandex has found in the catalog: its artist is a link, its menu has the radio and the artist (read only)', async () => {
+  // The user, 24.10.2026: "for my track there is neither the artist nor anything similar". Read only.
+  const found = await page.evaluate(async () => {
+    const me = String(await window.__wave.api.uid());
+    for (const p of window.__wave.useApp.getState().playlists.filter((x) => String(x.owner?.uid) === me)) {
+      const full = await window.__wave.api.playlist(p.uid, p.kind);
+      const it = full.tracks?.find((x) => x.track?.trackSource === 'UGC' && x.track.matchedTrack?.id && x.track.available !== false);
+      if (it) return { uid: p.uid, kind: p.kind, id: String(it.track.id), matched: String(it.track.matchedTrack.id) };
+    }
+    return null;
+  });
+  if (!found) {
+    console.log('       skipped: no upload of the account found by Yandex');
+    return;
+  }
+  await page.evaluate(({ uid, kind }) => window.__wave.navigate({ name: 'playlist', uid, kind }), found);
+  const row = page.locator(`.track-row[data-track-id="${found.id}"]`).first();
+  await row.waitFor({ timeout: 20000 });
+  if (!(await row.locator('a.link').count())) throw new Error('the artist is no link');
+  await row.click({ button: 'right' });
+  await page.waitForSelector('.menu');
+  const items = (await page.locator('.menu .menu-item .menu-label').allInnerTexts()).map((x) => x.trim());
+  await page.keyboard.press('Escape');
+  for (const want of ['Радио по треку', 'Перейти к исполнителю', 'Изменить']) if (!items.includes(want)) throw new Error(`menu: ${items.join(' | ')}`);
+  console.log(`       upload ${found.id} found as ${found.matched}: ${items.length} menu items`);
+});
+
 await step('daylist leads "For you" and fits the time of day', async () => {
   await page.click('[data-testid="nav-home"]');
   await page.waitForSelector('[data-testid="mix-card"]', { timeout: 60000 });
