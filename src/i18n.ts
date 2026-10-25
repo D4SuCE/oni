@@ -5,6 +5,7 @@
 import { create } from 'zustand';
 import type { Slot } from './recs/daylist.ts';
 import type { SmartRule } from './recs/smart.ts';
+import type { OwnMode } from './wave/own.ts';
 import type { Diversity, Language, Mood } from './wave/engine.ts';
 
 export type Lang = 'ru' | 'en';
@@ -519,6 +520,15 @@ const ru = {
     autostart: 'Запускать вместе с Windows',
     autostartHint: 'Oni открывается при входе в Windows — свёрнутым в трей, музыка не начинается сама',
   },
+  own: {
+    title: 'Своя волна',
+    play: 'Своя волна',
+    kicker: 'Из вашей музыки',
+    tagline: 'Любимое, похожее, забытые хиты и новинки ваших исполнителей. Учится на ходу: дослушали — будет похожее, пропустили — меньше такого',
+    modes: { familiar: 'Знакомое', balanced: 'Поровну', fresh: 'Новое' } as Record<OwnMode, string>,
+    group: 'Своя волна',
+    groupHint: 'Сколько в ней знакомого и сколько нового. Меняется сразу, со следующего трека.',
+  },
   wave: {
     kicker: (days: number) => `Без повторов · фильтр ${days ? `${days} дн.` : 'выкл.'}`,
     tagline: 'Бесконечный поток музыки, подобранной для вас',
@@ -590,9 +600,10 @@ const ru = {
       rewind: 'Забытые хиты',
       because: '«Потому что вы слушали»',
       smart: 'Умное перемешивание (✦)',
+      own: 'Своя волна',
       auto: 'Умные плейлисты',
       list: 'Плейлисты, альбомы, поиск',
-    } as Record<'wave' | 'radio' | 'daylist' | 'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because' | 'smart' | 'auto' | 'list', string>,
+    } as Record<'wave' | 'radio' | 'daylist' | 'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because' | 'smart' | 'auto' | 'own' | 'list', string>,
   },
   sound: {
     title: 'Настройки звука',
@@ -1135,6 +1146,15 @@ const en: Dict = {
     autostart: 'Start with Windows',
     autostartHint: 'Oni opens when you sign in to Windows — in the tray, without starting the music',
   },
+  own: {
+    title: 'Own Wave',
+    play: 'Own Wave',
+    kicker: 'From your music',
+    tagline: 'Favourites, similar tracks, forgotten hits and new releases from your artists. It learns as it plays: heard to the end, more like it; skipped, less of it',
+    modes: { familiar: 'Familiar', balanced: 'Balanced', fresh: 'New' },
+    group: 'Own Wave',
+    groupHint: 'How much of it is familiar and how much new. Applies at once, from the next track.',
+  },
   wave: {
     kicker: (days) => `No repeats · filter ${days ? `${days} d` : 'off'}`,
     tagline: 'An endless stream of music picked for you',
@@ -1205,6 +1225,7 @@ const en: Dict = {
       rewind: 'Forgotten Favourites',
       because: '"Because you listened to"',
       smart: 'Smart Shuffle (✦)',
+      own: 'Own Wave',
       auto: 'Smart playlists',
       list: 'Playlists, albums, search',
     },

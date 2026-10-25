@@ -6,6 +6,7 @@ import { tr } from '../i18n.ts';
 import type { Mix } from '../recs/index.ts';
 import type { Diversity, Language, Mood, WaveTuning } from '../wave/engine.ts';
 import type { Origin } from './stats.ts';
+import { OWN_SEED, type OwnMode } from '../wave/own.ts';
 
 export type Repeat = 'off' | 'all' | 'one';
 /** A wave without a station is My Wave; with one it is a radio seeded by a track, artist, album or playlist. */
@@ -24,6 +25,8 @@ export type ListLabel =
   | { key: 'liked' | 'downloads' | 'history' | 'chart' | 'yearAgo' }
   /** With what was picked in "Tune" at the time (History says "My Wave · Rock · Upbeat": the user, 25.10.2026). */
   | { key: 'myWave'; picks?: WavePicks }
+  /** «Своя волна», with the share picked then ("Своя волна · Новое"). */
+  | { key: 'ownWave'; mode?: OwnMode }
   | { key: 'search' | 'similar'; arg: string }
   | { key: 'mix'; mix: MixName }
   /** A station: `of` names what it plays from when that has a label ("Radio: Liked songs"). */
@@ -79,3 +82,5 @@ export function wavePicks(t: WaveTuning): WavePicks | undefined {
 }
 
 export const isMyWave = (source: Source | null) => source?.kind === 'wave' && !source.station;
+/** «Своя волна»: Oni's own station (wave/own.ts), a wave with its own seed. */
+export const isOwnWave = (source: Source | null) => source?.kind === 'wave' && source.station?.seed === OWN_SEED;

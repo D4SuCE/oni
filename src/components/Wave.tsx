@@ -1,14 +1,15 @@
-import { Loader2, Pause, Play, SlidersHorizontal, Trash2, X } from 'lucide-react';
+import { Loader2, Pause, Play, SlidersHorizontal, Sparkles, Trash2, X } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { api } from '../api/client.ts';
 import { useT } from '../i18n.ts';
 import { artistNames } from '../api/yandex.ts';
-import { history, isMyWave, PLAIN_WAVE, playWave, retuneWave, toggle, usePlayer } from '../player/player.ts';
+import { history, isMyWave, isOwnWave, PLAIN_WAVE, playOwnWave, playWave, retuneWave, setOwnMode, toggle, usePlayer } from '../player/player.ts';
 import { useListTitle, useSourceTitle } from './SourceTitle.ts';
 import { useApp } from '../store.ts';
 import { useSwipeDown } from '../ui/swipe.ts';
 import { cx, useAsync } from '../ui/util.ts';
 import { DIVERSITIES as DIVERSITY, LANGUAGES as LANGUAGE, MOODS as MOOD, type WaveTuning } from '../wave/engine.ts';
+import { OWN_MODES } from '../wave/own.ts';
 import { confirmDialog } from './Dialog.tsx';
 
 /** Pairs each option with its label from a dictionary record. */
@@ -74,6 +75,7 @@ export function WaveStatsLine() {
 
 export function TuningPanel() {
   const tuning = usePlayer((s) => s.tuning);
+  const ownMode = usePlayer((s) => s.ownMode);
   const [historySize, setHistorySize] = useState(history.size);
   const contexts = useAsync(() => api.waveContexts(), []);
   const close = useCallback(() => useApp.setState({ tuningOpen: false }), []);
@@ -98,6 +100,12 @@ export function TuningPanel() {
               <X size={20} />
             </button>
           </div>
+        </div>
+
+        <div className="drawer-group" data-testid="own-modes">
+          <h3>{t.own.group}</h3>
+          <p className="hint">{t.own.groupHint}</p>
+          <Segmented options={labeled(OWN_MODES, t.own.modes)} value={ownMode} onChange={setOwnMode} />
         </div>
 
         <div className="drawer-group">
@@ -181,6 +189,8 @@ export function WaveHero() {
   const source = usePlayer((s) => s.source);
   const track = usePlayer((s) => s.queue[s.index]);
   const myWave = isMyWave(source);
+  const own = isOwnWave(source);
+  const ownMode = usePlayer((s) => s.ownMode);
   const station = source?.kind === 'wave' ? source.station : undefined;
   const playing = usePlayer((s) => s.playing);
   const busy = usePlayer((s) => s.waveBusy);
@@ -200,7 +210,9 @@ export function WaveHero() {
     ? w.kicker(tuning.noRepeatDays)
     : myWave
       ? [t.common.myWave, ...settings].join(' · ')
-      : station
+      : own
+        ? [t.own.title, ownMode !== 'balanced' && t.own.modes[ownMode]].filter(Boolean).join(' · ')
+        : station
         ? w.stationOf(station.seed.split(':')[0], listTitle(station.title, station.label))
         : `${w.nowPlaying} · ${playingFrom}`;
   const desc = track ? [artistNames(track)] : settings;
@@ -250,6 +262,11 @@ export function WaveHero() {
           <button className="btn glass-btn big" onClick={() => useApp.setState({ tuningOpen: true })} data-testid="wave-tune">
             <SlidersHorizontal size={18} /> {w.tune}
           </button>
+          {!own && (
+            <button className="btn glass-btn big" onClick={() => playOwnWave()} disabled={busy} title={t.own.tagline} data-testid="own-wave">
+              <Sparkles size={18} /> {t.own.play}
+            </button>
+          )}
         </div>
         {myWave && (
           <div className="wave-footer">

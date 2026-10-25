@@ -21,6 +21,7 @@ import { becauseYouListened, forgottenFavourites, onRepeat, recentArtists } from
 import { radarArtists, radarTracks, recentReleases } from './radar.ts';
 import { differs, likedMonth, likedYearAgo, mostPlayed, myArtists, newFromArtists, SMART_RULES, type Like, type SmartRule } from './smart.ts';
 import { DAY, dayKey, mapLimit, seededRandom, shelfOrder, weekKey } from './util.ts';
+import type { OwnSources } from '../wave/own.ts';
 
 /** `auto`: a smart playlist (smart.ts), in a section of its own on Home. */
 export type MixKind = 'daylist' | 'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because' | 'auto';
@@ -457,7 +458,7 @@ export function loadSmart(force = false): Promise<void> {
     if (!force && cache && cache.day === day && cache.likes === likes && !releasesDue) return;
     if (!cache) useRecs.setState({ smartStatus: 'loading' });
     try {
-      const g = await gatherSmart();
+      const g = force ? await gatherSmart() : await gatheredSmart();
       const lists = [
         smartMix('likedMonth', likedMonth(g.likes, g.disliked, g.now)),
         smartMix('likedYearAgo', likedYearAgo(g.likes, g.disliked, g.now)),
@@ -486,3 +487,22 @@ export function loadSmart(force = false): Promise<void> {
 }
 
 export type { Profile };
+
+// ------------------------------------------------------------------ «Своя волна»
+
+/** The likes and plays, shared by the smart playlists and «Своя волна» (asked again after two minutes). */
+const gatheredSmart = () => fetchShared(`smart:${likesKey(useApp.getState().likedKeys)}`, gatherSmart);
+
+/** Where «Своя волна» (wave/own.ts) takes its tracks from: the same likes, plays and releases as the
+ * smart playlists ("New from my artists" from their cache when it is there). */
+export const ownWaveSources: OwnSources = {
+  likes: async () => (await gatheredSmart()).likes,
+  heard: async () => (await gatheredSmart()).heard,
+  similar: (t) => api.similarTracks(t.id),
+  async releases() {
+    const uid = String(useApp.getState().account?.uid ?? '');
+    const kept = useRecs.getState().smart.find((m) => m.rule === 'newFromArtists') ?? readSmart(uid)?.releases;
+    if (kept?.tracks.length) return kept.tracks;
+    return (await buildReleases(await gatheredSmart())).tracks;
+  },
+};

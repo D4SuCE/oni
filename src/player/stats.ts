@@ -4,7 +4,7 @@
 
 import type { KeyValueStore } from '../wave/history.ts';
 
-export type Origin = 'wave' | 'radio' | 'daylist' | 'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because' | 'smart' | 'auto' | 'list';
+export type Origin = 'wave' | 'radio' | 'daylist' | 'mix' | 'discover' | 'radar' | 'repeat' | 'rewind' | 'because' | 'smart' | 'auto' | 'own' | 'list';
 
 export interface PlayOutcome {
   at: number;

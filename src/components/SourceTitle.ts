@@ -27,6 +27,8 @@ export function useListTitle() {
         const picks = p ? [p.context, p.diversity && w.diversity[p.diversity], p.mood && w.moods[p.mood], p.language && w.languages[p.language]] : [];
         return [t.common.myWave, ...picks.filter(Boolean)].join(' · ');
       }
+      case 'ownWave':
+        return [t.own.title, label.mode && label.mode !== 'balanced' ? t.own.modes[label.mode] : ''].filter(Boolean).join(' · ');
       case 'search':
         return t.search.source(label.arg);
       case 'similar':

@@ -6,7 +6,8 @@ import type { Track } from '../api/types.ts';
 import { api, loadJson, storage, transport } from '../api/client.ts';
 import { tr } from '../i18n.ts';
 import { artistNames, heardSeconds, NetworkError, trackCover, type StreamQuality } from '../api/yandex.ts';
-import { DEFAULT_TUNING, WaveEngine, waveSeeds, type WaveStats, type WaveTuning } from '../wave/engine.ts';
+import { DEFAULT_TUNING, WaveEngine, waveSeeds, type Station, type WaveStats, type WaveTuning } from '../wave/engine.ts';
+import { OWN_SEED, OwnWave, type OwnMode, type OwnSources } from '../wave/own.ts';
 import { HEARD_SECONDS, ListenHistory } from '../wave/history.ts';
 import { PlayLog } from './playLog.ts';
 import { playOutcome, RecsFeedback } from '../recs/feedback.ts';
@@ -20,13 +21,14 @@ import { audioExt, OniPlayer, type NativeAudio } from './nativeAudio.ts';
 import { leadingSilence, QuietTail } from './silence.ts';
 import { setBoost } from './eq.ts';
 import type { CommandName } from '../sync/playing.ts';
-import { isMyWave, listKeyOf, sourceTitle, wavePicks, type ListLabel, type PlayContext, type PlayExtra, type Repeat, type Source } from './source.ts';
+import { isMyWave, isOwnWave, listKeyOf, sourceTitle, wavePicks, type ListLabel, type PlayContext, type PlayExtra, type Repeat, type Source } from './source.ts';
 
 export * from './source.ts';
 
 /** The label of what plays (components/SourceTitle.ts puts it in words), for History's runs too. */
 export function labelOf(source: Source | null): ListLabel | undefined {
   if (source?.kind === 'list') return source.label;
+  if (isOwnWave(source)) return { key: 'ownWave', mode: get().ownMode };
   if (!source?.station) return { key: 'myWave', picks: wavePicks(get().tuning) };
   return { key: 'radio', title: source.station.title, of: source.station.label };
 }
@@ -39,6 +41,8 @@ interface Prefs {
   quality: StreamQuality;
   /** Seconds one track flows into the next (0: off). */
   crossfade: number;
+  /** «Своя волна»: how much of it is familiar and how much new. */
+  ownMode: OwnMode;
 }
 
 export interface PlayerState extends Prefs {
@@ -60,7 +64,12 @@ export interface PlayerState extends Prefs {
   sleep: { until: number | null; afterTrack: boolean };
 }
 
-const prefs = loadJson<Prefs>('player.prefs', { volume: 0.8, repeat: 'off', normalize: true, quality: 'lossless', crossfade: 0 });
+const prefs = { ownMode: 'balanced' as OwnMode, ...loadJson<Partial<Prefs>>('player.prefs', {}) } as Prefs;
+prefs.volume ??= 0.8;
+prefs.repeat ??= 'off';
+prefs.normalize ??= true;
+prefs.quality ??= 'lossless';
+prefs.crossfade ??= 0;
 
 export const usePlayer = create<PlayerState>(() => ({
   ...prefs,
@@ -270,7 +279,7 @@ export const stats = new PlayStats(storage);
 export const useRecent = create<{ version: number }>(() => ({ version: 0 }));
 export { audio };
 
-let engine: WaveEngine | null = null;
+let engine: Station | null = null;
 const waveApi = transport.testMode ? { waveStart: api.waveStart.bind(api), waveMore: api.waveMore.bind(api), waveFeedback: async () => {} } : api;
 let isDisliked: (id: string) => boolean = () => false;
 let loadSeq = 0;
@@ -534,7 +543,7 @@ function finishCurrent(ended: boolean) {
 
 function originOf(t: Track): Origin {
   const s = get().source;
-  if (s?.kind === 'wave') return s.station ? 'radio' : 'wave';
+  if (s?.kind === 'wave') return isOwnWave(s) ? 'own' : s.station ? 'radio' : 'wave';
   if (s?.suggested?.includes(String(t.id))) return 'smart';
   return s?.origin ?? 'list';
 }
@@ -563,7 +572,7 @@ function reportPlay(t: Track, ended: boolean) {
 
 /** The fill in progress, per engine: a new wave (re-tuned, restarted) never waits on the old
  * one's request, which could hang and leave "next" with nothing to play. */
-let filling: { engine: WaveEngine; done: Promise<void>; at: number; id: number } | null = null;
+let filling: { engine: Station; done: Promise<void>; at: number; id: number } | null = null;
 let fills = 0;
 /** The last fill ended without reaching Yandex. */
 let fillLostNetwork = false;
@@ -634,6 +643,41 @@ async function syncRemoteHistory() {
   }
 }
 
+/** Where «Своя волна» takes its tracks from (recs/index.ts; imported when first asked: recs imports the player). */
+const ownSources: OwnSources = {
+  likes: () => import('../recs/index.ts').then((m) => m.ownWaveSources.likes()),
+  heard: () => import('../recs/index.ts').then((m) => m.ownWaveSources.heard()),
+  similar: (t) => import('../recs/index.ts').then((m) => m.ownWaveSources.similar(t)),
+  releases: () => import('../recs/index.ts').then((m) => m.ownWaveSources.releases()),
+};
+
+/** The wave a source plays from: «Своя волна» (Oni's), or Yandex's (My Wave, a station radio). */
+function makeStation(source: Source & { kind: 'wave' }): Station {
+  const station: Station = isOwnWave(source)
+    ? new OwnWave(ownSources, history, get().tuning, get().ownMode, (id) => isDisliked(id))
+    : new WaveEngine(waveApi, history, get().tuning, (id) => isDisliked(id), source.station ? [source.station.seed] : null);
+  station.isSkipped = leftOut;
+  return station;
+}
+
+/** «Своя волна» (wave/own.ts): Oni's own station from the user's music. */
+export async function playOwnWave() {
+  forgetResume();
+  clearWavePicks();
+  await startWave({ kind: 'wave', station: { seed: OWN_SEED, title: tr().own.title, label: { key: 'ownWave' } } });
+}
+
+/** «Своя волна»'s share of familiar and new; while it plays, what is queued ahead is picked anew. */
+export function setOwnMode(ownMode: OwnMode) {
+  set({ ownMode });
+  savePrefs();
+  if (engine instanceof OwnWave && isOwnWave(get().source)) {
+    engine.mode = ownMode;
+    set((s) => ({ queue: s.queue.slice(0, s.index + 1) }));
+    void fillWave();
+  }
+}
+
 /** Bumped by every start: a start overtaken by a newer one (a setting picked again meanwhile)
  * stops quietly instead of loading its track over the newer wave's. */
 let waveStarts = 0;
@@ -643,8 +687,7 @@ async function startWave(source: Source & { kind: 'wave' }) {
   const start = ++waveStarts;
   finishCurrent(false);
   // The old track plays on until the new wave's first one is ready (the user's choice).
-  const mine = new WaveEngine(waveApi, history, get().tuning, (id) => isDisliked(id), source.station ? [source.station.seed] : null);
-  mine.isSkipped = leftOut;
+  const mine = makeStation(source);
   engine = mine;
   set({ waveBusy: true, source, queue: [], index: -1, shuffle: false, error: null });
   unshuffled = null;
@@ -1124,8 +1167,8 @@ if (isIos) import('./volume.ts').then((m) => m.followSystemVolume((volume) => !e
 // -------------------------------------------------------------- persistence
 
 function savePrefs() {
-  const { volume, repeat, normalize, quality, crossfade } = get();
-  storage.setItem('player.prefs', JSON.stringify({ volume, repeat, normalize, quality, crossfade }));
+  const { volume, repeat, normalize, quality, crossfade, ownMode } = get();
+  storage.setItem('player.prefs', JSON.stringify({ volume, repeat, normalize, quality, crossfade, ownMode }));
 }
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1156,8 +1199,7 @@ export function warmWave() {
  * another device's. A wave goes on from where it was: a new session with Yandex starts with the next fill. */
 function placeSession(queue: Track[], index: number, title: string, label?: ListLabel, wave?: Source) {
   if (wave?.kind === 'wave') {
-    engine = new WaveEngine(waveApi, history, get().tuning, (id) => isDisliked(id), wave.station ? [wave.station.seed] : null);
-    engine.isSkipped = leftOut;
+    engine = makeStation(wave);
     set({ queue, index, source: wave, duration: (queue[index].durationMs || 0) / 1000 });
   } else {
     engine = null;
