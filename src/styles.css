@@ -1469,6 +1469,14 @@ html.ios .card-play {
   margin-top: 28px;
   flex-wrap: wrap;
 }
+/* The iPhone keeps the row of buttons in one line: «Своя волна» is its sign alone, named by a held finger. */
+html.ios .wave-actions .own-wave .btn-label {
+  display: none;
+}
+html.ios .wave-actions .own-wave {
+  padding-left: 16px;
+  padding-right: 16px;
+}
 .wave-footer {
   margin-top: 18px;
 }

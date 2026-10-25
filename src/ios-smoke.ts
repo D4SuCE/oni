@@ -372,6 +372,19 @@ async function levelling() {
   report('levelling', Math.abs(quiet.lift - 5) < 0.05 && quiet.playing && loud.lift === 0 && loud.playing, JSON.stringify({ quiet, loud }));
 }
 
+/** «Своя волна»: on Home its button sits in one row with Play and Tune (its sign alone on the
+ * iPhone), and it starts Oni's own station, played by the native player. */
+async function ownWave() {
+  click('[data-testid="nav-home"]');
+  const button = await until(() => document.querySelector('[data-testid="own-wave"]'), 15000);
+  const tops = [...document.querySelectorAll<HTMLElement>('.wave-actions .btn')].map((b) => Math.round(b.getBoundingClientRect().top));
+  const oneRow = tops.length === 3 && new Set(tops).size === 1;
+  click('[data-testid="own-wave"]');
+  const player = (wave() as unknown as { usePlayer: { getState(): { source?: { station?: { seed: string } } } } }).usePlayer;
+  const playing = await until(() => player.getState().source?.station?.seed === 'oni:own' && !wave().audio.paused && wave().audio.currentTime > 1, 60000);
+  report('own-wave', Boolean(button) && oneRow && playing, `buttons at ${tops.join('/')}; ${playing ? 'playing' : 'not playing'} "${wave().usePlayer.getState().queue[wave().usePlayer.getState().index]?.title ?? ''}"`);
+}
+
 /** The account's own upload Yandex keeps as "aac" (MP4 inside) plays: it would not open (the user, 25.10.2026). */
 async function uploadPlays() {
   const w = wave() as unknown as { api: { uid(): Promise<number>; playlist(uid: unknown, kind: unknown): Promise<{ tracks?: { track?: Track }[] }>; stream(id: string, q: string): Promise<{ codec: string }> }; useApp: { getState(): { playlists: { uid: number; kind: number; owner?: { uid: number } }[] } } };
@@ -1048,6 +1061,7 @@ export async function runSmoke() {
     await twice(fastStart);
     await intents();
     await backgroundDownload();
+    await ownWave();
 
     // A shortcut's link. The page asks iOS to open it (Capacitor hands non-web addresses to the
     // system), so it comes back through the scene as from a shortcut, without the "Open in Oni?"

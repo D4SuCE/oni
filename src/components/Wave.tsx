@@ -263,8 +263,8 @@ export function WaveHero() {
             <SlidersHorizontal size={18} /> {w.tune}
           </button>
           {!own && (
-            <button className="btn glass-btn big" onClick={() => playOwnWave()} disabled={busy} title={t.own.tagline} data-testid="own-wave">
-              <Sparkles size={18} /> {t.own.play}
+            <button className="btn glass-btn big own-wave" onClick={() => playOwnWave()} disabled={busy} title={t.own.title} data-testid="own-wave">
+              <Sparkles size={18} /> <span className="btn-label">{t.own.play}</span>
             </button>
           )}
         </div>
