@@ -19,8 +19,12 @@ export function useListTitle() {
         return t.nav.history;
       case 'chart':
         return t.home.chart;
-      case 'myWave':
-        return t.common.myWave;
+      case 'myWave': {
+        const p = label.picks;
+        const w = t.wave;
+        const picks = p ? [p.context, p.diversity && w.diversity[p.diversity], p.mood && w.moods[p.mood], p.language && w.languages[p.language]] : [];
+        return [t.common.myWave, ...picks.filter(Boolean)].join(' · ');
+      }
       case 'search':
         return t.search.source(label.arg);
       case 'similar':

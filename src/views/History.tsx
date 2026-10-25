@@ -99,7 +99,8 @@ function localDays(plays: RecentPlay[]) {
     let day = days[days.length - 1];
     if (day?.date !== date) days.push((day = { date, runs: [] }));
     const run = day.runs[day.runs.length - 1];
-    if (run?.source === p.source && run.device === p.device) {
+    // My Wave tuned otherwise is a run of its own ("My Wave · Rock", then "My Wave · Calm").
+    if (run?.source === p.source && run.device === p.device && JSON.stringify(run.label) === JSON.stringify(p.label)) {
       run.tracks.push(p.track);
       run.at = p.at;
     } else day.runs.push({ source: p.source, label: p.label, device: p.device, at: p.at, from: p.from, tracks: [p.track] });

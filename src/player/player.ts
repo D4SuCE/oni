@@ -6,7 +6,7 @@ import type { Track } from '../api/types.ts';
 import { api, loadJson, storage, transport } from '../api/client.ts';
 import { tr } from '../i18n.ts';
 import { artistNames, heardSeconds, NetworkError, trackCover, type StreamQuality } from '../api/yandex.ts';
-import { DEFAULT_TUNING, WaveEngine, waveSeeds, type WaveStats, type WaveTuning } from '../wave/engine.ts';
+import { DEFAULT_TUNING, WaveEngine, waveSeeds, type Diversity, type Language, type Mood, type WaveStats, type WaveTuning } from '../wave/engine.ts';
 import { HEARD_SECONDS, ListenHistory } from '../wave/history.ts';
 import { PlayLog } from './playLog.ts';
 import { playOutcome, RecsFeedback } from '../recs/feedback.ts';
@@ -34,7 +34,9 @@ export interface PlayContext {
  * Lists named by Yandex or the user (playlists, albums, artists) need none: their names stay.
  */
 export type ListLabel =
-  | { key: 'liked' | 'downloads' | 'history' | 'chart' | 'myWave' }
+  | { key: 'liked' | 'downloads' | 'history' | 'chart' }
+  /** With what was picked in "Tune" at the time (History says "My Wave · Rock · Upbeat": the user, 25.10.2026). */
+  | { key: 'myWave'; picks?: WavePicks }
   | { key: 'search' | 'similar'; arg: string }
   | { key: 'mix'; mix: MixName }
   /** A station: `of` names what it plays from when that has a label ("Radio: Liked songs"). */
@@ -75,8 +77,25 @@ export function sourceTitle(source: Source | null) {
 /** The label of what plays (components/SourceTitle.ts puts it in words), for History's runs too. */
 export function labelOf(source: Source | null): ListLabel | undefined {
   if (source?.kind === 'list') return source.label;
-  if (!source?.station) return { key: 'myWave' };
+  if (!source?.station) return { key: 'myWave', picks: wavePicks(get().tuning) };
   return { key: 'radio', title: source.station.title, of: source.station.label };
+}
+
+/** My Wave's Yandex-side picks, as keys (put in words when shown); the activity or genre by its name. */
+export interface WavePicks {
+  context?: string;
+  diversity?: Diversity;
+  mood?: Mood;
+  language?: Language;
+}
+
+function wavePicks(t: WaveTuning): WavePicks | undefined {
+  const picks: WavePicks = {};
+  if (t.context?.name) picks.context = t.context.name;
+  if (t.diversity !== 'default') picks.diversity = t.diversity;
+  if (t.mood !== 'all') picks.mood = t.mood;
+  if (t.language !== 'any') picks.language = t.language;
+  return Object.keys(picks).length ? picks : undefined;
 }
 
 export const isMyWave = (source: Source | null) => source?.kind === 'wave' && !source.station;

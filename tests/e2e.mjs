@@ -213,6 +213,13 @@ await step('a Yandex-side tuning while a list plays starts the wave with it, and
   });
   await waitPlaying(0.5);
   console.log(`       "${picked}": ${before.title} -> ${started.title} -> ${(await player()).title}`);
+  // History names the wave with what was picked (the user, 25.10.2026: not "My Wave" alone).
+  await waitPlaying(6, 30000);
+  await page.click('[data-testid="nav-history"]');
+  await page.click('[data-testid="history-app"]');
+  const run = await page.locator('.history-group .history-context > span').first().innerText();
+  await page.click('[data-testid="nav-home"]');
+  if (run.toLowerCase() !== `Моя волна · ${picked}`.toLowerCase()) throw new Error(`History: "${run}", picked "${picked}"`);
   // Back to the default wave, as the run found it.
   await page.evaluate(() => window.__wave.usePlayer.setState((s) => ({ tuning: { ...s.tuning, context: null } })));
 });
