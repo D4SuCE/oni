@@ -1,12 +1,14 @@
 // "Track details" and "Edit" (your own uploads) from the track menu, as in the official app.
 
 import { useState } from 'react';
+import { Copy } from 'lucide-react';
 import { create } from 'zustand';
 import { api } from '../api/client.ts';
 import type { Track } from '../api/types.ts';
 import { useLang, useT } from '../i18n.ts';
 import { usePlayer } from '../player/player.ts';
 import { errorText, navigate, toast } from '../store.ts';
+import { openMenu } from './Menu.tsx';
 import { fmtTime, useAsync } from '../ui/util.ts';
 import { Spinner } from './Common.tsx';
 import { useGenreTitles } from './Mixes.tsx';
@@ -45,8 +47,23 @@ function TrackInfo({ track }: { track: Track }) {
   const full = data ?? track;
   const album = full.albums?.[0];
   const lyrics = full.lyricsInfo?.hasAvailableSyncLyrics ? s.lyricsSynced : full.lyricsInfo?.hasAvailableTextLyrics ? s.lyricsText : s.lyricsNone;
-  const rows: [string, React.ReactNode][] = [];
-  const add = (label: string, value: React.ReactNode) => rows.push([label, value]);
+  // A row's value is copied by a click (the album is a link, so not there); on the desktop the text is
+  // also selected with the mouse, and the right button offers "Copy" for the selection or the row.
+  const rows: [string, React.ReactNode, string][] = [];
+  const add = (label: string, value: React.ReactNode, text = typeof value === 'string' ? value : '') => rows.push([label, value, text]);
+  const copy = (text: string) => {
+    navigator.clipboard.writeText(text).then(
+      () => toast(s.copied),
+      () => toast(text),
+    );
+  };
+  const selected = () => window.getSelection()?.toString().trim() ?? '';
+  // A click that ended a mouse selection is not a copy of the whole value.
+  const copyOnClick = (text: string) => () => !selected() && copy(text);
+  const menu = (text: string) => (e: React.MouseEvent) => {
+    const what = selected() || text;
+    openMenu(e, [{ label: s.copy, icon: <Copy size={15} />, onClick: () => copy(what) }]);
+  };
   add(s.artists, full.artists?.map((a) => a.name).join(', ') || '—');
   if (album) {
     const open = () => {
@@ -58,9 +75,10 @@ function TrackInfo({ track }: { track: Track }) {
       <a className="link" onClick={open}>
         {album.title}
       </a>,
+      album.title,
     );
     const date = album.releaseDate && new Date(album.releaseDate).toLocaleDateString(lang, { day: 'numeric', month: 'long', year: 'numeric' });
-    if (date || album.year) add(s.released, date || album.year);
+    if (date || album.year) add(s.released, date || String(album.year));
     if (album.genre) add(s.genre, genres[album.genre] ?? album.genre);
     if (album.labels?.length) add(s.label, album.labels.map((l) => l.name).join(', '));
     if (album.trackPosition && album.trackCount) add(s.position, s.positionOf(album.trackPosition.index, album.trackCount));
@@ -73,16 +91,20 @@ function TrackInfo({ track }: { track: Track }) {
   if (upload) add(s.source, t.menu.uploaded);
   return (
     <>
-      <h3>{full.title}</h3>
+      <h3 className="copyable" onClick={copyOnClick(full.title)} onContextMenu={menu(full.title)}>
+        {full.title}
+      </h3>
       {full.version && <p>{full.version}</p>}
       {loading && !data ? (
         <Spinner />
       ) : (
         <dl className="info-rows" data-testid="track-info">
-          {rows.map(([k, v]) => (
+          {rows.map(([k, v, text]) => (
             <div key={k} className="info-row">
               <dt>{k}</dt>
-              <dd>{v}</dd>
+              <dd className={typeof v === 'string' ? 'copyable' : undefined} onClick={typeof v === 'string' ? copyOnClick(text) : undefined} onContextMenu={menu(text)}>
+                {v}
+              </dd>
             </div>
           ))}
         </dl>

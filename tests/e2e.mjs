@@ -484,6 +484,50 @@ await step('track details: album, genre and more from the catalog', async () => 
   await page.waitForSelector('.track-sheet', { state: 'detached' });
 });
 
+await step('track details can be copied: a click, a selection with Ctrl+C, the right button', async () => {
+  const saved = await app.evaluate(({ clipboard }) => clipboard.readText());
+  const clip = () => app.evaluate(({ clipboard }) => clipboard.readText());
+  const reset = () => app.evaluate(({ clipboard }) => clipboard.writeText(''));
+  try {
+    await page.locator('.track-row').nth(1).click({ button: 'right' });
+    await page.locator('.menu-item', { hasText: 'Информация о треке' }).click();
+    await page.waitForSelector('[data-testid="track-info"]', { timeout: 15000 });
+    const row = (label) => page.locator('.info-row', { has: page.locator('dt', { hasText: label }) }).locator('dd');
+    // A click on a value copies it, and says so.
+    await reset();
+    const artists = (await row('Исполнители').innerText()).trim();
+    await row('Исполнители').click();
+    await page.locator('.toast', { hasText: 'Скопировано' }).waitFor({ timeout: 5000 });
+    if ((await clip()) !== artists) throw new Error(`click copied "${await clip()}", the row says "${artists}"`);
+    // The title in the header too.
+    await reset();
+    const title = (await page.locator('.track-sheet h3').innerText()).trim();
+    await page.locator('.track-sheet h3').click();
+    await page.waitForTimeout(300);
+    if ((await clip()) !== title) throw new Error(`title copied "${await clip()}", the header says "${title}"`);
+    // The album stays a link: a click opens it, so its copy is the right button's.
+    await reset();
+    const album = (await row('Альбом').innerText()).trim();
+    await row('Альбом').click({ button: 'right' });
+    await page.locator('.menu-item', { hasText: 'Скопировать' }).click();
+    await page.waitForTimeout(300);
+    if ((await clip()) !== album) throw new Error(`menu copied "${await clip()}", the album is "${album}"`);
+    // Selected with the mouse (a double click picks a word), Ctrl+C copies just that.
+    await reset();
+    const duration = row('Длительность');
+    await duration.dblclick();
+    const selection = await page.evaluate(() => getSelection().toString());
+    if (!selection.trim()) throw new Error('nothing selected in the details');
+    await page.keyboard.press('Control+C');
+    await page.waitForTimeout(300);
+    if ((await clip()) !== selection) throw new Error(`Ctrl+C copied "${await clip()}", selected "${selection}"`);
+  } finally {
+    await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), saved);
+  }
+  await page.locator('.track-sheet button', { hasText: 'Закрыть' }).click();
+  await page.waitForSelector('.track-sheet', { state: 'detached' });
+});
+
 await step('share a track: its link goes to the clipboard', async () => {
   const saved = await app.evaluate(({ clipboard }) => clipboard.readText());
   try {

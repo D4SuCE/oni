@@ -2293,7 +2293,7 @@ html.ios .wave-blobs i {
 
 .menu {
   position: fixed;
-  z-index: 100;
+  z-index: 115; /* above dialogs: "Track details" has its own "Copy" menu */
   min-width: 230px;
   max-width: 320px;
   max-height: 70vh;
@@ -2455,6 +2455,17 @@ html.ios .offline-banner {
 .info-row dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+/* "Track details" can be copied: selected with the mouse, or a value copied with a click (the user). */
+.track-sheet h3,
+.info-row dd {
+  user-select: text;
+}
+.track-sheet .copyable {
+  cursor: copy;
+}
+.track-sheet .copyable:hover {
+  color: var(--gold);
 }
 .field {
   display: grid;

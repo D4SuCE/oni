@@ -297,6 +297,8 @@ const ru = {
     chartPlace: (place: number, listeners?: number) => `${place}-е место${listeners ? ` · ${listeners.toLocaleString('ru')} слушателей` : ''}`,
     age: 'Возраст',
     source: 'Источник',
+    copy: 'Скопировать',
+    copied: 'Скопировано',
   },
   editTrack: {
     title: 'Изменить трек',
@@ -887,6 +889,8 @@ const en: Dict = {
     chartPlace: (place, listeners) => `#${place}${listeners ? ` · ${listeners.toLocaleString('en')} listeners` : ''}`,
     age: 'Age rating',
     source: 'Source',
+    copy: 'Copy',
+    copied: 'Copied',
   },
   editTrack: {
     title: 'Edit track',
