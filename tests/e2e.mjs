@@ -514,8 +514,9 @@ await step('track details can be copied: a click, a selection with Ctrl+C, the r
     if ((await clip()) !== album) throw new Error(`menu copied "${await clip()}", the album is "${album}"`);
     // Selected with the mouse (a double click picks a word), Ctrl+C copies just that.
     await reset();
+    // On the text itself: the row is wider than its value, and its middle is often empty.
     const duration = row('Длительность');
-    await duration.dblclick();
+    await duration.dblclick({ position: { x: 4, y: 8 } });
     const selection = await page.evaluate(() => getSelection().toString());
     if (!selection.trim()) throw new Error('nothing selected in the details');
     await page.keyboard.press('Control+C');
