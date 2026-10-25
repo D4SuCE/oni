@@ -95,6 +95,9 @@
   `trig_01AB2cC8ZymgrLdFpaCSZN57` и «(:40)» `trig_011V6qEhea3p3dmS1y5zspDd`, Opus 5.5, окружение `Default`
   (`env_01FQFjofqG7StSuhtPrd7bLD`: `GH_TOKEN`, `YANDEX_MUSIC_TOKEN` есть, `YANDEX_DISK_TOKEN` нет — шаги пульта в облаке
   пропускаются). Облаку открыт только D4SuCE/oni (oni-releases — нет; выпуски выкладывает `release.yml`).
+  Запись в GitHub из облака d4suceusa заработала 25.10.2026 в 11:56 МСК (пользователь подключил GitHub на claude.ai).
+  **25.10.2026, 11:57 МСК — обе routine выключены** (пользователь работает в чате); включить — по его команде
+  (RemoteTrigger `update` `{"enabled": true}` или на https://claude.ai/code/routines).
 - Аккаунты Claude (24.10.2026): Oni ведётся с **d4suceusa@gmail.com** — облачные routine, окружение и лимиты
   там; d4suce@gmail.com — основной, для других проектов. Пользователь запускает так: папка проекта →
   терминал (Windows PowerShell) → `claude` (d4suce) или `claude d4suceusa` (можно и почтой; новая почта
