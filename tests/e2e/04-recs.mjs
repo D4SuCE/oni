@@ -3,8 +3,8 @@ import { page, step, shot, waitPlaying } from './harness.mjs';
 
 await step('daylist leads "For you" and fits the time of day', async () => {
   await page.click('[data-testid="nav-home"]');
-  await page.waitForSelector('[data-testid="mix-card"]', { timeout: 60000 });
-  const first = page.locator('[data-testid="mix-card"]').first();
+  await page.waitForSelector('[data-testid="for-you"] [data-testid="mix-card"]', { timeout: 60000 });
+  const first = page.locator('[data-testid="for-you"] [data-testid="mix-card"]').first();
   const seal = await first.locator('.mix-seal').innerText();
   const h = new Date().getHours();
   const want = h >= 1 && h < 5 ? '深夜' : h >= 5 && h < 11 ? '朝' : h >= 11 && h < 17 ? '昼' : h >= 17 && h < 21 ? '夕' : '夜';
@@ -23,7 +23,7 @@ await step('daylist leads "For you" and fits the time of day', async () => {
 });
 
 await step('hide a track from the mixes, then bring it back from Settings ("Skipped": the list, one back alone)', async () => {
-  await page.locator('[data-testid="mix-card"]').first().click();
+  await page.locator('[data-testid="for-you"] [data-testid="mix-card"]').first().click();
   await page.waitForSelector('.track-row');
   const row = page.locator('.track-row').first();
   // By its id: rows off screen are drawn lazily (content-visibility), their text empty until then.
@@ -44,7 +44,7 @@ await step('hide a track from the mixes, then bring it back from Settings ("Skip
   await listed.locator('[data-testid="skipped-back"]').click();
   await listed.waitFor({ state: 'detached', timeout: 3000 });
   await page.click('[data-testid="nav-home"]');
-  await page.locator('[data-testid="mix-card"]').first().click();
+  await page.locator('[data-testid="for-you"] [data-testid="mix-card"]').first().click();
   await page.waitForFunction((n) => document.querySelectorAll('.track-row').length === n, before, { timeout: 5000 });
   await page.click('[data-testid="nav-home"]');
 });

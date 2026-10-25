@@ -65,11 +65,11 @@ await step('where the music plays from follows the interface language: a mix sta
     await page.locator('.sidebar > .nav-item', { hasText: /Настройки|Settings/ }).click();
     await page.locator('.segmented button', { hasText: name }).click();
     await page.click('[data-testid="nav-home"]');
-    await page.waitForSelector('[data-testid="mix-card"]', { timeout: 60000 });
+    await page.waitForSelector('[data-testid="for-you"] [data-testid="mix-card"]', { timeout: 60000 });
   };
-  const card = page.locator('[data-testid="mix-card"]').first();
+  const card = page.locator('[data-testid="for-you"] [data-testid="mix-card"]').first();
   await page.click('[data-testid="nav-home"]');
-  await page.waitForSelector('[data-testid="mix-card"]', { timeout: 60000 });
+  await page.waitForSelector('[data-testid="for-you"] [data-testid="mix-card"]', { timeout: 60000 });
   const ru = await card.locator('.card-title').innerText();
   await card.hover();
   await card.locator('.card-play').click();

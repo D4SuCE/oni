@@ -44,11 +44,13 @@ function ForYou() {
         ) : !mixes.length ? (
           <div className="empty-hint">{t.recs.notEnough}</div>
         ) : (
-          <Shelf>
-            {mixes.map((m) => (
-              <MixCard key={m.id} mix={m} genres={genres} />
-            ))}
-          </Shelf>
+          <div data-testid="for-you">
+            <Shelf>
+              {mixes.map((m) => (
+                <MixCard key={m.id} mix={m} genres={genres} />
+              ))}
+            </Shelf>
+          </div>
         )}
       </Section>
     </>
