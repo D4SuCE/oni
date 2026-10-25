@@ -6,7 +6,7 @@ import { api, loadJson, storage, transport } from './api/client.ts';
 import { ApiError, trackKey } from './api/yandex.ts';
 import { tr, useLang } from './i18n.ts';
 import { dropFromQueue, offline, onNetworkLost, setDislikedCheck, setLikedCheck, setOfflineMode, usePlayer, warmWave, waveFeedback } from './player/player.ts';
-import { startSync } from './sync/index.ts';
+import { connectDisk, startSync } from './sync/index.ts';
 
 export type Route =
   | { name: 'home' }
@@ -222,7 +222,12 @@ export async function loginWithToken(token: string) {
 
 export async function loginWithYandex() {
   if (!transport.login) return;
-  if (await transport.login(useLang.getState().lang)) await init();
+  if (!(await transport.login(useLang.getState().lang))) return;
+  await init();
+  // The shared history and the remote at once (the user, 25.10.2026: "why not both at the first sign-in?").
+  // Disk takes a token of Oni's own app at Yandex, not the music one, so it is a second page; signed in
+  // already, it is one "Allow". Closed, Settings has the button as before.
+  if (get().auth === 'ready' && transport.hasDiskToken && !(await transport.hasDiskToken())) await connectDisk();
 }
 
 export async function logout() {
