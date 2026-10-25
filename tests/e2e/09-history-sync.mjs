@@ -214,6 +214,15 @@ await step('the full remote: what a remote starts (a list, «Своя волна
   const names = [`now-${phoneId}.json`, `cmd-${phoneId}-${ownId}.json`, `cmd-${ownId}-${phoneId}.json`];
   const write = (name, file) => page.evaluate(([n, t]) => window.__wave.sync.disk.write(n, t), [name, JSON.stringify(file)]);
   const read = (name) => page.evaluate((n) => window.__wave.sync.disk.read(n).then((t) => JSON.parse(t)), name);
+  /** Disk lists a file just written a little late at times: looked at again until `cond`, as Oni does. */
+  const lookUntil = async (cond, arg) => {
+    for (let i = 0; i < 15; i++) {
+      await page.evaluate(() => window.__wave.sync.elsewhere.look());
+      if (await page.evaluate(cond, arg)) return;
+      await page.waitForTimeout(1000);
+    }
+    throw new Error(`not so after 15 s: ${cond}`);
+  };
   /** The command sent there, once it is up (a press goes up on its own a moment after). */
   const sent = async (fn) => {
     for (let i = 0; i < 15; i++) {
@@ -258,14 +267,12 @@ await step('the full remote: what a remote starts (a list, «Своя волна
     const keys = chart.map((t) => (t.albums?.[0]?.id ? `${t.id}:${t.albums[0].id}` : String(t.id)));
     const at = Date.now();
     await write(names[2], { v: 1, from: { id: phoneId, platform: 'ios' }, at, commands: [{ id: `${phoneId}.1`, at, fn: 'playTracks', args: [{ keys }, 2, 'e2e from the phone', undefined, {}] }] });
-    await page.evaluate(() => window.__wave.sync.elsewhere.look());
-    await page.waitForFunction(() => window.__wave.usePlayer.getState().source?.title === 'e2e from the phone', null, { timeout: 15000 });
+    await lookUntil(() => window.__wave.usePlayer.getState().source?.title === 'e2e from the phone');
     const here = await page.evaluate(() => { const s = window.__wave.usePlayer.getState(); return { n: s.queue.length, id: String(s.queue[s.index]?.id) }; });
     if (here.n !== 4 || here.id !== String(chart[2].id)) throw new Error(`the phone's list here: ${JSON.stringify(here)}`);
     await waitPlaying(0.5);
     await write(names[2], { v: 1, from: { id: phoneId, platform: 'ios' }, at: Date.now(), commands: [{ id: `${phoneId}.2`, at: Date.now(), fn: 'playOwnWave', args: [] }] });
-    await page.evaluate(() => window.__wave.sync.elsewhere.look());
-    await page.waitForFunction(() => window.__wave.usePlayer.getState().source?.station?.seed === 'oni:own', null, { timeout: 15000 });
+    await lookUntil(() => window.__wave.usePlayer.getState().source?.station?.seed === 'oni:own');
     await waitPlaying(0.5, 60000);
   } finally {
     await page.evaluate(() => window.__wave.audio.pause());

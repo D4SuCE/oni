@@ -2,6 +2,8 @@
 import { page, consoleErrors, step, shot } from './harness.mjs';
 
 await step('recap: the month summed up from the plays (here and, for the last days, everywhere); play it, save it as a playlist (removed again)', async () => {
+  // From History, opened here (the steps before may have left another page open).
+  await page.click('[data-testid="nav-history"]');
   await page.click('[data-testid="history-recap"]');
   await page.waitForSelector('[data-testid="recap-track"]', { timeout: 30000 });
   const minutes = await page.locator('[data-testid="recap-minutes"] b').innerText();
