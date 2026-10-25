@@ -5,6 +5,7 @@ import type { Track } from '../src/api/types.ts';
 import { PlayLog } from '../src/player/playLog.ts';
 import { RecentPlays } from '../src/player/recent.ts';
 import { DeviceSync } from '../src/sync/devices.ts';
+import { RecsFeedback } from '../src/recs/feedback.ts';
 import type { DiskLike } from '../src/sync/disk.ts';
 import { ListenHistory } from '../src/wave/history.ts';
 
@@ -70,8 +71,9 @@ function device(id: string, platform: string, disk: DiskLike, now: () => number)
   const history = new ListenHistory(store, 'h', now);
   const playLog = new PlayLog(store, now);
   const recent = new RecentPlays(store);
-  const sync = new DeviceSync(disk, { history, playLog, recent }, { id, platform }, now);
-  return { history, playLog, recent, sync, store };
+  const feedback = new RecsFeedback(store, now);
+  const sync = new DeviceSync(disk, { history, playLog, recent, feedback }, { id, platform }, now);
+  return { history, playLog, recent, feedback, sync, store };
 }
 
 /** As the app does it (sync/index.ts): read first, then send. */
@@ -229,6 +231,73 @@ await test("a device that lost its own plays here gets them back from its file o
   assert(morning.recent.own().length === 61 && morning.playLog.own().plays.length === 60 && morning.history.get('30')?.plays === 1, 'doubled on a second read');
   const stored = JSON.parse(morning.store.getItem('player.recent.v1') || '[]');
   assert(stored.length === 61, `stored here: ${stored.length}`);
+});
+
+await test('"Skipped" is one list on every device: hidden, left out and demoted go everywhere; "Back" on one brings it back on all, a third device (a Mac later) learns it all', async () => {
+  // The user, 25.10.2026: the lists differed on the PC and the phone; "a Mac later is one more device".
+  const { disk } = fakeDisk();
+  let t = Date.parse('2026-10-25T12:00:00Z');
+  const now = () => t;
+  const pc = device('pc', 'electron', disk, now);
+  const phone = device('phone', 'ios', disk, now);
+  const round = async (...ds: ReturnType<typeof device>[]) => {
+    for (const d of ds) await d.sync.pull();
+    for (const d of ds) await d.sync.push();
+    for (const d of ds) await d.sync.pull();
+  };
+  await round(pc, phone);
+  // The PC hides one; the phone leaves one out (skipped twice) and demotes an artist (two in a row).
+  pc.feedback.hide(song(1));
+  t += 1000;
+  phone.feedback.recordPlay(song(2, 'Two', 7), 'skipped', t);
+  phone.feedback.recordPlay(song(2, 'Two', 7), 'skipped', t);
+  await round(pc, phone);
+  for (const [name, d] of [['pc', pc], ['phone', phone]] as const) {
+    assert(d.feedback.isSkipped('1', t) && d.feedback.isSkipped('2', t) && d.feedback.isDemoted(7, t), `${name}: not everything there`);
+    assert(d.feedback.skippedList(t).map((e) => e.track.title).join() === 'Song 1,Two', `${name} lists ${d.feedback.skippedList(t).map((e) => e.track.title)}`);
+  }
+  // "Back" on the phone for the PC's hidden track and the artist: back on the PC too, and not undone by the PC's older marks.
+  t += 1000;
+  phone.feedback.bringBack('1');
+  phone.feedback.liftArtist(7);
+  await round(pc, phone);
+  await round(pc, phone);
+  for (const [name, d] of [['pc', pc], ['phone', phone]] as const) {
+    assert(!d.feedback.isSkipped('1', t) && !d.feedback.isDemoted(7, t) && d.feedback.isSkipped('2', t), `${name}: back not everywhere`);
+  }
+  // A third device: the same list, the same backs.
+  const mac = device('mac', 'mac', disk, now);
+  await round(mac, pc, phone);
+  assert(mac.feedback.skippedList(t).map((e) => e.track.title).join() === 'Two' && !mac.feedback.isSkipped('1', t) && !mac.feedback.isDemoted(7, t), `mac: ${mac.feedback.skippedList(t).map((e) => e.track.title)}`);
+  // "Bring all back" on the Mac: everywhere.
+  t += 1000;
+  mac.feedback.reset();
+  await round(mac, pc, phone);
+  await round(mac, pc, phone);
+  for (const [name, d] of [['pc', pc], ['phone', phone], ['mac', mac]] as const) assert(!d.feedback.isSkipped('2', t) && !d.feedback.skippedList(t).length, `${name}: not all back`);
+});
+
+await test('decisions kept before the lists were shared come together on the first exchange; a decision made since wins over them', async () => {
+  const { disk } = fakeDisk();
+  let t = Date.parse('2026-10-26T12:00:00Z');
+  const now = () => t;
+  const pc = device('pc', 'electron', disk, now);
+  const phone = device('phone', 'ios', disk, now);
+  // As an older Oni left them: no marks.
+  pc.store.setItem('recs.feedback.v1', JSON.stringify({ hidden: ['10'], artists: {}, tracks: {}, cards: { 10: song(10, 'Old PC') } }));
+  phone.store.setItem('recs.feedback.v1', JSON.stringify({ hidden: [], artists: { 5: { name: 'Old artist', streak: 0, demotedUntil: t + 5 * DAY } }, tracks: { 11: { n: 2, until: t + 99 * DAY } }, cards: { 11: song(11, 'Old phone') } }));
+  const pc2 = { ...pc, feedback: new RecsFeedback(pc.store, now) };
+  const phone2 = { ...phone, feedback: new RecsFeedback(phone.store, now) };
+  pc2.sync = new DeviceSync(disk, { history: pc.history, playLog: pc.playLog, recent: pc.recent, feedback: pc2.feedback }, { id: 'pc', platform: 'electron' }, now);
+  phone2.sync = new DeviceSync(disk, { history: phone.history, playLog: phone.playLog, recent: phone.recent, feedback: phone2.feedback }, { id: 'phone', platform: 'ios' }, now);
+  for (let i = 0; i < 2; i++) for (const d of [pc2, phone2]) { await d.sync.pull(); await d.sync.push(); await d.sync.pull(); }
+  for (const d of [pc2, phone2]) {
+    assert(d.feedback.skippedList(t).map((e) => e.track.title).join() === 'Old PC,Old phone' && d.feedback.isDemoted(5, t), `together: ${d.feedback.skippedList(t).map((e) => e.track.title)}`);
+  }
+  t += 1000;
+  phone2.feedback.bringBack('10');
+  for (let i = 0; i < 2; i++) for (const d of [pc2, phone2]) { await d.sync.pull(); await d.sync.push(); await d.sync.pull(); }
+  assert(!pc2.feedback.isSkipped('10', t), 'the old hidden one not back on the PC');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

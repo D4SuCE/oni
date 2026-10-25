@@ -159,3 +159,20 @@ await step('sound settings: equalizer hears the music', async () => {
   await page.waitForSelector('[data-testid="sound-panel"]', { state: 'detached' });
   await page.evaluate(() => window.__wave.audio.pause());
 });
+
+await step('a button showing only its sign gets its hidden words as the tooltip when the mouse comes over it', async () => {
+  // The user, 25.10.2026: "many buttons show nothing, one has to guess".
+  await page.evaluate(() => {
+    const b = Object.assign(document.createElement('button'), { className: 'btn e2e-sign' });
+    b.innerHTML = '<svg width="16" height="16"></svg><span style="display:none">Перемешать всё</span>';
+    Object.assign(b.style, { position: 'fixed', left: '300px', top: '300px', zIndex: '99999' });
+    document.body.append(b);
+  });
+  try {
+    await page.hover('.e2e-sign');
+    const title = await page.getAttribute('.e2e-sign', 'title');
+    if (title !== 'Перемешать всё') throw new Error(`title "${title}"`);
+  } finally {
+    await page.evaluate(() => document.querySelector('.e2e-sign')?.remove());
+  }
+});

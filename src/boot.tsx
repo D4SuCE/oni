@@ -7,7 +7,7 @@ import { useLang } from './i18n.ts';
 import { startBeatPulse } from './player/pulse.ts';
 import { connectDesktopShell } from './player/shell.ts';
 import { connectLinks } from './ui/links.ts';
-import { connectLongPress } from './ui/longPress.ts';
+import { connectButtonNames, connectLongPress } from './ui/longPress.ts';
 import { isIos } from './ui/platform.ts';
 import { connectTapRescue } from './ui/tap.ts';
 import { watchOwnOffline } from './ui/ownOffline.ts';
@@ -19,6 +19,7 @@ connectDesktopShell();
 startBeatPulse();
 connectLinks();
 connectLongPress();
+connectButtonNames();
 connectTapRescue();
 watchOwnOffline();
 if (isIos) {

@@ -7,6 +7,7 @@
 import type { HistoryEntry } from '../wave/history.ts';
 import type { DeviceLog } from '../player/playLog.ts';
 import type { RecentPlay } from '../player/recent.ts';
+import type { SharedFeedback } from '../recs/feedback.ts';
 import type { DiskLike } from './disk.ts';
 
 export interface Device {
@@ -23,6 +24,8 @@ export interface DeviceFile {
   history: Record<string, HistoryEntry>;
   log: DeviceLog;
   recent: RecentPlay[];
+  /** "Skipped", hidden from the mixes, demoted artists, brought back (recs/feedback.ts); not in older files. */
+  feedback?: SharedFeedback;
 }
 
 /** The parts of this device's memory that are shared. */
@@ -30,6 +33,8 @@ export interface Shared {
   history: { own(): Record<string, HistoryEntry>; setRemote(devices: Record<string, HistoryEntry>[]): void; restore(entries: Record<string, HistoryEntry>): void };
   playLog: { own(): DeviceLog; setRemote(devices: DeviceLog[]): void; restore(log: DeviceLog): void };
   recent: { own(): RecentPlay[]; setRemote(plays: RecentPlay[]): void; restore(plays: RecentPlay[]): void };
+  /** Decisions, the latest winning: the other devices' and this one's own file are read alike. */
+  feedback?: { own(): SharedFeedback; setRemote(devices: SharedFeedback[]): void };
 }
 
 const PREFIX = 'device-';
@@ -69,7 +74,7 @@ export class DeviceSync {
   /** Sends this device's file if anything changed since the last time; true when sent. */
   async push(): Promise<boolean> {
     if (!this.restored) return false;
-    const body = { history: this.shared.history.own(), log: this.shared.playLog.own(), recent: this.shared.recent.own() };
+    const body = { history: this.shared.history.own(), log: this.shared.playLog.own(), recent: this.shared.recent.own(), feedback: this.shared.feedback?.own() };
     const key = JSON.stringify(body);
     if (key === this.sent) return false;
     const file: DeviceFile = { v: 1, device: this.device, at: this.now(), ...body };
@@ -114,6 +119,7 @@ export class DeviceSync {
         this.shared.history.restore(file.history ?? {});
         this.shared.playLog.restore(file.log ?? { plays: [], tracks: {} });
         this.shared.recent.restore(file.recent ?? []);
+        if (file.feedback) this.shared.feedback?.setRemote([file.feedback]);
       }
     }
     this.restored = true;
@@ -132,5 +138,6 @@ export class DeviceSync {
     this.shared.history.setRemote(files.map((f) => f.history ?? {}));
     this.shared.playLog.setRemote(files.map((f) => f.log ?? { plays: [], tracks: {} }));
     this.shared.recent.setRemote(files.flatMap((f) => (f.recent ?? []).map((p) => ({ ...p, device: f.device.platform }))));
+    this.shared.feedback?.setRemote(files.flatMap((f) => (f.feedback ? [f.feedback] : [])));
   }
 }

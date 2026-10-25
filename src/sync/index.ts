@@ -6,7 +6,7 @@
 import { create } from 'zustand';
 import { storage, transport } from '../api/client.ts';
 import { useLang } from '../i18n.ts';
-import { history, playLog, recentPlays, useRecent } from '../player/player.ts';
+import { history, playLog, recentPlays, recsFeedback, useRecent } from '../player/player.ts';
 import { DeviceSync, type Device } from './devices.ts';
 import { DiskAuthError, YandexDisk } from './disk.ts';
 import { startElsewhere, stopElsewhere } from './elsewhere.ts';
@@ -42,7 +42,7 @@ function deviceId() {
 }
 
 export const disk = new YandexDisk(transport);
-export const deviceSync = new DeviceSync(disk, { history, playLog, recent: recentPlays }, { id: deviceId(), platform: transport.platform });
+export const deviceSync = new DeviceSync(disk, { history, playLog, recent: recentPlays, feedback: recsFeedback }, { id: deviceId(), platform: transport.platform });
 
 let timer: ReturnType<typeof setInterval> | null = null;
 let running: Promise<void> | null = null;

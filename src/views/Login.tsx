@@ -39,7 +39,7 @@ export function Login() {
           }}
         >
           <input className="input" type="password" placeholder="y0_AgAAAA…" value={token} onChange={(e) => setToken(e.target.value)} />
-          <button className="btn glass-btn" disabled={busy || !token.trim()}>
+          <button className="btn glass-btn" disabled={busy || !token.trim()} title={t.login.orToken}>
             <KeyRound size={16} />
           </button>
         </form>

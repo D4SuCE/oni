@@ -18,12 +18,37 @@ const AFTERMATH = 1000;
 const HINT_FOR = 1500;
 let hint: { el: HTMLElement; timer?: ReturnType<typeof setTimeout> } | null = null;
 
-/** What an icon-only button does, as its tooltip says; null for a button with words on it. */
+/** The words shown on a button; empty when it shows only its sign (the iPhone hides the words of
+ * round buttons: font size 0, or the label not displayed). */
+function shownWords(button: Element) {
+  if (!(button instanceof HTMLElement) || parseFloat(getComputedStyle(button).fontSize) === 0) return '';
+  return button.innerText.trim();
+}
+
+/** What a button that shows only its sign does: its tooltip, else the words it hides (the user,
+ * 25.10.2026: "many buttons show nothing, one has to guess" — Shuffle in Liked on the iPhone).
+ * Null for a button with words on it. */
 function buttonHint(target: Element): { button: Element; text: string } | null {
   const button = target.closest('button, [role="button"]');
-  if (!button || button.closest('.menu') || button.textContent?.trim()) return null;
-  const text = (button.getAttribute('aria-label') || button.getAttribute('title') || '').trim();
+  if (!button || button.closest('.menu') || shownWords(button)) return null;
+  const text = (button.getAttribute('aria-label') || button.getAttribute('title') || button.textContent || '').trim();
   return text ? { button, text } : null;
+}
+
+/** The desktop's tooltip for a button that shows only its sign and has none of its own (a narrow
+ * window, the menu folded): the words it hides, given when the mouse comes over it. */
+export function connectButtonNames() {
+  window.addEventListener(
+    'pointerover',
+    (e) => {
+      if (e.pointerType !== 'mouse') return;
+      const button = (e.target as Element | null)?.closest?.('button, [role="button"]');
+      if (!button || button.hasAttribute('title') || button.hasAttribute('aria-label') || shownWords(button)) return;
+      const words = button.textContent?.trim();
+      if (words) button.setAttribute('title', words);
+    },
+    true,
+  );
 }
 
 function showHint(target: Element) {

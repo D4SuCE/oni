@@ -131,6 +131,24 @@ async function longPressMenu() {
 
 /** Holding an icon-only button shows what it does above it, and lifting the finger does not press
  * it ("Next" stays on the same track). */
+/** A round button whose words the iPhone hides (Shuffle in Liked) names itself when held, by those
+ * words (the user, 25.10.2026: "many buttons show nothing, one has to guess"). */
+async function holdHintRound() {
+  click('[data-testid="nav-liked"]');
+  const button = (await until(() => [...document.querySelectorAll<HTMLElement>('.page-actions .btn:not(.primary)')].find((b) => b.textContent?.includes('Вперемешку')), 15000))
+    ? [...document.querySelectorAll<HTMLElement>('.page-actions .btn:not(.primary)')].find((b) => b.textContent?.includes('Вперемешку'))
+    : null;
+  if (!button) return report('hold-hint-round', false, 'no Shuffle in Liked');
+  const box = button.getBoundingClientRect();
+  const at = { pointerId: 12, pointerType: 'touch', isPrimary: true, clientX: box.left + box.width / 2, clientY: box.top + box.height / 2, bubbles: true };
+  button.dispatchEvent(new PointerEvent('pointerdown', at));
+  await until(() => document.querySelector('.hold-hint'), 1500);
+  const text = document.querySelector('.hold-hint')?.textContent ?? '';
+  button.dispatchEvent(new PointerEvent('pointerup', at));
+  await until(() => !document.querySelector('.hold-hint'), 3000);
+  report('hold-hint-round', text === 'Вперемешку' && Math.round(box.width) === 42, `"${text}", the button ${Math.round(box.width)} px wide`);
+}
+
 async function holdHint() {
   const shown = (b: HTMLElement) => b.offsetParent && b.getBoundingClientRect().width > 0;
   const next = document.querySelector<HTMLElement>('[data-testid="next"]');
@@ -1049,6 +1067,7 @@ export async function runSmoke() {
     const { OniHaptics } = await import('./ui/haptics.ts');
     const tapped = await OniHaptics.tap({ kind: 'pick' }).then(() => '', (e) => String(e));
     report('haptics', !tapped, tapped);
+    await holdHintRound();
     await twice(recap);
     await eqMatch().catch((e) => report('eq-match', false, String(e)));
     await eqButton().catch((e) => report('eq-button', false, String(e)));
