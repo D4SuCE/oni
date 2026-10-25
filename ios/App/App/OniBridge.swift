@@ -388,15 +388,7 @@ public class RemotePlugin: CAPPlugin, CAPBridgedPlugin {
         // Kept until the page listens: a command that opened the app comes before the page is up.
         guard done, let player = player else { return notifyListeners("command", data: ["name": name], retainUntilConsumed: true) }
         // The lock screen shows it at once, the page asleep or not.
-        var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
-        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = player.currentTime
-        info[MPNowPlayingInfoPropertyPlaybackRate] = player.isPlaying ? 1.0 : 0.0
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-        MPNowPlayingInfoCenter.default().playbackState = player.isPlaying ? .playing : .paused
-        if var shared = NowPlayingShare.read(), shared.playing != player.isPlaying {
-            shared.playing = player.isPlaying
-            if NowPlayingShare.write(shared) { WidgetCenter.shared.reloadTimelines(ofKind: "OniRemote") }
-        }
+        showOnLockScreen(playing: player.isPlaying, at: player.currentTime)
     }
 
     /// For the simulator run: a lock-screen button pressed ({ name }), handled as iOS would hand it
@@ -1727,6 +1719,9 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         }
         stopTimer()
         tick()
+        // Whoever paused (the page, the lock screen, iOS for a call or the headphones), the lock screen
+        // shows it now: the page may be frozen and never tell it.
+        showOnLockScreen(playing: false, at: pausedAt)
     }
 
     /// { time } in seconds; keeps playing if it was.
@@ -2151,5 +2146,21 @@ public class LanPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDelegate
         pings[id] = nil
         current.cancel(with: .goingAway, reason: nil)
         notifyListeners("closed", data: ["id": id])
+    }
+}
+
+/// Playing or paused, and where, on the lock screen and in the widget, by the player itself (main
+/// thread): the page may be frozen by iOS with the phone locked, and a pause iOS made (a call,
+/// headphones out, another app's sound) left "pause" on the lock screen with nothing playing (a user's
+/// screenshots, 25.10.2026).
+func showOnLockScreen(playing: Bool, at time: Double) {
+    var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+    info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = time
+    info[MPNowPlayingInfoPropertyPlaybackRate] = playing ? 1.0 : 0.0
+    MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+    MPNowPlayingInfoCenter.default().playbackState = playing ? .playing : .paused
+    if var shared = NowPlayingShare.read(), shared.playing != playing {
+        shared.playing = playing
+        if NowPlayingShare.write(shared) { WidgetCenter.shared.reloadTimelines(ofKind: "OniRemote") }
     }
 }
