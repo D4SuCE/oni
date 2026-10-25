@@ -863,7 +863,7 @@ await step('Pause pressed while the next track still loads keeps it from startin
   await page.evaluate(() => window.__wave.audio.pause());
 });
 
-await step('Liked opened again shows the whole list and its Download button at once', async () => {
+await step('Liked opened again shows its Download button at once and the whole list a moment later, without the network', async () => {
   // The user: Download came up late on Liked (it waited for the rest of the list after the first
   // hundred). Seen once, the list is kept and shows right away; the fresh one replaces it quietly.
   await page.click('[data-testid="nav-home"]');
@@ -872,10 +872,14 @@ await step('Liked opened again shows the whole list and its Download button at o
   await page.click('[data-testid="nav-liked"]');
   await page.waitForSelector('[data-testid="download-all"]', { timeout: 15000 });
   const ms = Date.now() - t0;
-  const rows = await page.locator('.track-row').count();
   const keys = await page.evaluate(() => window.__wave.useApp.getState().likedKeys.length);
-  console.log(`       Download after ${ms} ms, ${rows} of ${keys} rows`);
-  if (ms > 500 || rows < keys) throw new Error(`Download after ${ms} ms, ${rows} of ${keys} rows`);
+  // The whole list is there without the network: its rows are drawn a moment after the first 40 (the
+  // tab opens with them: the user, 25.10.2026), within a second, not after the fresh list comes in.
+  await page.waitForFunction((n) => document.querySelectorAll('.track-row').length >= n, keys, { timeout: 1500 }).catch(() => {});
+  const rows = await page.locator('.track-row').count();
+  const whole = Date.now() - t0;
+  console.log(`       Download after ${ms} ms, ${rows} of ${keys} rows after ${whole} ms`);
+  if (ms > 500 || rows < keys) throw new Error(`Download after ${ms} ms, ${rows} of ${keys} rows after ${whole} ms`);
 });
 
 await step('a big playlist opens at once, the rest of it comes in parts and joins a queue started early', async () => {
