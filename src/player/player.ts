@@ -382,7 +382,7 @@ function prefetchNext() {
   const next = s.queue[s.index + 1];
   if (!next || offlineMode || offline?.has(next.id)) return;
   // The iPhone's player fetches a track whole before it plays: the next one is fetched now.
-  if (isIos) streamUrl(next).then((st) => OniPlayer.fetch({ id: String(next.id), url: st.url, ext: audioExt(st.codec) })).catch(() => {});
+  if (isIos) streamUrl(next).then((st) => OniPlayer.fetch({ id: String(next.id), url: st.url, ext: audioExt(st.codec, next.trackSource === 'UGC') })).catch(() => {});
   else if (!prefetched.has(next.id)) streamUrl(next).catch(() => {});
 }
 
@@ -446,7 +446,7 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
       // The native player is told which track it opens and which files to keep (this and the next).
       const nextId = get().queue[index + 1]?.id;
       // Its length too: a track played while it still arrives (fast start) has no length of its own yet.
-      (audio as unknown as NativeAudio).next = { id: String(t.id), ext: audioExt(stream.codec), keep: [String(t.id), ...(nextId ? [String(nextId)] : [])], key: sealedKey ?? undefined, duration: (t.durationMs || 0) / 1000 || undefined };
+      (audio as unknown as NativeAudio).next = { id: String(t.id), ext: audioExt(stream.codec, t.trackSource === 'UGC'), keep: [String(t.id), ...(nextId ? [String(nextId)] : [])], key: sealedKey ?? undefined, duration: (t.durationMs || 0) / 1000 || undefined };
     }
     if (fade > 0 && autoplay && !audio.paused && canCrossfade()) {
       // The next one starts while this one fades out; this one's downloaded copy is freed once silent.

@@ -49,8 +49,9 @@ interface PlayerPlugin {
 export const OniPlayer = registerPlugin<PlayerPlugin>('OniPlayer');
 
 /** The file name ending AVAudioFile reads a codec by. */
-export function audioExt(codec: string) {
-  if (/mp4/.test(codec)) return 'm4a';
+export function audioExt(codec: string, upload = false) {
+  // An upload's "aac" is MP4 inside (M4A): opened as bare AAC, it did not start (the user, 25.10.2026).
+  if (/mp4/.test(codec) || (upload && codec === 'aac')) return 'm4a';
   if (/flac/.test(codec)) return 'flac';
   if (/aac/.test(codec)) return 'aac';
   return 'mp3';

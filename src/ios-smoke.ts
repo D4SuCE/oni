@@ -305,6 +305,27 @@ async function crossfade() {
   }
 }
 
+/** The account's own upload Yandex keeps as "aac" (MP4 inside) plays: it would not open (the user, 25.10.2026). */
+async function uploadPlays() {
+  const w = wave() as unknown as { api: { uid(): Promise<number>; playlist(uid: unknown, kind: unknown): Promise<{ tracks?: { track?: Track }[] }>; stream(id: string, q: string): Promise<{ codec: string }> }; useApp: { getState(): { playlists: { uid: number; kind: number; owner?: { uid: number } }[] } } };
+  const me = String(await w.api.uid());
+  let found: Track | null = null;
+  for (const p of w.useApp.getState().playlists.filter((x) => String(x.owner?.uid) === me)) {
+    const full = await w.api.playlist(p.uid, p.kind).catch(() => null);
+    for (const t of (full?.tracks ?? []).map((x) => x.track).filter((t): t is Track => t?.trackSource === 'UGC').slice(0, 8)) {
+      if ((await w.api.stream(String(t.id), 'lossless').catch(() => null))?.codec === 'aac') {
+        found = t;
+        break;
+      }
+    }
+    if (found) break;
+  }
+  if (!found) return report('upload-plays', true, 'no upload kept as aac on the account: nothing to try');
+  await wave().playTracks([found], 0, 'smoke upload');
+  const playing = await until(() => !wave().audio.paused && wave().audio.currentTime > 1, 30000);
+  report('upload-plays', Boolean(playing), `"${found.title}" at ${wave().audio.currentTime.toFixed(1)} s`);
+}
+
 /** Settings → Voice commands: a button per shared shortcut, each opening its iCloud page (not followed). */
 function voiceShortcuts() {
   const app = (window as unknown as { __wave: { navigate(r: unknown): void } }).__wave;
@@ -953,6 +974,7 @@ export async function runSmoke() {
     await lanLink();
     await iosPulse();
     await crossfade();
+    await uploadPlays();
     await fastStart();
     await intents();
     await backgroundDownload();

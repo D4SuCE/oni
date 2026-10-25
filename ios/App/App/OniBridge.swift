@@ -1225,6 +1225,24 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         }
     }
 
+    /// The file's audio by the type its name says, or, when that does not open, by what it holds:
+    /// Yandex says "aac" for uploads that are MP4 (M4A) inside, and the user's own tracks would not
+    /// start ("cannot open", 25.10.2026).
+    private func openAudio(_ url: URL) throws -> AVAudioFile {
+        do {
+            return try AVAudioFile(forReading: url)
+        } catch {
+            guard url.pathExtension != "m4a", let handle = try? FileHandle(forReadingFrom: url) else { throw error }
+            let head = handle.readData(ofLength: 8)
+            try? handle.close()
+            guard head.count == 8, String(data: head.subdata(in: 4..<8), encoding: .ascii) == "ftyp" else { throw error }
+            let m4a = url.deletingPathExtension().appendingPathExtension("m4a")
+            try? FileManager.default.removeItem(at: m4a)
+            try FileManager.default.copyItem(at: url, to: m4a)
+            return try AVAudioFile(forReading: m4a)
+        }
+    }
+
     private func cached(_ id: String, _ ext: String) -> URL {
         return PlayerPlugin.folder.appendingPathComponent(id + "." + ext)
     }
@@ -1430,13 +1448,13 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         }
         let opened: (Result<URL, Error>) -> Void = { [weak self] result in
             DispatchQueue.main.async {
-                guard self != nil else { return }
+                guard let self = self else { return }
                 switch result {
                 case .failure(let error):
                     call.reject(error.localizedDescription)
                 case .success(let url):
                     do {
-                        play(try AVAudioFile(forReading: url), nil)
+                        play(try self.openAudio(url), nil)
                     } catch {
                         call.reject("cannot open: " + error.localizedDescription)
                     }
