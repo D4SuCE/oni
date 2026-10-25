@@ -3863,6 +3863,27 @@ html.anim-fusuma .view-enter.from-left {
     clip-path: inset(0 30% 0 0);
   }
 }
+/* The iPhone: no clip-path. The page slides as a whole, and a long one (a liked list of hundreds)
+   clipped as it moved took so much memory that iOS closed Oni's page, and Oni started anew (the
+   user, 25.10.2026: Liked, then History). */
+html.ios.anim-fusuma .view-enter {
+  animation-name: fusuma-in-light;
+}
+html.ios.anim-fusuma .view-enter.from-left {
+  animation-name: fusuma-in-left-light;
+}
+@keyframes fusuma-in-light {
+  from {
+    opacity: 0.2;
+    transform: translateX(56px);
+  }
+}
+@keyframes fusuma-in-left-light {
+  from {
+    opacity: 0.2;
+    transform: translateX(-56px);
+  }
+}
 
 /* Scroll: Now Playing unrolls from the top like a hanging scroll, the side panels from their edge. */
 html.anim-scroll .nowplaying {
@@ -3892,8 +3913,10 @@ html.anim-scroll .q-sheet {
 }
 
 /* Cascade: cards and rows come in one after another (the first dozen; the rest at once). */
-html.anim-cascade .card,
-html.anim-cascade .track-row {
+/* The first twelve only (the rest are below the screen): every row of a long list moving at once
+   took the iPhone's memory (see fusuma above). */
+html.anim-cascade .card:nth-child(-n + 12),
+html.anim-cascade .track-row:nth-child(-n + 12) {
   animation: cascade-in 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 @keyframes cascade-in {

@@ -828,6 +828,30 @@ async function moveTracks() {
   click('.np-close');
 }
 
+/** Animations on, Liked and then History (the user, 25.10.2026: Oni started anew there): the page
+ * slides in without a clip (fusuma-in-light), only the first rows of the long list come in one
+ * after another, and the page is still the same one afterwards (iOS did not close it). */
+async function animLight() {
+  const { setAnimEnabled, useAnim } = await import('./ui/anim.ts');
+  const was = useAnim.getState().enabled;
+  const marker = Math.random();
+  (window as unknown as { __oniPage: number }).__oniPage = marker;
+  setAnimEnabled(true);
+  try {
+    click('[data-testid="nav-liked"]');
+    const listed = await until(() => document.querySelectorAll('.track-row').length > 20, 30000);
+    const slide = getComputedStyle(document.querySelector('.view-enter')!).animationName;
+    const rows = [...document.querySelectorAll('.track-row')].slice(0, 21).map((r) => getComputedStyle(r).animationName);
+    click('[data-testid="nav-history"]');
+    await sleep(4000);
+    const same = (window as unknown as { __oniPage?: number }).__oniPage === marker && Boolean(document.querySelector('[data-testid="nav-home"]'));
+    report('anim-light', listed && slide === 'fusuma-in-light' && rows[0] === 'cascade-in' && rows[20] === 'none' && same, `slide "${slide}", rows "${rows[0]}" … "${rows[20]}", ${same ? 'same page' : 'page started anew'}`);
+  } finally {
+    setAnimEnabled(was);
+    click('[data-testid="nav-home"]');
+  }
+}
+
 /** The update check reads the SideStore source (iosUpdate.ts): latest, or a newer one offered. */
 async function updateCheck() {
   const { checkIosUpdate } = await import('./ui/iosUpdate.ts');
@@ -934,6 +958,7 @@ export async function runSmoke() {
     await eqMatch().catch((e) => report('eq-match', false, String(e)));
     await eqButton().catch((e) => report('eq-button', false, String(e)));
     await voiceShortcuts();
+    await animLight().catch((e) => report('anim-light', false, String(e)));
     await updateCheck();
   } catch (e) {
     report('crash', false, String(e));

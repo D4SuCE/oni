@@ -67,16 +67,25 @@ export const animOn = (effect: AnimEffect) => {
   return s.enabled && s.effects[effect];
 };
 
-// A press of a button: its ring.
+// A press of a button: its ring. A mouse's at once; a finger's once the tap has gone through (its
+// click): on the iPhone something new on screen under the finger as it touched made iOS take the
+// tap for a hover, and the button went off only on the second tap (the user, 25.10.2026).
 if (typeof window !== 'undefined') {
+  const pressed = (e: PointerEvent | MouseEvent) => {
+    const button = (e.target as Element | null)?.closest?.('button') as HTMLButtonElement | null;
+    if (button && !button.disabled) hamon(e.clientX, e.clientY, button);
+  };
+  let touch = false;
   window.addEventListener(
     'pointerdown',
     (e) => {
-      const button = (e.target as Element | null)?.closest?.('button') as HTMLButtonElement | null;
-      if (button && !button.disabled) hamon(e.clientX, e.clientY, button);
+      touch = e.pointerType === 'touch';
+      if (!touch) pressed(e);
     },
     true,
   );
+  // `detail`: a click of a tap (a click made by a key or by code has none, nor a place).
+  window.addEventListener('click', (e) => touch && e.detail > 0 && pressed(e), true);
 }
 
 /** A thin ring spreads from the press and is gone in a third of a second: gold over dark buttons,

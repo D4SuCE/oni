@@ -1744,6 +1744,26 @@ await step('animations: on in Settings, a page slides in like a paper door, a pr
     await page.click('[data-testid="next"]');
     const ring = await page.evaluate(() => document.querySelectorAll('.hamon-ring').length);
     if (!ring) throw new Error('no ring from the press');
+    // A finger's ring comes with the tap's click, not as it touches (iOS took a tap that put
+    // something on screen for a hover: the user, 25.10.2026, bottom tabs went off on the second tap).
+    const touch = await page.evaluate(async () => {
+      await new Promise((r) => setTimeout(r, 400));
+      const b = document.querySelector('[data-testid="nav-home"]');
+      const at = b.getBoundingClientRect();
+      const o = { bubbles: true, clientX: at.left + 5, clientY: at.top + 5 };
+      b.dispatchEvent(new PointerEvent('pointerdown', { ...o, pointerType: 'touch', isPrimary: true, pointerId: 7 }));
+      const onTouch = document.querySelectorAll('.hamon-ring').length;
+      b.dispatchEvent(new PointerEvent('pointerup', { ...o, pointerType: 'touch', isPrimary: true, pointerId: 7 }));
+      b.dispatchEvent(new MouseEvent('click', { ...o, detail: 1 }));
+      return { onTouch, onClick: document.querySelectorAll('.hamon-ring').length };
+    });
+    if (touch.onTouch || !touch.onClick) throw new Error(`a tap's ring: ${JSON.stringify(touch)}`);
+    // A long list: only the first rows come in one after another (all of them at once took the
+    // iPhone's memory, and iOS closed the page).
+    await page.click('[data-testid="nav-liked"]');
+    await page.waitForFunction(() => document.querySelectorAll('.track-row').length > 20, null, { timeout: 30000 });
+    const rows = await page.evaluate(() => [...document.querySelectorAll('.track-row')].slice(0, 21).map((r) => getComputedStyle(r).animationName));
+    if (rows[0] !== 'cascade-in' || rows[20] !== 'none') throw new Error(`rows: first "${rows[0]}", 21st "${rows[20]}"`);
   } finally {
     await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
     await all.uncheck();
