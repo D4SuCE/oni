@@ -1,6 +1,6 @@
 // The smart crossfade (the user's pick, 24.10.2026): the next track comes in where this one's music
 // really ends, not where its file does, and from its first sound, not from silence before it. The
-// iPhone's player finds both in the file itself (OniBridge.swift, `audible`); the desktop hears this
+// iPhone's player finds both in the file itself (PlayerPlugin.swift, `musicEndIn` / `leadIn`); the desktop hears this
 // track's end as it plays (the level after the elements, eq.ts) and looks at the next one's first
 // seconds before it starts.
 

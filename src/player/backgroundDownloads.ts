@@ -1,4 +1,4 @@
-// The iPhone's background downloads (DownloadsPlugin in ios/App/App/OniBridge.swift): iOS fetches
+// The iPhone's background downloads (ios/App/App/DownloadsPlugin.swift): iOS fetches
 // the files even while Oni is in the background or locked, a few at a time in the list's order;
 // the native side seals each with the library's key as it lands (or, without the key yet, leaves
 // it unencrypted in a folder for the page to seal); this keeps the books. A list is written down whole at once (so a lock screen mid-way loses

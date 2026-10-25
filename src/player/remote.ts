@@ -1,5 +1,5 @@
 // The iPhone's lock screen and Control Center player, run by the OniRemote plugin
-// (ios/App/App/OniBridge.swift): WebKit's own showed -10 s / +10 s instead of previous / next and
+// (ios/App/App/RemotePlugin.swift): WebKit's own showed -10 s / +10 s instead of previous / next and
 // had no like. The page tells it what plays; it sends back what the user pressed. Play and pause
 // it does itself (the page may be frozen after a while paused with the screen locked).
 

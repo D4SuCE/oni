@@ -1,6 +1,6 @@
 // The remote on the home network (the user, 25.10.2026: "as fast as possible"): the PC listens
 // (electron/lan.cjs) and says where in Oni's folder on Disk (lan-<id>.json, with a key); the phone
-// connects to it (OniLan, ios/App/App/OniBridge.swift). Over the link a press and what plays go at
+// connects to it (OniLan, ios/App/App/LanPlugin.swift). Over the link a press and what plays go at
 // once; Disk stays the way when there is no link (another network, the link refused).
 
 import { registerPlugin, type PluginListenerHandle } from '@capacitor/core';

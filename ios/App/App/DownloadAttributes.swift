@@ -1,7 +1,7 @@
 import ActivityKit
 
 /// What the downloads' Live Activity shows (the Dynamic Island and the lock screen): built into the
-/// app, which starts and updates it (DownloadsPlugin in OniBridge.swift), and into the OniActivity
+/// app, which starts and updates it (DownloadsPlugin.swift), and into the OniActivity
 /// extension, which draws it.
 @available(iOS 16.1, *)
 struct DownloadAttributes: ActivityAttributes {

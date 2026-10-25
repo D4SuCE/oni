@@ -1,4 +1,4 @@
-// The iPhone's audio element: the OniPlayer plugin (ios/App/App/OniBridge.swift) behind the part
+// The iPhone's audio element: the OniPlayer plugin (ios/App/App/PlayerPlugin.swift) behind the part
 // of HTMLAudioElement the player uses (src, play, pause, currentTime, duration, paused, ended and
 // its events), so the queue, the wave and history work as on the desktop. WebKit's own element
 // took the lock screen with -10 s / +10 s, and its Web Audio equalizer lagged behind seeks and

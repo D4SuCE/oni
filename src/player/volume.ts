@@ -1,5 +1,5 @@
 // The iPhone's volume slider moves the phone's own volume (OniVolume in
-// ios/App/App/OniBridge.swift), and follows the hardware buttons. The player keeps it in its
+// ios/App/App/VolumePlugin.swift), and follows the hardware buttons. The player keeps it in its
 // `volume` like the desktop's, so the same slider component shows it.
 
 import { registerPlugin, type PluginListenerHandle } from '@capacitor/core';

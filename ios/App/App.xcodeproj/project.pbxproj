@@ -17,6 +17,16 @@
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		A0C1B2D3E4F5061728394A5C /* OniBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0C1B2D3E4F5061728394A5B /* OniBridge.swift */; };
+		E4E1676C8202CCF755522CB4 /* HapticsPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D53352D704CB659B8F0561A /* HapticsPlugin.swift */; };
+		E64F5462B1829B0082692A0D /* KeychainPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9333FBF6DFB5060DF7CB596 /* KeychainPlugin.swift */; };
+		9218DEAA9B6EE598CF38FD9F /* LoginPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58452C2A29710044D5A3AC43 /* LoginPlugin.swift */; };
+		2586EF61ADC1EA80C3D15B25 /* RemotePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDF96FA10A75B85DA3C7DA41 /* RemotePlugin.swift */; };
+		ED40638FBF946E4E03C26BA0 /* VolumePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 557B63C62CB172E4D2714989 /* VolumePlugin.swift */; };
+		6926D7C7621F7E090D6D4197 /* Vault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 294F280298456E848634EE91 /* Vault.swift */; };
+		375365177B4E72AE91A1F01C /* DownloadsPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18173567D423E7E897C5769F /* DownloadsPlugin.swift */; };
+		014FFBCDDA2B44B66E4FFCAA /* TrackFetch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72A5C7C232202FCD105012AA /* TrackFetch.swift */; };
+		38A1BEA682EF4BA249230193 /* PlayerPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6092DCFE167A997E02516AE3 /* PlayerPlugin.swift */; };
+		4C4D843028A9C4D307037999 /* LanPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0E5C0EEB61664FEB31D600A /* LanPlugin.swift */; };
 		A0C1B2D3E4F5061728394A7C /* OniIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0C1B2D3E4F5061728394A7B /* OniIntents.swift */; };
 		A0C1B2D3E4F5061728394A8C /* OniCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0C1B2D3E4F5061728394A8B /* OniCommands.swift */; };
 		A0C1B2D3E4F5061728394A8D /* OniCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0C1B2D3E4F5061728394A8B /* OniCommands.swift */; };
@@ -40,6 +50,16 @@
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		A0C1B2D3E4F5061728394A5B /* OniBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OniBridge.swift; sourceTree = "<group>"; };
+		9D53352D704CB659B8F0561A /* HapticsPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticsPlugin.swift; sourceTree = "<group>"; };
+		F9333FBF6DFB5060DF7CB596 /* KeychainPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainPlugin.swift; sourceTree = "<group>"; };
+		58452C2A29710044D5A3AC43 /* LoginPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginPlugin.swift; sourceTree = "<group>"; };
+		EDF96FA10A75B85DA3C7DA41 /* RemotePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemotePlugin.swift; sourceTree = "<group>"; };
+		557B63C62CB172E4D2714989 /* VolumePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumePlugin.swift; sourceTree = "<group>"; };
+		294F280298456E848634EE91 /* Vault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vault.swift; sourceTree = "<group>"; };
+		18173567D423E7E897C5769F /* DownloadsPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadsPlugin.swift; sourceTree = "<group>"; };
+		72A5C7C232202FCD105012AA /* TrackFetch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackFetch.swift; sourceTree = "<group>"; };
+		6092DCFE167A997E02516AE3 /* PlayerPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerPlugin.swift; sourceTree = "<group>"; };
+		B0E5C0EEB61664FEB31D600A /* LanPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanPlugin.swift; sourceTree = "<group>"; };
 		A0C1B2D3E4F5061728394A7B /* OniIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OniIntents.swift; sourceTree = "<group>"; };
 		A0C1B2D3E4F5061728394A8B /* OniCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OniCommands.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
@@ -117,6 +137,16 @@
 			children = (
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
 				A0C1B2D3E4F5061728394A5B /* OniBridge.swift */,
+				9D53352D704CB659B8F0561A /* HapticsPlugin.swift */,
+				F9333FBF6DFB5060DF7CB596 /* KeychainPlugin.swift */,
+				58452C2A29710044D5A3AC43 /* LoginPlugin.swift */,
+				EDF96FA10A75B85DA3C7DA41 /* RemotePlugin.swift */,
+				557B63C62CB172E4D2714989 /* VolumePlugin.swift */,
+				294F280298456E848634EE91 /* Vault.swift */,
+				18173567D423E7E897C5769F /* DownloadsPlugin.swift */,
+				72A5C7C232202FCD105012AA /* TrackFetch.swift */,
+				6092DCFE167A997E02516AE3 /* PlayerPlugin.swift */,
+				B0E5C0EEB61664FEB31D600A /* LanPlugin.swift */,
 				A0C1B2D3E4F5061728394A7B /* OniIntents.swift */,
 				A0C1B2D3E4F5061728394A8B /* OniCommands.swift */,
 				0A1B2C3D4E5F607182930011 /* DownloadAttributes.swift */,
@@ -257,6 +287,16 @@
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				A0C1B2D3E4F5061728394A5C /* OniBridge.swift in Sources */,
+				E4E1676C8202CCF755522CB4 /* HapticsPlugin.swift in Sources */,
+				E64F5462B1829B0082692A0D /* KeychainPlugin.swift in Sources */,
+				9218DEAA9B6EE598CF38FD9F /* LoginPlugin.swift in Sources */,
+				2586EF61ADC1EA80C3D15B25 /* RemotePlugin.swift in Sources */,
+				ED40638FBF946E4E03C26BA0 /* VolumePlugin.swift in Sources */,
+				6926D7C7621F7E090D6D4197 /* Vault.swift in Sources */,
+				375365177B4E72AE91A1F01C /* DownloadsPlugin.swift in Sources */,
+				014FFBCDDA2B44B66E4FFCAA /* TrackFetch.swift in Sources */,
+				38A1BEA682EF4BA249230193 /* PlayerPlugin.swift in Sources */,
+				4C4D843028A9C4D307037999 /* LanPlugin.swift in Sources */,
 				A0C1B2D3E4F5061728394A7C /* OniIntents.swift in Sources */,
 				A0C1B2D3E4F5061728394A8C /* OniCommands.swift in Sources */,
 				0A1B2C3D4E5F607182930001 /* DownloadAttributes.swift in Sources */,

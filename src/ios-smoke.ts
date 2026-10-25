@@ -280,7 +280,7 @@ async function lanLink() {
   try {
     const refused = await lan.open({ id: 'mac', url: 'ws://127.0.0.1:47999', hello: JSON.stringify({ t: 'hello', key: 'wrong', device: { id: 'sim' } }), timeout: 2000 }).then(() => false, () => true);
     // The hello went before the connection was open and was lost now and then (3 of 4 runs on
-    // 25.10.2026; OniBridge.swift now says it once open). The runner's simulator takes seconds to
+    // 25.10.2026; LanPlugin.swift now says it once open). The runner's simulator takes seconds to
     // connect even to itself (the stand-in saw it 2-3 s late): up to 20 s, a second try allowed and told.
     const opening = performance.now();
     const hello = { id: 'mac', url: 'ws://127.0.0.1:47999', hello: JSON.stringify({ t: 'hello', key: 'smoke', device: { id: 'sim' } }), timeout: 20000 };
