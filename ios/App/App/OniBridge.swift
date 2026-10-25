@@ -2018,7 +2018,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 self.endSearch = false
-                if self.endOf == track { self.musicEnd = end }
+                // Not readable: its file's end, once (not looked for again on every tick).
+                if self.endOf == track { self.musicEnd = end ?? self.duration }
             }
         }
     }
