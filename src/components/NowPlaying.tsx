@@ -172,7 +172,10 @@ export function NowPlaying() {
             <>
               <div className="np-meta" onContextMenu={(e) => openMenu(e, trackMenu(track))}>
                 <div className="np-text">
-                  <h1 title={track.title}>{track.title}</h1>
+                  {/* A long name gets a smaller face on the iPhone, so it is there whole (styles.css). */}
+                  <h1 title={track.title} className={cx(track.title.length > 36 && 'long')}>
+                    {track.title}
+                  </h1>
                   <div className="np-artists">
                     <ArtistLinks artists={track.artists} plain={isUpload(track)} />
                   </div>

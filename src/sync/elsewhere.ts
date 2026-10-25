@@ -46,6 +46,8 @@ export interface OtherDevice {
   /** Plays there now. */
   live: boolean;
   track?: Track;
+  /** It is the remote of this device, or of another: nothing plays there. */
+  remoteOf?: string;
 }
 
 interface ElsewhereState {
@@ -53,9 +55,11 @@ interface ElsewhereState {
   devices: OtherDevice[];
   /** The device this one is the remote of. */
   controlling: Device | null;
+  /** The devices that are this one's remote now (it says "Controlled from iPhone"). */
+  remotes: Device[];
 }
 
-export const useElsewhere = create<ElsewhereState>(() => ({ devices: [], controlling: null }));
+export const useElsewhere = create<ElsewhereState>(() => ({ devices: [], controlling: null, remotes: [] }));
 const set = useElsewhere.setState;
 
 /** How often the folder is looked at: watched or watching, often; open or playing, now and then;
@@ -77,7 +81,10 @@ let sync: PlayingSync | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let ticker: ReturnType<typeof setInterval> | null = null;
 let busy = false;
-let watched = false;
+/** The ids of the devices that are this one's remote now (they look for its answers, it for their presses). */
+let watchers: string[] = [];
+/** A device let go here ("Disconnect"): not made this one's remote by itself again while it plays on. */
+let declined: string | null = null;
 /** Look around (take up another device's track, or become its remote) after the next look. */
 let lookAround = true;
 /** What the device this one controls plays, as shown (a press changes it at once, its file later). */
@@ -121,7 +128,9 @@ export function stopElsewhere() {
   awake = -1;
   sync?.clear();
   sync = null;
-  set({ devices: [], controlling: null });
+  watchers = [];
+  declined = null;
+  set({ devices: [], controlling: null, remotes: [] });
 }
 
 function schedule(ms = delay()) {
@@ -133,7 +142,7 @@ function delay() {
   const target = useElsewhere.getState().controlling;
   // Linked on the home network: what plays there comes over the link, Disk is only looked at now and then.
   if (target && lan?.isOpen(target.id)) return OPEN;
-  if (target || watched) return FAST;
+  if (target || watchers.length) return FAST;
   return !document.hidden || usePlayer.getState().playing ? OPEN : IDLE;
 }
 
@@ -152,8 +161,12 @@ export async function look(around = false) {
   try {
     const target = useElsewhere.getState().controlling;
     if (target) await sync.watch(target.id);
-    const { changed, commands, watched: w } = await sync.poll();
-    watched = w;
+    const polled = await sync.poll();
+    const { changed, commands } = polled;
+    if (polled.watchers.join() !== watchers.join()) {
+      watchers = polled.watchers;
+      showRemotes();
+    }
     for (const c of commands) run(c);
     // Done, or nothing to do: the remote sees the answer either way (it takes no answer for "gone").
     if (commands.length) publishSoon(300);
@@ -177,7 +190,11 @@ export async function look(around = false) {
 
 function showDevices() {
   const now = Date.now();
-  set({ devices: sync!.others().map((f) => ({ device: f.device, live: isLive(f, now), track: f.queue[f.index] })) });
+  const others = sync!.others();
+  set({ devices: others.map((f) => ({ device: f.device, live: isLive(f, now), track: f.queue[f.index], remoteOf: f.remoteOf })) });
+  // The device let go has stopped: played again, it may be taken up as before.
+  if (declined && !others.some((f) => f.device.id === declined && isLive(f, now))) declined = null;
+  showRemotes();
   const seconds = sync!.others().length ? AWAKE : 0;
   if (isIos && seconds !== awake) {
     awake = seconds;
@@ -185,13 +202,23 @@ function showDevices() {
   }
 }
 
+/** The devices this one's remotes are, as known (a remote not known yet shows when its file comes). */
+function showRemotes() {
+  const known = sync?.others() ?? [];
+  const remotes = watchers.map((id) => known.find((f) => f.device.id === id)?.device).filter((d): d is Device => Boolean(d));
+  const was = useElsewhere.getState().remotes;
+  if (remotes.map((d) => d.id).join() !== was.map((d) => d.id).join()) set({ remotes });
+}
+
 /** Opened, or back in view, with nothing playing here: the other device's track, or its remote. */
 function takeUp() {
   const p = usePlayer.getState();
   if (p.playing || p.loading || isElsewhere()) return;
-  const top = sync!.others()[0];
+  // A device that is itself a remote plays nothing: neither taken up nor controlled (two devices, each
+  // the other's remote, waited for each other and no press did anything: the user, 25.10.2026).
+  const top = sync!.others().find((f) => !f.remoteOf);
   if (!top?.queue[top.index]) return;
-  if (isLive(top, Date.now())) return control(top.device);
+  if (isLive(top, Date.now())) return top.device.id === declined ? undefined : control(top.device);
   if (top.changed > changedAt && top.changed > takenAt) take(top, false);
 }
 
@@ -217,7 +244,10 @@ function take(f: NowFile, play: boolean) {
 export function control(device: Device) {
   if (!sync) return;
   const f = sync.others().find((x) => x.device.id === device.id);
-  if (!f) return;
+  if (!f || f.remoteOf) return;
+  if (declined === device.id) declined = null;
+  // Said first, while what plays here is still known: else the others go on seeing it play here.
+  becomeRemote(device);
   controlElsewhere({ send, leave: () => leave('drop') });
   set({ controlling: device });
   view = f;
@@ -227,10 +257,19 @@ export function control(device: Device) {
   schedule(0);
 }
 
+/** This device becomes a remote: its file says so, and that nothing plays here now. */
+function becomeRemote(target: Device) {
+  const state = nowPlaying();
+  if (!sync || !state) return;
+  const mark = { ...state, playing: false, remoteOf: target.id };
+  lan?.broadcast(JSON.stringify({ t: 'now', file: sync.fileFor(mark, changedAt) }));
+  void sync.publish(mark, changedAt).catch((e) => console.warn('[now]', e));
+}
+
 /**
  * This device plays its own again. What played there: `here` goes on here from where it was, and
- * stops there ("Play here"); `keep` stays here paused, as if taken over; `drop` is let go
- * (something else is started here).
+ * stops there ("Play here"); `keep` stays here paused, as if taken over, and plays on there; `drop`
+ * is let go (something else is started here).
  */
 export function leave(how: 'here' | 'keep' | 'drop') {
   const target = useElsewhere.getState().controlling;
@@ -241,9 +280,24 @@ export function leave(how: 'here' | 'keep' | 'drop') {
   view = null;
   set({ controlling: null });
   controlElsewhere(null);
+  const s = sync;
+  if (s) {
+    const pause = how === 'here' && last?.playing;
+    if (pause) lan?.send(target.id, JSON.stringify({ t: 'cmd', to: target.id, command: s.press(target.id, 'pause') }));
+    // The press, then "not watching" (in this order: the file written last is the one that stays).
+    void (pause ? s.flush(target.id) : Promise.resolve()).then(() => s.unwatch(target.id)).catch((e) => console.warn('[now]', e));
+  }
   if (!last?.queue[last.index] || how === 'drop') return;
-  if (how === 'here' && last.playing) void sync?.send(target.id, 'pause').catch((e) => console.warn('[now]', e));
   take(last, how === 'here');
+}
+
+/** "Disconnect": this device is no remote any more, and the other plays on. It is not made that one's
+ * remote again by itself while that one plays on (the user, 25.10.2026: "I only disconnected"). */
+export function disconnect() {
+  const target = useElsewhere.getState().controlling;
+  if (!target) return;
+  declined = target.id;
+  leave('keep');
 }
 
 /** The file of the device controlled came: shown, unless it is older than a press just made. */
@@ -252,6 +306,11 @@ function follow() {
   const f = sync?.others().find((x) => x.device.id === target?.id);
   const now = Date.now();
   if (!f) return leave('keep');
+  // It became a remote itself (of this one, or of another): nothing plays there to control.
+  if (f.remoteOf) {
+    view = f;
+    return leave('keep');
+  }
   // Closed while it played (its file not renewed), or a press not followed: it is not there now.
   const playingGone = f.playing && !isLive(f, now);
   const deaf = sentAt && now - sentAt > NO_ANSWER && f.at < sentAt;
@@ -350,8 +409,9 @@ function linked() {
 
 /** A press from this device's remote. */
 function run(c: Command) {
-  // This one is itself a remote now: nothing plays here to press.
-  if (isElsewhere()) return;
+  // This one is itself a remote, and yet a press came: the other device saw this one play (each was
+  // the other's remote). This one stops being a remote and does the press.
+  if (isElsewhere()) leave('keep');
   const s = usePlayer.getState();
   /** The track's place now: by its id, if the queue moved since the remote saw it. */
   const place = (i: unknown, id: unknown) => (s.queue[Number(i)]?.id === id ? Number(i) : s.queue.findIndex((t) => t.id === id));

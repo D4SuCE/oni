@@ -1506,7 +1506,80 @@ await step('another device in the player: its paused track taken up at its secon
   if (left.some((f) => names.includes(f.name))) throw new Error('files left on Disk');
 });
 
-await step('the home network: the PC listens where its file on Disk says; a phone with the key learns what plays at once and its Pause is done here in under a second; a wrong key is refused (removed again)', async () => {
+await step('who controls whom: a phone that is this one\'s remote is never made its remote ("Controlled from iPhone"); becoming a remote says so on Disk; a press while each is the other\'s remote is done; "Disconnect" leaves the phone playing and is not undone by itself (all removed again)', async () => {
+  // The user, 25.10.2026: Pause from the phone did nothing until Oni was opened again (each device was
+  // the other's remote), and leaving the remote on the phone paused the PC and played on the phone.
+  if (!(await page.evaluate(() => window.__wave.sync.useSync.getState().connected))) {
+    console.log('       skipped: no YANDEX_DISK_TOKEN');
+    return;
+  }
+  const phoneId = `e2ephone${Date.now()}`;
+  const ownId = await page.evaluate(() => window.__wave.sync.deviceSync.device.id);
+  const names = [`now-${phoneId}.json`, `cmd-${phoneId}-${ownId}.json`, `cmd-${ownId}-${phoneId}.json`, `now-${ownId}.json`];
+  const write = (name, file) => page.evaluate(([n, t]) => window.__wave.sync.disk.write(n, t), [name, JSON.stringify(file)]);
+  const read = (name) => page.evaluate((n) => window.__wave.sync.disk.read(n).then((t) => JSON.parse(t)), name);
+  const look = (around = true) => page.evaluate((a) => window.__wave.sync.elsewhere.look(a), around);
+  const playingOn = async () => ((await page.locator('[data-testid="playing-on"]').count()) ? page.locator('[data-testid="playing-on"]').first().innerText() : '');
+  const currentId = () => page.evaluate(() => { const s = window.__wave.usePlayer.getState(); return s.queue[s.index]?.id; });
+  try {
+    const queue = await page.evaluate(() => window.__wave.api.chart().then((l) => l.filter((t) => t.available !== false).slice(3, 6)));
+    const phone = (over) => ({
+      v: 1, device: { id: phoneId, platform: 'ios' }, queue, index: 0, offset: 0, title: 'e2e phone list', playing: true, position: 20,
+      duration: (queue[0].durationMs || 180000) / 1000, shuffle: false, repeat: 'off', at: Date.now(), changed: Date.now() + 5000, test: true, ...over,
+    });
+    await page.evaluate(() => window.__wave.audio.pause());
+    await page.waitForFunction(() => !window.__wave.usePlayer.getState().playing);
+    const mine = await currentId();
+
+    // 1. The phone is this one's remote (its file says so, and it looks on): this one, paused, neither
+    // takes up its track nor becomes its remote, and says who controls it.
+    await write(names[0], phone({ playing: false, remoteOf: ownId }));
+    await write(names[2], { v: 1, from: { id: phoneId, platform: 'ios' }, at: Date.now(), commands: [] });
+    await look();
+    await page.waitForFunction(() => window.__wave.sync.elsewhere.useElsewhere.getState().remotes.length, null, { timeout: 5000 });
+    const shown = await playingOn();
+    if (!/Управляет iPhone/.test(shown) || (await currentId()) !== mine) throw new Error(`with the phone as its remote: "${shown}", track ${await currentId()} (was ${mine})`);
+
+    // 2. Playing there: this one becomes its remote, and its own file says so (nothing plays here).
+    await write(names[0], phone());
+    await look();
+    if (!/Играет на iPhone/.test(await playingOn())) throw new Error(`not a remote: "${await playingOn()}"`);
+    let own = null;
+    for (let i = 0; i < 10 && !own?.remoteOf; i++) own = await page.waitForTimeout(500).then(() => read(names[3])).catch(() => null);
+    if (own?.remoteOf !== phoneId || own.playing) throw new Error(`own file: ${JSON.stringify(own && { remoteOf: own.remoteOf, playing: own.playing })}`);
+
+    // 3. A press from the phone all the same (it took this one for the player): done here.
+    await write(names[2], { v: 1, from: { id: phoneId, platform: 'ios' }, at: Date.now(), commands: [{ id: `${phoneId}.1`, at: Date.now(), fn: 'toggle', args: [] }] });
+    await look(false);
+    await waitPlaying(1);
+    if (/Играет на/.test(await playingOn())) throw new Error('still a remote after a press for it');
+
+    // 4. "Disconnect": not a remote; the phone was not paused, nothing plays here; told "not watching".
+    await page.evaluate(() => window.__wave.audio.pause());
+    await page.waitForFunction(() => !window.__wave.usePlayer.getState().playing);
+    await write(names[0], phone({ changed: Date.now() + 10_000 }));
+    await look();
+    if (!/Играет на iPhone/.test(await playingOn())) throw new Error(`not a remote again: "${await playingOn()}"`);
+    const since = Date.now();
+    await page.evaluate(() => window.__wave.sync.elsewhere.disconnect());
+    await page.waitForTimeout(1500);
+    if (/Играет на/.test(await playingOn())) throw new Error('still a remote after "Disconnect"');
+    if (!(await page.evaluate(() => window.__wave.audio.paused))) throw new Error('plays here after "Disconnect"');
+    const told = await read(names[1]);
+    if (told.at !== 0 || told.commands.some((c) => c.at >= since)) throw new Error(`told the phone: ${JSON.stringify(told)}`);
+    // Back in view: still not its remote, while it plays on.
+    await look();
+    if (/Играет на/.test(await playingOn())) throw new Error('made its remote again by itself');
+  } finally {
+    await page.evaluate(() => window.__wave.sync.elsewhere.leave('drop'));
+    await page.evaluate(() => window.__wave.audio.pause());
+    await page.evaluate((list) => Promise.all(list.map((n) => window.__wave.sync.disk.remove(n).catch(() => {}))), names);
+  }
+  const left = await page.evaluate(() => window.__wave.sync.disk.list());
+  if (left.some((f) => names.includes(f.name))) throw new Error('files left on Disk');
+});
+
+await step('the home network:the PC listens where its file on Disk says; a phone with the key learns what plays at once and its Pause is done here in under a second; a wrong key is refused (removed again)', async () => {
   // The user, 25.10.2026: the remote "as fast as possible" (electron/lan.cjs, src/sync/lan.ts).
   if (!(await page.evaluate(() => window.__wave.sync.useSync.getState().connected))) {
     console.log('       skipped: no YANDEX_DISK_TOKEN');

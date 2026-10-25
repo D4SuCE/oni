@@ -542,6 +542,39 @@ async function revived() {
   report('revived', shown && playing, `page ${shown ? 'shown' : 'not shown'}, music ${playing ? 'playing' : 'not seen playing'}`);
 }
 
+/** Now Playing shows the track's name whole (the user, 25.10.2026: "Am I …" was cut by the buttons
+ * beside it), a long one too; the cover stays square, and all down to the last control is on screen. */
+async function npTitle() {
+  const store = wave().usePlayer as unknown as { getState(): { queue: { title: string }[]; index: number }; setState(s: object): void };
+  const { queue, index } = store.getState();
+  const seen: string[] = [];
+  let ok = true;
+  try {
+    for (const title of ['Am I Ever Gonna Find Out', 'Am I Ever Gonna Find Out (Live from the Stanley Climbfall Sessions, 2002)']) {
+      store.setState({ queue: queue.map((t, i) => (i === index ? { ...t, title } : t)) });
+      await sleep(500);
+      const h1 = document.querySelector<HTMLElement>('.nowplaying .np-text h1');
+      const cover = document.querySelector('.nowplaying .np-cover')?.getBoundingClientRect();
+      const stage = document.querySelector<HTMLElement>('.nowplaying .np-stage');
+      const last = document.querySelector('.nowplaying .np-art')?.lastElementChild?.getBoundingClientRect();
+      if (!h1 || !cover || !stage || !last) {
+        ok = false;
+        seen.push(`"${title}": not shown`);
+        continue;
+      }
+      const floor = stage.getBoundingClientRect().bottom - parseFloat(getComputedStyle(stage).paddingBottom);
+      const whole = h1.textContent === title && h1.scrollHeight <= h1.clientHeight + 1 && h1.scrollWidth <= h1.clientWidth + 1;
+      const square = Math.abs(cover.width - cover.height) < 2 && cover.width > 150;
+      const fits = last.bottom <= floor + 1 && cover.top >= stage.getBoundingClientRect().top;
+      ok &&= whole && square && fits;
+      seen.push(`${title.length} chars: ${whole ? 'whole' : `cut (${h1.scrollHeight}/${h1.clientHeight})`}, cover ${cover.width.toFixed(0)}×${cover.height.toFixed(0)}, last control ${last.bottom.toFixed(0)} of ${floor.toFixed(0)}`);
+    }
+  } finally {
+    store.setState({ queue });
+  }
+  report('np-title', ok, seen.join('; '));
+}
+
 /** Now Playing's seek bar: a tap in its middle (not on the thumb) takes the track there, once,
  * when the finger lifts (src/ui/touchRange.ts, SeekBar). */
 async function touchSeek() {
@@ -847,6 +880,7 @@ export async function runSmoke() {
     report('now-playing', await until(() => document.querySelector('.nowplaying'), 5000));
     await sleep(2500);
     await touchSeek();
+    await npTitle();
     const { value } = await OniVolume.get().catch(() => ({ value: -1 }));
     report('phone-volume', value >= 0 && value <= 1, `system volume ${value}`);
     nowPlayingCloses();

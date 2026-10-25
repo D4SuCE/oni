@@ -15,7 +15,7 @@ import { eqOutputLevel } from './player/eq.ts';
 import { pulseLevel, pulseTempo } from './player/pulse.ts';
 import { cx } from './ui/util.ts';
 import { deviceSync, disk, syncNow, useSync } from './sync/index.ts';
-import { elsewhereSync, leave, listen, look, publish, useElsewhere } from './sync/elsewhere.ts';
+import { disconnect, elsewhereSync, leave, listen, look, publish, useElsewhere } from './sync/elsewhere.ts';
 import { TuningPanel } from './components/Wave.tsx';
 import { audio, current, next, offline, playTracks, prev, restoreSession, setSleep, setVolume, toggle, usePlayer } from './player/player.ts';
 import { back, historyStep, init, navigate, toast, toggleLike, useApp } from './store.ts';
@@ -223,5 +223,5 @@ export function App() {
 
 // Handy for debugging and for the automated UI test.
 Object.assign(window, {
-  __wave: { offline, usePlayer, useApp, audio, api, navigate, playTracks, setSleep, toggleLike, eqOutputLevel, pulseLevel, pulseTempo, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, listen, useElsewhere, elsewhereSync } } },
+  __wave: { offline, usePlayer, useApp, audio, api, navigate, playTracks, setSleep, toggleLike, eqOutputLevel, pulseLevel, pulseTempo, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } } },
 });

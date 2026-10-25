@@ -25,6 +25,8 @@ export interface NowPlaying {
   duration: number;
   shuffle: boolean;
   repeat: string;
+  /** This device is the remote of that one: nothing plays here (it is not to be taken up or controlled). */
+  remoteOf?: string;
 }
 
 export interface NowFile extends NowPlaying {
@@ -103,8 +105,8 @@ export class PlayingSync {
   private test: boolean;
   /** The other devices' files as last read, by file name; `stamp`: Disk's mark of that version. */
   private theirs = new Map<string, { stamp: string; file: NowFile }>();
-  /** The presses to this device: files as last read, and the presses already acted on. */
-  private inbox = new Map<string, { stamp: string; at: number }>();
+  /** The presses to this device: files as last read (`from`: the remote's id), and the presses already acted on. */
+  private inbox = new Map<string, { stamp: string; at: number; from: string }>();
   private done = new Set<string>();
   /** This device's presses, per device it controls. */
   private outbox = new Map<string, CommandFile>();
@@ -175,9 +177,9 @@ export class PlayingSync {
 
   /**
    * One look at the folder: the other devices' files that changed are read, and the presses to
-   * this device that are new. `watched`: some device is this one's remote now.
+   * this device that are new. `watchers`: the devices that are this one's remote now.
    */
-  async poll(): Promise<{ changed: boolean; commands: Command[]; watched: boolean }> {
+  async poll(): Promise<{ changed: boolean; commands: Command[]; watchers: string[] }> {
     const listed = await this.disk.list();
     const stamp = (f: { modified: string; md5?: string }) => `${f.modified}|${f.md5 ?? ''}`;
     let changed = false;
@@ -228,11 +230,11 @@ export class PlayingSync {
         if (!known && this.now() - c.at > STALE_PRESS) continue;
         commands.push(c);
       }
-      this.inbox.set(f.name, { stamp: stamp(f), at: file.at });
+      this.inbox.set(f.name, { stamp: stamp(f), at: file.at, from: f.name.slice(mine.length, -'.json'.length) });
     }
     commands.sort((a, b) => a.at - b.at);
-    const watched = [...this.inbox.values()].some((x) => this.now() - x.at < WATCHED);
-    return { changed, commands, watched };
+    const watchers = [...this.inbox.values()].filter((x) => this.now() - x.at < WATCHED).map((x) => x.from);
+    return { changed, commands, watchers };
   }
 
   /** The other devices' files, the latest change first. */
@@ -272,6 +274,14 @@ export class PlayingSync {
     this.outbox.set(to, next);
     await this.disk.write(commandFileOf(to, this.device.id), JSON.stringify(next));
     return true;
+  }
+
+  /** Tells `to` this device does not look at it any more (it stops looking for presses often at once). */
+  async unwatch(to: string) {
+    const file = this.outbox.get(to);
+    if (!file) return;
+    file.at = 0;
+    await this.disk.write(commandFileOf(to, this.device.id), JSON.stringify(file));
   }
 
   /** Forgets the others (Disk disconnected). */

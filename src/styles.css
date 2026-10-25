@@ -3601,6 +3601,51 @@ kbd {
     flex: 1;
   }
 
+  /* Now Playing is the track's card: its name whole (the user, 25.10.2026: "Am I …" was cut by the
+     row of buttons beside it). The name and artists take the full width, up to two lines (a long
+     name, three in a smaller face), and the buttons go in a row under them. What that adds in height
+     comes off the cover, which stays square: it takes the room the rest leaves (grid row 1fr). */
+  html.ios .np-art {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
+    justify-items: center;
+  }
+  html.ios .np-cover {
+    width: auto;
+    max-width: 100%;
+    height: min(100%, calc(100vw - 44px));
+    align-self: center;
+  }
+  html.ios .np-meta {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-top: 22px;
+  }
+  html.ios .np-text h1 {
+    font-size: 26px;
+    line-height: 1.18;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  html.ios .np-text h1.long {
+    font-size: 21px;
+    -webkit-line-clamp: 3;
+  }
+  html.ios .np-artists {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  html.ios .np-actions {
+    justify-content: space-between;
+    margin: 0 -8px;
+  }
+
   /* The bar below: a touch taller, with previous back beside play and next. */
   html.ios .playerbar {
     padding: 10px 12px;

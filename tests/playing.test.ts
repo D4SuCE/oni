@@ -110,7 +110,7 @@ await test('a press reaches the target once, in order, even two in one second', 
   await phone.send('pc', 'seek', [12]);
   const got = await pc.poll();
   assert(got.commands.map((c) => c.fn).join() === 'next,seek' && got.commands[1].args[0] === 12, JSON.stringify(got.commands));
-  assert(got.watched, 'not watched');
+  assert(got.watchers.join() === 'phone', `watchers: ${got.watchers}`);
   assert((await pc.poll()).commands.length === 0, 'acted on twice');
   clock.t += 3_000;
   await phone.send('pc', 'toggle');
@@ -126,7 +126,7 @@ await test('presses left from long ago are not acted on when Oni opens', async (
   const pc = new PlayingSync(disk, { id: 'pc', platform: 'electron' }, () => clock.t);
   const got = await pc.poll();
   assert(got.commands.length === 0, `acted on: ${JSON.stringify(got.commands)}`);
-  assert(!got.watched, 'watched by a remote gone long ago');
+  assert(!got.watchers.length, 'watched by a remote gone long ago');
 });
 
 await test('a remote that looks on says so now and then, not on every look', async () => {
@@ -137,6 +137,27 @@ await test('a remote that looks on says so now and then, not on every look', asy
   assert(!(await phone.watch('pc')), 'written again at once');
   clock.t += 20_000;
   assert(await phone.watch('pc'), 'not renewed');
+});
+
+await test('a remote let go says so: the target stops being watched at once', async () => {
+  const { clock, pc, phone } = pair();
+  await phone.watch('pc');
+  assert((await pc.poll()).watchers.join() === 'phone', 'not watched');
+  clock.t += 1_000;
+  await phone.unwatch('pc');
+  assert(!(await pc.poll()).watchers.length, 'still watched');
+  // Back as its remote later: watched again.
+  clock.t += 1_000;
+  assert(await phone.watch('pc'), 'not written');
+  assert((await pc.poll()).watchers.join() === 'phone', 'not watched again');
+});
+
+await test("a remote's own file says it plays nothing and whose remote it is", async () => {
+  const { clock, pc, phone } = pair();
+  await phone.publish({ ...state(), playing: false, remoteOf: 'pc' }, clock.t);
+  await pc.poll();
+  const [f] = pc.others();
+  assert(f.remoteOf === 'pc' && !isLive(f, clock.t), JSON.stringify({ remoteOf: f.remoteOf, playing: f.playing }));
 });
 
 await test("a test run's device is seen by test runs only", async () => {
