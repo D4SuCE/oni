@@ -1498,7 +1498,7 @@ await step('another device in the player: its paused track taken up at its secon
   }
   const phoneId = `e2ephone${Date.now()}`;
   const ownId = await page.evaluate(() => window.__wave.sync.deviceSync.device.id);
-  const names = [`now-${phoneId}.json`, `cmd-${phoneId}-${ownId}.json`, `cmd-${ownId}-${phoneId}.json`, `now-${ownId}.json`];
+  const names = [`now-${phoneId}.json`, `cmd-${phoneId}-${ownId}.json`, `cmd-${ownId}-${phoneId}.json`, `now-${ownId}.json`, `now-${phoneId}b.json`];
   const write = (name, file) => page.evaluate(([n, t]) => window.__wave.sync.disk.write(n, t), [name, JSON.stringify(file)]);
   const read = (name) => page.evaluate((n) => window.__wave.sync.disk.read(n).then((t) => JSON.parse(t)), name).catch((e) => {
     throw new Error(`${name}: ${e.message.split('\n')[0]}`);
@@ -1571,15 +1571,17 @@ await step('another device in the player: its paused track taken up at its secon
 
     // 5. The phone's Oni not there for a while (its file not renewed): not offered as a remote (the
     // user, 25.10.2026: the PC's track shown on the phone with the PC off).
-    const listed = () => page.evaluate((id) => window.__wave.sync.elsewhere.useElsewhere.getState().devices.some((d) => d.device.id === id), phoneId);
-    if (!(await listed())) throw new Error('the phone, open, not listed');
-    await write(names[0], phone({ at: Date.now() - 200_000 }));
+    // (A second phone: a file older than one already read is not taken, so the first cannot be aged.)
+    const listed = (id) => page.evaluate((i) => window.__wave.sync.elsewhere.useElsewhere.getState().devices.some((d) => d.device.id === i), id);
+    if (!(await listed(phoneId))) throw new Error('the phone, open, not listed');
+    await write(names[4], phone({ device: { id: `${phoneId}b`, platform: 'ios' }, at: Date.now() - 200_000 }));
     await page.evaluate(() => window.__wave.sync.elsewhere.look());
-    if (await listed()) throw new Error('the phone, away, still listed');
+    if (await listed(`${phoneId}b`)) throw new Error('a phone away (its file not renewed) listed');
+    if (!(await listed(phoneId))) throw new Error('the open phone gone from the list');
   } finally {
     await page.evaluate((v) => window.__wave.setVolume(v), ownVolume);
     await page.evaluate(() => window.__wave.sync.elsewhere.leave('drop'));
-    await page.evaluate((list) => Promise.all(list.map((n) => window.__wave.sync.disk.remove(n))), names);
+    await page.evaluate((list) => Promise.all(list.map((n) => window.__wave.sync.disk.remove(n).catch(() => {}))), names);
   }
   const left = await page.evaluate(() => window.__wave.sync.disk.list());
   if (left.some((f) => names.includes(f.name))) throw new Error('files left on Disk');
