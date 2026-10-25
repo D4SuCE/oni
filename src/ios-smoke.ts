@@ -303,7 +303,7 @@ async function crossfade() {
     // The smart crossfade: the player finds where the music ends once the file is whole.
     const native = wave().audio as unknown as { musicEnd: number; duration: number };
     const found = await until(() => Number.isFinite(native.musicEnd), 30000);
-    report('music-end', Boolean(found) && native.musicEnd > native.duration - 31 && native.musicEnd <= native.duration + 0.5, `music ends at ${native.musicEnd?.toFixed?.(1)} of ${native.duration?.toFixed?.(1)} s`);
+    report('music-end', Boolean(found) && native.musicEnd > native.duration - 31 && native.musicEnd <= native.duration + 0.5, `music ends at ${native.musicEnd?.toFixed?.(1)} of ${native.duration?.toFixed?.(1)} s; ${JSON.stringify(await OniPlayer.state())}`);
   } finally {
     setCrossfade(0);
   }
