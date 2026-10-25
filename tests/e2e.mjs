@@ -1554,8 +1554,13 @@ await step("shared history: another device's plays come from Oni's folder on Yan
     const put = () => page.evaluate(([name, text]) => window.__wave.sync.disk.write(name, text), [phone, JSON.stringify(file)]);
     await put().catch(() => page.waitForTimeout(3000).then(put));
     await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
-    await page.click('[data-testid="sync-now"]');
-    await page.waitForFunction(() => !window.__wave.sync.useSync.getState().busy && window.__wave.sync.useSync.getState().at, null, { timeout: 60000 });
+    // A round may fail on Yandex's network now and then ("fetch failed"): pressed again, as one would.
+    for (let i = 0; i < 3; i++) {
+      await page.click('[data-testid="sync-now"]');
+      const done = await page.waitForFunction(() => !window.__wave.sync.useSync.getState().busy && window.__wave.sync.useSync.getState().at, null, { timeout: 30000 }).then(() => true, () => false);
+      if (done) break;
+    }
+    if (!(await page.evaluate(() => window.__wave.sync.useSync.getState().at))) throw new Error('three rounds of syncing did not go through');
     const devices = await page.locator('[data-testid="sync-devices"]').innerText();
     if (!/iPhone/.test(devices)) throw new Error(`devices: "${devices}"`);
     const listed = await page.evaluate(() => window.__wave.sync.disk.list());

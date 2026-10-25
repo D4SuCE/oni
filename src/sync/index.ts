@@ -12,6 +12,9 @@ import { DiskAuthError, YandexDisk } from './disk.ts';
 import { startElsewhere, stopElsewhere } from './elsewhere.ts';
 
 const EVERY = 5 * 60_000;
+/** After a round that failed (no network, Disk not answering), the next one this soon, not in five minutes. */
+const RETRY = 30_000;
+let retry: ReturnType<typeof setTimeout> | null = null;
 /** Back in view: the others are read again if it has been this long. */
 const REREAD = 60_000;
 
@@ -60,7 +63,10 @@ export function syncNow(): Promise<void> {
       if (e instanceof DiskAuthError) {
         stop();
         set({ connected: false, expired: true });
-      } else console.warn('[sync]', e); // no network and the like: the next round tries again
+      } else {
+        console.warn('[sync]', e); // no network and the like: tried again soon
+        if (!retry && !transport.testMode) retry = setTimeout(() => ((retry = null), void syncNow()), RETRY);
+      }
     } finally {
       set({ busy: false });
       running = null;
@@ -94,6 +100,8 @@ function stop() {
   stopElsewhere();
   if (timer) clearInterval(timer);
   timer = null;
+  if (retry) clearTimeout(retry);
+  retry = null;
   document.removeEventListener('visibilitychange', onVisibility);
 }
 
