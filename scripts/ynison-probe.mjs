@@ -1,4 +1,4 @@
-// Ynison, first look (ROADMAP, "Автопилот" 8): connect under the account, read what plays where
+// Ynison, first look (docs/history/roadmap-2026-10.md, "Автопилот" 8): connect under the account, read what plays where
 // (track, position, devices), and leave. Nothing is changed: the probe joins as a shadow device
 // (is_shadow, as the official desktop app does by default), never active, and its own state is
 // versions are random, as the official app makes them, with no time: older than anything the server keeps.
