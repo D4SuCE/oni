@@ -1572,7 +1572,12 @@ await step('another device in the player: its paused track taken up at its secon
 
     // 1. Paused there, changed later than here: taken up here, paused at the same second, no banner.
     await write(names[0], phone());
-    await page.evaluate(() => window.__wave.sync.elsewhere.look(true));
+    // Disk lists a file just written a little late at times: looked at again, as Oni does.
+    for (let i = 0; i < 8; i++) {
+      await page.evaluate(() => window.__wave.sync.elsewhere.look(true));
+      if (await page.evaluate((id) => { const s = window.__wave.usePlayer.getState(); return s.queue[s.index]?.id === id; }, queue[1].id)) break;
+      await page.waitForTimeout(1000);
+    }
     const taken = await page.evaluate(() => { const s = window.__wave.usePlayer.getState(); return { id: s.queue[s.index]?.id, position: s.position, playing: s.playing, title: s.source?.title }; });
     if (taken.id !== queue[1].id || Math.round(taken.position) !== 40 || taken.playing || taken.title !== 'e2e phone list') throw new Error(`taken up: ${JSON.stringify(taken)}`);
     if (await page.locator('[data-testid="playing-on"]').count()) throw new Error('a remote, not a take-over');
