@@ -2,7 +2,7 @@
 // fake Yandex Disk. Run: npm run test:playing
 import type { Track } from '../src/api/types.ts';
 import type { DiskLike } from '../src/sync/disk.ts';
-import { commandFileOf, isLive, LIVE, PlayingSync, positionOf, type NowPlaying } from '../src/sync/playing.ts';
+import { ALIVE, AWAY, commandFileOf, isLive, isThere, LIVE, PlayingSync, positionOf, type NowPlaying } from '../src/sync/playing.ts';
 
 let passed = 0;
 let failed = 0;
@@ -86,6 +86,24 @@ await test('the other device reads what plays, with the time going on while it p
   // Its own file is not among the others.
   await phone.publish(state({ playing: false }), clock.t);
   assert((await phone.poll()).changed === false && phone.others().length === 1, 'own file read');
+});
+
+await test('a device is there while its file is renewed, paused too; not renewed, it is away (the PC off)', async () => {
+  // The user, 25.10.2026: the phone showed the PC's track as a remote with the PC off.
+  const { clock, pc, phone } = pair();
+  await pc.publish(state({ playing: false }), clock.t);
+  await phone.poll();
+  assert(isThere(phone.others()[0], clock.t) && !isLive(phone.others()[0], clock.t), 'paused and open: not there');
+  // Renewed now and then while open and paused.
+  clock.t += ALIVE;
+  await pc.publish(state({ playing: false }), clock.t - ALIVE);
+  await phone.poll();
+  assert(isThere(phone.others()[0], clock.t + AWAY - 1), 'renewed: not there');
+  assert(!isThere(phone.others()[0], clock.t + AWAY + 1), 'not renewed: still there');
+  // Playing, not renewed for LIVE: closed while it played.
+  await pc.publish(state(), clock.t);
+  await phone.poll();
+  assert(!isThere(phone.others()[0], clock.t + LIVE + 1), 'playing, not renewed: still there');
 });
 
 await test('only a part of a long queue goes up, and its place in the whole is kept', async () => {

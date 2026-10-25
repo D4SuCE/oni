@@ -5,7 +5,7 @@
 import { Check, MonitorSmartphone } from 'lucide-react';
 import { artistNames } from '../api/yandex.ts';
 import { useT } from '../i18n.ts';
-import { control, deviceName, disconnect, leave, useElsewhere } from '../sync/elsewhere.ts';
+import { control, deviceName, disconnect, useElsewhere } from '../sync/elsewhere.ts';
 import { cx } from '../ui/util.ts';
 import { openMenu, type MenuItem } from './Menu.tsx';
 
@@ -15,13 +15,12 @@ export function DevicesButton({ size = 18 }: { size?: number }) {
   const controlling = useElsewhere((s) => s.controlling);
   if (!devices.length) return null;
   const e = t.elsewhere;
-  // While a remote: let go (the other plays on), or move the music here (the user, 25.10.2026: "Play
-  // here" alone was taken for "disconnect", and it paused the PC and played on the phone).
+  // While a remote: let go, the other plays on and this one has its own back (the user, 25.10.2026:
+  // one button, "Play here" as well was too many).
   const items = (): MenuItem[] => [
     ...(controlling
       ? [
           { label: e.disconnect(deviceName(controlling)), onClick: disconnect },
-          { label: e.playHere(deviceName(controlling)), onClick: () => leave('here') },
           { label: '', separator: true },
         ]
       : [{ label: e.here, icon: <Check size={16} /> }]),

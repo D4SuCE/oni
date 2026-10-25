@@ -1490,7 +1490,7 @@ await step("shared history: another device's plays come from Oni's folder on Yan
   if (left.some((f) => f.name === phone || f.name === own)) throw new Error('files left on Disk');
 });
 
-await step('another device in the player: its paused track taken up at its second; its playing one shown with the time going, Next pressed there; "Play here"; a press from it done here (all removed again)', async () => {
+await step('another device in the player: its paused track taken up at its second; its playing one shown with the time going, Next and the volume pressed there; "Disconnect" brings back what was here; its presses and volume done here (all removed again)', async () => {
   // The user, 24.10.2026: "continue on another device" and the remote, through Oni's folder on Disk.
   if (!(await page.evaluate(() => window.__wave.sync.useSync.getState().connected))) {
     console.log('       skipped: no YANDEX_DISK_TOKEN');
@@ -1503,6 +1503,7 @@ await step('another device in the player: its paused track taken up at its secon
   const read = (name) => page.evaluate((n) => window.__wave.sync.disk.read(n).then((t) => JSON.parse(t)), name).catch((e) => {
     throw new Error(`${name}: ${e.message.split('\n')[0]}`);
   });
+  const ownVolume = await page.evaluate(() => window.__wave.usePlayer.getState().volume);
   try {
     await page.evaluate(() => window.__wave.audio.pause());
     await page.waitForFunction(() => !window.__wave.usePlayer.getState().playing);
@@ -1541,21 +1542,42 @@ await step('another device in the player: its paused track taken up at its secon
     if (!sent) throw new Error('the press never went up');
     if (sent.commands.at(-1)?.fn !== 'next') throw new Error(`sent: ${JSON.stringify(sent.commands)}`);
 
-    // 3. "Play here": it plays here from where it was there.
-    await page.evaluate(() => window.__wave.sync.elsewhere.leave('here'));
-    await waitPlaying(1.5);
-    const here = await page.evaluate(() => ({ id: window.__wave.usePlayer.getState().queue[window.__wave.usePlayer.getState().index]?.id, at: window.__wave.audio.currentTime }));
-    if (here.id !== queue[2].id) throw new Error(`plays here: ${JSON.stringify(here)}`);
+    // The volume goes there too, and this one's own stays (the user, 25.10.2026: "the remote in full").
+    await page.keyboard.press('Control+ArrowDown');
+    let turned = null;
+    for (let i = 0; i < 15 && !turned; i++) turned = await read(names[1]).then((f) => f.commands.find((c) => c.fn === 'volume'), () => null) ?? (await page.waitForTimeout(1000), null);
+    if (!(Math.abs(turned?.args[0] - Math.max(0, ownVolume - 0.05)) < 0.001)) throw new Error(`volume sent: ${JSON.stringify(turned)} (own ${ownVolume})`);
+
+    // 3. "Disconnect": not a remote; what was here before comes back as it was (the phone's paused track
+    // taken up, at 40 s), paused; and this one's own volume (the user: My Wave was gone after it).
+    await page.evaluate(() => window.__wave.sync.elsewhere.disconnect());
+    const back = await page.evaluate(() => { const s = window.__wave.usePlayer.getState(); return { id: s.queue[s.index]?.id, position: s.position, playing: s.playing, title: s.source?.title, volume: s.volume }; });
+    if (back.id !== queue[1].id || Math.round(back.position) !== 40 || back.playing || back.title !== 'e2e phone list' || back.volume !== ownVolume) throw new Error(`back: ${JSON.stringify(back)}`);
     if (await page.locator('[data-testid="playing-on"]').count()) throw new Error('still a remote');
 
-    // 4. The phone as this one's remote: its Pause is done here.
-    await write(names[2], { v: 1, from: { id: phoneId, platform: 'ios' }, at: Date.now(), commands: [{ id: `${phoneId}.1`, at: Date.now(), fn: 'pause', args: [] }] });
+    // 4. The phone as this one's remote: its Play and its volume are done here, then its Pause.
+    const at = Date.now();
+    await write(names[2], { v: 1, from: { id: phoneId, platform: 'ios' }, at, commands: [{ id: `${phoneId}.1`, at, fn: 'play', args: [] }, { id: `${phoneId}.2`, at: at + 1, fn: 'volume', args: [0.3] }] });
+    await page.evaluate(() => window.__wave.sync.elsewhere.look());
+    await waitPlaying(0.5);
+    const loud = await page.evaluate(() => window.__wave.usePlayer.getState().volume);
+    if (loud !== 0.3) throw new Error(`volume from the phone: ${loud}`);
+    await write(names[2], { v: 1, from: { id: phoneId, platform: 'ios' }, at: Date.now(), commands: [{ id: `${phoneId}.3`, at: Date.now(), fn: 'pause', args: [] }] });
     await page.evaluate(() => window.__wave.sync.elsewhere.look());
     await page.waitForFunction(() => window.__wave.audio.paused, null, { timeout: 5000 });
     await page.evaluate(() => window.__wave.sync.elsewhere.publish());
     const mine = await read(names[3]);
-    if (mine.playing || mine.queue[mine.index]?.id !== queue[2].id || !mine.test) throw new Error(`own file: playing ${mine.playing}, ${mine.queue[mine.index]?.id}, test ${mine.test}`);
+    if (mine.playing || mine.queue[mine.index]?.id !== queue[1].id || mine.volume !== 0.3 || !mine.test) throw new Error(`own file: playing ${mine.playing}, ${mine.queue[mine.index]?.id}, volume ${mine.volume}, test ${mine.test}`);
+
+    // 5. The phone's Oni not there for a while (its file not renewed): not offered as a remote (the
+    // user, 25.10.2026: the PC's track shown on the phone with the PC off).
+    const listed = () => page.evaluate((id) => window.__wave.sync.elsewhere.useElsewhere.getState().devices.some((d) => d.device.id === id), phoneId);
+    if (!(await listed())) throw new Error('the phone, open, not listed');
+    await write(names[0], phone({ at: Date.now() - 200_000 }));
+    await page.evaluate(() => window.__wave.sync.elsewhere.look());
+    if (await listed()) throw new Error('the phone, away, still listed');
   } finally {
+    await page.evaluate((v) => window.__wave.setVolume(v), ownVolume);
     await page.evaluate(() => window.__wave.sync.elsewhere.leave('drop'));
     await page.evaluate((list) => Promise.all(list.map((n) => window.__wave.sync.disk.remove(n))), names);
   }

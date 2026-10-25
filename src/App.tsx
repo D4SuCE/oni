@@ -223,5 +223,5 @@ export function App() {
 
 // Handy for debugging and for the automated UI test.
 Object.assign(window, {
-  __wave: { offline, usePlayer, useApp, audio, api, navigate, playTracks, setSleep, toggleLike, eqOutputLevel, pulseLevel, pulseTempo, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } } },
+  __wave: { offline, usePlayer, useApp, audio, api, navigate, playTracks, setSleep, setVolume, toggleLike, eqOutputLevel, pulseLevel, pulseTempo, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } } },
 });

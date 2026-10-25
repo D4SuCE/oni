@@ -14,6 +14,7 @@ import { DevicesButton, PlayingOn } from './Devices.tsx';
 import { LikeButton, SeekBar, SleepButton, Transport, VolumeControl } from './PlayerBar.tsx';
 import { usePhoneSound } from '../player/phoneSound.ts';
 import { useEq } from '../player/eq.ts';
+import { useElsewhere } from '../sync/elsewhere.ts';
 import { isIos } from '../ui/platform.ts';
 import { BackgroundVideo, LiveCover, useCoverVideo } from './LiveCover.tsx';
 import { openMenu } from './Menu.tsx';
@@ -186,6 +187,7 @@ export function NowPlaying() {
   const sheet = useRef<HTMLDivElement>(null);
   useSwipeDown(sheet, close);
   const volumeSlider = usePhoneSound((s) => s.volumeSlider);
+  const remote = useElsewhere((s) => Boolean(s.controlling));
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
     window.addEventListener('keydown', onKey);
@@ -247,7 +249,8 @@ export function NowPlaying() {
               </div>
               <SeekBar className="np-seek" />
               <Transport big />
-              {isIos && volumeSlider && <VolumeControl className="np-volume" />}
+              {/* A remote always has it: the volume there (the iPhone's buttons are the phone's own). */}
+              {isIos && (volumeSlider || remote) && <VolumeControl className="np-volume" />}
             </>
           )}
         </div>

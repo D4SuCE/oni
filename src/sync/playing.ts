@@ -25,6 +25,8 @@ export interface NowPlaying {
   duration: number;
   shuffle: boolean;
   repeat: string;
+  /** 0–1 (the iPhone's: the phone's own); a remote moves it (older files have none). */
+  volume?: number;
   /** This device is the remote of that one: nothing plays here (it is not to be taken up or controlled). */
   remoteOf?: string;
 }
@@ -40,7 +42,7 @@ export interface NowFile extends NowPlaying {
   test?: boolean;
 }
 
-export type CommandName = 'toggle' | 'play' | 'pause' | 'next' | 'prev' | 'seek' | 'playAt' | 'playNext' | 'enqueue' | 'moveInQueue' | 'removeAt' | 'cycleRepeat' | 'toggleShuffle';
+export type CommandName = 'toggle' | 'play' | 'pause' | 'next' | 'prev' | 'seek' | 'volume' | 'playAt' | 'playNext' | 'enqueue' | 'moveInQueue' | 'removeAt' | 'cycleRepeat' | 'toggleShuffle';
 
 export interface Command {
   id: string;
@@ -78,6 +80,11 @@ export interface LanFile {
 /** A playing device renews its file this often; not renewed for LIVE, it has stopped (closed, no network). */
 export const RENEW = 30_000;
 export const LIVE = 75_000;
+/** An open Oni renews its file this often even paused; not renewed for AWAY, it is not there (closed, the
+ * PC off, the phone's Oni asleep): not offered as a remote (the user, 25.10.2026, saw the PC's track
+ * from the phone with the PC off). */
+export const ALIVE = 60_000;
+export const AWAY = 150_000;
 /** A remote says it is still watching this often; a target not told for WATCHED is not watched any more. */
 export const STILL_WATCHING = 20_000;
 export const WATCHED = 60_000;
@@ -97,6 +104,9 @@ export function positionOf(f: NowPlaying & { at: number }, now: number) {
 
 /** Playing there now: the file says so and is renewed. */
 export const isLive = (f: NowFile, now: number) => f.playing && now - f.at < LIVE;
+
+/** Oni is open there: the file is renewed (playing, or paused and open). */
+export const isThere = (f: NowFile, now: number) => now - f.at < (f.playing ? LIVE : AWAY);
 
 export class PlayingSync {
   private disk: DiskLike;

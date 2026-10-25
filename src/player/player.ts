@@ -881,6 +881,8 @@ export function seek(seconds: number) {
 export function setVolume(volume: number) {
   const v = Math.max(0, Math.min(1, volume));
   set({ volume: v });
+  // A remote: the volume of the device controlled (this one's own stays as it is).
+  if (elsewhere) return elsewhere.send('volume', [v]);
   // The iPhone: the phone's own volume (its buttons move it too); see volume.ts.
   if (isIos) import('./volume.ts').then((m) => m.OniVolume.set({ value: v }).catch(() => {}));
   else {
@@ -1140,7 +1142,8 @@ document.addEventListener('visibilitychange', () => !document.hidden && get().so
 
 // That alone did not change the iPhone's lock screen: there a native plugin runs it (remote.ts).
 if (isIos) import('./remote.ts').then((m) => m.connectRemote());
-if (isIos) import('./volume.ts').then((m) => m.followSystemVolume((volume) => set({ volume })));
+// A remote shows the other device's volume instead.
+if (isIos) import('./volume.ts').then((m) => m.followSystemVolume((volume) => !elsewhere && set({ volume })));
 
 // -------------------------------------------------------------- persistence
 
@@ -1227,17 +1230,23 @@ export function controlElsewhere(e: Elsewhere | null) {
     stale = true;
     unshuffled = null;
   }
-  // The repeat shown was the other device's: this one's own again.
-  if (!e && elsewhere) set({ repeat: loadJson<Prefs>('player.prefs', prefs).repeat ?? 'off', playing: false });
+  // The repeat and the volume shown were the other device's: this one's own again.
+  if (!e && elsewhere) {
+    const own = loadJson<Prefs>('player.prefs', prefs);
+    set({ repeat: own.repeat ?? 'off', playing: false, ...(isIos ? {} : { volume: own.volume ?? prefs.volume }) });
+    if (isIos) import('./volume.ts').then((m) => m.OniVolume.get().then(({ value }) => !elsewhere && set({ volume: value })).catch(() => {}));
+  }
   elsewhere = e;
 }
 
 /** What plays on the device this one is the remote of, shown as if it played here. */
-export function mirror(s: { queue: Track[]; index: number; source: Source; playing: boolean; position: number; duration: number; shuffle: boolean; repeat: Repeat }) {
+export function mirror(s: { queue: Track[]; index: number; source: Source; playing: boolean; position: number; duration: number; shuffle: boolean; repeat: Repeat; volume?: number }) {
   if (!elsewhere) return;
   const t = s.queue[s.index];
   if (t && t.id !== current()?.id) updateMediaSession(t);
-  set({ ...s, loading: false, error: null, stream: null });
+  // An older Oni there says no volume: the slider stays where it is.
+  const { volume, ...rest } = s;
+  set({ ...rest, ...(volume === undefined ? {} : { volume }), loading: false, error: null, stream: null });
 }
 
 /**

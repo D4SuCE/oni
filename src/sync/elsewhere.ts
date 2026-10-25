@@ -23,6 +23,7 @@ import {
   prev,
   removeAt,
   seek,
+  setVolume,
   takeOver,
   toggle,
   toggleShuffle,
@@ -39,7 +40,7 @@ import { isIos } from '../ui/platform.ts';
 import type { Device } from './devices.ts';
 import { DiskAuthError, type DiskLike } from './disk.ts';
 import { Lan } from './lan.ts';
-import { isLive, PlayingSync, positionOf, RENEW, type Command, type CommandName, type NowFile, type NowPlaying } from './playing.ts';
+import { ALIVE, isLive, isThere, PlayingSync, positionOf, RENEW, type Command, type CommandName, type NowFile, type NowPlaying } from './playing.ts';
 
 export interface OtherDevice {
   device: Device;
@@ -97,6 +98,11 @@ let publishedAt = 0;
 let publishTimer: ReturnType<typeof setTimeout> | null = null;
 /** The link on the home network (made once: it listens to the shell for good). */
 let lan: Lan | null = null;
+/** What played here before this one became a remote: back to it, paused, once let go (the user,
+ * 25.10.2026: My Wave with his genres, the PC picked and let go, and the PC's track stayed here). */
+let own: NowPlaying | null = null;
+/** That is being put back: not a change of the user's (another device would take it up). */
+let restoring = false;
 
 /** Disk connected (sync/index.ts): the other devices are looked at, and this one's playing goes up. */
 export function startElsewhere(disk: DiskLike, device: Device) {
@@ -170,7 +176,8 @@ export async function look(around = false) {
     for (const c of commands) run(c);
     // Done, or nothing to do: the remote sees the answer either way (it takes no answer for "gone").
     if (commands.length) publishSoon(300);
-    if (changed) showDevices();
+    // Every look: a device not heard of for a while goes from the list though its file stays.
+    showDevices(changed);
     if (target) follow();
     // The phone links to the PCs that listen (only tried again for a newer file, or after a while).
     for (const f of sync.lanFiles()) void lan?.connect(sync.device, f);
@@ -178,7 +185,8 @@ export async function look(around = false) {
       lookAround = false;
       takeUp();
     }
-    if (usePlayer.getState().playing && !isElsewhere() && Date.now() - publishedAt > RENEW) await publish();
+    // Renewed while it plays, and now and then while open and paused: the others see it is there.
+    if (!isElsewhere() && Date.now() - publishedAt > (usePlayer.getState().playing ? RENEW : ALIVE)) await publish();
   } catch (e) {
     if (e instanceof DiskAuthError) return stopElsewhere();
     console.warn('[now]', e); // no network and the like: the next look tries again
@@ -188,10 +196,14 @@ export async function look(around = false) {
   }
 }
 
-function showDevices() {
+/** The devices where Oni is open (or linked on the home network) with what plays there. */
+function showDevices(changed = true) {
   const now = Date.now();
   const others = sync!.others();
-  set({ devices: others.map((f) => ({ device: f.device, live: isLive(f, now), track: f.queue[f.index], remoteOf: f.remoteOf })) });
+  const there = others.filter((f) => isThere(f, now) || lan?.isOpen(f.device.id));
+  const devices = there.map((f) => ({ device: f.device, live: isLive(f, now), track: f.queue[f.index], remoteOf: f.remoteOf }));
+  const was = useElsewhere.getState().devices;
+  if (changed || devices.map((d) => d.device.id).join() !== was.map((d) => d.device.id).join()) set({ devices });
   // The device let go has stopped: played again, it may be taken up as before.
   if (declined && !others.some((f) => f.device.id === declined && isLive(f, now))) declined = null;
   showRemotes();
@@ -246,6 +258,8 @@ export function control(device: Device) {
   const f = sync.others().find((x) => x.device.id === device.id);
   if (!f || f.remoteOf) return;
   if (declined === device.id) declined = null;
+  // Picking another device while a remote: what played here first is what comes back.
+  if (!isElsewhere()) own = nowPlaying();
   // Said first, while what plays here is still known: else the others go on seeing it play here.
   becomeRemote(device);
   controlElsewhere({ send, leave: () => leave('drop') });
@@ -267,28 +281,37 @@ function becomeRemote(target: Device) {
 }
 
 /**
- * This device plays its own again. What played there: `here` goes on here from where it was, and
- * stops there ("Play here"); `keep` stays here paused, as if taken over, and plays on there; `drop`
- * is let go (something else is started here).
+ * This device is no remote any more; the other one goes on as it was. `keep`: what played here
+ * before comes back, paused, as it was (with nothing of its own, the other's track, paused); `drop`:
+ * something else is started here. A single "Disconnect" (the user, 25.10.2026: "Play here" as well
+ * was one button too many).
  */
-export function leave(how: 'here' | 'keep' | 'drop') {
+export function leave(how: 'keep' | 'drop') {
   const target = useElsewhere.getState().controlling;
   if (!target) return;
   if (ticker) clearInterval(ticker);
   ticker = null;
   const last = view;
   view = null;
+  const mine = own;
+  own = null;
   set({ controlling: null });
   controlElsewhere(null);
   const s = sync;
-  if (s) {
-    const pause = how === 'here' && last?.playing;
-    if (pause) lan?.send(target.id, JSON.stringify({ t: 'cmd', to: target.id, command: s.press(target.id, 'pause') }));
-    // The press, then "not watching" (in this order: the file written last is the one that stays).
-    void (pause ? s.flush(target.id) : Promise.resolve()).then(() => s.unwatch(target.id)).catch((e) => console.warn('[now]', e));
+  if (s) void s.unwatch(target.id).catch((e) => console.warn('[now]', e));
+  if (how === 'drop') return;
+  if (mine?.queue[mine.index]) return restore(mine);
+  if (last?.queue[last.index]) take(last, false);
+}
+
+/** What played here before it became a remote, back as it was, paused; no change of the user's. */
+function restore(mine: NowPlaying) {
+  restoring = true;
+  try {
+    takeOver({ queue: mine.queue, index: mine.index, title: mine.title, label: mine.label as ListLabel | undefined, wave: mine.wave as Source | undefined }, Math.floor(mine.position), false);
+  } finally {
+    restoring = false;
   }
-  if (!last?.queue[last.index] || how === 'drop') return;
-  take(last, how === 'here');
 }
 
 /** "Disconnect": this device is no remote any more, and the other plays on. It is not made that one's
@@ -311,10 +334,10 @@ function follow() {
     view = f;
     return leave('keep');
   }
-  // Closed while it played (its file not renewed), or a press not followed: it is not there now.
-  const playingGone = f.playing && !isLive(f, now);
+  // Closed or off (its file not renewed), or a press not followed: it is not there now.
+  const gone = !isThere(f, now) && !lan?.isOpen(f.device.id);
   const deaf = sentAt && now - sentAt > NO_ANSWER && f.at < sentAt;
-  if (playingGone || deaf) {
+  if (gone || deaf) {
     toast(tr().elsewhere.gone(deviceName(f.device)));
     view = { ...f, playing: false, position: positionOf(view ?? f, now) };
     return leave('keep');
@@ -343,6 +366,7 @@ function show() {
     duration: v.duration || (v.queue[v.index]?.durationMs ?? 0) / 1000,
     shuffle: v.shuffle,
     repeat: (v.repeat as Repeat) || 'off',
+    volume: v.volume,
   });
 }
 
@@ -366,6 +390,7 @@ function send(fn: CommandName, args: unknown[]) {
     view = { ...v, index: back ? v.index - 1 : v.index, position: 0, at: now, duration: back ? (v.queue[v.index - 1].durationMs ?? 0) / 1000 : v.duration };
   }
   if (fn === 'seek') view = { ...v, position: Number(args[0]) || 0, at: now };
+  if (fn === 'volume') view = { ...v, volume: Number(args[0]) };
   if (fn === 'playAt') {
     const i = Number(args[0]);
     view = i === v.index ? { ...v, playing: !v.playing, position: at, at: now } : { ...v, index: i, position: 0, playing: true, at: now, duration: (v.queue[i]?.durationMs ?? 0) / 1000 };
@@ -429,6 +454,8 @@ function run(c: Command) {
       return prev();
     case 'seek':
       return seek(Number(a));
+    case 'volume':
+      return void (Number.isFinite(Number(a)) && setVolume(Number(a)));
     case 'playAt': {
       const i = place(a, b);
       return void (i >= 0 && playAt(i));
@@ -477,6 +504,7 @@ function nowPlaying(): NowPlaying | null {
     duration: s.duration,
     shuffle: s.shuffle,
     repeat: s.repeat,
+    volume: s.volume,
   };
 }
 
@@ -507,13 +535,13 @@ usePlayer.subscribe((s, p) => {
   const sought = track === p.queue[p.index]?.id && Math.abs(s.position - p.position) > 2.5;
   if (track !== p.queue[p.index]?.id || s.playing !== p.playing || sought) {
     // Only what the user does counts as a change: a track opening (loading) is not a pause.
-    if (track) {
+    if (track && !restoring) {
       changedAt = Date.now();
       storage.setItem('now.changed', String(changedAt));
     }
     tell();
     publishSoon(s.playing !== p.playing || sought ? 300 : 600);
-  } else if (s.queue.length !== p.queue.length || s.shuffle !== p.shuffle || s.repeat !== p.repeat) {
+  } else if (s.queue.length !== p.queue.length || s.shuffle !== p.shuffle || s.repeat !== p.repeat || s.volume !== p.volume) {
     tell();
     publishSoon(2000);
   }
