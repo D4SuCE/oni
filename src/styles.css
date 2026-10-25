@@ -3807,6 +3807,17 @@ html.ios .q-row .icon-btn {
 .q-sheet .queue {
   overflow: visible;
 }
+/* The lyrics: the sheet's full height, the line sung kept in the middle as it scrolls. */
+.lyrics-sheet {
+  height: 78vh;
+}
+.lyrics-sheet .q-sheet-list {
+  flex: 1;
+}
+.q-sheet .lyrics {
+  overflow: visible;
+  max-height: none;
+}
 
 /* iPhone: no magnifier over the finger on a double tap (the user: "on almost any page"). The page
    already said user-select: none, but text that may be selected (lyrics, track details) and iOS's

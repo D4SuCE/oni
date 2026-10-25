@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { Ban, ChevronDown, GripVertical, ListMusic, MoreHorizontal, SlidersVertical, X } from 'lucide-react';
+import { Ban, ChevronDown, GripVertical, ListMusic, MicVocal, MoreHorizontal, SlidersVertical, X } from 'lucide-react';
 import { api } from '../api/client.ts';
 import type { Track } from '../api/types.ts';
 import { trackCover } from '../api/yandex.ts';
@@ -179,8 +179,8 @@ export function NowPlaying() {
   // The equalizer's button is red while it is on, as in the desktop's player bar (the user).
   const eqOn = useEq((s) => s.enabled);
   const [picked, setTab] = useState<'queue' | 'lyrics' | 'similar'>('queue');
-  // The iPhone has no room for the queue beside the cover: it opens as a sheet.
-  const [queueOpen, setQueueOpen] = useState(false);
+  // The iPhone has no room for the queue and the lyrics beside the cover: they open as a sheet.
+  const [sheetOpen, setSheet] = useState<'queue' | 'lyrics' | null>(null);
   const video = useCoverVideo(track);
   const t = useT();
   const close = useCallback(() => useApp.setState({ nowPlayingOpen: false }), []);
@@ -237,8 +237,14 @@ export function NowPlaying() {
                       <SlidersVertical size={21} />
                     </button>
                   )}
+                  {/* The lyrics on the iPhone too (the user, 25.10.2026: "is there a page with the lyrics?"). */}
                   {isIos && (
-                    <button className="icon-btn" onClick={() => setQueueOpen(true)} title={t.player.queue} data-testid="np-queue">
+                    <button className="icon-btn" onClick={() => setSheet('lyrics')} disabled={!hasLyrics} title={hasLyrics ? t.nowPlaying.lyrics : t.nowPlaying.lyricsMissing} data-testid="np-lyrics">
+                      <MicVocal size={21} />
+                    </button>
+                  )}
+                  {isIos && (
+                    <button className="icon-btn" onClick={() => setSheet('queue')} title={t.player.queue} data-testid="np-queue">
                       <ListMusic size={21} />
                     </button>
                   )}
@@ -268,18 +274,16 @@ export function NowPlaying() {
           </div>
           {tab === 'queue' || !track ? <Queue /> : tab === 'lyrics' ? <Lyrics trackId={track.id} /> : <Similar track={track} />}
         </aside>
-        {queueOpen && (
-          <div className="q-sheet-backdrop" onClick={() => setQueueOpen(false)}>
-            <div className="q-sheet glass" onClick={(e) => e.stopPropagation()} data-testid="queue-sheet">
+        {sheetOpen && (
+          <div className="q-sheet-backdrop" onClick={() => setSheet(null)}>
+            <div className={cx('q-sheet glass', sheetOpen === 'lyrics' && 'lyrics-sheet')} onClick={(e) => e.stopPropagation()} data-testid={`${sheetOpen}-sheet`}>
               <div className="q-sheet-head">
-                <h3>{t.player.queue}</h3>
-                <button className="icon-btn" onClick={() => setQueueOpen(false)} title={t.common.close}>
+                <h3>{sheetOpen === 'queue' ? t.player.queue : t.nowPlaying.lyrics}</h3>
+                <button className="icon-btn" onClick={() => setSheet(null)} title={t.common.close}>
                   <X size={20} />
                 </button>
               </div>
-              <div className="q-sheet-list">
-                <Queue />
-              </div>
+              <div className="q-sheet-list">{sheetOpen === 'queue' ? <Queue /> : track && hasLyrics ? <Lyrics trackId={track.id} /> : <div className="muted pad">{t.nowPlaying.noLyrics}</div>}</div>
             </div>
           </div>
         )}
