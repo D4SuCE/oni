@@ -747,7 +747,7 @@ function clearWavePicks() {
   saveTuning(PLAIN_WAVE);
 }
 
-export function saveTuning(patch: Partial<WaveTuning>) {
+function saveTuning(patch: Partial<WaveTuning>) {
   const before = get().tuning;
   const tuning = { ...before, ...patch };
   set({ tuning });

@@ -62,9 +62,9 @@ export interface CommandFile {
 const NOW = 'now-';
 const CMD = 'cmd-';
 const LAN = 'lan-';
-export const nowFileOf = (id: string) => `${NOW}${id}.json`;
+const nowFileOf = (id: string) => `${NOW}${id}.json`;
 export const commandFileOf = (to: string, from: string) => `${CMD}${to}-${from}.json`;
-export const lanFileOf = (id: string) => `${LAN}${id}.json`;
+const lanFileOf = (id: string) => `${LAN}${id}.json`;
 
 /** Where a PC listens on the home network (sync/lan.ts): its file, with the key a connection says. */
 export interface LanFile {
@@ -86,8 +86,8 @@ export const LIVE = 75_000;
 export const ALIVE = 60_000;
 export const AWAY = 150_000;
 /** A remote says it is still watching this often; a target not told for WATCHED is not watched any more. */
-export const STILL_WATCHING = 20_000;
-export const WATCHED = 60_000;
+const STILL_WATCHING = 20_000;
+const WATCHED = 60_000;
 /** Presses are kept in the file this long (the target may look only every few seconds). */
 const KEEP = 2 * 60_000;
 /** A press older than this, found when a file is first read, is not acted on (Oni was closed meanwhile). */

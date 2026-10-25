@@ -5,11 +5,11 @@
 // seconds before it starts.
 
 /** Quieter than this is silence: -50 dBFS (a fade-out has gone, a rest in the music has not). */
-export const SILENT = 10 ** (-50 / 20);
+const SILENT = 10 ** (-50 / 20);
 /** Silence at a track's start shorter than this is left as it is (an attack's breath, not a gap). */
-export const MIN_LEAD = 0.25;
+const MIN_LEAD = 0.25;
 /** A track's start is looked at this far at most. */
-export const MAX_LEAD = 8;
+const MAX_LEAD = 8;
 
 /** Seconds into the samples where the first sound is (none: their whole length). */
 export function firstAudible(channels: Float32Array[], rate: number): number {

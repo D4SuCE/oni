@@ -6,7 +6,7 @@ import { transport } from '../api/client.ts';
 import { tr } from '../i18n.ts';
 import { toast } from '../store.ts';
 
-export function trackUrl(t: Track) {
+function trackUrl(t: Track) {
   const album = t.albums?.[0]?.id;
   return album ? `https://music.yandex.ru/album/${album}/track/${t.id}` : `https://music.yandex.ru/track/${t.id}`;
 }

@@ -28,7 +28,7 @@ const RELEASE = /remaster|mono|stereo|radio edit|single version|album version|or
  * on, songs heard three times came again). One key per artist, so a featured artist listed or not
  * still matches. None for a remix or a live take: that is a song of its own.
  */
-export function songKeys(t: Track): string[] {
+function songKeys(t: Track): string[] {
   if (t.version && !RELEASE.test(t.version)) return [];
   const title = t.title
     .toLowerCase()

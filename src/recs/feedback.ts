@@ -43,11 +43,11 @@ export interface SkippedEntry {
 
 const KEY = 'recs.feedback.v1';
 /** Two skips in a row demote an artist… */
-export const DEMOTE_AFTER = 2;
+const DEMOTE_AFTER = 2;
 /** …for this long. */
-export const DEMOTE_FOR = 30 * DAY;
+const DEMOTE_FOR = 30 * DAY;
 /** A track skipped twice in its first 30 s and never heard is left out this long (the user's choice). */
-export const SKIPPED_FOR = 182 * DAY;
+const SKIPPED_FOR = 182 * DAY;
 
 export class RecsFeedback {
   private hidden: Set<string>;

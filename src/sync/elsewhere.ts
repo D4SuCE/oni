@@ -552,8 +552,6 @@ usePlayer.subscribe((s, p) => {
 
 /** For the automated tests (window.__wave). */
 export const elsewhereSync = () => sync;
-export const elsewhereLan = () => lan;
-
 /** A device's name in the interface language ("PC", "iPhone"). */
 export function deviceName(d: Device) {
   return tr().sync.deviceName(d.platform);

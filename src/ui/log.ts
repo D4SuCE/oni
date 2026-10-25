@@ -1,6 +1,6 @@
 // Errors go to the console and, in Electron, to userData/logs/wave.log.
 
-export function errorDetails(e: unknown) {
+function errorDetails(e: unknown) {
   if (e instanceof Error) return e.stack || `${e.name}: ${e.message}`;
   return typeof e === 'string' ? e : JSON.stringify(e);
 }

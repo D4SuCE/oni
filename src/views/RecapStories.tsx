@@ -325,7 +325,7 @@ function fit(ctx: CanvasRenderingContext2D, text: string, width: number) {
 }
 
 /** The summary as a 1080×1920 picture (a story's size), in Oni's colors and faces. */
-export async function drawSummary(recap: Recap, period: string, genre: string, labels: { title: (p: string) => string; minutes: string; artist: string; track: string; genre: string }, lang: string) {
+async function drawSummary(recap: Recap, period: string, genre: string, labels: { title: (p: string) => string; minutes: string; artist: string; track: string; genre: string }, lang: string) {
   await document.fonts?.ready;
   const W = 1080;
   const H = 1920;

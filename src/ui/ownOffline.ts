@@ -18,7 +18,7 @@ const AT_KEY = 'downloads.autoOwn.at';
 /** Looked at this often at most (a new On Repeat comes with the mixes, new likes all day). */
 const EVERY = 6 * 60 * 60 * 1000;
 /** The latest likes kept (Liked's own Download is for all of them). */
-export const LATEST_LIKES = 30;
+const LATEST_LIKES = 30;
 
 function readOn(): boolean {
   try {
@@ -65,7 +65,7 @@ export async function ownToKeep(): Promise<Track[]> {
 }
 
 /** On Repeat and the latest likes not downloaded yet, downloaded; `now`: whenever it was done last. */
-export async function keepOwnOffline(now = false) {
+async function keepOwnOffline(now = false) {
   const app = useApp.getState();
   // A test run downloads only when it says so (`now`), not by itself.
   if (!offline || running || !enabled() || app.offline || !app.libraryReady || (transport.testMode && !now)) return;

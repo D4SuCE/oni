@@ -50,7 +50,7 @@ function keep(id: string, entry: Entry) {
 }
 
 /** Yandex's lyrics are there (an upload Yandex has found: the catalog track's). */
-export const yandexHas = (t: Track) => {
+const yandexHas = (t: Track) => {
   const s = catalogTrack(t) ?? t;
   return Boolean(s.lyricsInfo?.hasAvailableSyncLyrics || s.lyricsInfo?.hasAvailableTextLyrics);
 };

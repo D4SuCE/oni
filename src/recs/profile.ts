@@ -29,7 +29,7 @@ export interface Profile {
 }
 
 /** Listening counts for half as much after this many days. */
-export const HALF_LIFE_DAYS = 30;
+const HALF_LIFE_DAYS = 30;
 const LIKE_WEIGHT = 3;
 const PLAY_WEIGHT = 1;
 const SKIP_WEIGHT = 2;
@@ -74,11 +74,4 @@ export function buildProfile(input: TasteInput, tree: GenreTree): Profile {
     }
   }
   return { tracks, artists, genres };
-}
-
-export function topArtists(profile: Profile, n: number) {
-  return [...profile.artists.entries()]
-    .sort((a, b) => b[1].weight - a[1].weight)
-    .slice(0, n)
-    .map(([id, a]) => ({ id, name: a.name, weight: a.weight }));
 }

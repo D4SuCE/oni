@@ -19,7 +19,7 @@ const HINT_FOR = 1500;
 let hint: { el: HTMLElement; timer?: ReturnType<typeof setTimeout> } | null = null;
 
 /** What an icon-only button does, as its tooltip says; null for a button with words on it. */
-export function buttonHint(target: Element): { button: Element; text: string } | null {
+function buttonHint(target: Element): { button: Element; text: string } | null {
   const button = target.closest('button, [role="button"]');
   if (!button || button.closest('.menu') || button.textContent?.trim()) return null;
   const text = (button.getAttribute('aria-label') || button.getAttribute('title') || '').trim();

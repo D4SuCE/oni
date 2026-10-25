@@ -1,6 +1,5 @@
 // The watch on Yandex Music (asked by the user, 23.10.2026): Yandex publishes no changelog of its
-// API, and on 21.10 it quietly stopped counting /play-audio. Once a day (scripts/ym-watch.ps1, from
-// the Windows Task Scheduler, or GitHub's ym-watch.yml) this looks whether a new official desktop app is out; if so it takes
+// API, and on 21.10 it quietly stopped counting /play-audio. Once a day (GitHub's ym-watch.yml) this looks whether a new official desktop app is out; if so it takes
 // a fingerprint of what the app asks of the API (endpoints, the fields of a play, the equalizer)
 // and compares it with the last one. It also runs the API tests on the real account (test:api),
 // which catch a change on Yandex's side with no new app at all.
@@ -8,7 +7,7 @@
 //   node scripts/ym-watch.mjs [--force] [--no-canary] [--baseline <app dir>]
 //
 // Exit: 0 nothing new · 3 a new app, nothing in the fingerprint changed · 4 the fingerprint
-// changed · 5 the API tests fail. On 4 and 5 the runner (ym-watch.ps1) sends a notification.
+// changed · 5 the API tests fail. On 4 and 5 ym-watch.yml leaves it to the cloud agent (watch/AGENT.md).
 // Everything lives in %LOCALAPPDATA%/oni-watch: the installers, the snapshot, the report.
 
 import { createHash } from 'node:crypto';

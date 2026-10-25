@@ -33,7 +33,7 @@ export const useSidebar = create<{ open: boolean }>(() => ({ open: stored() }));
  */
 const ORDER_KEY = 'ui.sidebar.order';
 const playlistKey = (p: { uid: number | string; kind: number | string }) => `${p.uid}:${p.kind}`;
-export const useSidebarOrder = create<{ order: string[] }>(() => {
+const useSidebarOrder = create<{ order: string[] }>(() => {
   try {
     return { order: JSON.parse(localStorage.getItem(ORDER_KEY) || '[]') };
   } catch {

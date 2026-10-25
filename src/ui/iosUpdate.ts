@@ -33,7 +33,7 @@ export function setAutoUpdate(on: boolean) {
  * it is given, wait, off (the user's own, 22.10.2026). Run by name with the SideStore link as input. */
 export const UPDATE_SHORTCUT = 'Oni - Update';
 /** Where Shortcuts adds it from (shared by the user). Capacitor opens other sites outside the app. */
-export const UPDATE_SHORTCUT_LINK = 'https://www.icloud.com/shortcuts/3c691508574444aeba0005d0801d28e8';
+const UPDATE_SHORTCUT_LINK = 'https://www.icloud.com/shortcuts/3c691508574444aeba0005d0801d28e8';
 export function installUpdateShortcut() {
   location.href = UPDATE_SHORTCUT_LINK;
 }

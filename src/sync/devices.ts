@@ -33,7 +33,7 @@ export interface Shared {
 }
 
 const PREFIX = 'device-';
-export const fileOf = (id: string) => `${PREFIX}${id}.json`;
+const fileOf = (id: string) => `${PREFIX}${id}.json`;
 
 export class DeviceSync {
   /** The other devices' files as last read, by file name. */

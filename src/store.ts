@@ -92,7 +92,7 @@ export function back() {
   if (prev) set({ route: prev, backStack: s.backStack.slice(0, -1), forwardStack: [...s.forwardStack, s.route], nowPlayingOpen: false, navDir: 'back' });
 }
 
-export function forward() {
+function forward() {
   const s = get();
   const next = s.forwardStack[s.forwardStack.length - 1];
   if (next) set({ route: next, forwardStack: s.forwardStack.slice(0, -1), backStack: [...s.backStack.slice(-30), s.route], nowPlayingOpen: false, navDir: 'forward' });

@@ -62,7 +62,7 @@ export function setAnimEffect(effect: AnimEffect, on: boolean) {
   save();
 }
 
-export const animOn = (effect: AnimEffect) => {
+const animOn = (effect: AnimEffect) => {
   const s = useAnim.getState();
   return s.enabled && s.effects[effect];
 };

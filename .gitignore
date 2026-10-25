@@ -6,5 +6,5 @@ tests/screenshots/
 .env
 *.log
 
-# Screen recordings shared for a task (kept locally, not in the code)
-task/*.mp4
+# Pictures and recordings shared for a task (kept locally, not in the code)
+task/

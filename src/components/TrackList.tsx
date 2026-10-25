@@ -17,7 +17,7 @@ import { openMenu, type MenuItem } from './Menu.tsx';
 import { editUpload, showTrackInfo } from './TrackSheet.tsx';
 
 /** A file the user uploaded: marked in lists, with a short menu (its link opens for nobody else). */
-export const isUpload = (t: Track) => t.trackSource === 'UGC';
+const isUpload = (t: Track) => t.trackSource === 'UGC';
 /** An upload whose artist is no link: one Yandex has not found in the catalog. */
 export const plainArtists = (t: Track) => isUpload(t) && !catalogTrack(t);
 
