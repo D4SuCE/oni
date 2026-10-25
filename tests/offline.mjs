@@ -171,6 +171,8 @@ await app.close();
 
 await step('no network: the app starts on Liked, kept whole; the downloaded tracks play in its order', async () => {
   await page.waitForSelector('[data-testid="list-play"]', { timeout: 10000 });
+  // A long list draws its first rows with the page and the rest a moment later (TrackList).
+  await page.waitForFunction((n) => document.querySelectorAll('.track-row').length >= n, likedTotal, { timeout: 3000 }).catch(() => {});
   const rows = await page.locator('.track-row').count();
   const off = await page.locator('.track-row.unavailable').count();
   // The downloaded ones in Liked, in its order: the two picked, and any other download that is a
