@@ -100,6 +100,23 @@ const makeMix = (id: string, kind: MixKind, tracks: Track[], artists: string[], 
   builtAt: Date.now(),
 });
 
+/** The likes in short, to tell a changed list from the same one (a like or unlike changes it). */
+const likesKey = (keys: string[]) => `${keys.length}:${keys.slice(0, 30).join(',')}`;
+
+/** A fetch shared by builds running together ("For you" and the smart playlists both want the likes
+ * and Yandex's history when Home opens): the same request within two minutes is answered once. */
+const shared = new Map<string, { at: number; value: Promise<unknown> }>();
+function fetchShared<T>(key: string, fetch: () => Promise<T>): Promise<T> {
+  const hit = shared.get(key);
+  if (hit && Date.now() - hit.at < 120_000) return hit.value as Promise<T>;
+  const value = fetch();
+  shared.set(key, { at: Date.now(), value });
+  value.catch(() => shared.delete(key)); // a failure is asked again next time
+  return value;
+}
+const likedTracks = (keys: string[]) => fetchShared(`liked:${likesKey(keys)}`, () => api.tracks(keys));
+const musicHistory = () => fetchShared('history', () => api.musicHistory());
+
 /** Plays from Yandex's history (other devices) and this app's own, and how long since each was heard. */
 function collectHeard(server: Awaited<ReturnType<typeof api.musicHistory>>) {
   const heard = new Map<string, { track: Track; plays: number; skips: number; last: number }>();
@@ -135,8 +152,8 @@ function collectHeard(server: Awaited<ReturnType<typeof api.musicHistory>>) {
 async function gather() {
   const app = useApp.getState();
   const [liked, server, tree] = await Promise.all([
-    api.tracks(app.likedKeys).catch(() => [] as Track[]),
-    api.musicHistory().catch(() => []),
+    likedTracks(app.likedKeys).catch(() => [] as Track[]),
+    musicHistory().catch(() => []),
     api.genreTree().catch((): GenreTree => ({ parent: {}, title: {} })),
   ]);
 
@@ -378,7 +395,6 @@ interface SmartCache {
   releases?: Mix;
 }
 
-const likesKey = (keys: string[]) => `${keys.length}:${keys.slice(0, 30).join(',')}`;
 
 function readSmart(uid: string): SmartCache | null {
   try {
@@ -401,8 +417,7 @@ const smartShown = (c: SmartCache) => {
 
 /** The likes with their dates and the plays: what every smart playlist is made of. */
 async function gatherSmart() {
-  const [dates, server] = await Promise.all([api.likedTrackDates(), api.musicHistory().catch(() => [])]);
-  const tracks = await api.tracks(dates.map((d) => d.key));
+  const [dates, server, tracks] = await Promise.all([api.likedTrackDates(), musicHistory().catch(() => []), likedTracks(useApp.getState().likedKeys)]);
   const at = new Map(dates.map((d) => [d.key.split(':')[0], d.at]));
   const likes: Like[] = tracks.filter((t) => at.has(String(t.id))).map((t) => ({ track: t, at: at.get(String(t.id))! }));
   const { heard, now } = collectHeard(server);
