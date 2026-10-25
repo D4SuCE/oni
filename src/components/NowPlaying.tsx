@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Ban, ChevronDown, GripVertical, ListMusic, MoreHorizontal, SlidersVertical, X } from 'lucide-react';
 import { api } from '../api/client.ts';
 import type { Track } from '../api/types.ts';
@@ -135,6 +135,43 @@ function QueueRow({ i, current }: { i: number; current?: boolean }) {
   );
 }
 
+/** The iPhone: the cover takes the height the name, buttons and controls leave it, and stays square
+ * (a whole name on two or three lines would push the controls off the screen). Sets --np-cover on
+ * the column, read by styles.css under html.ios; the desktop's layout is left as it is. */
+function useCoverFit(art: RefObject<HTMLDivElement | null>) {
+  useEffect(() => {
+    const box = art.current;
+    if (!isIos || !box) return;
+    const fit = () => {
+      let rest = 0;
+      for (const el of box.children) {
+        if (el.classList.contains('np-cover')) continue;
+        const s = getComputedStyle(el);
+        rest += (el as HTMLElement).offsetHeight + parseFloat(s.marginTop) + parseFloat(s.marginBottom);
+      }
+      box.style.setProperty('--np-cover', `${Math.max(160, Math.floor(box.clientHeight - rest))}px`);
+    };
+    const watch = new ResizeObserver(fit);
+    const observe = () => {
+      watch.disconnect();
+      watch.observe(box);
+      for (const el of box.children) if (!el.classList.contains('np-cover')) watch.observe(el);
+    };
+    // Children come and go (a track, the volume slider): watched anew.
+    const children = new MutationObserver(() => {
+      observe();
+      fit();
+    });
+    observe();
+    children.observe(box, { childList: true });
+    fit();
+    return () => {
+      watch.disconnect();
+      children.disconnect();
+    };
+  }, [art]);
+}
+
 export function NowPlaying() {
   const track = usePlayer((s) => s.queue[s.index]);
   const isWave = usePlayer((s) => s.source?.kind === 'wave');
@@ -157,6 +194,8 @@ export function NowPlaying() {
   const hasLyrics = Boolean(track?.lyricsInfo?.hasAvailableSyncLyrics || track?.lyricsInfo?.hasAvailableTextLyrics);
   // A track without lyrics shows the queue; the lyrics tab comes back with the next track that has them.
   const tab = picked === 'lyrics' && !hasLyrics ? 'queue' : picked;
+  const art = useRef<HTMLDivElement>(null);
+  useCoverFit(art);
 
   return (
     <div ref={sheet} className={cx('nowplaying', video && 'has-video')}>
@@ -166,7 +205,7 @@ export function NowPlaying() {
         <ChevronDown size={24} />
       </button>
       <div className="np-stage">
-        <div className="np-art">
+        <div ref={art} className="np-art">
           <LiveCover track={track} className="np-cover" />
           {track && (
             <>

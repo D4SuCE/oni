@@ -3604,17 +3604,10 @@ kbd {
   /* Now Playing is the track's card: its name whole (the user, 25.10.2026: "Am I …" was cut by the
      row of buttons beside it). The name and artists take the full width, up to two lines (a long
      name, three in a smaller face), and the buttons go in a row under them. What that adds in height
-     comes off the cover, which stays square: it takes the room the rest leaves (grid row 1fr). */
-  html.ios .np-art {
-    display: grid;
-    grid-template-rows: minmax(0, 1fr);
-    justify-items: center;
-  }
+     comes off the cover, which stays square: it takes the room the rest leaves (--np-cover, measured
+     in NowPlaying.tsx, useCoverFit). */
   html.ios .np-cover {
-    width: auto;
-    max-width: 100%;
-    height: min(100%, calc(100vw - 44px));
-    align-self: center;
+    width: min(100%, var(--np-cover, 100%));
   }
   html.ios .np-meta {
     flex-direction: column;
