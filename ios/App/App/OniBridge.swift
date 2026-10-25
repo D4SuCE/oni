@@ -1156,9 +1156,12 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     /// The track playing, while it is still arriving (nil once whole, or for a file from disk).
     private var stream: TrackFetch?
     /// Where the music ends in the track playing, its silence after it left out (the smart crossfade,
-    /// src/player/silence.ts): looked for once its file is whole; `endOf` the file it is for.
+    /// src/player/silence.ts): looked for once its file is whole; `endOf` the track (`tracksOpened`) it is for
+    /// (the file itself is opened anew as a track arrives).
     private var musicEnd: Double?
-    private var endOf: AVAudioFile?
+    private var endOf = -1
+    /// Counts the tracks opened (not `generation`, which a seek moves on too).
+    private var tracksOpened = 0
     private var endSearch = false
     /// Its length as the page knows it (the file's own is only known once whole).
     private var durationHint: Double = 0
@@ -1519,7 +1522,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         connect(file)
         self.file = file
         musicEnd = nil
-        endOf = file
+        tracksOpened += 1
+        endOf = tracksOpened
         schedule(from: 0)
     }
 
@@ -1546,7 +1550,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         connect(file)
         self.file = file
         musicEnd = nil
-        endOf = file
+        tracksOpened += 1
+        endOf = tracksOpened
         // From its first sound, past the silence at its start (the smart crossfade).
         let lead = leadIn(file.url)
         pausedAt = lead
@@ -2003,7 +2008,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     /// The track's music end, looked for in the background once its file is whole (a track still
     /// arriving has no end to look at yet).
     private func findMusicEnd() {
-        guard musicEnd == nil, !endSearch, let file = file, endOf === file else { return }
+        guard musicEnd == nil, !endSearch, let file = file, endOf == tracksOpened else { return }
+        let track = tracksOpened
         if let fetch = stream, !fetch.state.done { return }
         let url = stream?.target ?? file.url
         endSearch = true
@@ -2012,7 +2018,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 self.endSearch = false
-                if self.endOf === file { self.musicEnd = end }
+                if self.endOf == track { self.musicEnd = end }
             }
         }
     }
