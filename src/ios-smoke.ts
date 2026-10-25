@@ -135,8 +135,8 @@ async function longPressMenu() {
  * words (the user, 25.10.2026: "many buttons show nothing, one has to guess"). */
 async function holdHintRound() {
   click('[data-testid="nav-liked"]');
-  const button = (await until(() => [...document.querySelectorAll<HTMLElement>('.page-actions .btn:not(.primary)')].find((b) => b.textContent?.includes('Вперемешку')), 15000))
-    ? [...document.querySelectorAll<HTMLElement>('.page-actions .btn:not(.primary)')].find((b) => b.textContent?.includes('Вперемешку'))
+  const button = (await until(() => [...document.querySelectorAll<HTMLElement>('.lib-actions .btn:not(.primary), .page-actions .btn:not(.primary)')].find((b) => b.textContent?.includes('Вперемешку')), 15000))
+    ? [...document.querySelectorAll<HTMLElement>('.lib-actions .btn:not(.primary), .page-actions .btn:not(.primary)')].find((b) => b.textContent?.includes('Вперемешку'))
     : null;
   if (!button) return report('hold-hint-round', false, 'no Shuffle in Liked');
   const box = button.getBoundingClientRect();
