@@ -144,7 +144,11 @@ async function holdHintRound() {
   const button = (await until(() => [...document.querySelectorAll<HTMLElement>('.lib-actions .btn:not(.primary), .page-actions .btn:not(.primary)')].find((b) => b.textContent?.includes('Вперемешку')), 15000))
     ? [...document.querySelectorAll<HTMLElement>('.lib-actions .btn:not(.primary), .page-actions .btn:not(.primary)')].find((b) => b.textContent?.includes('Вперемешку'))
     : null;
-  if (!button) return report('hold-hint-round', false, 'no Shuffle on the album');
+  if (!button) {
+    const route = (wave() as unknown as { useApp?: { getState(): { route: { name: string } } } }).useApp?.getState().route.name;
+    const seen = [...document.querySelectorAll<HTMLElement>('.page-actions .btn, .lib-actions .btn')].map((b) => b.textContent?.trim()).join(' | ');
+    return report('hold-hint-round', false, `no Shuffle on the album ${album}: route ${route}, buttons [${seen}]`);
+  }
   const box = button.getBoundingClientRect();
   const at = { pointerId: 12, pointerType: 'touch', isPrimary: true, clientX: box.left + box.width / 2, clientY: box.top + box.height / 2, bubbles: true };
   button.dispatchEvent(new PointerEvent('pointerdown', at));
