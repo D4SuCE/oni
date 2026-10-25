@@ -519,6 +519,9 @@ await step('track details can be copied: a click, a selection with Ctrl+C, the r
     await duration.dblclick({ position: { x: 4, y: 8 } });
     const selection = await page.evaluate(() => getSelection().toString());
     if (!selection.trim()) throw new Error('nothing selected in the details');
+    // The double click's first click copied the whole value: what Ctrl+C copies is seen apart from it.
+    await page.waitForTimeout(300);
+    await reset();
     await page.keyboard.press('Control+C');
     await page.waitForTimeout(300);
     if ((await clip()) !== selection) throw new Error(`Ctrl+C copied "${await clip()}", selected "${selection}"`);
