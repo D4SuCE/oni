@@ -5,7 +5,7 @@
 
 import { OniLogin } from './api/capacitor.ts';
 import type { Track } from './api/types.ts';
-import { transport } from './api/client.ts';
+import { storage, transport } from './api/client.ts';
 import { OniRemote } from './player/remote.ts';
 import { OniPlayer, type EqShape } from './player/nativeAudio.ts';
 import { OniVolume } from './player/volume.ts';
@@ -899,6 +899,8 @@ export async function runSmoke() {
     noLoupe();
     await loginRedirect();
     report('home', await until(() => document.querySelector('.wave-hero'), 30000));
+    // Oni's data in IndexedDB, not the page's ~5 MB localStorage (it filled up on the user's phone, 25.10.2026).
+    report('storage', storage.kind === 'indexeddb', `${storage.kind}; in localStorage: ${Object.keys(localStorage).filter((k) => !k.startsWith('ui.')).length} of Oni's entries`);
     phoneLayout();
     buttonNames('home');
     const mixes = await until(() => document.querySelectorAll('[data-testid="mix-card"]').length, 60000);
