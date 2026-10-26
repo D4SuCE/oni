@@ -579,6 +579,8 @@ const ru = {
     added: (n: number, title: string) => `${n === 1 ? 'Трек загружается' : `${n} треков загружаются`} в «${title}» — появятся через минуту-другую`,
     addFailed: (title: string, msg: string) => `«${title}» не добавился: ${msg}`,
     gone: 'Загруженные плейлисты сейчас недоступны',
+    pending: (tracks: string) => `выкладывается ещё ${tracks}`,
+    empty: 'Треки выкладываются — первые появятся здесь через несколько секунд',
     toMine: 'Добавить себе',
     setting: 'Делиться загруженными треками',
     settingHint:
@@ -1297,6 +1299,8 @@ const en: Dict = {
     added: (n, title) => `${n === 1 ? 'The track is uploading' : `${n} tracks are uploading`} to "${title}" — they will be there in a minute or two`,
     addFailed: (title, msg) => `"${title}" was not added: ${msg}`,
     gone: 'The uploaded playlists are not available now',
+    pending: (tracks) => `${tracks} more on the way`,
+    empty: 'The tracks are going up — the first ones show here in a few seconds',
     toMine: 'Add to mine',
     setting: 'Share my uploaded tracks',
     settingHint:

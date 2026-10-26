@@ -92,14 +92,18 @@ export async function round(opts: RoundOptions = {}): Promise<string | null> {
     const there = new Set((await disk.folder(folder)).map((f) => f.name));
     const send = [...wanted].filter(([file]) => !there.has(file));
     useShare.setState({ total: send.length });
-    for (const [file, t] of send) {
-      await disk.uploadFrom(`${folder}/${file}`, (await api.stream(String(t.id))).url);
-      useShare.setState((s) => ({ done: s.done + 1 }));
-    }
-    // what left every playlist leaves the folder
-    for (const name of there) if (name !== INDEX && !wanted.has(name)) await disk.remove(`${folder}/${name}`);
-    const index: SharedIndex = { v: 1, owner: { uid: account.uid, name: account.displayName || account.login || '' }, updated: Date.now(), playlists: shared };
-    await disk.write(`${folder}/${INDEX}`, JSON.stringify(index));
+    // The index lists what is in the folder already, so a friend sees the first tracks at once and
+    // the rest as they come (the user, 27.10.2026: "why not as soon as the first track is there?");
+    // `pending`: how many are still on their way (the friend's page looks again while there are).
+    const owner = { uid: account.uid, name: account.displayName || account.login || '' };
+    const present = new Set([...there].filter((name) => wanted.has(name)));
+    const writeIndex = (pending: number) => {
+      const playlists = shared.map((p) => ({ ...p, tracks: p.tracks.filter((x) => present.has(x.file)) })).filter((p) => p.tracks.length);
+      const index: SharedIndex = { v: 1, owner, updated: Date.now(), playlists, ...(pending ? { pending } : {}) };
+      return disk.write(`${folder}/${INDEX}`, JSON.stringify(index));
+    };
+    await writeIndex(send.length);
+    // the folder opened and marked first: the button shows to a friend while the files go up
     const link = await disk.publish(folder);
     if (opts.mark !== false) {
       storage.setItem(LINK, link);
@@ -109,6 +113,21 @@ export async function round(opts: RoundOptions = {}): Promise<string | null> {
         await api.setPlaylistDescription(pl.kind, withMark(pl.description, link));
       }
     }
+    let written = Date.now();
+    for (const [i, [file, t]] of send.entries()) {
+      await disk.uploadFrom(`${folder}/${file}`, (await api.stream(String(t.id))).url);
+      present.add(file);
+      useShare.setState((s) => ({ done: s.done + 1 }));
+      // the index again after the first track, then every few or every 10 s
+      const left = send.length - i - 1;
+      if (left && (i === 0 || (i + 1) % 5 === 0 || Date.now() - written > 10_000)) {
+        await writeIndex(left);
+        written = Date.now();
+      }
+    }
+    // what left every playlist leaves the folder
+    for (const name of there) if (name !== INDEX && !wanted.has(name)) await disk.remove(`${folder}/${name}`);
+    await writeIndex(0);
     useShare.setState({ at: Date.now(), tracks: wanted.size, playlists: shared.length });
     return link;
   } catch (e) {

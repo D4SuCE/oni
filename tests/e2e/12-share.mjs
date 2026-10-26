@@ -15,11 +15,25 @@ await step("shared uploads: a playlist's own uploads go to a folder on Disk open
   if (kind === null) return console.log('       skipped: no uploads in the account');
   const folder = `shared-e2e-${Date.now()}`;
   try {
-    const link = await page.evaluate(([f, k]) => window.__wave.share.round({ folder: f, only: [k], maxTracks: 2, mark: false }), [folder, kind]);
+    // the round, and its folder looked at meanwhile: its index is there before all the files are
+    // (a friend sees them come), with how many are on their way
+    const [link, early] = await page.evaluate(async ([f, k]) => {
+      const { share, sync } = window.__wave;
+      let over = false;
+      const going = share.round({ folder: f, only: [k], maxTracks: 4, mark: false }).finally(() => (over = true));
+      let seen = null;
+      while (!over && !seen) {
+        const index = await sync.disk.read(`${f}/index.json`).then((t) => JSON.parse(t), () => null);
+        if (index?.pending) seen = index;
+      }
+      return [await going, seen];
+    }, [folder, kind]);
+    if (!early) throw new Error('no index while the files went up');
     if (!link) throw new Error(`the round failed: ${await page.evaluate(() => window.__wave.share.useShare?.getState().error)}`);
     const index = await page.evaluate((l) => window.__wave.share.read(l), link);
     const pl = index.playlists[0];
-    if (index.playlists.length !== 1 || pl.tracks.length !== 2 || !index.owner.name) throw new Error(`index ${JSON.stringify(index).slice(0, 300)}`);
+    // at the end every track is listed and none is on its way (the index went up first, then grew)
+    if (index.playlists.length !== 1 || pl.tracks.length < 2 || !index.owner.name || index.pending) throw new Error(`index ${JSON.stringify(index).slice(0, 300)}`);
     await page.evaluate(([l, list]) => window.__wave.playTracks(list.map((x) => window.__wave.share.asTrack(x, l, 'e2e')), 0, 'e2e shared'), [link, pl.tracks]);
     await waitPlaying(1, 60000);
     const playing = await page.evaluate(() => window.__wave.usePlayer.getState().queue[window.__wave.usePlayer.getState().index]?.share?.file);
@@ -33,11 +47,11 @@ await step("shared uploads: a playlist's own uploads go to a folder on Disk open
     } finally {
       await page.evaluate((id) => window.__wave.offline.remove(id), one.id);
     }
-    console.log(`       "${pl.title}": ${pl.tracks.map((t) => t.title).join(', ')} — played from the Disk, one downloaded`);
+    console.log(`       "${pl.title}": the index there with ${early.pending} on their way; ${pl.tracks.map((t) => t.title).join(', ')} — played from the Disk, one downloaded`);
     // the friend's page: his uploaded playlists by the link, a row per track, Play plays them
     await page.evaluate(() => window.__wave.audio.pause());
     await page.evaluate((l) => window.__wave.navigate({ name: 'shared', link: l, owner: 'e2e' }), link);
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid="shared-row"]').length === 2, null, { timeout: 20000 });
+    await page.waitForFunction((n) => document.querySelectorAll('[data-testid="shared-row"]').length === n, pl.tracks.length, { timeout: 20000 });
     await page.click('[data-testid="shared-play"]');
     await waitPlaying(1, 60000);
     await shot('12-shared');

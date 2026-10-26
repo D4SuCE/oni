@@ -36,6 +36,8 @@ export interface SharedIndex {
   /** When the folder was last brought up to date (ms). */
   updated: number;
   playlists: SharedPlaylist[];
+  /** Tracks still going up (the owner's Oni is putting them there now); none when all are there. */
+  pending?: number;
 }
 
 export type Fetch = <T = any>(req: HttpRequest) => Promise<HttpResponse<T>>;
@@ -95,6 +97,8 @@ export function shareLinkOf(pl: Playlist, theirs: (uid: number | string) => Prom
   if (!found) {
     found = theirs(uid).then((list) => list.map((p) => readMark(p.description)).find(Boolean) ?? null, () => null);
     links.set(String(uid), found);
+    // none yet: asked again next time (the owner may switch sharing on in a minute)
+    void found.then((l) => l || links.delete(String(uid)));
   }
   return found;
 }

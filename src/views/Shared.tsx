@@ -3,7 +3,7 @@
 // 26.10.2026). Reached from a playlist of his, by the button his Oni's hidden mark brings.
 
 import { ArrowDownToLine, Check, Download, Loader2, Play, Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { transport } from '../api/client.ts';
 import type { Playlist, Track } from '../api/types.ts';
 import { ErrorBox, Spinner } from '../components/Common.tsx';
@@ -20,7 +20,14 @@ import { cx, fmtTime, fmtTotal, useAsync } from '../ui/util.ts';
 export function SharedView({ link, owner }: { link: string; owner?: string }) {
   const t = useT();
   const s = t.shared;
-  const { data, loading, error } = useAsync(() => readShared(link, (r) => transport.request(r)), [link]);
+  const { data, loading, error, setData } = useAsync(() => readShared(link, (r) => transport.request(r)), [link]);
+  // the owner's Oni still putting tracks there: looked at again every 10 s, the new ones show
+  const pending = data?.pending ?? 0;
+  useEffect(() => {
+    if (!pending) return;
+    const timer = setInterval(() => void readShared(link, (r) => transport.request(r)).then(setData, () => {}), 10_000);
+    return () => clearInterval(timer);
+  }, [link, pending, setData]);
   const [open, setOpen] = useState(0);
   // per track: being added (spinner), added (a tick)
   const [adding, setAdding] = useState<Record<string, 'busy' | 'done'>>({});
@@ -91,7 +98,10 @@ export function SharedView({ link, owner }: { link: string; owner?: string }) {
         <div className="page-header-text">
           <div className="kicker">{s.kicker(name)}</div>
           <h1>{s.title}</h1>
-          <div className="page-meta">{s.meta(t.count.tracks(new Set(data.playlists.flatMap((p) => p.tracks.map((x) => x.id))).size), data.playlists.length)}</div>
+          <div className="page-meta">
+            {s.meta(t.count.tracks(new Set(data.playlists.flatMap((p) => p.tracks.map((x) => x.id))).size), data.playlists.length)}
+            {pending > 0 && <span data-testid="shared-pending"> · {s.pending(t.count.tracks(pending))}</span>}
+          </div>
         </div>
       </header>
       {data.playlists.length > 1 && (
@@ -103,6 +113,7 @@ export function SharedView({ link, owner }: { link: string; owner?: string }) {
           ))}
         </div>
       )}
+      {!pl && <div className="empty-hint">{pending ? s.empty : s.gone}</div>}
       {pl && (
         <>
           <div className="page-actions">
