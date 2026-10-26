@@ -118,6 +118,8 @@ export async function startSync() {
 export async function connectDisk() {
   if (!transport.diskLogin || !(await transport.diskLogin(useLang.getState().lang))) return false;
   begin();
+  // one's uploads go up for friends at once (src/share; on unless switched off)
+  setTimeout(() => void import('../share/owner.ts').then((m) => m.shareUploads()), 3000);
   return true;
 }
 

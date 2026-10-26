@@ -255,15 +255,33 @@ export function useSwipeTabs<T extends string>(ref: RefObject<HTMLElement | null
     const el = ref.current;
     if (!el || !enabled || tabs.length < 2) return;
     let start: { x: number; y: number; t: number } | null = null;
+    let last = { x: 0, y: 0 };
+    // Sideways from its first move: the page does not scroll under it. On a long tab (Albums) the
+    // page's scroll took every swipe that went down a little — iOS then ends the touch with
+    // touchcancel, not touchend — so only the short tabs turned (the user, 26.10.2026).
+    let sideways = false;
     const down = (e: TouchEvent) => {
       const touch = e.touches[0];
       start = e.touches.length === 1 && !scrollsSideways(e.target as Element, el) ? { x: touch.clientX, y: touch.clientY, t: e.timeStamp } : null;
+      last = start ? { x: start.x, y: start.y } : last;
+      sideways = false;
+    };
+    const move = (e: TouchEvent) => {
+      if (!start) return;
+      const touch = e.touches[0];
+      last = { x: touch.clientX, y: touch.clientY };
+      const dx = Math.abs(last.x - start.x);
+      const dy = Math.abs(last.y - start.y);
+      if (!sideways && dx > 10 && dx > 1.5 * dy) sideways = true;
+      // down first: the page's own scroll, not a swipe
+      else if (!sideways && dy > 10) return void (start = null);
+      if (sideways && e.cancelable) e.preventDefault();
     };
     const up = (e: TouchEvent) => {
-      if (!start || e.type !== 'touchend') return void (start = null);
-      const touch = e.changedTouches[0];
-      const dx = touch.clientX - start.x;
-      const dy = touch.clientY - start.y;
+      if (!start || (e.type !== 'touchend' && !sideways)) return void (start = null);
+      const end = e.type === 'touchend' ? { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY } : last;
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
       const fast = Math.abs(dx) / Math.max(1, e.timeStamp - start.t) > FLICK;
       start = null;
       // sideways, clearly: far enough or a flick, and much more across than down
@@ -276,10 +294,12 @@ export function useSwipeTabs<T extends string>(ref: RefObject<HTMLElement | null
       go(to, dir);
     };
     el.addEventListener('touchstart', down, { passive: true });
+    el.addEventListener('touchmove', move, { passive: false });
     el.addEventListener('touchend', up);
     el.addEventListener('touchcancel', up);
     return () => {
       el.removeEventListener('touchstart', down);
+      el.removeEventListener('touchmove', move);
       el.removeEventListener('touchend', up);
       el.removeEventListener('touchcancel', up);
     };

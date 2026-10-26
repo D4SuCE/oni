@@ -830,28 +830,46 @@ async function swipeTrack() {
   report('swipe-track', Boolean(forward) && Boolean(back) && peers.every(Boolean) && !document.querySelector('.nowplaying'), `${index} → ${forward ? index + 1 : '?'} → ${app.usePlayer.getState().index} of ${queue.length}; the neighbour's card beside it: ${peers.join(', ')}`);
 }
 
-/** Tabs by a swipe (src/ui/swipe.ts, useSwipeTabs; the user, 26.10.2026): Collection — left to
- * Albums, right back to Playlists; History — left to Yandex Music's tab. */
+/** Tabs by a swipe (src/ui/swipe.ts, useSwipeTabs; the user, 26.10.2026): Collection — left through
+ * every tab from a card in the middle of the page (on a long tab the page's scroll took the touch,
+ * ending it with touchcancel: one swipe here ends so), then right back to Playlists; History — left
+ * to Yandex Music's tab. */
 async function swipeTabs() {
   const w = wave() as unknown as { navigate(r: unknown): void; useApp: { getState(): { route: { name: string; tab?: string } } } };
-  const swipe = (target: Element, from: number, to: number) => {
-    const touch = (x: number) => new Touch({ identifier: 6, target, clientX: x, clientY: 420 });
+  const swipe = (target: Element, from: number, to: number, end: 'touchend' | 'touchcancel' = 'touchend') => {
+    const touch = (x: number, y = 420) => new Touch({ identifier: 6, target, clientX: x, clientY: y });
     target.dispatchEvent(new TouchEvent('touchstart', { touches: [touch(from)], changedTouches: [touch(from)], bubbles: true, cancelable: true }));
-    target.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [touch(to)], bubbles: true, cancelable: true }));
+    // a finger's way: sideways, drifting down a little
+    for (let i = 1; i <= 6; i++) {
+      const x = from + ((to - from) * i) / 6;
+      target.dispatchEvent(new TouchEvent('touchmove', { touches: [touch(x, 420 + i * 3)], changedTouches: [touch(x, 420 + i * 3)], bubbles: true, cancelable: true }));
+    }
+    target.dispatchEvent(new TouchEvent(end, { touches: [], changedTouches: [touch(to, 438)], bubbles: true, cancelable: true }));
   };
-  const title = () => document.querySelector('.page .page-title') ?? document.querySelector('.page');
+  // a card or a row in the middle of the page, else its title
+  const middle = () => document.querySelector('.page .card, .page .track-row, .page .pl-row') ?? document.querySelector('.page .page-title') ?? document.querySelector('.page');
+  const tab = () => w.useApp.getState().route.tab;
   w.navigate({ name: 'library', tab: 'playlists' });
   await until(() => document.querySelector('.page .tabs'), 5000);
-  swipe(title()!, 300, 100);
-  const albums = await until(() => w.useApp.getState().route.tab === 'albums', 3000);
-  await sleep(400);
-  swipe(title()!, 100, 300);
-  const playlists = await until(() => w.useApp.getState().route.tab === 'playlists', 3000);
+  const walk: string[] = [];
+  for (const [want, end] of [['albums', 'touchend'], ['artists', 'touchcancel'], ['downloads', 'touchend']] as const) {
+    await until(() => document.querySelector('.page .card, .page .track-row, .page .empty-hint'), 8000);
+    await sleep(400);
+    swipe(middle()!, 300, 100, end);
+    walk.push((await until(() => tab() === want, 3000)) ? want : `${want}: stayed on ${tab()}`);
+  }
+  for (let i = 0; i < 3; i++) {
+    await sleep(400);
+    swipe(middle()!, 100, 300);
+    await until(() => tab() !== ['downloads', 'artists', 'albums'][i], 3000);
+  }
+  const playlists = tab() === 'playlists';
   w.navigate({ name: 'history' });
   await until(() => document.querySelector('[data-testid="history-yandex"]'), 5000);
-  swipe(title()!, 300, 100);
+  swipe(document.querySelector('.page .page-title') ?? document.querySelector('.page')!, 300, 100);
   const yandex = await until(() => document.querySelector('[data-testid="history-yandex"].active'), 3000);
-  report('swipe-tabs', Boolean(albums && playlists && yandex), `Collection: albums ${albums}, back ${playlists}; History: Yandex ${Boolean(yandex)}`);
+  const all = walk.every((x) => !x.includes(':'));
+  report('swipe-tabs', all && playlists && Boolean(yandex), `Collection: ${walk.join(' → ')}, back ${playlists}; History: Yandex ${Boolean(yandex)}`);
   w.navigate({ name: 'home' });
   await sleep(300);
 }
@@ -1071,13 +1089,16 @@ async function moveTracks() {
     const lines = document.querySelectorAll('[data-testid="np-sung"] .lyric').length;
     const from = document.querySelector('[data-testid="np-sung"] [data-testid="lyrics-source"]') ? 'LRCLIB' : 'Yandex';
     const small = Math.round(document.querySelector('.nowplaying.sung .np-cover')?.getBoundingClientRect().width ?? 0);
+    // the buttons in the middle of the screen, as under the cover (they sat at the left, the user 26.10.2026)
+    const play = document.querySelector('.nowplaying.sung .transport .play-btn')?.getBoundingClientRect();
+    const off = play ? Math.round(play.left + play.width / 2 - window.innerWidth / 2) : 999;
     await picture('lyrics');
     const meta = document.querySelector('.nowplaying .np-meta')!;
     const touch = (y: number) => new Touch({ identifier: 5, target: meta, clientX: 200, clientY: y });
     meta.dispatchEvent(new TouchEvent('touchstart', { touches: [touch(120)], changedTouches: [touch(120)], bubbles: true, cancelable: true }));
     meta.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [touch(260)], bubbles: true, cancelable: true }));
     const back = await until(() => !document.querySelector('.nowplaying.sung') && document.querySelector('.nowplaying'), 3000);
-    report('lyrics-sheet', Boolean(sung) && Math.abs(small - 56) <= 2 && Boolean(back), `${!sung ? 'nothing shown' : lines ? `${lines} lines, ${from}` : document.querySelector('[data-testid="np-sung"] .lyrics-plain') ? `plain, ${from}` : 'none: Genius offered'}; the cover ${small} px; a swipe down ${back ? 'went back to it' : 'did not go back'}`);
+    report('lyrics-sheet', Boolean(sung) && Math.abs(small - 56) <= 2 && Math.abs(off) <= 3 && Boolean(back), `play ${off} px from the middle; ${!sung ? 'nothing shown' : lines ? `${lines} lines, ${from}` : document.querySelector('[data-testid="np-sung"] .lyrics-plain') ? `plain, ${from}` : 'none: Genius offered'}; the cover ${small} px; a swipe down ${back ? 'went back to it' : 'did not go back'}`);
   } else report('lyrics-sheet', false, 'no lyrics button');
   click('[data-testid="np-queue"]');
   const sheet = await until(() => document.querySelector('[data-testid="queue-sheet"] [data-testid="drag-handle"]'), 3000);

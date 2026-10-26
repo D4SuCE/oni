@@ -156,7 +156,8 @@ export async function init() {
  * playlist once found (src/import/run.ts). A little after the start, so it does not slow it. */
 function lookAgain() {
   // and one's own shared uploads catch up with the playlists (src/share; the desktop, sharing on)
-  setTimeout(() => void import('./share/owner.ts').then((m) => m.shareUploads()), 60_000);
+  // (not from a test run: it would mark the account's playlists)
+  setTimeout(() => void (transport.testMode || import('./share/owner.ts').then((m) => m.shareUploads())), 60_000);
   // and the downloads Yandex has taken away since: kept for good (ui/offline.ts)
   setTimeout(() => void import('./ui/offline.ts').then((m) => m.keepGoneDownloads()).catch(() => {}), 30_000);
   // and the day's backup of the library (src/backup), once the Disk is there; not from a test run

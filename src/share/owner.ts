@@ -28,7 +28,9 @@ export interface ShareState {
   error: string | null;
 }
 
-export const useShare = create<ShareState>(() => ({ on: storage.getItem(ON) === '1', busy: false, done: 0, total: 0, at: null, tracks: 0, playlists: 0, error: null }));
+// On unless switched off: a friend opening one's playlist finds the uploads with nothing to set up
+// first (the user, 26.10.2026: "the main new thing"; switched off by hand, it stays off).
+export const useShare = create<ShareState>(() => ({ on: storage.getItem(ON) !== '0', busy: false, done: 0, total: 0, at: null, tracks: 0, playlists: 0, error: null }));
 
 /** The desktop with a Disk: it can share (the iPhone's shell sends no file's bytes up). */
 export const canShare = () => transport.platform === 'electron';

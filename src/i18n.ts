@@ -567,8 +567,8 @@ const ru = {
       `${from} не ответил за 25 секунд.${youtube ? ' В России YouTube сильно замедлен:' : ''} Попробуйте с включённым VPN — или вставьте список песен текстом.`,
   },
   shared: {
-    banner: (name: string) => `✦ Загруженные плейлисты ${name}`,
-    bannerHint: 'Его собственные загруженные треки — слушать и добавлять себе',
+    banner: (name: string) => `✦ Загруженное${name ? ` — ${name}` : ''}`,
+    bannerHint: 'Все загруженные плейлисты владельца — слушать и добавлять себе',
     kicker: (name: string) => `Загружено ${name}`,
     title: 'Загруженные плейлисты',
     meta: (tracks: string, playlists: number) => `${tracks} в ${playlists} ${playlists === 1 ? 'плейлисте' : 'плейлистах'}`,
@@ -582,7 +582,7 @@ const ru = {
     toMine: 'Добавить себе',
     setting: 'Делиться загруженными треками',
     settingHint:
-      'Ваши загруженные mp3 по плейлистам выгружаются в папку Oni на Яндекс Диске. Друг с Oni, открыв любой ваш плейлист, увидит кнопку «Загруженные плейлисты» — слушать и добавлять себе. Ссылка на папку нигде не видна.',
+      'Ваши загруженные mp3 по плейлистам выгружаются в папку Oni на Яндекс Диске. Друг с Oni, открыв любой ваш плейлист, увидит кнопку «Загруженное» — все ваши загруженные плейлисты, слушать и добавлять себе. Ссылка на папку нигде не видна.',
     needsDisk: 'Нужен подключённый Яндекс Диск (выше)',
     syncing: (done: number, total: number) => (total ? `Выгружаю треки: ${done} из ${total}` : 'Проверяю плейлисты…'),
     status: (tracks: number, playlists: number) => `Общих: ${tracks} ${tracks === 1 ? 'трек' : 'треков'} в ${playlists} ${playlists === 1 ? 'плейлисте' : 'плейлистах'}`,
@@ -1285,8 +1285,8 @@ const en: Dict = {
     slow: (from, youtube) => `${from} did not answer in 25 seconds.${youtube ? ' YouTube is slowed down a lot in Russia:' : ''} Try with a VPN on — or paste the songs as text.`,
   },
   shared: {
-    banner: (name) => `✦ ${name}'s uploaded playlists`,
-    bannerHint: 'Their own uploaded tracks — listen and add them to yours',
+    banner: (name) => `✦ Uploads${name ? ` — ${name}` : ''}`,
+    bannerHint: "All the owner's uploaded playlists — listen and add them to yours",
     kicker: (name) => `Uploaded by ${name}`,
     title: 'Uploaded playlists',
     meta: (tracks, playlists) => `${tracks} in ${playlists} ${playlists === 1 ? 'playlist' : 'playlists'}`,
@@ -1300,7 +1300,7 @@ const en: Dict = {
     toMine: 'Add to mine',
     setting: 'Share my uploaded tracks',
     settingHint:
-      "Your uploaded mp3s go, by playlist, to Oni's folder on your Yandex Disk. A friend with Oni who opens any playlist of yours gets an \"Uploaded playlists\" button — to listen and add them to theirs. The folder's link is shown nowhere.",
+      "Your uploaded mp3s go, by playlist, to Oni's folder on your Yandex Disk. A friend with Oni who opens any playlist of yours gets an \"Uploads\" button — all your uploaded playlists, to listen and add to theirs. The folder's link is shown nowhere.",
     needsDisk: 'Yandex Disk has to be connected (above)',
     syncing: (done, total) => (total ? `Uploading tracks: ${done} of ${total}` : 'Looking at the playlists…'),
     status: (tracks, playlists) => `Shared: ${tracks} ${tracks === 1 ? 'track' : 'tracks'} in ${playlists} ${playlists === 1 ? 'playlist' : 'playlists'}`,

@@ -3715,6 +3715,11 @@ kbd {
   html.ios .nowplaying.sung .np-volume {
     grid-column: 1 / -1;
   }
+  /* the buttons in the middle, as under the cover (a row of the grid is the whole width: they sat
+     at its left, the user, 26.10.2026) */
+  html.ios .nowplaying.sung .transport {
+    justify-self: center;
+  }
   html.ios .np-sung {
     grid-row: 2;
     align-self: stretch;
