@@ -74,6 +74,15 @@ jobs:
           SIMCTL_CHILD_ONI_TEST_TOKEN="$ONI_TEST_TOKEN" xcrun simctl launch --console-pty "$DEVICE" local.wave.player > console.log 2>&1 &
           APP=$!
           shot() { xcrun simctl io "$DEVICE" screenshot "$1"; }
+          # The page's memory, once a second (the web content processes on this Mac: the simulator's
+          # run here): a friend's iPhone reloaded Oni after History then Liked, and after Next with
+          # Now Playing open — iOS ends a page that takes too much. ms, pid, RSS in KB.
+          ( while true; do
+              now=$(perl -MTime::HiRes=time -e 'printf "%d", time*1000')
+              for p in $(pgrep -f 'com.apple.WebKit.WebContent'); do echo "$now $p $(ps -o rss= -p "$p" | tr -d ' ')"; done
+              sleep 1
+            done ) > mem.log 2>/dev/null &
+          MEM=$!
           for i in $(seq 1 120); do grep -q "SMOKE playback" console.log && break; sleep 1; done
           shot playing.png
           for i in $(seq 1 60); do grep -q "SMOKE offline-playback" console.log && break; sleep 1; done
@@ -90,7 +99,7 @@ jobs:
           # Back in front the shell finds the page "black" (the probe says so) and loads it anew.
           for i in $(seq 1 60); do grep -q "SMOKE revived" console.log && break; sleep 1; done
           shot revived.png
-          kill $LOG $APP || true
+          kill $LOG $APP $MEM || true
           # Pictures the smoke run took of Oni's own window (OniPlayer.snapshot).
           cp "$(xcrun simctl get_app_container "$DEVICE" local.wave.player data)"/Documents/shot-*.png . 2>/dev/null || true
           scrub
@@ -135,6 +144,7 @@ jobs:
             search-link.png
             revived.png
             shot-*.png
+            mem.log
             app.log
             console.log
             *.ipa

@@ -850,6 +850,43 @@ async function swipeTabs() {
   await sleep(300);
 }
 
+/** What a friend did before his iPhone reloaded Oni (26.10.2026): History, then Liked, a few times;
+ * then Next a few times with Now Playing open. Marks with the time go to the console; the cloud run
+ * logs the page's memory each second beside them (ios.yml, mem.log). */
+async function memoryWalk() {
+  const w = wave() as unknown as { navigate(r: unknown): void; useApp: { setState(s: object): void } };
+  const mark = (name: string) => console.log(`SMOKE-MARK ${name} ${Date.now()}`);
+  const main = document.querySelector<HTMLElement>('.main');
+  const scroll = async () => {
+    for (let i = 0; i < 6 && main; i++) {
+      main.scrollTop = main.scrollHeight;
+      await sleep(500);
+    }
+  };
+  mark('walk-start');
+  for (let round = 1; round <= 3; round++) {
+    w.navigate({ name: 'history' });
+    await until(() => document.querySelectorAll('.track-row').length, 15000);
+    mark(`history-${round}`);
+    await scroll();
+    w.navigate({ name: 'library', tab: 'tracks' });
+    await until(() => document.querySelectorAll('.track-row').length, 15000);
+    mark(`liked-${round}`);
+    await scroll();
+  }
+  const { next } = await import('./player/player.ts');
+  w.useApp.setState({ nowPlayingOpen: true });
+  await until(() => document.querySelector('.nowplaying'), 5000);
+  for (let i = 1; i <= 8; i++) {
+    await next(true);
+    mark(`np-next-${i}`);
+    await sleep(2500);
+  }
+  w.useApp.setState({ nowPlayingOpen: false });
+  mark('walk-end');
+  report('memory-walk', true, 'see mem.log beside the SMOKE-MARK lines');
+}
+
 /** Playlist import on the phone (src/views/Import.tsx): a pasted list is found in Yandex Music, and a
  * Spotify link is read through the phone's own requests (CapacitorHttp; YouTube's is a JSON post).
  * Nothing is made in the account. */
@@ -1204,6 +1241,7 @@ export async function runSmoke() {
     await swipeBack();
     await importList();
     await swipeTabs();
+    await memoryWalk();
     await swipeTrack();
     await phoneTop();
     await moveTracks();
