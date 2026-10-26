@@ -3,7 +3,7 @@
 // Run: npm run test:import
 import type { Track } from '../src/api/types.ts';
 import { baseTitle, pick, queryOf, score } from '../src/import/match.ts';
-import { parseApple, parseSpotify, parseText, parseYoutubePage, sourceOf, type SourceTrack } from '../src/import/sources.ts';
+import { fetchSource, ImportError, parseApple, parseSpotify, parseText, parseYoutubePage, sourceOf, type SourceTrack } from '../src/import/sources.ts';
 
 let passed = 0;
 let failed = 0;
@@ -121,6 +121,17 @@ test('an unavailable track is left out; candidates come once', () => {
   const m = pick(src(['A'], 'Song', 200), [{ ...t, available: false } as Track, track('Song', ['A'], 201), track('Song', ['A'], 201)]);
   assert(m.candidates.length === 1 && m.candidates[0].track.durationMs === 201000, JSON.stringify(m.candidates.length));
 });
+
+// a service that never answers (YouTube in Russia without a VPN): given up, not waited for for ever
+const never = () => new Promise<never>(() => {});
+for (const link of ['https://www.youtube.com/playlist?list=PLx', 'https://open.spotify.com/playlist/abc']) {
+  const started = Date.now();
+  const why = await fetchSource(link, never, 200).then(
+    () => 'answered',
+    (e) => (e instanceof ImportError ? e.reason : String(e)),
+  );
+  test(`a service that does not answer is given up: ${link.split('/')[2]}`, () => assert(why === 'slow' && Date.now() - started < 2000, `${why} after ${Date.now() - started} ms`));
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

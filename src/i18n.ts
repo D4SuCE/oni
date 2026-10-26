@@ -560,6 +560,8 @@ const ru = {
       empty: 'В списке нет песен',
       network: 'Не удалось открыть ссылку — проверьте интернет',
     } as Record<'link' | 'private' | 'empty' | 'network', string>,
+    slow: (from: string, youtube: boolean) =>
+      `${from} не ответил за 25 секунд.${youtube ? ' В России YouTube сильно замедлен:' : ''} Попробуйте с включённым VPN — или вставьте список песен текстом.`,
   },
   own: {
     title: 'Своя волна',
@@ -1227,6 +1229,7 @@ const en: Dict = {
       empty: 'There are no songs in the list',
       network: 'Could not open the link — check the internet connection',
     },
+    slow: (from, youtube) => `${from} did not answer in 25 seconds.${youtube ? ' YouTube is slowed down a lot in Russia:' : ''} Try with a VPN on — or paste the songs as text.`,
   },
   own: {
     title: 'Own Wave',

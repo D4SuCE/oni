@@ -27,10 +27,25 @@ export interface SourceList {
 
 export type Fetch = <T = any>(req: HttpRequest) => Promise<HttpResponse<T>>;
 
+/** A service that does not answer in this long has not answered: in Russia YouTube is slowed down
+ * to a standstill, and the phone waited for it for ever (the user, 26.10.2026: "Find" — and an
+ * endless spinner on the iPhone, while the PC read the same link). */
+const WAIT_MS = 25_000;
+
+function within<T>(p: Promise<T>, ms = WAIT_MS): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new ImportError('slow')), ms);
+    p.then(
+      (v) => (clearTimeout(timer), resolve(v)),
+      (e) => (clearTimeout(timer), reject(e)),
+    );
+  });
+}
+
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
 
 export class ImportError extends Error {
-  reason: 'link' | 'private' | 'empty' | 'network';
+  reason: 'link' | 'private' | 'empty' | 'network' | 'slow';
   constructor(reason: ImportError['reason']) {
     super(reason);
     this.reason = reason;
@@ -188,11 +203,12 @@ function parseCsv(lines: string[], title: string): SourceList {
 }
 
 /** Reads a link's playlist, through the app's own requests (no browser limits, no sign-in). */
-export async function fetchSource(input: string, fetch: Fetch): Promise<SourceList> {
+/** `wait`: how long one answer is waited for (tests make it short). */
+export async function fetchSource(input: string, fetch: Fetch, wait = WAIT_MS): Promise<SourceList> {
   const src = sourceOf(input);
   if (!src) throw new ImportError('link');
   const page = async (url: string) => {
-    const r = await fetch<string>({ url, headers: { 'User-Agent': UA, 'Accept-Language': 'en' }, responseType: 'text' });
+    const r = await within(fetch<string>({ url, headers: { 'User-Agent': UA, 'Accept-Language': 'en' }, responseType: 'text' }), wait);
     if (r.status === 404) throw new ImportError('private');
     if (!r.ok) throw new ImportError('network');
     return r.data;
@@ -200,7 +216,7 @@ export async function fetchSource(input: string, fetch: Fetch): Promise<SourceLi
   let list: SourceList;
   if (src.kind === 'spotify') list = parseSpotify(await page(`https://open.spotify.com/embed/playlist/${src.id}`));
   else if (src.kind === 'apple') list = parseApple(await page(src.url));
-  else list = await fetchYoutube(src.id, fetch);
+  else list = await fetchYoutube(src.id, fetch, wait);
   if (!list.tracks.length) throw new ImportError('empty');
   return list;
 }
@@ -208,9 +224,9 @@ export async function fetchSource(input: string, fetch: Fetch): Promise<SourceLi
 const YTM = 'https://music.youtube.com/youtubei/v1/browse?prettyPrint=false';
 const YTM_CLIENT = { clientName: 'WEB_REMIX', clientVersion: '1.20241023.01.00', hl: 'en' };
 
-async function fetchYoutube(id: string, fetch: Fetch): Promise<SourceList> {
+async function fetchYoutube(id: string, fetch: Fetch, wait: number): Promise<SourceList> {
   const ask = async (body: object) => {
-    const r = await fetch({ method: 'POST', url: YTM, headers: { 'User-Agent': UA, Origin: 'https://music.youtube.com' }, json: { context: { client: YTM_CLIENT }, ...body } });
+    const r = await within(fetch({ method: 'POST', url: YTM, headers: { 'User-Agent': UA, Origin: 'https://music.youtube.com' }, json: { context: { client: YTM_CLIENT }, ...body } }), wait);
     if (!r.ok) throw new ImportError(r.status === 404 || r.status === 400 ? 'private' : 'network');
     return r.data;
   };
