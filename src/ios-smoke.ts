@@ -136,15 +136,25 @@ async function longPressMenu() {
  * On a chart track's album (Liked may be left in its "Move" mode by the steps before, and what plays
  * may be an upload, whose album is no page). */
 async function holdHintRound() {
-  const w = wave() as unknown as { navigate(r: unknown): void; api: { chart(): Promise<Track[]> } };
+  const w = wave() as unknown as { navigate(r: unknown): void; api: { chart(): Promise<Track[]> }; useApp?: { getState(): { route: { name: string } } } };
   const chart = await w.api.chart().catch(() => [] as Track[]);
-  const album = chart.find((t) => t.available !== false && t.albums?.[0]?.id)?.albums?.[0]?.id;
-  if (!album) return report('hold-hint-round', false, 'no album to open');
-  w.navigate({ name: 'album', id: album });
-  const button = (await until(() => [...document.querySelectorAll<HTMLElement>('.lib-actions .btn:not(.primary), .page-actions .btn:not(.primary)')].find((b) => b.textContent?.includes('Вперемешку')), 15000))
-    ? [...document.querySelectorAll<HTMLElement>('.lib-actions .btn:not(.primary), .page-actions .btn:not(.primary)')].find((b) => b.textContent?.includes('Вперемешку'))
-    : null;
-  if (!button) return report('hold-hint-round', false, 'no Shuffle on the album');
+  // The chart's albums, several tracks each: an album may not open from the cloud's Mac (Yandex
+  // keeps some to Russia), so up to three are tried (the step failed on a chart day like that).
+  const albums = [...new Set(chart.filter((t) => t.available !== false && (t.albums?.[0]?.trackCount ?? 2) > 1).map((t) => t.albums?.[0]?.id).filter(Boolean))].slice(0, 3);
+  if (!albums.length) return report('hold-hint-round', false, 'no album to open');
+  const shuffle = () => [...document.querySelectorAll<HTMLElement>('.lib-actions .btn:not(.primary), .page-actions .btn:not(.primary)')].find((b) => b.textContent?.includes('Вперемешку'));
+  let button: HTMLElement | undefined;
+  const tried: string[] = [];
+  for (const album of albums) {
+    w.navigate({ name: 'album', id: album });
+    if (await until(shuffle, 15000)) {
+      button = shuffle();
+      break;
+    }
+    const seen = [...document.querySelectorAll<HTMLElement>('.page-actions .btn, .lib-actions .btn')].map((b) => b.textContent?.trim()).join(' | ');
+    tried.push(`${album}: route ${w.useApp?.getState().route.name}, buttons [${seen}]`);
+  }
+  if (!button) return report('hold-hint-round', false, `no Shuffle on the albums: ${tried.join('; ')}`);
   const box = button.getBoundingClientRect();
   const at = { pointerId: 12, pointerType: 'touch', isPrimary: true, clientX: box.left + box.width / 2, clientY: box.top + box.height / 2, bubbles: true };
   button.dispatchEvent(new PointerEvent('pointerdown', at));
