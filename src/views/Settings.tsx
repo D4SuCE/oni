@@ -1,4 +1,4 @@
-import { Cloud, Download, ExternalLink, FileText, HardDriveDownload, LogOut, Mic, RefreshCw, Trash2, Undo2 } from 'lucide-react';
+import { ArchiveRestore, Cloud, Download, ExternalLink, FileText, HardDriveDownload, LogOut, Mic, RefreshCw, Trash2, Undo2 } from 'lucide-react';
 import { confirmDialog } from '../components/Dialog.tsx';
 import { formatSize, setAutoLikes, useAutoLikes, useOfflineVersion } from '../ui/offline.ts';
 import { setAutoOwn, useAutoOwn } from '../ui/ownOffline.ts';
@@ -357,6 +357,17 @@ function SyncPanel() {
           )}
         </div>
       </div>
+      {connected && (
+        <div className="settings-row">
+          <div>
+            <div>{t.backup.open}</div>
+            <div className="hint">{t.backup.openHint}</div>
+          </div>
+          <button className="btn ghost" onClick={() => navigate({ name: 'backup' })} data-testid="backup-open">
+            <ArchiveRestore size={16} /> {t.backup.open}
+          </button>
+        </div>
+      )}
       {canShare() && <SharePanel connected={Boolean(connected)} />}
     </div>
   );

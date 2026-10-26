@@ -38,3 +38,39 @@ await step("shared uploads: a playlist's own uploads go to a folder on Disk open
     await page.evaluate((f) => window.__wave.sync.disk.remove(f), folder);
   }
 });
+
+await step('backup: a snapshot holds the playlists in order and Liked; a playlist comes back from it as a new one, a like that left comes back (all removed again)', async () => {
+  // The user, 26.10.2026. The test run makes no daily backup of its own: the parts are tried.
+  const made = [];
+  let liked = null;
+  try {
+    const chart = await page.evaluate(() => window.__wave.api.chart().then((l) => l.filter((t) => t.available !== false).slice(10, 14)));
+    const pl = await page.evaluate(async (tracks) => {
+      const { api } = window.__wave;
+      const p = await api.createPlaylist('oni-e2e-backup');
+      return api.addToPlaylist(p, tracks.slice(0, 3), 0);
+    }, chart);
+    made.push(pl.kind);
+    const copy = await page.evaluate(() => window.__wave.backup.snapshot());
+    const kept = copy.playlists.find((p) => String(p.kind) === String(pl.kind));
+    const want = chart.slice(0, 3).map((t) => String(t.id));
+    if (!kept || kept.tracks.map((x) => x.id).join() !== want.join()) throw new Error(`the copy has ${JSON.stringify(kept)}`);
+    if (!copy.likes.length) throw new Error('no likes in the copy');
+    const back = await page.evaluate(([c, k]) => window.__wave.backup.restorePlaylist(c, k, 'oni-e2e-backup restored'), [copy, pl.kind]);
+    made.push(back.kind);
+    const again = await page.evaluate((k) => window.__wave.api.playlist(window.__wave.useApp.getState().account.uid, k, false), back.kind);
+    if ((again.tracks ?? []).map((i) => String(i.id)).join() !== want.join()) throw new Error(`restored ${JSON.stringify((again.tracks ?? []).map((i) => i.id))}`);
+    // a like that is not there now comes back from a copy that had it
+    const free = await page.evaluate((list) => { const l = window.__wave.useApp.getState().liked; return list.find((t) => !l.has(String(t.id))) ?? null; }, chart);
+    if (free) {
+      const key = free.albums?.[0]?.id ? `${free.id}:${free.albums[0].id}` : String(free.id);
+      liked = key;
+      const n = await page.evaluate((k) => window.__wave.backup.restoreLikes({ v: 1, at: 0, likes: [k], playlists: [] }), key);
+      if (n !== 1) throw new Error(`likes restored: ${n}`);
+    }
+    console.log(`       ${copy.playlists.length} playlists, ${copy.likes.length} likes in the copy; a playlist and ${free ? 'a like' : 'no like'} brought back`);
+  } finally {
+    if (liked) await page.evaluate((k) => window.__wave.api.setLiked([k], false), liked);
+    for (const k of made) await page.evaluate((kind) => window.__wave.api.deletePlaylist(kind), k);
+  }
+});

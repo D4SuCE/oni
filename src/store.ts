@@ -21,6 +21,7 @@ export type Route =
   | { name: 'downloads' }
   | { name: 'import' }
   | { name: 'shared'; link: string; owner?: string }
+  | { name: 'backup' }
   | { name: 'settings' };
 
 /** `downloads`: the iPhone shows Downloads as a Collection tab (the desktop has its own page). */
@@ -156,6 +157,11 @@ export async function init() {
 function lookAgain() {
   // and one's own shared uploads catch up with the playlists (src/share; the desktop, sharing on)
   setTimeout(() => void import('./share/owner.ts').then((m) => m.shareUploads()), 60_000);
+  // and the day's backup of the library (src/backup), once the Disk is there; not from a test run
+  setTimeout(() => {
+    if (transport.testMode) return;
+    void import('./sync/index.ts').then(({ useSync }) => useSync.getState().connected && import('./backup/backup.ts').then((m) => m.backUp())).catch(() => {});
+  }, 90_000);
   setTimeout(() => {
     checkWaiting()
       .then((added) => {

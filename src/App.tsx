@@ -31,6 +31,7 @@ import { PlaylistView } from './views/Playlist.tsx';
 import { Search } from './views/Search.tsx';
 import { ImportView } from './views/Import.tsx';
 import { SharedView } from './views/Shared.tsx';
+import { BackupView } from './views/Backup.tsx';
 import { SettingsView } from './views/Settings.tsx';
 import { isIos } from './ui/platform.ts';
 import { ownToKeep } from './ui/ownOffline.ts';
@@ -38,6 +39,7 @@ import { leadingSilence } from './player/silence.ts';
 import { useSwipeBack } from './ui/swipe.ts';
 import { useCover } from './ui/offline.ts';
 import { readMark, withMark } from './share/mark.ts';
+import { restoreLikes, restorePlaylist, snapshot } from './backup/backup.ts';
 import { round as shareRound } from './share/owner.ts';
 import { asTrack, readShared } from './share/shared.ts';
 
@@ -120,7 +122,7 @@ function Main() {
   // The iPhone: a page opened from somewhere (a playlist, an album, a mix, an artist) goes back
   // with a pull down from its top. The tabs' own pages have nowhere to go back to.
   const view$ = useCallback(() => ref.current?.querySelector<HTMLElement>('.view-enter') ?? null, []);
-  useSwipeBack(ref, view$, back, isIos && ['playlist', 'album', 'mix', 'artist', 'import', 'shared'].includes(route.name));
+  useSwipeBack(ref, view$, back, isIos && ['playlist', 'album', 'mix', 'artist', 'import', 'shared', 'backup'].includes(route.name));
   let view;
   switch (route.name) {
     case 'home':
@@ -153,6 +155,9 @@ function Main() {
       break;
     case 'import':
       view = <ImportView />;
+      break;
+    case 'backup':
+      view = <BackupView />;
       break;
     case 'shared':
       view = <SharedView link={route.link} owner={route.owner} />;
@@ -237,5 +242,5 @@ export function App() {
 
 // Handy for debugging and for the automated UI test.
 Object.assign(window, {
-  __wave: { share: { round: shareRound, read: (link: string) => readShared(link, (r) => transport.request(r)), asTrack, readMark, withMark }, offline, storage, ownToKeep, silence: { leadingSilence }, usePlayer, useApp, audio, api, navigate, recsFeedback, current, playTracks, setSleep, setVolume, toggleShuffle, toggleLike, findMix, eqOutputLevel, levelLift, pulseLevel, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } } },
+  __wave: { backup: { snapshot, restorePlaylist, restoreLikes }, share: { round: shareRound, read: (link: string) => readShared(link, (r) => transport.request(r)), asTrack, readMark, withMark }, offline, storage, ownToKeep, silence: { leadingSilence }, usePlayer, useApp, audio, api, navigate, recsFeedback, current, playTracks, setSleep, setVolume, toggleShuffle, toggleLike, findMix, eqOutputLevel, levelLift, pulseLevel, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } } },
 });
