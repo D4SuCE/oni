@@ -32,7 +32,7 @@
 **Сделано 25.10.2026 вечером:** оптимизация (раздел ниже), выпущено в 1.22.1 (sidestore build 184; IPA 6,2 → 5,3 МБ).
 **26.10.2026:** пульс обложки — только в бочку (`player/beat.ts`: `bassFlux`, `KickDetector`; iPhone шлёт уровни четырёх
 низких полос, `PlayerPlugin.swift`), Esc закрывает поиск (`useEscape`, `ui/util.ts`), на iPhone перемотка свайпом по
-панели плеера (`useSwipeSeek`, `ui/swipe.ts`) — **выпущено в 1.24.0**.
+панели плеера (`useSwipeSeek`, `ui/swipe.ts`) — **выпущено в 1.24.0** (sidestore build 199).
 **Дальше:** «Своя волна» и полный пульт (пробная `trial-own-wave-2`, ветка `feat/full-remote`) + перенос плейлистов →
 выпуск 2.0.0. Тексты рядом с обложкой — макет https://claude.ai/artifact/ShWVsiDKY9g1F4t85tcsLB, ждёт выбора варианта.
 
