@@ -29,6 +29,7 @@ import { MixView } from './views/Mix.tsx';
 import { Login } from './views/Login.tsx';
 import { PlaylistView } from './views/Playlist.tsx';
 import { Search } from './views/Search.tsx';
+import { ImportView } from './views/Import.tsx';
 import { SettingsView } from './views/Settings.tsx';
 import { isIos } from './ui/platform.ts';
 import { ownToKeep } from './ui/ownOffline.ts';
@@ -145,6 +146,9 @@ function Main() {
     case 'downloads':
       // A Library tab, its tabs above it (src/views/Library.tsx).
       view = <Library tab="downloads" />;
+      break;
+    case 'import':
+      view = <ImportView />;
       break;
     case 'settings':
       view = <SettingsView />;

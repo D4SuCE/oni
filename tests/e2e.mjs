@@ -14,4 +14,5 @@ await import('./e2e/07-playback.mjs');
 await import('./e2e/08-layout.mjs');
 await import('./e2e/09-history-sync.mjs');
 await import('./e2e/10-recap-ui.mjs');
+await import('./e2e/11-import.mjs');
 await finish();

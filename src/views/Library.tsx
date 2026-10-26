@@ -1,4 +1,4 @@
-import { ArrowUpDown, Heart, Library as LibraryIcon, MoreHorizontal, Plus, Radio, Shuffle } from 'lucide-react';
+import { ArrowUpDown, Heart, Import, Library as LibraryIcon, MoreHorizontal, Plus, Radio, Shuffle } from 'lucide-react';
 import { openMenu } from '../components/Menu.tsx';
 import { isIos } from '../ui/platform.ts';
 import { DownloadButton } from '../components/DownloadButton.tsx';
@@ -181,6 +181,19 @@ function NewPlaylistCard() {
   );
 }
 
+/** Bringing a playlist over from Spotify, Apple Music, YouTube or a list (src/views/Import.tsx). */
+function ImportCard() {
+  const t = useT();
+  return (
+    <button className="card new-card" onClick={() => navigate({ name: 'import' })} data-testid="import-card">
+      <div className="card-cover new-cover">
+        <Import size={34} />
+      </div>
+      <div className="card-title">{t.transfer.title}</div>
+    </button>
+  );
+}
+
 /** Liked tracks shown as a playlist, like Spotify's "Liked Songs". */
 export function LikedSongsCard() {
   const count = useApp((s) => s.likedKeys.length);
@@ -205,6 +218,7 @@ function Playlists() {
       <Section title={t.library.yourPlaylists}>
         <div className="grid">
           <NewPlaylistCard />
+          <ImportCard />
           <LikedSongsCard />
           {playlists.map((p) => (
             <PlaylistCard key={`${p.uid}-${p.kind}`} playlist={p} />

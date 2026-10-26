@@ -4077,3 +4077,156 @@ html.anim-hamon .icon-btn:active,
 html.anim-hamon .play-btn:active {
   transform: scale(0.94);
 }
+
+/* ------------------------------------------------------------ playlist import (views/Import.tsx) */
+
+.import-page .page-header.compact {
+  min-height: 0;
+  padding-bottom: 8px;
+}
+.import-hint {
+  max-width: 760px;
+  margin: 0 0 14px;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+.import-input {
+  display: block;
+  width: 100%;
+  max-width: 760px;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+}
+.import-input:focus {
+  border-color: var(--gold-soft);
+}
+.import-error {
+  margin: 10px 0;
+  color: var(--accent-hi);
+}
+.import-bar {
+  height: 3px;
+  max-width: 760px;
+  margin: 4px 0 14px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.import-bar > div {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+.import-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 12px;
+}
+.import-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 96px;
+}
+.import-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 6px 10px;
+  border-radius: 10px;
+}
+.import-row:hover {
+  background: var(--hover);
+}
+.import-mark {
+  justify-self: center;
+}
+.import-row.found .import-mark {
+  color: var(--gold);
+}
+.import-row.maybe .import-mark {
+  color: var(--text);
+}
+.import-row.none .import-mark {
+  color: var(--text-3);
+}
+.import-mark.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.import-row.skipped .import-src .import-title {
+  color: var(--text-2);
+}
+.import-title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.import-sub {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.import-found .btn {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.import-create {
+  position: sticky;
+  bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  max-width: 760px;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+}
+.import-create input {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+.import-create input:focus {
+  border-color: var(--gold-soft);
+}
+
+/* A narrow window and the iPhone: what was asked for over what was found. */
+@media (max-width: 700px) {
+  .import-row {
+    grid-template-columns: 22px minmax(0, 1fr) 36px;
+    row-gap: 2px;
+  }
+  .import-found {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .import-row > .icon-btn {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+}

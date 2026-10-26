@@ -7,6 +7,7 @@ import { ApiError, trackKey } from './api/yandex.ts';
 import { tr, useLang } from './i18n.ts';
 import { dropFromQueue, offline, onNetworkLost, setDislikedCheck, setLikedCheck, setOfflineMode, usePlayer, warmWave, waveFeedback } from './player/player.ts';
 import { connectDisk, startSync } from './sync/index.ts';
+import { checkWaiting } from './import/run.ts';
 
 export type Route =
   | { name: 'home' }
@@ -18,6 +19,7 @@ export type Route =
   | { name: 'history' }
   | { name: 'mix'; id: string }
   | { name: 'downloads' }
+  | { name: 'import' }
   | { name: 'settings' };
 
 /** `downloads`: the iPhone shows Downloads as a Collection tab (the desktop has its own page). */
@@ -138,6 +140,7 @@ export async function init() {
     refreshLibrary();
     warmWave();
     startSync();
+    lookAgain();
   } catch (e) {
     // No network (not a refused token): start from what was saved last time, with the downloads.
     const cached = loadJson<Account | null>(ACCOUNT_CACHE, null);
@@ -145,6 +148,19 @@ export async function init() {
     toast(tr().toast.loginFailed(errorText(e)));
     set({ auth: 'login' });
   }
+}
+
+/** Tracks of imported playlists Yandex had not got: asked for again once a day, added to their
+ * playlist once found (src/import/run.ts). A little after the start, so it does not slow it. */
+function lookAgain() {
+  setTimeout(() => {
+    checkWaiting()
+      .then((added) => {
+        for (const [title, n] of added ?? []) toast(tr().transfer.addedLater(title, n));
+        if (added?.size) refreshPlaylists();
+      })
+      .catch(() => {});
+  }, 30_000);
 }
 
 const ACCOUNT_CACHE = 'app.account.v1';
