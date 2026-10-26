@@ -151,7 +151,7 @@ async function holdHintRound() {
   // keeps some to Russia), so up to three are tried (the step failed on a chart day like that).
   const albums = [...new Set(chart.filter((t) => t.available !== false && (t.albums?.[0]?.trackCount ?? 2) > 1).map((t) => t.albums?.[0]?.id).filter(Boolean))].slice(0, 3);
   if (!albums.length) return report('hold-hint-round', false, 'no album to open');
-  const shuffle = () => [...document.querySelectorAll<HTMLElement>('.lib-actions .btn:not(.primary), .page-actions .btn:not(.primary)')].find((b) => b.textContent?.includes('Вперемешку'));
+  const shuffle = () => [...document.querySelectorAll<HTMLElement>('.lib-actions .btn:not(.primary), .page-actions .btn:not(.primary)')].find((b) => b.textContent?.includes('Вперемешку') && b.getBoundingClientRect().width > 0);
   let button: HTMLElement | undefined;
   const tried: string[] = [];
   for (const album of albums) {
