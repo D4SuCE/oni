@@ -7,6 +7,7 @@ import { Segmented } from '../components/Wave.tsx';
 import { LANGS, setLang, useLang, useT } from '../i18n.ts';
 import { canAnalyzeAudio } from '../player/eq.ts';
 import { offline, recsFeedback, setCrossfade, setNormalize, stats, usePlayer } from '../player/player.ts';
+import { SMART_EVERY, setSmartEvery, useSmartEvery } from '../recs/smartShuffle.ts';
 import type { SpaceRules } from '../player/offline.ts';
 import { logout, navigate, toast, useApp } from '../store.ts';
 import { setMotion, setPulse, useMotion, usePulse } from '../ui/motion.ts';
@@ -26,6 +27,7 @@ export function SettingsView() {
   const account = useApp((s) => s.account);
   const normalize = usePlayer((s) => s.normalize);
   const crossfade = usePlayer((s) => s.crossfade);
+  const smartEvery = useSmartEvery((s) => s.every);
   const lang = useLang((s) => s.lang);
   const motion = useMotion((s) => s.enabled);
   const pulse = usePulse((s) => s.enabled);
@@ -133,6 +135,24 @@ export function SettingsView() {
             data-testid="crossfade"
           />
           <div className="hint">{s.crossfadeHint}</div>
+        </div>
+        <div className="slider-row">
+          <div className="slider-head">
+            <span>{s.smartEvery}</span>
+            <span className="slider-value">{s.smartEveryValue(smartEvery)}</span>
+          </div>
+          <input
+            type="range"
+            className="range"
+            min={SMART_EVERY.min}
+            max={SMART_EVERY.max}
+            step={1}
+            value={smartEvery}
+            style={{ '--p': `${((smartEvery - SMART_EVERY.min) / (SMART_EVERY.max - SMART_EVERY.min)) * 100}%` } as React.CSSProperties}
+            onChange={(e) => setSmartEvery(Number(e.target.value))}
+            data-testid="smart-every"
+          />
+          <div className="hint">{s.smartEveryHint}</div>
         </div>
         {isIos && <PhoneSound />}
       </div>

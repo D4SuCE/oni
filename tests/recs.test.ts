@@ -236,6 +236,11 @@ await test('smart shuffle: a suggestion after every three tracks, none already i
   const out = interleave(list, picked);
   assert(out.length === 12, `9 + 3, got ${out.length}`);
   assert([3, 7, 11].every((i) => picked.includes(out[i])), 'suggestions sit after every third track');
+  // the setting (Settings > Playback): after every track, after every two
+  const each = interleave(list.slice(0, 3), picked, 1);
+  assert(each.map((t) => (picked.includes(t) ? 'r' : 'o')).join('') === 'ororor', each.map((t) => t.id).join());
+  const two = interleave(list.slice(0, 6), picked, 2);
+  assert([2, 5, 8].every((i) => picked.includes(two[i])) && two.length === 9, two.map((t) => t.id).join());
 });
 
 await test('play stats: finished at 85%, skipped under 30 s, last 30 days only', () => {
