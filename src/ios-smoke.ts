@@ -162,6 +162,9 @@ async function holdHintRound() {
     tried.push(`${album}: route ${w.useApp?.getState().route.name}, buttons [${seen}]`);
   }
   if (!button) return report('hold-hint-round', false, `no Shuffle on the albums: ${tried.join('; ')}`);
+  // the album's page settles (it drew anew once more, and the button found had gone: 0 px wide)
+  await sleep(1000);
+  button = shuffle() ?? button;
   const box = button.getBoundingClientRect();
   const at = { pointerId: 12, pointerType: 'touch', isPrimary: true, clientX: box.left + box.width / 2, clientY: box.top + box.height / 2, bubbles: true };
   button.dispatchEvent(new PointerEvent('pointerdown', at));
