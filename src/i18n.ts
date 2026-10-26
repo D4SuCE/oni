@@ -573,7 +573,7 @@ const ru = {
     tagline: 'Любимое, похожее, забытые хиты и новинки ваших исполнителей. Учится на ходу: дослушали — будет похожее, пропустили — меньше такого',
     modes: { familiar: 'Знакомое', balanced: 'Поровну', fresh: 'Новое' } as Record<OwnMode, string>,
     group: 'Своя волна',
-    groupHint: 'Сколько в ней знакомого и сколько нового. Меняется сразу, со следующего трека.',
+    groupHint: 'Сколько в ней знакомого и сколько нового. Выбор включает «Свою волну» заново — с новым треком.',
   },
   wave: {
     kicker: (days: number) => `Без повторов · фильтр ${days ? `${days} дн.` : 'выкл.'}`,
@@ -1244,7 +1244,7 @@ const en: Dict = {
     tagline: 'Favourites, similar tracks, forgotten hits and new releases from your artists. It learns as it plays: heard to the end, more like it; skipped, less of it',
     modes: { familiar: 'Familiar', balanced: 'Balanced', fresh: 'New' },
     group: 'Own Wave',
-    groupHint: 'How much of it is familiar and how much new. Applies at once, from the next track.',
+    groupHint: 'How much of it is familiar and how much new. A pick starts Own Wave anew, with a new track.',
   },
   wave: {
     kicker: (days) => `No repeats · filter ${days ? `${days} d` : 'off'}`,

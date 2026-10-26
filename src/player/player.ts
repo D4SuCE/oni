@@ -670,16 +670,17 @@ export async function playOwnWave() {
   await startWave({ kind: 'wave', station: { seed: OWN_SEED, title: tr().own.title, label: { key: 'ownWave' } } });
 }
 
-/** «Своя волна»'s share of familiar and new; while it plays, what is queued ahead is picked anew. */
+/**
+ * «Своя волна»'s share of familiar and new. A pick of it starts «Своя волна» anew with it, a new
+ * track at once — as a Yandex-side setting starts My Wave. It used to pick only what was queued
+ * ahead, and from My Wave it did nothing at all (the user, 26.10.2026: "it looks as if nothing
+ * happened").
+ */
 export function setOwnMode(ownMode: OwnMode) {
   set({ ownMode });
   savePrefs();
   if (elsewhere) return elsewhere.send('setOwnMode', [ownMode]);
-  if (engine instanceof OwnWave && isOwnWave(get().source)) {
-    engine.mode = ownMode;
-    set((s) => ({ queue: s.queue.slice(0, s.index + 1) }));
-    void fillWave();
-  }
+  void playOwnWave();
 }
 
 /** Bumped by every start: a start overtaken by a newer one (a setting picked again meanwhile)

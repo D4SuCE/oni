@@ -305,7 +305,7 @@ await step('volume levelling: a loud track turned down, a quiet one raised while
   if (!r.shuffled.shuffle || !near(r.shuffled.lift, 10 ** (5 / 20))) throw new Error(`shuffled album: ${JSON.stringify(r)}`);
 });
 
-await step('«Своя волна»: a button beside "Tune" starts Oni\'s own station from the account\'s music; it plays, says so, and its "New" share picks what comes next anew', async () => {
+await step('«Своя волна»: a button beside "Tune" starts Oni\'s own station from the account\'s music; it plays, says so, and a pick of its share ("New") starts it anew with a new track', async () => {
   await page.click('[data-testid="nav-home"]');
   await page.click('[data-testid="own-wave"]');
   await page.waitForFunction(() => window.__wave.usePlayer.getState().source?.station?.seed === 'oni:own', null, { timeout: 15000 });
@@ -319,12 +319,14 @@ await step('«Своя волна»: a button beside "Tune" starts Oni\'s own st
   const first = await page.evaluate(() => String(window.__wave.current()?.id));
   await page.click('[data-testid="next"]');
   await page.waitForFunction((id) => String(window.__wave.current()?.id) !== id && !window.__wave.audio.paused, first, { timeout: 30000 });
-  // "New": the queue ahead is made again, the kicker says so; back to "Balanced".
-  const ahead = await page.evaluate(() => { const s = window.__wave.usePlayer.getState(); return s.queue.slice(s.index + 1).map((t) => String(t.id)).join(); });
+  // "New": the station starts anew with it, a new track at once (the user, 26.10.2026: picking a
+  // mode looked as if nothing happened); back to "Balanced".
+  const playing = await page.evaluate(() => String(window.__wave.current()?.id));
   await page.click('[data-testid="wave-tune"]');
   await page.locator('[data-testid="own-modes"] .segmented button', { hasText: 'Новое' }).click();
-  await page.waitForFunction((was) => { const s = window.__wave.usePlayer.getState(); return s.ownMode === 'fresh' && s.queue.length - s.index > 2 && s.queue.slice(s.index + 1).map((t) => String(t.id)).join() !== was; }, ahead, { timeout: 30000 });
+  await page.waitForFunction((was) => { const s = window.__wave.usePlayer.getState(); return s.ownMode === 'fresh' && s.source?.station?.seed === 'oni:own' && String(window.__wave.current()?.id) !== was && !window.__wave.audio.paused; }, playing, { timeout: 30000 });
   await page.locator('[data-testid="own-modes"] .segmented button', { hasText: 'Поровну' }).click();
+  await page.waitForFunction(() => window.__wave.usePlayer.getState().ownMode === 'balanced' && !window.__wave.usePlayer.getState().waveBusy, null, { timeout: 30000 });
   await page.keyboard.press('Escape');
   await page.locator('.drawer-backdrop').click({ position: { x: 5, y: 5 } }).catch(() => {});
   await shot('17-own-wave');
