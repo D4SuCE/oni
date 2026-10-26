@@ -1,6 +1,6 @@
 // Touch: drag a full-screen sheet down to close it, as Now Playing closes in music apps.
 
-import { useEffect, useState, type RefObject } from 'react';
+import { useEffect, type RefObject } from 'react';
 import { haptic } from './haptics.ts';
 
 /** Where a drag is something else's: sliders, rows dragged into order (a handle, a list in
@@ -125,41 +125,45 @@ export function useSwipeBack(scroller: RefObject<HTMLElement | null>, page: () =
 }
 
 /**
- * Seek by a sideways swipe along a strip — the iPhone's player bar, as in Yandex Music's app (the
- * user, 26.10.2026). The strip's width is the whole track and the time moves from where it was;
- * letting go jumps there. Returns the time the finger points at while it swipes (null otherwise).
- * A tap stays a tap (the bar opens Now Playing, its buttons work); after a swipe the click that
- * follows is swallowed, so a swipe that starts on a button does not press it.
+ * A sideways swipe along a strip turns the track — the iPhone's player bar, as in Yandex Music's
+ * app (the user, 26.10.2026: the next or the previous track, not the time within it). Left: the
+ * next; right: the previous. What `slide` returns follows the finger; far enough (a quarter of the
+ * strip) or a quick flick turns, anything less springs back. A tap stays a tap (the bar opens Now
+ * Playing, its buttons work); after a swipe the click that follows is swallowed.
  */
-export function useSwipeSeek(ref: RefObject<HTMLElement | null>, now: () => { position: number; duration: number }, onSeek: (seconds: number) => void, enabled = true) {
-  const [at, setAt] = useState<number | null>(null);
+export function useSwipeTrack(ref: RefObject<HTMLElement | null>, slide: () => HTMLElement | null, turn: (dir: 'next' | 'prev') => boolean, enabled = true) {
   useEffect(() => {
     const el = ref.current;
     if (!el || !enabled) return;
-    let start: { x: number; y: number; from: number; duration: number } | null = null;
-    let seeking = false;
-    let to = 0;
+    let start: { x: number; y: number; t: number } | null = null;
+    let swiping = false;
+    let dx = 0;
+    const place = (x: number, ms: number, opacity = 1) => {
+      const s = slide();
+      if (!s) return;
+      s.style.transition = ms ? `transform ${ms}ms ease, opacity ${ms}ms ease` : 'none';
+      s.style.transform = x ? `translateX(${x}px)` : '';
+      s.style.opacity = opacity === 1 ? '' : String(opacity);
+    };
     const down = (e: TouchEvent) => {
-      const { position, duration } = now();
       const touch = e.touches[0];
-      start = e.touches.length === 1 && duration > 0 && !(e.target as Element).closest(NOT_A_SWIPE) ? { x: touch.clientX, y: touch.clientY, from: position, duration } : null;
-      seeking = false;
+      start = e.touches.length === 1 && !(e.target as Element).closest(NOT_A_SWIPE) ? { x: touch.clientX, y: touch.clientY, t: e.timeStamp } : null;
+      swiping = false;
+      dx = 0;
     };
     const drag = (e: TouchEvent) => {
       if (!start) return;
       const touch = e.touches[0];
-      const dx = touch.clientX - start.x;
+      dx = touch.clientX - start.x;
       const dy = touch.clientY - start.y;
-      if (!seeking) {
-        // Up or down first: not a seek (the page scrolls, Now Playing opens).
+      if (!swiping) {
+        // Up or down first: not a swipe (the page scrolls, Now Playing opens).
         if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) return void (start = null);
         if (Math.abs(dx) < 12) return;
-        seeking = true;
-        haptic('tick');
+        swiping = true;
       }
       e.preventDefault();
-      to = Math.max(0, Math.min(start.duration - 1, start.from + (dx / el.clientWidth) * start.duration));
-      setAt(to);
+      place(dx, 0, Math.max(0.3, 1 - Math.abs(dx) / el.clientWidth));
     };
     const swallow = (e: Event) => {
       e.stopPropagation();
@@ -167,14 +171,24 @@ export function useSwipeSeek(ref: RefObject<HTMLElement | null>, now: () => { po
     };
     const up = (e: TouchEvent) => {
       if (!start) return;
+      const fast = Math.abs(dx) / Math.max(1, e.timeStamp - start.t) > FLICK;
       start = null;
-      if (!seeking) return;
-      seeking = false;
-      setAt(null);
-      if (e.type !== 'touchend') return;
-      onSeek(to);
+      if (!swiping) return;
+      swiping = false;
       el.addEventListener('click', swallow, { capture: true });
       setTimeout(() => el.removeEventListener('click', swallow, { capture: true }), 400);
+      const far = Math.abs(dx) > el.clientWidth / 4 || (fast && Math.abs(dx) > 40);
+      const dir = dx < 0 ? 'next' : 'prev';
+      if (e.type !== 'touchend' || !far) return place(0, 200);
+      // out the way it went, the track turns, the new one comes in from the other side
+      const out = Math.sign(dx) * el.clientWidth * 0.5;
+      place(out, 140, 0);
+      setTimeout(() => {
+        if (!turn(dir)) return place(0, 200);
+        haptic('tick');
+        place(-out * 0.6, 0, 0);
+        requestAnimationFrame(() => requestAnimationFrame(() => place(0, 200)));
+      }, 140);
     };
     el.addEventListener('touchstart', down, { passive: true });
     el.addEventListener('touchmove', drag, { passive: false });
@@ -186,6 +200,5 @@ export function useSwipeSeek(ref: RefObject<HTMLElement | null>, now: () => { po
       el.removeEventListener('touchend', up);
       el.removeEventListener('touchcancel', up);
     };
-  }, [ref, now, onSeek, enabled]);
-  return at;
+  }, [ref, slide, turn, enabled]);
 }

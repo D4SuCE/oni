@@ -761,37 +761,30 @@ async function playlistActions() {
   report('playlist-actions', over === 0 && placed && items.some((i) => /удалить|delete/i.test(i ?? '')), `${over} off screen; ${where}; menu: ${items.join(', ')}`);
 }
 
-/** A sideways swipe along the player bar seeks (src/ui/swipe.ts, useSwipeSeek; the user, 26.10.2026,
- * as in Yandex Music's app): the time shows in place of the artists while the finger moves, and a
- * third of the bar's width moves the track by a third of its length. */
-async function swipeSeek() {
-  const app = (window as unknown as { __wave: { useApp: { setState(s: object): void }; usePlayer: { getState(): { position: number; duration: number } } } }).__wave;
+/** A sideways swipe along the player bar turns the track (src/ui/swipe.ts, useSwipeTrack; the user,
+ * 26.10.2026, as in Yandex Music's app): left, the next one; right, back to the one before. */
+async function swipeTrack() {
+  const app = (window as unknown as { __wave: { useApp: { setState(s: object): void }; usePlayer: { getState(): { index: number; queue: { id: string }[] } } } }).__wave;
   app.useApp.setState({ nowPlayingOpen: false });
   await until(() => !document.querySelector('.nowplaying'), 3000);
   const bar = document.querySelector<HTMLElement>('.playerbar');
   const target = document.querySelector('.playerbar .pb-meta');
-  const { position, duration } = app.usePlayer.getState();
-  if (!bar || !target || duration < 30) return report('swipe-seek', false, `bar ${Boolean(bar)}, duration ${duration}`);
-  const width = bar.clientWidth;
-  const from = Math.min(position, duration * 0.4);
-  if (Math.abs(position - from) > 1) {
-    const { seek } = await import('./player/player.ts');
-    seek(from);
-    await sleep(800);
-  }
-  const start = app.usePlayer.getState().position;
-  const touch = (x: number) => new Touch({ identifier: 4, target, clientX: x, clientY: bar.getBoundingClientRect().top + 20 });
-  const xs = [60, 75, 95, 60 + width * 0.15, 60 + width * 0.3];
-  target.dispatchEvent(new TouchEvent('touchstart', { touches: [touch(xs[0])], changedTouches: [touch(xs[0])], bubbles: true, cancelable: true }));
-  for (const x of xs.slice(1)) {
-    target.dispatchEvent(new TouchEvent('touchmove', { touches: [touch(x)], changedTouches: [touch(x)], bubbles: true, cancelable: true }));
-    await sleep(30);
-  }
-  const shown = await until(() => document.querySelector('[data-testid="scrub-time"]')?.textContent, 1000);
-  target.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [touch(xs[xs.length - 1])], bubbles: true, cancelable: true }));
-  const want = start + duration * 0.3;
-  const moved = await until(() => Math.abs(app.usePlayer.getState().position - want) < 5, 6000);
-  report('swipe-seek', Boolean(shown) && Boolean(moved) && !document.querySelector('.nowplaying'), `"${shown || ''}", ${start.toFixed(0)} → ${app.usePlayer.getState().position.toFixed(0)} s (want ${want.toFixed(0)} of ${duration.toFixed(0)})`);
+  const { index, queue } = app.usePlayer.getState();
+  if (!bar || !target || index + 1 >= queue.length) return report('swipe-track', false, `bar ${Boolean(bar)}, ${index + 1} of ${queue.length}`);
+  const swipe = (xs: number[]) => {
+    const y = bar.getBoundingClientRect().top + 20;
+    const touch = (x: number) => new Touch({ identifier: 4, target, clientX: x, clientY: y });
+    target.dispatchEvent(new TouchEvent('touchstart', { touches: [touch(xs[0])], changedTouches: [touch(xs[0])], bubbles: true, cancelable: true }));
+    for (const x of xs.slice(1)) target.dispatchEvent(new TouchEvent('touchmove', { touches: [touch(x)], changedTouches: [touch(x)], bubbles: true, cancelable: true }));
+    target.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [touch(xs[xs.length - 1])], bubbles: true, cancelable: true }));
+  };
+  const w = bar.clientWidth;
+  swipe([w * 0.8, w * 0.75, w * 0.6, w * 0.4]);
+  const forward = await until(() => app.usePlayer.getState().index === index + 1, 4000);
+  await sleep(600);
+  swipe([w * 0.2, w * 0.25, w * 0.4, w * 0.6]);
+  const back = await until(() => app.usePlayer.getState().index === index, 4000);
+  report('swipe-track', Boolean(forward) && Boolean(back) && !document.querySelector('.nowplaying'), `${index} → ${forward ? index + 1 : '?'} → ${app.usePlayer.getState().index} of ${queue.length}`);
 }
 
 /** On a page opened from somewhere (the own playlist above), a pull down from its top goes back
@@ -1100,7 +1093,7 @@ export async function runSmoke() {
     await textResponse();
     await playlistActions();
     await swipeBack();
-    await swipeSeek();
+    await swipeTrack();
     await phoneTop();
     await moveTracks();
     // The Taptic Engine's plugin is there and answers (the simulator has nothing to feel).
