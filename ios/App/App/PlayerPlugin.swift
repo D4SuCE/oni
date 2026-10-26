@@ -829,15 +829,24 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     // MARK: the beat pulse
 
     /// The bass, listened to for the page's beat pulse (src/player/pulse.ts): the music after the
-    /// two players meet, low-passed at 150 Hz, its loudness in dB about 60 times a second (as the
-    /// desktop's analyser gives it) and the rise of it ("flux"), each with the moment it will be
-    /// heard (wall clock, ms). Sent to the page a few at a time; it finds the beats.
+    /// two players meet, as the desktop's analyser hears it — the levels (dB) of its four lowest
+    /// bins (≈47, 94, 141, 188 Hz: band-pass filters, a 1024-sample window, smoothed by half,
+    /// about 60 times a second), each with the moment it will be heard (wall clock, ms). Sent to
+    /// the page a few at a time; it finds the kicks (`bassFlux`, `KickDetector`). It used to be
+    /// one low-pass loudness mapped over −100…−30 dB, where a loud song's bass stayed at the top
+    /// and the cover hardly throbbed (tests/beat.test.ts, "a loud master").
     private var pulseOn = false
-    private var lowState: (x1: Float, x2: Float, y1: Float, y2: Float) = (0, 0, 0, 0)
-    private var lowCoeffs: (b0: Float, b1: Float, b2: Float, a1: Float, a2: Float) = (0, 0, 0, 0, 0)
+    private static let pulseBands = 4
+    private static let pulseWindow = 1024
+    /// Per band: the biquad's coefficients (b0, b2, a1, a2; b1 is 0) and state, the squares of the
+    /// last window and their sum, and the smoothed level.
+    private var bandCoeffs: [(b0: Float, b2: Float, a1: Float, a2: Float)] = []
+    private var bandState: [(x1: Float, x2: Float, y1: Float, y2: Float)] = []
+    private var bandSquares: [[Float]] = []
+    private var bandSum: [Float] = []
+    private var bandLevel: [Float] = []
+    private var windowAt = 0
     private var hopFill = 0
-    private var hopEnergy: Float = 0
-    private var level: Float = 0
 
     /// { on } — listen to the bass for the page's beat pulse, or stop (it costs a little power).
     @objc func pulse(_ call: CAPPluginCall) {
@@ -858,60 +867,71 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         }
         let format = mix.outputFormat(forBus: 0)
         let rate = Float(format.sampleRate > 0 ? format.sampleRate : 44100)
-        // A low-pass biquad at 150 Hz (RBJ's cookbook), Q 0.707: the kick and the bass.
-        let w = 2 * Float.pi * 150 / rate
-        let alpha = sin(w) / (2 * 0.707)
-        let a0 = 1 + alpha
-        lowCoeffs = (b0: (1 - cos(w)) / 2 / a0, b1: (1 - cos(w)) / a0, b2: (1 - cos(w)) / 2 / a0, a1: -2 * cos(w) / a0, a2: (1 - alpha) / a0)
-        lowState = (0, 0, 0, 0)
+        // Band-pass biquads (RBJ's cookbook, 0 dB at the centre), Q 3, at the analyser's bins
+        // (48 kHz / 1024 apart).
+        bandCoeffs = (1...PlayerPlugin.pulseBands).map { k in
+            let w = 2 * Float.pi * 46.875 * Float(k) / rate
+            let alpha = sin(w) / (2 * 3)
+            let a0 = 1 + alpha
+            return (b0: alpha / a0, b2: -alpha / a0, a1: -2 * cos(w) / a0, a2: (1 - alpha) / a0)
+        }
+        bandState = Array(repeating: (0, 0, 0, 0), count: PlayerPlugin.pulseBands)
+        bandSquares = Array(repeating: Array(repeating: 0, count: PlayerPlugin.pulseWindow), count: PlayerPlugin.pulseBands)
+        bandSum = Array(repeating: 0, count: PlayerPlugin.pulseBands)
+        bandLevel = Array(repeating: 0, count: PlayerPlugin.pulseBands)
+        windowAt = 0
         hopFill = 0
-        hopEnergy = 0
         let hop = Int(rate / 60)
         mix.installTap(onBus: 0, bufferSize: 2048, format: nil) { [weak self] buffer, when in
             self?.listen(buffer, when: when, hop: hop, rate: Double(rate))
         }
     }
 
-    /// One buffer of the music (the tap's thread): its bass, hop by hop.
+    /// One buffer of the music (the tap's thread): its low bands, hop by hop.
     private func listen(_ buffer: AVAudioPCMBuffer, when: AVAudioTime, hop: Int, rate: Double) {
         guard let data = buffer.floatChannelData else { return }
         let frames = Int(buffer.frameLength)
         let channels = Int(buffer.format.channelCount)
-        let c = lowCoeffs
-        var st = lowState
+        let bands = PlayerPlugin.pulseBands
+        let size = PlayerPlugin.pulseWindow
         // When the buffer's first frame is heard, on the wall clock (ms).
         let session = AVAudioSession.sharedInstance()
         let lead = when.isHostTimeValid ? AVAudioTime.seconds(forHostTime: when.hostTime) - CACurrentMediaTime() : 0
         let start = Date().timeIntervalSince1970 * 1000 + (lead + session.outputLatency + session.ioBufferDuration) * 1000
         var at: [Double] = []
-        var flux: [Double] = []
+        var db: [Double] = []
         for i in 0..<frames {
             var x: Float = 0
             for ch in 0..<channels { x += data[ch][i] }
             x /= Float(max(1, channels))
-            let y = c.b0 * x + c.b1 * st.x1 + c.b2 * st.x2 - c.a1 * st.y1 - c.a2 * st.y2
-            st = (x, st.x1, y, st.y1)
-            hopEnergy += y * y
+            for b in 0..<bands {
+                let c = bandCoeffs[b]
+                let s = bandState[b]
+                let y = c.b0 * x + c.b2 * s.x2 - c.a1 * s.y1 - c.a2 * s.y2
+                bandState[b] = (x, s.x1, y, s.y1)
+                let sq = y * y
+                bandSum[b] += sq - bandSquares[b][windowAt]
+                bandSquares[b][windowAt] = sq
+            }
+            windowAt = (windowAt + 1) % size
             hopFill += 1
             if hopFill >= hop {
-                let rms = (hopEnergy / Float(hopFill)).squareRoot()
-                // dB mapped as the desktop's analyser maps it (−100…−30 dB to 0…1), smoothed by half.
-                let db = 20 * log10(max(rms, 1e-7))
-                let now = min(1, max(0, (db + 100) / 70))
-                let smoothed = 0.5 * level + 0.5 * now
-                flux.append(Double(max(0, smoothed - level)))
-                level = smoothed
+                for b in 0..<bands {
+                    let rms = (max(0, bandSum[b]) / Float(size)).squareRoot()
+                    // smoothed by half, as the analyser smooths; × 0.297: a sine's level in a
+                    // Blackman-windowed bin (|X| / N) against its RMS here
+                    bandLevel[b] = 0.5 * bandLevel[b] + 0.5 * rms
+                    db.append(Double(20 * log10(max(bandLevel[b] * 0.297, 1e-10))))
+                }
                 at.append(start + Double(i) / rate * 1000)
                 hopFill = 0
-                hopEnergy = 0
             }
         }
-        lowState = st
         // Sent with each buffer (~20 a second): held back to ten a second, most came after they
         // were heard and the cover throbbed late (the simulator run's trace).
         DispatchQueue.main.async {
             guard self.pulseOn, !at.isEmpty else { return }
-            self.notifyListeners("beat", data: ["at": at, "flux": flux])
+            self.notifyListeners("beat", data: ["at": at, "db": db])
         }
     }
 

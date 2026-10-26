@@ -447,12 +447,11 @@ async function recap() {
   report('recap-stories', Boolean(opened) && full && summary && shareOk && swiped, `${full ? 'full screen' : 'not full screen'}, summary ${summary ? 'reached' : 'not reached'}, share ${shareOk ? 'there' : 'missing'}, ${swiped ? 'closed by a pull down' : 'a pull down did not close it'}`);
 }
 
-/** The beat pulse on the phone: the native player sends the bass, the page finds beats in it and
+/** The beat pulse on the phone: the native player sends the bass, the page finds kicks in it and
  * Now Playing's cover throbs (Now Playing is open here, the music playing). */
 async function iosPulse() {
   const { setPulse } = await import('./ui/motion.ts');
   const { pulseDebug, resetPulseDebug } = await import('./player/pulse.ts');
-  const w = window as unknown as { __wave: { pulseTempo(): number | null } };
   resetPulseDebug();
   setPulse(true);
   // Up to 25 s, done at the first throb: a cloud Mac's beats come late and few (one to three in 20 s
@@ -461,7 +460,7 @@ async function iosPulse() {
   await until(() => pulseDebug().peak > 0.2, 25000);
   const cover = Number((document.querySelector('.np-cover') as HTMLElement | null)?.style.getPropertyValue('--beat') || -1);
   const seen = pulseDebug();
-  report('ios-pulse', seen.peak > 0.2 && cover >= 0, `peak ${seen.peak.toFixed(2)}, tempo ${w.__wave.pulseTempo()?.toFixed(0) ?? 'none'}, cover --beat ${cover} ${JSON.stringify(seen)}`);
+  report('ios-pulse', seen.peak > 0.2 && cover >= 0, `peak ${seen.peak.toFixed(2)}, cover --beat ${cover} ${JSON.stringify(seen)}`);
 }
 
 /**

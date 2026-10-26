@@ -12,7 +12,7 @@ import { PlayerBar } from './components/PlayerBar.tsx';
 import { Sidebar, useSidebar } from './components/Sidebar.tsx';
 import { SoundPanel } from './components/SoundPanel.tsx';
 import { eqOutputLevel, levelLift } from './player/eq.ts';
-import { pulseLevel, pulseTempo } from './player/pulse.ts';
+import { pulseLevel } from './player/pulse.ts';
 import { cx } from './ui/util.ts';
 import { deviceSync, disk, syncNow, useSync } from './sync/index.ts';
 import { disconnect, elsewhereSync, leave, listen, look, publish, useElsewhere } from './sync/elsewhere.ts';
@@ -226,5 +226,5 @@ export function App() {
 
 // Handy for debugging and for the automated UI test.
 Object.assign(window, {
-  __wave: { offline, storage, ownToKeep, silence: { leadingSilence }, usePlayer, useApp, audio, api, navigate, recsFeedback, playTracks, setSleep, setVolume, toggleShuffle, toggleLike, findMix, eqOutputLevel, levelLift, pulseLevel, pulseTempo, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } } },
+  __wave: { offline, storage, ownToKeep, silence: { leadingSilence }, usePlayer, useApp, audio, api, navigate, recsFeedback, playTracks, setSleep, setVolume, toggleShuffle, toggleLike, findMix, eqOutputLevel, levelLift, pulseLevel, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } } },
 });

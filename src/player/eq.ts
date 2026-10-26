@@ -89,6 +89,13 @@ export function tapAnalyser(): AnalyserNode {
   return a;
 }
 
+/** How long after the analyser hears the music it leaves the speakers (ms): the context's own
+ * buffering and the output device's (Bluetooth headphones: ~0.2 s). */
+export function outputDelay() {
+  if (!ctx) return 0;
+  return ((ctx.baseLatency || 0) + (ctx.outputLatency || 0)) * 1000;
+}
+
 /** The desktop's levelling above full volume (1: none); only where Web Audio hears the stream. */
 export function setBoost(value: number) {
   if (isIos || value === boost) return;
