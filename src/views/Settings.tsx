@@ -22,7 +22,7 @@ import { cx } from '../ui/util.ts';
 import { ANIM_EFFECTS, setAnimEffect, setAnimEnabled, useAnim } from '../ui/anim.ts';
 import { artistNames } from '../api/yandex.ts';
 import { connectDisk, disconnectDisk, syncNow, useSync } from '../sync/index.ts';
-import { canShare, setSharing, shareUploads, useShare } from '../share/owner.ts';
+import { setSharing, shareUploads, useShare } from '../share/owner.ts';
 
 export function SettingsView() {
   const account = useApp((s) => s.account);
@@ -368,7 +368,7 @@ function SyncPanel() {
           </button>
         </div>
       )}
-      {canShare() && <SharePanel connected={Boolean(connected)} />}
+      <SharePanel connected={Boolean(connected)} />
     </div>
   );
 }

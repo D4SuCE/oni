@@ -104,6 +104,22 @@ export class YandexDisk implements DiskLike {
     if (r.status !== 201 && r.status !== 202 && !r.ok) this.fail('upload', r);
   }
 
+  /** A file the Disk fetches itself from `url` (an upload's stream: no bytes go through the device,
+   * so the iPhone shares as the desktop does); done when the Disk says so, in a minute at most. */
+  async uploadFrom(path: string, url: string): Promise<void> {
+    const r = await this.call('POST', `${API}/upload`, { path: `app:/${path}`, url });
+    if (r.status !== 202) this.fail('upload', r);
+    const op = (r.data as any)?.href;
+    for (let i = 0; op && i < 60; i++) {
+      await new Promise((ok) => setTimeout(ok, i ? 1000 : 300));
+      const s = await timed(this.transport.request<any>({ url: op }));
+      if (s.status === 401) throw new DiskAuthError('Yandex Disk: not authorized');
+      if (s.data?.status === 'success') return;
+      if (s.data?.status === 'failed') throw new Error('Yandex Disk upload: failed');
+    }
+    throw new Error('Yandex Disk upload: no answer');
+  }
+
   /** A file's bytes, `path` inside Oni's folder (an uploaded track kept by the backup). */
   async readBytes(path: string): Promise<ArrayBuffer> {
     const link = await this.call('GET', `${API}/download`, { path: `app:/${path}` });

@@ -24,7 +24,16 @@ await step("shared uploads: a playlist's own uploads go to a folder on Disk open
     await waitPlaying(1, 60000);
     const playing = await page.evaluate(() => window.__wave.usePlayer.getState().queue[window.__wave.usePlayer.getState().index]?.share?.file);
     if (playing !== pl.tracks[0].file) throw new Error(`playing ${playing}`);
-    console.log(`       "${pl.title}": ${pl.tracks.map((t) => t.title).join(', ')} — played from the Disk`);
+    // a friend downloads one: kept on the device, its file from the owner's Disk (removed again)
+    const one = await page.evaluate(([l, x]) => window.__wave.share.asTrack(x, l, 'e2e'), [link, pl.tracks[1]]);
+    try {
+      await page.evaluate((t) => window.__wave.share.downloadShared(t), one);
+      const kept = await page.evaluate((id) => window.__wave.offline.entry(id)?.size ?? 0, one.id);
+      if (kept < 50000) throw new Error(`downloaded ${kept} bytes`);
+    } finally {
+      await page.evaluate((id) => window.__wave.offline.remove(id), one.id);
+    }
+    console.log(`       "${pl.title}": ${pl.tracks.map((t) => t.title).join(', ')} — played from the Disk, one downloaded`);
     // the friend's page: his uploaded playlists by the link, a row per track, Play plays them
     await page.evaluate(() => window.__wave.audio.pause());
     await page.evaluate((l) => window.__wave.navigate({ name: 'shared', link: l, owner: 'e2e' }), link);

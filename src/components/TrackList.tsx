@@ -26,11 +26,13 @@ export const plainArtists = (t: Track) => isUpload(t) && !catalogTrack(t);
 export function trackMenu(t: Track, extra: MenuItem[] = []): MenuItem[] {
   const app = useApp.getState();
   const own = app.playlists.filter((p) => isOwn(p));
-  // a friend's upload from his Disk (src/share): only "add to mine", as one's own upload
+  // a friend's upload from their Disk (src/share): "add to mine", as one's own upload, and download
   if (t.share)
-    return transport.canUpload
-      ? [{ label: tr().shared.toMine, icon: <Plus size={15} />, submenu: own.map((p) => ({ label: p.title, onClick: () => void addToMine(t, p).then(() => toast(tr().shared.added(1, p.title)), (e) => toast(tr().shared.addFailed(t.title, errorText(e)))) })) }, ...extra]
-      : extra;
+    return [
+      ...(transport.canUpload ? [{ label: tr().shared.toMine, icon: <Plus size={15} />, submenu: own.map((p) => ({ label: p.title, onClick: () => void addToMine(t, p).then(() => toast(tr().shared.added(1, p.title)), (e) => toast(tr().shared.addFailed(t.title, errorText(e)))) })) }] : []),
+      ...(offline && !offline.has(t.id) ? [{ label: tr().menu.download, icon: <Download size={15} />, onClick: () => void downloadTrack(t) }] : []),
+      ...extra,
+    ];
   const liked = app.liked.has(String(t.id));
   const tx = tr();
   const playlistItems: MenuItem[] = [

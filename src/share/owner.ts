@@ -2,11 +2,11 @@
 // own uploads in it goes into the "shared" folder of Oni's folder on his Yandex Disk — a file per
 // track (one for a track in two playlists) and index.json — the folder is opened by a link, and
 // the link goes, hidden, into the description of each of his playlists (mark.ts), so a friend he
-// sends any of them finds it. What left the playlists leaves the folder. The desktop does it (the
-// uploads are made there, and only its shell sends a file's bytes to the Disk).
+// sends any of them finds it. What left the playlists leaves the folder. Any device does it: the
+// Disk fetches each file itself from the upload's stream (the user, 26.10.2026: "why only the PC?").
 
 import { create } from 'zustand';
-import { api, storage, transport } from '../api/client.ts';
+import { api, storage } from '../api/client.ts';
 import type { Playlist, Track } from '../api/types.ts';
 import { disk, useSync } from '../sync/index.ts';
 import { readMark, withMark } from './mark.ts';
@@ -32,9 +32,6 @@ export interface ShareState {
 // first (the user, 26.10.2026: "the main new thing"; switched off by hand, it stays off).
 export const useShare = create<ShareState>(() => ({ on: storage.getItem(ON) !== '0', busy: false, done: 0, total: 0, at: null, tracks: 0, playlists: 0, error: null }));
 
-/** The desktop with a Disk: it can share (the iPhone's shell sends no file's bytes up). */
-export const canShare = () => transport.platform === 'electron';
-
 export function setSharing(on: boolean) {
   storage.setItem(ON, on ? '1' : '0');
   useShare.setState({ on });
@@ -58,7 +55,7 @@ let running: Promise<void> | null = null;
 
 /** Brings the shared folder up to date with the playlists (one round at a time). */
 export function shareUploads(): Promise<void> {
-  if (!useShare.getState().on || !canShare() || !useSync.getState().connected) return Promise.resolve();
+  if (!useShare.getState().on || !useSync.getState().connected) return Promise.resolve();
   running ??= round().then(() => {}).finally(() => (running = null));
   return running;
 }
@@ -96,9 +93,7 @@ export async function round(opts: RoundOptions = {}): Promise<string | null> {
     const send = [...wanted].filter(([file]) => !there.has(file));
     useShare.setState({ total: send.length });
     for (const [file, t] of send) {
-      const stream = await api.stream(String(t.id));
-      const bytes = await transport.fetchBytes!(stream.url);
-      await disk.writeBytes(`${folder}/${file}`, bytes);
+      await disk.uploadFrom(`${folder}/${file}`, (await api.stream(String(t.id))).url);
       useShare.setState((s) => ({ done: s.done + 1 }));
     }
     // what left every playlist leaves the folder

@@ -5,8 +5,8 @@
 // Then (the user: "keep the likes, add the downloaded list, and the uploads by playlist as the
 // songs themselves"): each device's downloaded tracks, as a list to download again, and the user's
 // own uploaded mp3s as files, a folder a playlist (backup/uploads/<playlist>/<Artist - Title>.mp3),
-// so a playlist whose uploads are gone from Yandex comes back with them. The files are sent by the
-// desktop (only its shell sends a file's bytes); a file stays while any kept copy names it.
+// so a playlist whose uploads are gone from Yandex comes back with them. The Disk fetches the files
+// itself (any device); a file stays while any kept copy names it.
 
 import { api, storage, transport } from '../api/client.ts';
 import type { Playlist, Track } from '../api/types.ts';
@@ -41,7 +41,7 @@ export interface Backup {
   playlists: { kind: number | string; title: string; description?: string; tracks: BackupItem[] }[];
   /** Downloaded tracks, by device id: each device writes its own list (not in the first copies). */
   downloads?: Record<string, { platform: string; tracks: BackupItem[] }>;
-  /** Own uploads kept as files, by track id (the desktop's; not in the first copies). */
+  /** Own uploads kept as files, by track id (not in the first copies). */
   uploads?: Record<string, BackupUpload>;
 }
 
@@ -63,8 +63,8 @@ const asTrack = (x: BackupItem) => ({ id: x.id, albums: x.albumId ? [{ id: x.alb
 
 const keyOf = (x: BackupItem) => (x.albumId ? `${x.id}:${x.albumId}` : x.id);
 
-/** Only the desktop's shell sends a file's bytes to the Disk. */
-const keepsFiles = () => transport.platform === 'electron' && Boolean(transport.fetchBytes);
+/** Uploading to Yandex again (a playlist's uploads gone from it) takes the file's bytes. */
+const canUploadAgain = () => Boolean(transport.canUpload && transport.fetchBytes);
 
 /** A playlist's folder name: no characters a folder cannot have. */
 const folderName = (title: string) => title.replace(/[<>:"|?*\\/]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100) || 'Playlist';
@@ -127,10 +127,7 @@ export async function keepUploads(met: { track: Track; playlist: string }[], bef
           copied = true;
           break;
         }
-        if (!copied) {
-          const stream = await api.stream(id);
-          await disk.writeBytes(path, await transport.fetchBytes!(stream.url));
-        }
+        if (!copied) await disk.uploadFrom(path, (await api.stream(id)).url);
         (await inFolder(folder)).add(path.slice(folder.length + 1));
       }
       taken.set(path, id);
@@ -167,16 +164,14 @@ export async function backUp(now = Date.now()) {
   const today = days.includes(day) ? await read(day).catch(() => null) : null;
   const last = today ?? (days.length ? await read(days[0]).catch(() => null) : null);
   backup.downloads = { ...today?.downloads, ...backup.downloads };
-  backup.uploads = keepsFiles() ? await keepUploads(uploads, last?.uploads) : (today?.uploads ?? {});
+  backup.uploads = await keepUploads(uploads, last?.uploads);
   await disk.write(`${FOLDER}/${day}.json`, JSON.stringify(backup));
   storage.setItem(DONE, day);
   const old = days.filter((d) => d !== day).slice(KEEP - 1);
   for (const d of old) await disk.remove(`${FOLDER}/${d}.json`);
-  if (keepsFiles()) {
-    const kept = [backup, ...(await Promise.all(days.filter((d) => d !== day && !old.includes(d)).map((d) => read(d).catch(() => null))))];
-    // a copy that would not read: its files are not known, so nothing is swept this time
-    if (kept.every(Boolean)) await sweepUploads(kept as Backup[]);
-  }
+  const kept = [backup, ...(await Promise.all(days.filter((d) => d !== day && !old.includes(d)).map((d) => read(d).catch(() => null))))];
+  // a copy that would not read: its files are not known, so nothing is swept this time
+  if (kept.every(Boolean)) await sweepUploads(kept as Backup[]);
   return true;
 }
 
@@ -196,8 +191,8 @@ export async function read(day: string): Promise<Backup> {
 }
 
 /** A playlist of a copy, as a new playlist (the one there now is left as it is). Own uploads Yandex
- * no longer has are uploaded again from their files (the desktop; they join at the end, as Yandex
- * takes them in); `lost`: the uploads that could not come back. */
+ * no longer has are uploaded again from their files (they join at the end, as Yandex takes them
+ * in); `lost`: the uploads that could not come back. */
 export async function restorePlaylist(b: Backup, kind: number | string, title: string): Promise<Playlist & { lost?: number }> {
   const pl = b.playlists.find((p) => String(p.kind) === String(kind));
   if (!pl) throw new Error('no such playlist in the copy');
@@ -212,7 +207,7 @@ export async function restorePlaylist(b: Backup, kind: number | string, title: s
   for (const x of gone) {
     const file = b.uploads![x.id].files[0];
     try {
-      if (!keepsFiles()) throw new Error('the iPhone sends no files');
+      if (!canUploadAgain()) throw new Error('no uploads here');
       await api.upload({ name: file.slice(file.lastIndexOf('/') + 1), data: await disk.readBytes(file) }, made);
     } catch (e) {
       console.warn('backup: an upload not brought back', x.id, e);

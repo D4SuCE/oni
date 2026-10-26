@@ -13,7 +13,8 @@ import { TrackList } from '../components/TrackList.tsx';
 import { useT } from '../i18n.ts';
 import { extendList, playRadio, playShuffled, playTracks } from '../player/player.ts';
 import { back, errorText, isOwn, navigate, refreshPlaylists, samePlaylist, toast, togglePlaylistLike, useApp } from '../store.ts';
-import { readMark, visible } from '../share/mark.ts';
+import { visible } from '../share/mark.ts';
+import { shareLinkOf } from '../share/shared.ts';
 import { shareUploads } from '../share/owner.ts';
 import { isIos } from '../ui/platform.ts';
 import { cx, fmtTotal, useAsync } from '../ui/util.ts';
@@ -212,12 +213,7 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
         }
       />
       {/* a friend's playlist: his own uploads, shared through his Disk (src/share) */}
-      {!own && readMark(pl.description) && (
-        <button className="shared-banner glass" onClick={() => navigate({ name: 'shared', link: readMark(pl.description)!, owner: pl.owner?.name || pl.owner?.login })} data-testid="shared-banner">
-          <span className="shared-banner-title">{t.shared.banner(pl.owner?.name || pl.owner?.login || '')}</span>
-          <span className="shared-banner-hint">{t.shared.bannerHint}</span>
-        </button>
-      )}
+      {!own && <SharedBanner pl={pl} />}
       {uploading && (
         <div className="notice glass">
           <Spinner label={uploading} />
@@ -243,5 +239,20 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
         </div>
       )}
     </div>
+  );
+}
+
+/** A friend's playlist (their Liked too): the button to their own uploads, shared through their
+ * Disk (src/share), when any of their playlists has the mark. */
+function SharedBanner({ pl }: { pl: Playlist }) {
+  const t = useT();
+  const link = useAsync(() => shareLinkOf(pl, (uid) => api.userPlaylists(uid)), [pl.uid, pl.kind, pl.description]).data;
+  if (!link) return null;
+  const name = pl.owner?.name || pl.owner?.login || '';
+  return (
+    <button className="shared-banner glass" onClick={() => navigate({ name: 'shared', link, owner: name })} data-testid="shared-banner">
+      <span className="shared-banner-title">{t.shared.banner(name)}</span>
+      <span className="shared-banner-hint">{t.shared.bannerHint}</span>
+    </button>
   );
 }

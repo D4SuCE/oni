@@ -7,7 +7,8 @@
 // his own upload). This file: the folder's index, and reading it by its link (no sign-in needed).
 
 import type { HttpRequest, HttpResponse } from '../api/transport.ts';
-import type { Track } from '../api/types.ts';
+import type { Playlist, Track } from '../api/types.ts';
+import { readMark } from './mark.ts';
 
 /** Oni's folder on the Disk: the shared one inside it. */
 export const SHARED = 'shared';
@@ -61,7 +62,8 @@ export async function readShared(link: string, fetch: Fetch): Promise<SharedInde
 /** A shared track as the player and the lists take it. */
 export function asTrack(t: SharedTrack, link: string, owner: string): Track {
   return {
-    id: `share:${t.id}`,
+    // no colon: a download's file is named by the id (the desktop takes [\w-] only)
+    id: `share-${t.id}`,
     title: t.title,
     artists: t.artists.map((name, i) => ({ id: -1 - i, name })),
     albums: [],
@@ -77,4 +79,22 @@ export const isShared = (t: Track | undefined) => Boolean(t?.share);
 export function fileName(t: Track) {
   const artists = (t.artists ?? []).map((a) => a.name).join(', ');
   return `${artists ? `${artists} - ` : ''}${t.title}`.replace(/[<>:"|?*\\]+/g, ' ').replaceAll('/', ' ').replace(/\s+/g, ' ').trim().slice(0, 150) + '.mp3';
+}
+
+const links = new Map<string, Promise<string | null>>();
+
+/** The owner's shared folder, from any playlist of theirs: its own mark, or else one in another of
+ * their playlists — their Liked has no description to hold it (the user, 26.10.2026: a friend on
+ * one's Liked finds "Uploads" too). Asked once per owner. */
+export function shareLinkOf(pl: Playlist, theirs: (uid: number | string) => Promise<Playlist[]>): Promise<string | null> {
+  const own = readMark(pl.description);
+  if (own) return Promise.resolve(own);
+  const uid = pl.owner?.uid ?? pl.uid;
+  if (uid === undefined) return Promise.resolve(null);
+  let found = links.get(String(uid));
+  if (!found) {
+    found = theirs(uid).then((list) => list.map((p) => readMark(p.description)).find(Boolean) ?? null, () => null);
+    links.set(String(uid), found);
+  }
+  return found;
 }

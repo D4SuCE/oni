@@ -846,8 +846,9 @@ async function swipeTabs() {
     }
     target.dispatchEvent(new TouchEvent(end, { touches: [], changedTouches: [touch(to, 438)], bubbles: true, cancelable: true }));
   };
-  // a card or a row in the middle of the page, else its title
-  const middle = () => document.querySelector('.page .card, .page .track-row, .page .pl-row') ?? document.querySelector('.page .page-title') ?? document.querySelector('.page');
+  // a card or a row in the middle of the page; on an empty tab, the empty space below it (a swipe
+  // there went unheard: the user's Albums and Artists are empty)
+  const middle = () => document.querySelector('.page .card, .page .track-row, .page .pl-row') ?? document.querySelector('.main') ?? document.querySelector('.page');
   const tab = () => w.useApp.getState().route.tab;
   w.navigate({ name: 'library', tab: 'playlists' });
   await until(() => document.querySelector('.page .tabs'), 5000);

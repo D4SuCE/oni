@@ -252,7 +252,9 @@ function scrollsSideways(target: Element, page: Element) {
  */
 export function useSwipeTabs<T extends string>(ref: RefObject<HTMLElement | null>, tabs: readonly T[], current: T, go: (tab: T, dir: 'next' | 'prev') => void, enabled = true) {
   useEffect(() => {
-    const el = ref.current;
+    // the whole area under the tabs: a short tab (an empty Albums) leaves most of it below the page,
+    // where a swipe went unheard (the user, 26.10.2026)
+    const el = ref.current?.closest<HTMLElement>('.main') ?? ref.current;
     if (!el || !enabled || tabs.length < 2) return;
     let start: { x: number; y: number; t: number } | null = null;
     let last = { x: 0, y: 0 };

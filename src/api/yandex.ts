@@ -367,6 +367,11 @@ export class YandexMusic {
     return this.call<Playlist[]>(`/users/${await this.uid()}/playlists/list`);
   }
 
+  /** Someone else's own playlists (their open ones). */
+  async userPlaylists(uid: number | string): Promise<Playlist[]> {
+    return this.call<Playlist[]>(`/users/${uid}/playlists/list`);
+  }
+
   /** Other people's playlists the user liked; /playlists/list returns only their own. */
   async likedPlaylists(): Promise<Playlist[]> {
     const r = await this.call<any[]>(`/users/${await this.uid()}/likes/playlists`);

@@ -6,7 +6,8 @@ import { create } from 'zustand';
 import type { Album, Playlist, Track } from '../api/types.ts';
 import { ApiError, trackCover } from '../api/yandex.ts';
 import { saveList, savedList } from '../player/offlineLists.ts';
-import { api, storage } from '../api/client.ts';
+import { api, storage, transport } from '../api/client.ts';
+import { sharedFileUrl } from '../share/shared.ts';
 import { tr } from '../i18n.ts';
 import { iosBackgroundDownloads, showProgressInShade, useTrackProgress } from '../player/iosDownloads.ts';
 import { offline } from '../player/player.ts';
@@ -61,7 +62,16 @@ export const offlineState = (id: string | number): OfflineState =>
 /** How far a track's download is (0…1) where it is known: the iPhone's, through iOS. */
 export const useDownloadProgress = (id: string | number) => useTrackProgress((s) => s[String(id)]);
 
+/** A friend's shared upload (src/share) kept as a download: its file from the friend's Disk (the
+ * user, 26.10.2026: a friend can listen to one's uploads and download them). */
+export async function downloadShared(t: Track) {
+  if (!offline || !t.share || !transport.fetchBytes || offline.has(t.id)) return;
+  const url = await sharedFileUrl(t.share.link, t.share.file, (r) => transport.request(r));
+  await offline.keep(t, await transport.fetchBytes(url), 'mp3', 320);
+}
+
 export async function downloadTrack(t: Track) {
+  if (t.share) return void downloadShared(t).catch((e) => toast(tr().downloads.failedOne(errorText(e))));
   // The iPhone: through iOS too, sealed natively (no audio through the page) and with its ring.
   if (background) {
     showProgressInShade();

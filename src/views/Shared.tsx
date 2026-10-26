@@ -2,7 +2,7 @@
 // Disk; "+ Mine" puts a track into a playlist of one's own, as one's own upload (the user,
 // 26.10.2026). Reached from a playlist of his, by the button his Oni's hidden mark brings.
 
-import { Check, Loader2, Play, Plus } from 'lucide-react';
+import { ArrowDownToLine, Check, Download, Loader2, Play, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { transport } from '../api/client.ts';
 import type { Playlist, Track } from '../api/types.ts';
@@ -10,10 +10,11 @@ import { ErrorBox, Spinner } from '../components/Common.tsx';
 import { askText } from '../components/Dialog.tsx';
 import { openMenu } from '../components/Menu.tsx';
 import { useT } from '../i18n.ts';
-import { playTracks, toggle, usePlayer } from '../player/player.ts';
+import { offline, playTracks, toggle, usePlayer } from '../player/player.ts';
 import { addToMine } from '../share/mine.ts';
 import { asTrack, readShared } from '../share/shared.ts';
 import { createPlaylist, errorText, isOwn, toast, useApp } from '../store.ts';
+import { downloadShared, useOfflineVersion } from '../ui/offline.ts';
 import { cx, fmtTime, fmtTotal, useAsync } from '../ui/util.ts';
 
 export function SharedView({ link, owner }: { link: string; owner?: string }) {
@@ -24,6 +25,27 @@ export function SharedView({ link, owner }: { link: string; owner?: string }) {
   // per track: being added (spinner), added (a tick)
   const [adding, setAdding] = useState<Record<string, 'busy' | 'done'>>({});
   const playing = usePlayer((p) => (p.playing ? p.queue[p.index]?.id : undefined));
+  // downloads: kept on this device, to play with no network (the files come from the owner's Disk)
+  useOfflineVersion((v) => v.v);
+  const [fetching, setFetching] = useState<Set<string>>(new Set());
+  const download = async (list: Track[]) => {
+    for (const x of list) {
+      if (offline?.has(x.id)) continue;
+      setFetching((f) => new Set(f).add(x.id));
+      try {
+        await downloadShared(x);
+      } catch (err) {
+        toast(t.downloads.failedOne(errorText(err)));
+        return;
+      } finally {
+        setFetching((f) => {
+          const n = new Set(f);
+          n.delete(x.id);
+          return n;
+        });
+      }
+    }
+  };
   if (loading) return <Spinner />;
   if (error || !data) return <ErrorBox error={error ?? new Error(s.gone)} />;
   const name = data.owner.name || owner || '';
@@ -92,6 +114,11 @@ export function SharedView({ link, owner }: { link: string; owner?: string }) {
                 <Plus size={16} /> {s.addAll}
               </button>
             )}
+            {offline && (
+              <button className="btn glass-btn" onClick={() => void download(tracks)} disabled={!tracks.length || fetching.size > 0 || tracks.every((x) => offline!.has(x.id))} data-testid="shared-download-all">
+                {tracks.length && tracks.every((x) => offline!.has(x.id)) ? <Check size={16} /> : <Download size={16} />} {tracks.length && tracks.every((x) => offline!.has(x.id)) ? t.downloads.done : t.downloads.download}
+              </button>
+            )}
             <span className="muted">
               {t.count.tracks(tracks.length)}
               {total > 0 && `, ${fmtTotal(total)}`}
@@ -110,6 +137,11 @@ export function SharedView({ link, owner }: { link: string; owner?: string }) {
                     {x.durationMs ? ` · ${fmtTime(x.durationMs / 1000)}` : ''}
                   </div>
                 </div>
+                {offline && (
+                  <button className="icon-btn" disabled={fetching.has(x.id) || offline.has(x.id)} onClick={() => void download([x])} title={offline.has(x.id) ? t.menu.downloaded : t.menu.download} data-testid="shared-download">
+                    {fetching.has(x.id) ? <Loader2 size={15} className="spin" /> : offline.has(x.id) ? <Check size={15} /> : <ArrowDownToLine size={15} />}
+                  </button>
+                )}
                 {transport.canUpload &&
                   (adding[x.id] === 'done' ? (
                     <span className="import-taken">
