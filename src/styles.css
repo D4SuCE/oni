@@ -3768,6 +3768,25 @@ kbd {
   html.ios .pb-peer .pb-left {
     min-width: 0;
   }
+  /* A tab reached by a swipe (ui/swipe.ts, useSwipeTabs) slides in from the side it came from. */
+  html.ios .tab-from-next {
+    animation: tab-from-next 0.22s ease both;
+  }
+  html.ios .tab-from-prev {
+    animation: tab-from-prev 0.22s ease both;
+  }
+  @keyframes tab-from-next {
+    from {
+      transform: translateX(40px);
+      opacity: 0;
+    }
+  }
+  @keyframes tab-from-prev {
+    from {
+      transform: translateX(-40px);
+      opacity: 0;
+    }
+  }
   html.ios .playerbar.pb-fresh .pb-left > button:not(.pb-cover),
   html.ios .playerbar.pb-fresh .pb-center {
     animation: pb-fresh 0.45s ease both;

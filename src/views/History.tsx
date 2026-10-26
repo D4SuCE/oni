@@ -1,5 +1,5 @@
 import { History as HistoryIcon, ListMusic, Waves } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { api } from '../api/client.ts';
 import type { HistoryContext, HistoryGroup } from '../api/types.ts';
 import { ErrorBox, Spinner } from '../components/Common.tsx';
@@ -9,6 +9,8 @@ import { playTracks, recentPlays, useRecent } from '../player/player.ts';
 import type { RecentPlay } from '../player/recent.ts';
 import { navigate, samePlaylist, useApp } from '../store.ts';
 import { cx, useAsync } from '../ui/util.ts';
+import { isIos } from '../ui/platform.ts';
+import { useSwipeTabs } from '../ui/swipe.ts';
 import { RecapView } from './Recap.tsx';
 import { useListTitle } from '../components/SourceTitle.ts';
 
@@ -189,11 +191,21 @@ function FromYandex() {
   );
 }
 
+const HISTORY_TABS = ['app', 'yandex', 'recap'] as const;
+
 export function HistoryView() {
   const t = useT();
-  const [tab, setTab] = useState<'app' | 'yandex' | 'recap'>('app');
+  const [tab, setTab] = useState<(typeof HISTORY_TABS)[number]>('app');
+  // the iPhone: a swipe sideways goes to the next or the previous tab, sliding in from that side
+  const page = useRef<HTMLDivElement>(null);
+  const [from, setFrom] = useState<'next' | 'prev' | null>(null);
+  const go = useCallback((to: (typeof HISTORY_TABS)[number], dir: 'next' | 'prev') => {
+    setFrom(dir);
+    setTab(to);
+  }, []);
+  useSwipeTabs(page, HISTORY_TABS, tab, go, isIos);
   return (
-    <div className="page">
+    <div className="page" ref={page}>
       <h1 className="page-title">
         <HistoryIcon size={26} /> {t.nav.history}
       </h1>
@@ -208,7 +220,9 @@ export function HistoryView() {
           {t.recap.tab}
         </button>
       </div>
-      {tab === 'app' ? <InThisApp /> : tab === 'yandex' ? <FromYandex /> : <RecapView />}
+      <div key={tab} className={cx(from && `tab-from-${from}`)}>
+        {tab === 'app' ? <InThisApp /> : tab === 'yandex' ? <FromYandex /> : <RecapView />}
+      </div>
     </div>
   );
 }

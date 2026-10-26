@@ -824,6 +824,32 @@ async function swipeTrack() {
   report('swipe-track', Boolean(forward) && Boolean(back) && peers.every(Boolean) && !document.querySelector('.nowplaying'), `${index} → ${forward ? index + 1 : '?'} → ${app.usePlayer.getState().index} of ${queue.length}; the neighbour's card beside it: ${peers.join(', ')}`);
 }
 
+/** Tabs by a swipe (src/ui/swipe.ts, useSwipeTabs; the user, 26.10.2026): Collection — left to
+ * Albums, right back to Playlists; History — left to Yandex Music's tab. */
+async function swipeTabs() {
+  const w = wave() as unknown as { navigate(r: unknown): void; useApp: { getState(): { route: { name: string; tab?: string } } } };
+  const swipe = (target: Element, from: number, to: number) => {
+    const touch = (x: number) => new Touch({ identifier: 6, target, clientX: x, clientY: 420 });
+    target.dispatchEvent(new TouchEvent('touchstart', { touches: [touch(from)], changedTouches: [touch(from)], bubbles: true, cancelable: true }));
+    target.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [touch(to)], bubbles: true, cancelable: true }));
+  };
+  const title = () => document.querySelector('.page .page-title') ?? document.querySelector('.page');
+  w.navigate({ name: 'library', tab: 'playlists' });
+  await until(() => document.querySelector('.page .tabs'), 5000);
+  swipe(title()!, 300, 100);
+  const albums = await until(() => w.useApp.getState().route.tab === 'albums', 3000);
+  await sleep(400);
+  swipe(title()!, 100, 300);
+  const playlists = await until(() => w.useApp.getState().route.tab === 'playlists', 3000);
+  w.navigate({ name: 'history' });
+  await until(() => document.querySelector('[data-testid="history-yandex"]'), 5000);
+  swipe(title()!, 300, 100);
+  const yandex = await until(() => document.querySelector('[data-testid="history-yandex"].active'), 3000);
+  report('swipe-tabs', Boolean(albums && playlists && yandex), `Collection: albums ${albums}, back ${playlists}; History: Yandex ${Boolean(yandex)}`);
+  w.navigate({ name: 'home' });
+  await sleep(300);
+}
+
 /** Playlist import on the phone (src/views/Import.tsx): a pasted list is found in Yandex Music, and a
  * Spotify link is read through the phone's own requests (CapacitorHttp; YouTube's is a JSON post).
  * Nothing is made in the account. */
@@ -1177,6 +1203,7 @@ export async function runSmoke() {
     await playlistActions();
     await swipeBack();
     await importList();
+    await swipeTabs();
     await swipeTrack();
     await phoneTop();
     await moveTracks();

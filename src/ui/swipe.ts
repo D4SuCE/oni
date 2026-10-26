@@ -231,3 +231,57 @@ export function useSwipeTrack(ref: RefObject<HTMLElement | null>, peers: () => H
     };
   }, [ref, peers, turn, enabled]);
 }
+
+/** What scrolls sideways itself, or is dragged: a swipe there is its own, not the tabs'. */
+const OWN_SIDEWAYS = `${NOT_A_SWIPE}, .shelf, .tabs, .chips, .stories, input[type="range"]`;
+
+function scrollsSideways(target: Element, page: Element) {
+  for (let el: Element | null = target; el && el !== page; el = el.parentElement) {
+    if (el.matches(OWN_SIDEWAYS)) return true;
+    const style = getComputedStyle(el);
+    if ((style.overflowX === 'auto' || style.overflowX === 'scroll') && el.scrollWidth > el.clientWidth + 4) return true;
+  }
+  return false;
+}
+
+/**
+ * A page with tabs (Collection, History) goes to the next tab with a swipe left, the previous with
+ * a swipe right — the iPhone (the user, 26.10.2026). Not where something scrolls sideways itself (a
+ * row of covers, a slider) or is dragged; up and down stays the page's scroll. The new tab's page
+ * slides in from the side it was swiped from (`.tab-from-next` / `.tab-from-prev` on the page).
+ */
+export function useSwipeTabs<T extends string>(ref: RefObject<HTMLElement | null>, tabs: readonly T[], current: T, go: (tab: T, dir: 'next' | 'prev') => void, enabled = true) {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !enabled || tabs.length < 2) return;
+    let start: { x: number; y: number; t: number } | null = null;
+    const down = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      start = e.touches.length === 1 && !scrollsSideways(e.target as Element, el) ? { x: touch.clientX, y: touch.clientY, t: e.timeStamp } : null;
+    };
+    const up = (e: TouchEvent) => {
+      if (!start || e.type !== 'touchend') return void (start = null);
+      const touch = e.changedTouches[0];
+      const dx = touch.clientX - start.x;
+      const dy = touch.clientY - start.y;
+      const fast = Math.abs(dx) / Math.max(1, e.timeStamp - start.t) > FLICK;
+      start = null;
+      // sideways, clearly: far enough or a flick, and much more across than down
+      if (Math.abs(dx) < (fast ? 40 : 80) || Math.abs(dx) < 2 * Math.abs(dy)) return;
+      const at = tabs.indexOf(current);
+      const dir = dx < 0 ? 'next' : 'prev';
+      const to = tabs[at + (dir === 'next' ? 1 : -1)];
+      if (at < 0 || !to) return;
+      haptic('tick');
+      go(to, dir);
+    };
+    el.addEventListener('touchstart', down, { passive: true });
+    el.addEventListener('touchend', up);
+    el.addEventListener('touchcancel', up);
+    return () => {
+      el.removeEventListener('touchstart', down);
+      el.removeEventListener('touchend', up);
+      el.removeEventListener('touchcancel', up);
+    };
+  }, [ref, tabs, current, go, enabled]);
+}

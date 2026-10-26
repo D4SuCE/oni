@@ -3,7 +3,7 @@ import { openMenu } from '../components/Menu.tsx';
 import { isIos } from '../ui/platform.ts';
 import { DownloadButton } from '../components/DownloadButton.tsx';
 import { DownloadsView } from './Downloads.tsx';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { moved } from '../ui/dragSort.ts';
 import { api } from '../api/client.ts';
 import type { Track } from '../api/types.ts';
@@ -15,6 +15,7 @@ import { useT } from '../i18n.ts';
 import { offline, playRadio, playShuffled, playTracks } from '../player/player.ts';
 import { createPlaylist, errorText, navigate, refreshLibrary, toast, type LibraryTab, useApp } from '../store.ts';
 import { cx, useAsync } from '../ui/util.ts';
+import { useSwipeTabs } from '../ui/swipe.ts';
 import { useListSearch } from '../components/ListSearch.tsx';
 import { savedList, useKeepForOffline } from '../ui/offline.ts';
 import { ApiError, trackKey } from '../api/yandex.ts';
@@ -272,6 +273,14 @@ function Artists() {
 
 export function Library({ tab = 'playlists' }: { tab?: LibraryTab }) {
   const t = useT();
+  // the iPhone: a swipe sideways goes to the next or the previous tab (the one before slides in from the left)
+  const page = useRef<HTMLDivElement>(null);
+  const tabs = useMemo(() => (offline ? [...TABS, 'downloads' as const] : [...TABS]), []);
+  const go = useCallback((to: LibraryTab, dir: 'next' | 'prev') => {
+    navigate({ name: 'library', tab: to });
+    if (dir === 'prev') useApp.setState({ navDir: 'back' });
+  }, []);
+  useSwipeTabs(page, tabs, tab as (typeof tabs)[number], go, isIos && tab !== 'tracks');
   if (tab === 'tracks') {
     return (
       <div className="page">
@@ -283,7 +292,7 @@ export function Library({ tab = 'playlists' }: { tab?: LibraryTab }) {
     );
   }
   return (
-    <div className="page">
+    <div className="page" ref={page}>
       <h1 className="page-title">
         <LibraryIcon size={26} /> {t.nav.library}
       </h1>
