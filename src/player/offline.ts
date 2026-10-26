@@ -54,6 +54,8 @@ export interface OfflineEntry {
   cover?: boolean;
   /** ms epoch when it last played (room is made from those played longest ago). */
   played?: number;
+  /** Yandex has taken the track away: this copy is the only one, and making room never takes it. */
+  gone?: boolean;
 }
 
 const INDEX = 'offline.index.v1';
@@ -269,7 +271,17 @@ export class OfflineLibrary {
 
   private kept(e: OfflineEntry) {
     const id = String(e.track.id);
-    return this.pin(id) || this.protect(id) || this.busy.has(id) || (this.sessionStart > 0 && e.at >= this.sessionStart);
+    return Boolean(e.gone) || this.pin(id) || this.protect(id) || this.busy.has(id) || (this.sessionStart > 0 && e.at >= this.sessionStart);
+  }
+
+  /** A list seen online says Yandex has taken these away: their copies stay whatever the rules. */
+  keepGone(tracks: Track[]) {
+    let changed = false;
+    for (const t of tracks) {
+      const e = t.available === false ? this.index[String(t.id)] : undefined;
+      if (e && !e.gone) changed = e.gone = true;
+    }
+    if (changed) this.changed();
   }
 
   /** What `rules` would remove now: the long unplayed, then the longest unplayed down to the limit. */

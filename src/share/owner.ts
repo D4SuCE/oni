@@ -40,7 +40,7 @@ export function setSharing(on: boolean) {
 }
 
 /** A playlist's tracks, whole (a big one comes as ids: the rest asked for). */
-async function tracksOf(pl: Playlist): Promise<Track[]> {
+export async function tracksOf(pl: Playlist): Promise<Track[]> {
   const full = await api.playlist(pl.uid, pl.kind);
   const items = full.tracks ?? [];
   const missing = items.filter((i) => !i.track).map((i) => String(i.id));
@@ -49,7 +49,7 @@ async function tracksOf(pl: Playlist): Promise<Track[]> {
   return items.map((i) => i.track ?? byId.get(String(i.id))).filter((t): t is Track => Boolean(t));
 }
 
-const isUpload = (t: Track) => t.trackSource === 'UGC';
+export const isUpload = (t: Track) => t.trackSource === 'UGC';
 const fileOf = (t: Track) => `${t.id}.mp3`;
 
 let running: Promise<void> | null = null;

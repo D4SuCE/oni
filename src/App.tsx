@@ -39,8 +39,8 @@ import { leadingSilence } from './player/silence.ts';
 import { useSwipeBack } from './ui/swipe.ts';
 import { useCover } from './ui/offline.ts';
 import { readMark, withMark } from './share/mark.ts';
-import { restoreLikes, restorePlaylist, snapshot } from './backup/backup.ts';
-import { round as shareRound } from './share/owner.ts';
+import { keepUploads, restoreLikes, restorePlaylist, snapshot } from './backup/backup.ts';
+import { round as shareRound, useShare } from './share/owner.ts';
 import { asTrack, readShared } from './share/shared.ts';
 
 /** Blurred cover of the current track behind everything, cross-faded between tracks. */
@@ -242,5 +242,5 @@ export function App() {
 
 // Handy for debugging and for the automated UI test.
 Object.assign(window, {
-  __wave: { backup: { snapshot, restorePlaylist, restoreLikes }, share: { round: shareRound, read: (link: string) => readShared(link, (r) => transport.request(r)), asTrack, readMark, withMark }, offline, storage, ownToKeep, silence: { leadingSilence }, usePlayer, useApp, audio, api, navigate, recsFeedback, current, playTracks, setSleep, setVolume, toggleShuffle, toggleLike, findMix, eqOutputLevel, levelLift, pulseLevel, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } } },
+  __wave: { backup: { snapshot, restorePlaylist, restoreLikes, keepUploads }, share: { round: shareRound, useShare, read: (link: string) => readShared(link, (r) => transport.request(r)), asTrack, readMark, withMark }, offline, storage, ownToKeep, silence: { leadingSilence }, usePlayer, useApp, audio, api, navigate, recsFeedback, current, playTracks, setSleep, setVolume, toggleShuffle, toggleLike, findMix, eqOutputLevel, levelLift, pulseLevel, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } } },
 });

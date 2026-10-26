@@ -11,7 +11,7 @@ export function DownloadButton({ listKey, tracks, title }: { listKey: string; tr
   useOfflineVersion((s) => s.v);
   const running = useBatches((s) => s[listKey]);
   if (!offline || !tracks.length) return null;
-  const playable = tracks.filter((x) => x.available !== false);
+  const playable = tracks.filter((x) => x.available !== false || offline!.has(x.id));
   const all = playable.length > 0 && playable.every((x) => offline!.has(x.id));
   // The iPhone's lists download through iOS in the background, also across app restarts.
   const batch = background?.pendingFor(listKey) ? { done: playable.filter((x) => offline!.has(x.id)).length, total: playable.length } : running;

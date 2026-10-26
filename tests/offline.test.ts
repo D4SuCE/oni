@@ -262,6 +262,18 @@ await test('room: forgetting what has not played for a while, the playing one ke
   assert(swept === 2 && again.entries().map((e) => e.track.id).join() === 'now', `sweep ${swept}: ${again.entries().map((e) => e.track.id)}`);
 });
 
+await test('room: a downloaded track Yandex took away is never forgotten (its copy is the only one)', async () => {
+  // The user, 26.10.2026: a liked song gone from Yandex the next day.
+  const { lib, clock } = timed();
+  for (const id of ['gone', 'here']) await lib.download(track(id));
+  lib.keepGone([{ ...track('gone'), available: false }, { ...track('here'), available: true }, { ...track('never'), available: false }]);
+  assert(lib.entry('gone')!.gone === true && !lib.entry('here')!.gone, 'marked');
+  clock.now += 200 * DAY;
+  await lib.download(track('fresh'));
+  const removed = await lib.setSpace({ limit: 0, forgetDays: 90 });
+  assert(removed === 1 && lib.has('gone') && !lib.has('here') && lib.has('fresh'), `left: ${lib.entries().map((e) => e.track.id)}`);
+});
+
 await test('audio type by codec', () => {
   assert(audioType('mp3') === 'audio/mpeg' && audioType('aac-mp4') === 'audio/mp4' && audioType('flac-mp4') === 'audio/mp4' && audioType('he-aac') === 'audio/aac', 'types');
 });

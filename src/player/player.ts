@@ -777,8 +777,12 @@ export async function playTracks(tracks: Track[], start = 0, title = tr().common
   await startList(tracks, start, title, from, extra);
 }
 
+/** Yandex gives it, or its downloaded copy is here: a track Yandex took away (its rights ended)
+ * still plays from the copy (the user, 26.10.2026: a liked song gone the next day). */
+export const playable = (t: Track) => t.available !== false || Boolean(offline?.has(t.id));
+
 /** Playable now: available, and with no network downloaded. */
-const canPlay = (t: Track) => t.available !== false && (!offlineMode || Boolean(offline?.has(t.id)));
+const canPlay = (t: Track) => playable(t) && (!offlineMode || Boolean(offline?.has(t.id)));
 
 /** A list still coming in parts (a big playlist, ui/listLoader.ts): its later tracks join the
  * queue as they come, if it is what plays, in its order (not shuffled). */
@@ -814,8 +818,7 @@ async function startList(tracks: Track[], start: number, title: string, from?: P
 }
 
 export async function playShuffled(tracks: Track[], title = tr().common.list, from?: PlayContext, extra: PlayExtra = {}) {
-  const playable = tracks.filter((t) => t.available !== false);
-  await playTracks(shuffleArray(playable), 0, title, from, extra);
+  await playTracks(shuffleArray(tracks.filter(playable)), 0, title, from, extra);
 }
 
 /** The load (its loadSeq) that Pause was pressed during: it does not start when ready; and the

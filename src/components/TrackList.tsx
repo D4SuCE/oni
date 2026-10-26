@@ -128,7 +128,8 @@ interface RowProps {
 }
 
 const TrackRow = memo(function TrackRow({ track: t, index, active, playing, liked, showAlbum, onPlay, onRemove, rowMenu, saved, off, sortable, handle }: RowProps) {
-  const unavailable = t.available === false || Boolean(off);
+  // taken away by Yandex, but downloaded: it plays from the copy (player.ts, `playable`)
+  const unavailable = (t.available === false && saved !== 'done') || Boolean(off);
   const tx = useT();
   const cover = useCover(t, 100);
   // Being put in order: a hold is for dragging, not for the menu, and a tap plays nothing.

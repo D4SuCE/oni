@@ -42,7 +42,9 @@ function deviceId() {
 }
 
 export const disk = new YandexDisk(transport);
-export const deviceSync = new DeviceSync(disk, { history, playLog, recent: recentPlays, feedback: recsFeedback }, { id: deviceId(), platform: transport.platform });
+/** This device, as the other devices' files and the backup name it. */
+export const thisDevice = { id: deviceId(), platform: transport.platform };
+export const deviceSync = new DeviceSync(disk, { history, playLog, recent: recentPlays, feedback: recsFeedback }, thisDevice);
 
 let timer: ReturnType<typeof setInterval> | null = null;
 let running: Promise<void> | null = null;

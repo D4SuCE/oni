@@ -40,7 +40,7 @@ export class YandexDisk implements DiskLike {
     this.transport = transport;
   }
 
-  private async call<T = any>(method: 'GET' | 'DELETE' | 'PUT', url: string, query: Record<string, string | number>): Promise<{ status: number; data: T }> {
+  private async call<T = any>(method: 'GET' | 'DELETE' | 'PUT' | 'POST', url: string, query: Record<string, string | number>): Promise<{ status: number; data: T }> {
     const r = await timed(this.transport.request<T>({ method, url, query }));
     if (r.status === 401) throw new DiskAuthError('Yandex Disk: not authorized');
     return r;
@@ -82,6 +82,14 @@ export class YandexDisk implements DiskLike {
     return ((r.data as any)?._embedded?.items ?? []).filter((x: any) => x.type === 'file').map((x: any) => ({ name: x.name, modified: x.modified, md5: x.md5, size: x.size }));
   }
 
+  /** The folders in a folder of Oni's (the backup's uploads, a folder a playlist). */
+  async folders(path: string): Promise<string[]> {
+    const r = await this.call('GET', API, { path: `app:/${path}`, limit: 10000, fields: '_embedded.items.name,_embedded.items.type' });
+    if (r.status === 404) return [];
+    if (r.status !== 200) this.fail('list', r);
+    return ((r.data as any)?._embedded?.items ?? []).filter((x: any) => x.type === 'dir').map((x: any) => x.name);
+  }
+
   async mkdir(path: string): Promise<void> {
     const r = await this.call('PUT', API, { path: `app:/${path}` });
     if (r.status !== 201 && r.status !== 409) this.fail('mkdir', r);
@@ -94,6 +102,19 @@ export class YandexDisk implements DiskLike {
     // a track takes longer than a small file: a minute for it
     const r = await this.transport.request({ method: 'PUT', url: (link.data as any).href, body: data, headers: { 'Content-Type': type }, responseType: 'text' });
     if (r.status !== 201 && r.status !== 202 && !r.ok) this.fail('upload', r);
+  }
+
+  /** A file's bytes, `path` inside Oni's folder (an uploaded track kept by the backup). */
+  async readBytes(path: string): Promise<ArrayBuffer> {
+    const link = await this.call('GET', `${API}/download`, { path: `app:/${path}` });
+    if (link.status !== 200) this.fail('download', link);
+    return this.transport.fetchBytes!((link.data as any).href);
+  }
+
+  /** A copy made by Disk itself, nothing sent (one track in two playlists of the backup). */
+  async copy(from: string, to: string): Promise<void> {
+    const r = await this.call('POST', `${API}/copy`, { from: `app:/${from}`, path: `app:/${to}`, overwrite: 'true' });
+    if (r.status !== 201 && r.status !== 202) this.fail('copy', r);
   }
 
   /** Opens a folder to anyone with its link; the link (yadi.sk/d/…). */

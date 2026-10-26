@@ -129,6 +129,8 @@ export function useKeepForOffline(key: string, title: string, tracks: Track[] | 
   const kept = Boolean(tracks?.length) && (key === 'liked' || tracks!.some((t) => offline?.has(t.id)) || Boolean(background?.pendingFor(key)));
   useEffect(() => {
     if (kept && tracks && !useApp.getState().offline) saveList(key, title, tracks, header);
+    // a downloaded track Yandex has taken away is kept for good (player.ts, `playable`)
+    if (tracks && !useApp.getState().offline) offline?.keepGone(tracks);
   }, [kept, tracks, key, title, header]);
 }
 
