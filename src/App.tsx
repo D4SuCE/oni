@@ -116,7 +116,7 @@ function Main() {
   // The iPhone: a page opened from somewhere (a playlist, an album, a mix, an artist) goes back
   // with a pull down from its top. The tabs' own pages have nowhere to go back to.
   const view$ = useCallback(() => ref.current?.querySelector<HTMLElement>('.view-enter') ?? null, []);
-  useSwipeBack(ref, view$, back, isIos && ['playlist', 'album', 'mix', 'artist'].includes(route.name));
+  useSwipeBack(ref, view$, back, isIos && ['playlist', 'album', 'mix', 'artist', 'import'].includes(route.name));
   let view;
   switch (route.name) {
     case 'home':

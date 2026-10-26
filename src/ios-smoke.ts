@@ -813,6 +813,45 @@ async function swipeSeek() {
   report('swipe-seek', Boolean(shown) && Boolean(moved) && !document.querySelector('.nowplaying'), `"${shown || ''}", ${start.toFixed(0)} → ${app.usePlayer.getState().position.toFixed(0)} s (want ${want.toFixed(0)} of ${duration.toFixed(0)})`);
 }
 
+/** Playlist import on the phone (src/views/Import.tsx): a pasted list is found in Yandex Music, and a
+ * Spotify link is read through the phone's own requests (CapacitorHttp; YouTube's is a JSON post).
+ * Nothing is made in the account. */
+async function importList() {
+  const w = wave() as unknown as { navigate(r: unknown): void };
+  const type = (text: string) => {
+    const box = document.querySelector<HTMLTextAreaElement>('[data-testid="import-input"]');
+    if (!box) return false;
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(box, text);
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  };
+  const rows = (state?: string) => document.querySelectorAll(`[data-testid="import-row"]${state ? `[data-state="${state}"]` : ''}`).length;
+  w.navigate({ name: 'import' });
+  await until(() => document.querySelector('[data-testid="import-input"]'), 5000);
+  type('Кино — Группа крови\nDaft Punk — One More Time');
+  await sleep(100);
+  click('[data-testid="import-find"]');
+  const found = await until(() => rows('found') === 2, 30000);
+  report('import-list', Boolean(found), `${rows('found')} of ${rows()} found`);
+  w.navigate({ name: 'home' });
+  await sleep(300);
+  for (const [name, link, least] of [
+    ['import-spotify', 'https://open.spotify.com/playlist/37i9dQZF1DX5Ejj0EkURtP', 50],
+    ['import-youtube', 'https://music.youtube.com/playlist?list=PL4fGSI1pDJn6puJdseH2Rt9sMvt9E2M4i', 50],
+  ] as const) {
+    w.navigate({ name: 'import' });
+    await until(() => document.querySelector('[data-testid="import-input"]'), 5000);
+    type(link);
+    await sleep(100);
+    click('[data-testid="import-find"]');
+    await until(() => rows() >= least || document.querySelector('[data-testid="import-error"]'), 30000);
+    const error = document.querySelector('[data-testid="import-error"]')?.textContent;
+    report(name, rows() >= least, error ?? `${rows()} tracks read`);
+    w.navigate({ name: 'home' });
+    await sleep(300);
+  }
+}
+
 /** On a page opened from somewhere (the own playlist above), a pull down from its top goes back
  * (src/ui/swipe.ts, useSwipeBack); a page scrolled down only scrolls. Then Liked's "…" has Radio. */
 async function swipeBack() {
@@ -1120,6 +1159,7 @@ export async function runSmoke() {
     await textResponse();
     await playlistActions();
     await swipeBack();
+    await importList();
     await swipeSeek();
     await phoneTop();
     await moveTracks();
