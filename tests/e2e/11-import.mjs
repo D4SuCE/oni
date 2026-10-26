@@ -12,7 +12,14 @@ await step('import a pasted list: found tracks make a playlist in order, the one
   await page.waitForFunction(() => !document.querySelector('[data-testid="import-row"][data-state="pending"]') && document.querySelectorAll('[data-testid="import-row"]').length === 3, null, { timeout: 60000 });
   const states = await page.$$eval('[data-testid="import-row"]', (rows) => rows.map((r) => r.getAttribute('data-state')));
   if (states.join() !== 'found,found,none') throw new Error(`states ${states.join()}`);
+  // ▶ plays a found track to hear it; the chevron opens its matches, each with ▶ and "Take"
+  await page.click('[data-testid="import-row"] [data-testid="import-listen"]');
+  await page.waitForFunction(() => /группа крови/i.test(window.__wave.usePlayer.getState().queue[window.__wave.usePlayer.getState().index]?.title ?? ''), null, { timeout: 15000 });
+  await page.click('[data-testid="import-row"] [data-testid="import-choices"]');
+  const choices = await page.$$eval('.import-choice', (els) => els.map((e) => Boolean(e.querySelector('[data-testid="import-listen"]'))));
+  if (!choices.length || !choices.every(Boolean)) throw new Error(`matches ${JSON.stringify(choices)}`);
   await shot('11-import-review');
+  await page.evaluate(() => window.__wave.audio.pause());
   let pl = null;
   try {
     await page.fill('[data-testid="import-title"]', NAME);

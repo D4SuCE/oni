@@ -74,6 +74,14 @@ jobs:
           SIMCTL_CHILD_ONI_TEST_TOKEN="$ONI_TEST_TOKEN" xcrun simctl launch --console-pty "$DEVICE" local.wave.player > console.log 2>&1 &
           APP=$!
           shot() { xcrun simctl io "$DEVICE" screenshot "$1"; }
+          # Pictures the smoke run asks for ("SMOKE-SHOT <name>": it holds still a moment for them).
+          ( for i in $(seq 1 900); do
+              for name in $(grep -o "SMOKE-SHOT [a-z-]*" console.log 2>/dev/null | cut -d' ' -f2); do
+                [ -f "shot-$name.png" ] || shot "shot-$name.png"
+              done
+              sleep 0.5
+            done ) &
+          SHOTS=$!
           for i in $(seq 1 120); do grep -q "SMOKE playback" console.log && break; sleep 1; done
           shot playing.png
           for i in $(seq 1 60); do grep -q "SMOKE offline-playback" console.log && break; sleep 1; done
@@ -90,7 +98,7 @@ jobs:
           # Back in front the shell finds the page "black" (the probe says so) and loads it anew.
           for i in $(seq 1 60); do grep -q "SMOKE revived" console.log && break; sleep 1; done
           shot revived.png
-          kill $LOG $APP || true
+          kill $LOG $APP $SHOTS || true
           scrub
           echo "--- smoke ---"
           grep "SMOKE" console.log || true
@@ -132,6 +140,7 @@ jobs:
             now-playing.png
             search-link.png
             revived.png
+            shot-*.png
             app.log
             console.log
             *.ipa

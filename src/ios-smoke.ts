@@ -52,6 +52,12 @@ async function twice(fn: () => Promise<void>) {
   first.forEach((l) => console.log(l.replace(/^SMOKE (\S+) FAIL/, 'SMOKE-SLOW $1 first try failed:')));
   await fn();
 }
+/** A picture of the screen as it is now, taken by the cloud run (ios.yml, "SMOKE-SHOT"). */
+async function picture(name: string) {
+  console.log(`SMOKE-SHOT ${name}`);
+  await sleep(2500);
+}
+
 const click = (selector: string) => (document.querySelector(selector) as HTMLElement | null)?.click();
 
 /** Sign-in: the redirect to music.yandex.ru with the token is caught in the app's sheet (on a phone
@@ -796,7 +802,7 @@ async function swipeTrack() {
   const target = document.querySelector('.playerbar .pb-meta');
   const { index, queue } = app.usePlayer.getState();
   if (!bar || !target || index + 1 >= queue.length) return report('swipe-track', false, `bar ${Boolean(bar)}, ${index + 1} of ${queue.length}`);
-  const swipe = (xs: number[]) => {
+  const swipe = async (xs: number[], hold = false) => {
     const y = bar.getBoundingClientRect().top + 20;
     const touch = (x: number) => new Touch({ identifier: 4, target, clientX: x, clientY: y });
     target.dispatchEvent(new TouchEvent('touchstart', { touches: [touch(xs[0])], changedTouches: [touch(xs[0])], bubbles: true, cancelable: true }));
@@ -804,14 +810,15 @@ async function swipeTrack() {
     // the neighbour's card beside the bar while the finger is down (the carousel)
     const peer = document.querySelector<HTMLElement>(`.pb-peer[data-side="${xs[1] < xs[0] ? 'next' : 'prev'}"]`);
     peers.push(Boolean(peer && peer.style.visibility === 'visible' && Math.abs(peer.getBoundingClientRect().left - bar.getBoundingClientRect().left) < bar.clientWidth + 20));
+    if (hold) await picture('carousel');
     target.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [touch(xs[xs.length - 1])], bubbles: true, cancelable: true }));
   };
   const peers: boolean[] = [];
   const w = bar.clientWidth;
-  swipe([w * 0.8, w * 0.75, w * 0.6, w * 0.4]);
+  await swipe([w * 0.8, w * 0.75, w * 0.6, w * 0.4], true);
   const forward = await until(() => app.usePlayer.getState().index === index + 1, 4000);
   await sleep(600);
-  swipe([w * 0.2, w * 0.25, w * 0.4, w * 0.6]);
+  await swipe([w * 0.2, w * 0.25, w * 0.4, w * 0.6]);
   const back = await until(() => app.usePlayer.getState().index === index, 4000);
   report('swipe-track', Boolean(forward) && Boolean(back) && peers.every(Boolean) && !document.querySelector('.nowplaying'), `${index} → ${forward ? index + 1 : '?'} → ${app.usePlayer.getState().index} of ${queue.length}; the neighbour's card beside it: ${peers.join(', ')}`);
 }
@@ -835,6 +842,7 @@ async function importList() {
   await sleep(100);
   click('[data-testid="import-find"]');
   const found = await until(() => rows('found') === 2, 30000);
+  await picture('import');
   report('import-list', Boolean(found), `${rows('found')} of ${rows()} found`);
   w.navigate({ name: 'home' });
   await sleep(300);
@@ -993,6 +1001,7 @@ async function moveTracks() {
     const lines = document.querySelectorAll('[data-testid="np-sung"] .lyric').length;
     const from = document.querySelector('[data-testid="np-sung"] [data-testid="lyrics-source"]') ? 'LRCLIB' : 'Yandex';
     const small = Math.round(document.querySelector('.nowplaying.sung .np-cover')?.getBoundingClientRect().width ?? 0);
+    await picture('lyrics');
     const meta = document.querySelector('.nowplaying .np-meta')!;
     const touch = (y: number) => new Touch({ identifier: 5, target: meta, clientX: 200, clientY: y });
     meta.dispatchEvent(new TouchEvent('touchstart', { touches: [touch(120)], changedTouches: [touch(120)], bubbles: true, cancelable: true }));
