@@ -115,3 +115,22 @@ await step("backup: each device's downloads are listed; own uploads kept as file
     await page.evaluate((r) => window.__wave.sync.disk.remove(r), root);
   }
 });
+
+await step('downloads: one Yandex took away is marked to keep, one it still gives is not (a download of its own, removed again)', async () => {
+  // The user, 26.10.2026: "Pink Blush" gone from Yandex (and from Liked) the day after the like.
+  const track = await page.evaluate(() => window.__wave.api.chart().then((l) => l.find((t) => t.available !== false && !window.__wave.offline.has(t.id))));
+  try {
+    await page.evaluate((t) => window.__wave.offline.download(t), track);
+    await page.evaluate(() => window.__wave.backup.keepGoneDownloads());
+    if (await page.evaluate((id) => window.__wave.offline.entry(id).gone, track.id)) throw new Error('an available download marked gone');
+    // a list showing it unavailable marks it; a copy of a gone one plays (player.ts, playable)
+    await page.evaluate((t) => window.__wave.offline.keepGone([{ ...t, available: false }]), track);
+    if (!(await page.evaluate((id) => window.__wave.offline.entry(id).gone, track.id))) throw new Error('not marked');
+    await page.evaluate((t) => window.__wave.playTracks([{ ...t, available: false }], 0, 'e2e gone'), track);
+    await waitPlaying(1, 30000);
+    console.log(`       "${track.title}": kept, and plays from its copy as gone`);
+  } finally {
+    await page.evaluate(() => window.__wave.audio.pause());
+    await page.evaluate((id) => window.__wave.offline.remove(id), track.id);
+  }
+});

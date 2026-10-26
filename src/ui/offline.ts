@@ -176,6 +176,17 @@ export function useCover(track: Track | undefined, size: number) {
  * itself. Only those liked after switching it on: what was liked before downloads with Liked's
  * own Download. The ids already seen are kept, so a restart does not take every like for new.
  */
+/** Downloads Yandex has taken away are kept for good (OfflineEntry.gone). A list showing one marks
+ * it too (useKeepForOffline), but Yandex drops such a track from Liked as well (the user's "Pink
+ * Blush", 26.10.2026), so every download is asked about once a start. */
+export async function keepGoneDownloads() {
+  if (!offline || useApp.getState().offline) return;
+  const ids = offline.entries().map((e) => String(e.track.id)).filter((id) => /^\d+$/.test(id));
+  if (!ids.length) return;
+  const got = new Map((await api.tracks(ids)).map((t) => [String(t.id), t]));
+  offline.keepGone(ids.map((id) => got.get(id) ?? ({ id, available: false } as Track)));
+}
+
 const AUTO_KEY = 'downloads.autoLikes';
 const SEEN_KEY = 'downloads.autoLikes.seen';
 /** A plain JSON value (loadJson is for objects: it merges them into the fallback). */
