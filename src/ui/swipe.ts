@@ -1,6 +1,7 @@
 // Touch: drag a full-screen sheet down to close it, as Now Playing closes in music apps.
 
-import { useEffect, type RefObject } from 'react';
+import { useEffect, useState, type RefObject } from 'react';
+import { haptic } from './haptics.ts';
 
 /** Where a drag is something else's: sliders, rows dragged into order (a handle, a list in
  * "Reorder"), the queue's sheet over Now Playing (its own scroll and handles). Dragging a track
@@ -121,4 +122,70 @@ export function useSwipeBack(scroller: RefObject<HTMLElement | null>, page: () =
       box.removeEventListener('touchcancel', up);
     };
   }, [scroller, page, onBack, enabled]);
+}
+
+/**
+ * Seek by a sideways swipe along a strip — the iPhone's player bar, as in Yandex Music's app (the
+ * user, 26.10.2026). The strip's width is the whole track and the time moves from where it was;
+ * letting go jumps there. Returns the time the finger points at while it swipes (null otherwise).
+ * A tap stays a tap (the bar opens Now Playing, its buttons work); after a swipe the click that
+ * follows is swallowed, so a swipe that starts on a button does not press it.
+ */
+export function useSwipeSeek(ref: RefObject<HTMLElement | null>, now: () => { position: number; duration: number }, onSeek: (seconds: number) => void, enabled = true) {
+  const [at, setAt] = useState<number | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !enabled) return;
+    let start: { x: number; y: number; from: number; duration: number } | null = null;
+    let seeking = false;
+    let to = 0;
+    const down = (e: TouchEvent) => {
+      const { position, duration } = now();
+      const touch = e.touches[0];
+      start = e.touches.length === 1 && duration > 0 && !(e.target as Element).closest(NOT_A_SWIPE) ? { x: touch.clientX, y: touch.clientY, from: position, duration } : null;
+      seeking = false;
+    };
+    const drag = (e: TouchEvent) => {
+      if (!start) return;
+      const touch = e.touches[0];
+      const dx = touch.clientX - start.x;
+      const dy = touch.clientY - start.y;
+      if (!seeking) {
+        // Up or down first: not a seek (the page scrolls, Now Playing opens).
+        if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) return void (start = null);
+        if (Math.abs(dx) < 12) return;
+        seeking = true;
+        haptic('tick');
+      }
+      e.preventDefault();
+      to = Math.max(0, Math.min(start.duration - 1, start.from + (dx / el.clientWidth) * start.duration));
+      setAt(to);
+    };
+    const swallow = (e: Event) => {
+      e.stopPropagation();
+      e.preventDefault();
+    };
+    const up = (e: TouchEvent) => {
+      if (!start) return;
+      start = null;
+      if (!seeking) return;
+      seeking = false;
+      setAt(null);
+      if (e.type !== 'touchend') return;
+      onSeek(to);
+      el.addEventListener('click', swallow, { capture: true });
+      setTimeout(() => el.removeEventListener('click', swallow, { capture: true }), 400);
+    };
+    el.addEventListener('touchstart', down, { passive: true });
+    el.addEventListener('touchmove', drag, { passive: false });
+    el.addEventListener('touchend', up);
+    el.addEventListener('touchcancel', up);
+    return () => {
+      el.removeEventListener('touchstart', down);
+      el.removeEventListener('touchmove', drag);
+      el.removeEventListener('touchend', up);
+      el.removeEventListener('touchcancel', up);
+    };
+  }, [ref, now, onSeek, enabled]);
+  return at;
 }
