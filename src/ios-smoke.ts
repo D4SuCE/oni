@@ -453,8 +453,11 @@ async function recap() {
   if (!tracks) return;
   click('[data-testid="recap-stories-open"]');
   const opened = await until(() => document.querySelector('[data-testid="story-card"]'), 3000);
-  const card = document.querySelector<HTMLElement>('[data-testid="story-card"]');
-  const full = card ? Math.abs(card.getBoundingClientRect().width - window.innerWidth) < 2 : false;
+  // measured once it has opened (it grows into place: measured at once it was narrower now and then)
+  const full = Boolean(await until(() => {
+    const card = document.querySelector<HTMLElement>('[data-testid="story-card"]');
+    return card && Math.abs(card.getBoundingClientRect().width - window.innerWidth) < 2;
+  }, 2000));
   let summary = false;
   for (let i = 0; i < 12 && !summary; i++) {
     const c = document.querySelector<HTMLElement>('[data-testid="story-card"]');
