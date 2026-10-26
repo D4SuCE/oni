@@ -36,6 +36,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         CAPPluginMethod(name: "testThrottle", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pulse", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "eqResponse", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "snapshot", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setAwake", returnType: CAPPluginReturnPromise),
     ]
 
@@ -932,6 +933,25 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         DispatchQueue.main.async {
             guard self.pulseOn, !at.isEmpty else { return }
             self.notifyListeners("beat", data: ["at": at, "db": db])
+        }
+    }
+
+    /// { name } — for the simulator run: a picture of Oni's own window (no system alert over it),
+    /// saved as Documents/shot-<name>.png; the cloud run copies them out (ios.yml).
+    @objc func snapshot(_ call: CAPPluginCall) {
+        let name = (call.getString("name") ?? "shot").filter { $0.isLetter || $0.isNumber || $0 == "-" }
+        DispatchQueue.main.async {
+            guard let window = self.bridge?.viewController?.view.window else { return call.reject("no window") }
+            let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
+                window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+            }
+            do {
+                let dir = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+                try image.pngData()?.write(to: dir.appendingPathComponent("shot-\(name).png"))
+                call.resolve()
+            } catch {
+                call.reject(error.localizedDescription)
+            }
         }
     }
 

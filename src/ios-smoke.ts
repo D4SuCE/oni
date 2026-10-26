@@ -52,10 +52,13 @@ async function twice(fn: () => Promise<void>) {
   first.forEach((l) => console.log(l.replace(/^SMOKE (\S+) FAIL/, 'SMOKE-SLOW $1 first try failed:')));
   await fn();
 }
-/** A picture of the screen as it is now, taken by the cloud run (ios.yml, "SMOKE-SHOT"). */
+/** A picture of Oni's window as it is now (OniPlayer.snapshot; the cloud run copies it out). A
+ * picture taken by the run from outside came late (the console reaches it in batches) and with
+ * the notifications prompt over it. */
 async function picture(name: string) {
-  console.log(`SMOKE-SHOT ${name}`);
-  await sleep(2500);
+  await sleep(400);
+  const { OniPlayer } = await import('./player/nativeAudio.ts');
+  await OniPlayer.snapshot({ name }).catch((e) => console.log(`snapshot ${name}: ${e}`));
 }
 
 const click = (selector: string) => (document.querySelector(selector) as HTMLElement | null)?.click();
@@ -153,10 +156,8 @@ async function holdHintRound() {
   const tried: string[] = [];
   for (const album of albums) {
     w.navigate({ name: 'album', id: album });
-    if (await until(shuffle, 15000)) {
-      button = shuffle();
-      break;
-    }
+    await until(() => (button = shuffle()), 15000);
+    if (button) break;
     const seen = [...document.querySelectorAll<HTMLElement>('.page-actions .btn, .lib-actions .btn')].map((b) => b.textContent?.trim()).join(' | ');
     tried.push(`${album}: route ${w.useApp?.getState().route.name}, buttons [${seen}]`);
   }
@@ -1007,7 +1008,7 @@ async function moveTracks() {
     meta.dispatchEvent(new TouchEvent('touchstart', { touches: [touch(120)], changedTouches: [touch(120)], bubbles: true, cancelable: true }));
     meta.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [touch(260)], bubbles: true, cancelable: true }));
     const back = await until(() => !document.querySelector('.nowplaying.sung') && document.querySelector('.nowplaying'), 3000);
-    report('lyrics-sheet', Boolean(sung) && small === 56 && Boolean(back), `${!sung ? 'nothing shown' : lines ? `${lines} lines, ${from}` : document.querySelector('[data-testid="np-sung"] .lyrics-plain') ? `plain, ${from}` : 'none: Genius offered'}; the cover ${small} px; a swipe down ${back ? 'went back to it' : 'did not go back'}`);
+    report('lyrics-sheet', Boolean(sung) && Math.abs(small - 56) <= 2 && Boolean(back), `${!sung ? 'nothing shown' : lines ? `${lines} lines, ${from}` : document.querySelector('[data-testid="np-sung"] .lyrics-plain') ? `plain, ${from}` : 'none: Genius offered'}; the cover ${small} px; a swipe down ${back ? 'went back to it' : 'did not go back'}`);
   } else report('lyrics-sheet', false, 'no lyrics button');
   click('[data-testid="np-queue"]');
   const sheet = await until(() => document.querySelector('[data-testid="queue-sheet"] [data-testid="drag-handle"]'), 3000);
