@@ -260,13 +260,13 @@ export function ImportView() {
                     <div className="import-sub">{s.notFound}</div>
                   ) : null}
                 </div>
-                {heard ? <Listen track={heard} /> : <span />}
+                {heard ? <Listen track={heard} /> : <span className="import-listen" />}
                 {r && r.match.candidates.length > 0 ? (
-                  <button className={cx('icon-btn', open === i && 'on')} onClick={() => setOpen(open === i ? null : i)} title={s.other} data-testid="import-choices">
+                  <button className={cx('icon-btn import-more', open === i && 'on')} onClick={() => setOpen(open === i ? null : i)} title={s.other} data-testid="import-choices">
                     <ChevronDown size={18} className={cx('import-chevron', open === i && 'open')} />
                   </button>
                 ) : (
-                  <span />
+                  <span className="import-more" />
                 )}
               </div>
               {r && open === i && (

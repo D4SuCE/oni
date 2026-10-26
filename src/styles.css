@@ -4339,16 +4339,43 @@ html.anim-hamon .play-btn:active {
 
 /* A narrow window and the iPhone: what was asked for over what was found. */
 @media (max-width: 700px) {
+  /* each in its own place (the phone's picture: the mark alone on a line, the match cut off at the
+     right): the mark and the buttons span both lines, asked over found in the middle */
   .import-row {
     grid-template-columns: 22px minmax(0, 1fr) 36px 36px;
     row-gap: 2px;
+    column-gap: 8px;
+  }
+  .import-row > .import-mark {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+  .import-row > .import-src {
+    grid-column: 2;
+    grid-row: 1;
   }
   .import-found {
     grid-column: 2;
     grid-row: 2;
   }
-  .import-row > .icon-btn,
-  .import-row > span:not(.import-mark) {
+  .import-found .import-title,
+  .import-found .import-sub {
+    display: inline;
+    font-size: 13px;
+    color: var(--text-2);
+  }
+  .import-found .import-title::before {
+    content: '→ ';
+  }
+  .import-found .import-sub::before {
+    content: ' · ';
+  }
+  .import-row > .import-listen {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+  .import-row > .import-more {
+    grid-column: 4;
     grid-row: 1 / span 2;
   }
   .import-choices {
