@@ -392,6 +392,11 @@ export class YandexMusic {
     return this.call(`/users/${await this.uid()}/playlists/${kind}/name`, { method: 'POST', form: { value: title } });
   }
 
+  /** The description shown under a playlist (found in the official app: changePlaylistDescription). */
+  async setPlaylistDescription(kind: number, value: string): Promise<Playlist> {
+    return this.call(`/users/${await this.uid()}/playlists/${kind}/description`, { method: 'POST', query: { value } });
+  }
+
   async deletePlaylist(kind: number) {
     await this.call(`/users/${await this.uid()}/playlists/${kind}/delete`, { method: 'POST' });
   }

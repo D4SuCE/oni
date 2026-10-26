@@ -48,6 +48,9 @@ export interface Track {
   backgroundVideoUri?: string;
   /** In the chart now (full-info). */
   chart?: { position: number; listeners?: number };
+  /** A friend's own upload, from his Yandex Disk (src/share): his folder's link and the file in it.
+   * Not Yandex's: it is not liked, reported or looked up there. */
+  share?: { link: string; file: string; owner: string };
 }
 
 export interface PlaylistTrackItem {

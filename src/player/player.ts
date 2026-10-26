@@ -22,6 +22,7 @@ import { leadingSilence, QuietTail } from './silence.ts';
 import { setBoost } from './eq.ts';
 import type { CommandName } from '../sync/playing.ts';
 import { isMyWave, isOwnWave, listKeyOf, sourceTitle, wavePicks, type ListLabel, type PlayContext, type PlayExtra, type Repeat, type Source } from './source.ts';
+import { sharedFileUrl } from '../share/shared.ts';
 
 export * from './source.ts';
 
@@ -312,7 +313,8 @@ export function setDislikedCheck(fn: (id: string) => boolean) {
 async function streamUrl(t: Track) {
   const cached = prefetched.get(t.id);
   if (cached && Date.now() - cached.at < STREAM_TTL) return cached;
-  const s = await api.stream(t.id, get().quality);
+  // a friend's own upload: from his Yandex Disk (src/share), an mp3
+  const s = t.share ? { url: await sharedFileUrl(t.share.link, t.share.file, (r) => transport.request(r)), codec: 'mp3', bitrate: 0 } : await api.stream(t.id, get().quality);
   const entry = { url: s.url, at: Date.now(), codec: s.codec, bitrate: s.bitrate };
   prefetched.set(t.id, entry);
   return entry;
@@ -555,7 +557,8 @@ function reportPlay(t: Track, ended: boolean) {
   const source = get().source;
   // Tests must not touch the history. The wave's plays are reported too: its session feedback
   // alone puts nothing into the account's history (the user: none for a night of My Wave).
-  if (!source || transport.testMode || listened < 1) return;
+  // a friend's upload from his Disk is not Yandex's track: nothing to report there
+  if (!source || transport.testMode || listened < 1 || t.share) return;
   api
     .reportPlay({
       track: t,

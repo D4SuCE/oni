@@ -22,6 +22,7 @@ import { cx } from '../ui/util.ts';
 import { ANIM_EFFECTS, setAnimEffect, setAnimEnabled, useAnim } from '../ui/anim.ts';
 import { artistNames } from '../api/yandex.ts';
 import { connectDisk, disconnectDisk, syncNow, useSync } from '../sync/index.ts';
+import { canShare, setSharing, shareUploads, useShare } from '../share/owner.ts';
 
 export function SettingsView() {
   const account = useApp((s) => s.account);
@@ -356,6 +357,35 @@ function SyncPanel() {
           )}
         </div>
       </div>
+      {canShare() && <SharePanel connected={Boolean(connected)} />}
+    </div>
+  );
+}
+
+/** Sharing one's own uploads with friends (src/share), the desktop: under the Disk it goes to. */
+function SharePanel({ connected }: { connected: boolean }) {
+  const t = useT();
+  const s = t.shared;
+  const { on, busy, done, total, at, tracks, playlists, error } = useShare();
+  return (
+    <div className="settings-row" data-testid="share-panel">
+      <label className="toggle-row">
+        <div>
+          <div>{s.setting}</div>
+          <div className="hint">{s.settingHint}</div>
+          {on && (
+            <div className="hint" data-testid="share-status">
+              {!connected ? s.needsDisk : busy ? s.syncing(done, total) : error ? s.failed(error) : at ? s.status(tracks, playlists) : ''}
+            </div>
+          )}
+        </div>
+        <input type="checkbox" className="switch" checked={on} disabled={!connected} onChange={(e) => setSharing(e.target.checked)} data-testid="share-toggle" />
+      </label>
+      {on && connected && (
+        <button className="btn ghost small" onClick={() => void shareUploads()} disabled={busy}>
+          <RefreshCw size={14} className={cx(busy && 'spin')} /> {s.refresh}
+        </button>
+      )}
     </div>
   );
 }

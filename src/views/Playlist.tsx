@@ -12,7 +12,9 @@ import { SmartShuffleButton } from '../components/SmartShuffle.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { useT } from '../i18n.ts';
 import { extendList, playRadio, playShuffled, playTracks } from '../player/player.ts';
-import { back, errorText, isOwn, refreshPlaylists, samePlaylist, toast, togglePlaylistLike, useApp } from '../store.ts';
+import { back, errorText, isOwn, navigate, refreshPlaylists, samePlaylist, toast, togglePlaylistLike, useApp } from '../store.ts';
+import { readMark, visible } from '../share/mark.ts';
+import { shareUploads } from '../share/owner.ts';
 import { isIos } from '../ui/platform.ts';
 import { cx, fmtTotal, useAsync } from '../ui/util.ts';
 import { useListSearch } from '../components/ListSearch.tsx';
@@ -129,6 +131,7 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
         setData(fresh);
         refreshPlaylists();
         toast(t.playlist.uploadDone);
+        void shareUploads();
         return setUploading(null);
       }
     }
@@ -159,7 +162,7 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
           <>
             {t.count.tracks(pl.trackCount)}
             {complete && total > 0 && `, ${fmtTotal(total)}`}
-            {pl.description && <div className="muted desc">{pl.description}</div>}
+            {visible(pl.description) && <div className="muted desc">{visible(pl.description)}</div>}
           </>
         }
         actions={
@@ -208,6 +211,13 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
           </>
         }
       />
+      {/* a friend's playlist: his own uploads, shared through his Disk (src/share) */}
+      {!own && readMark(pl.description) && (
+        <button className="shared-banner glass" onClick={() => navigate({ name: 'shared', link: readMark(pl.description)!, owner: pl.owner?.name || pl.owner?.login })} data-testid="shared-banner">
+          <span className="shared-banner-title">{t.shared.banner(pl.owner?.name || pl.owner?.login || '')}</span>
+          <span className="shared-banner-hint">{t.shared.bannerHint}</span>
+        </button>
+      )}
       {uploading && (
         <div className="notice glass">
           <Spinner label={uploading} />

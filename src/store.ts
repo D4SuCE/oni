@@ -20,6 +20,7 @@ export type Route =
   | { name: 'mix'; id: string }
   | { name: 'downloads' }
   | { name: 'import' }
+  | { name: 'shared'; link: string; owner?: string }
   | { name: 'settings' };
 
 /** `downloads`: the iPhone shows Downloads as a Collection tab (the desktop has its own page). */
@@ -153,6 +154,8 @@ export async function init() {
 /** Tracks of imported playlists Yandex had not got: asked for again once a day, added to their
  * playlist once found (src/import/run.ts). A little after the start, so it does not slow it. */
 function lookAgain() {
+  // and one's own shared uploads catch up with the playlists (src/share; the desktop, sharing on)
+  setTimeout(() => void import('./share/owner.ts').then((m) => m.shareUploads()), 60_000);
   setTimeout(() => {
     checkWaiting()
       .then((added) => {

@@ -11,8 +11,9 @@ export interface HttpRequest {
   form?: Record<string, string | number>;
   json?: unknown;
   multipart?: { field: string; filename: string; contentType: string; data: ArrayBuffer };
-  /** Sent as it is (a file uploaded to Yandex Disk); its Content-Type goes in `headers`. */
-  body?: string;
+  /** Sent as it is (a file uploaded to Yandex Disk: text, or a track's bytes — the desktop only);
+   * its Content-Type goes in `headers`. */
+  body?: string | ArrayBuffer;
   headers?: Record<string, string>;
   responseType?: 'json' | 'text';
 }

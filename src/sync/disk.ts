@@ -40,7 +40,7 @@ export class YandexDisk implements DiskLike {
     this.transport = transport;
   }
 
-  private async call<T = any>(method: 'GET' | 'DELETE', url: string, query: Record<string, string | number>): Promise<{ status: number; data: T }> {
+  private async call<T = any>(method: 'GET' | 'DELETE' | 'PUT', url: string, query: Record<string, string | number>): Promise<{ status: number; data: T }> {
     const r = await timed(this.transport.request<T>({ method, url, query }));
     if (r.status === 401) throw new DiskAuthError('Yandex Disk: not authorized');
     return r;
@@ -70,6 +70,39 @@ export class YandexDisk implements DiskLike {
     if (link.status !== 200) this.fail('upload', link);
     const r = await timed(this.transport.request({ method: 'PUT', url: (link.data as any).href, body: text, headers: { 'Content-Type': 'application/json' }, responseType: 'text' }));
     if (r.status !== 201 && r.status !== 202 && !r.ok) this.fail('upload', r);
+  }
+
+  // ---------------------------------------------------------- a folder of its own (shared uploads)
+
+  /** The files in a folder of Oni's (`path` inside it, as "shared"); none when it is not there. */
+  async folder(path: string): Promise<(DiskFile & { size: number })[]> {
+    const r = await this.call('GET', API, { path: `app:/${path}`, limit: 10000, fields: '_embedded.items.name,_embedded.items.modified,_embedded.items.md5,_embedded.items.size,_embedded.items.type' });
+    if (r.status === 404) return [];
+    if (r.status !== 200) this.fail('list', r);
+    return ((r.data as any)?._embedded?.items ?? []).filter((x: any) => x.type === 'file').map((x: any) => ({ name: x.name, modified: x.modified, md5: x.md5, size: x.size }));
+  }
+
+  async mkdir(path: string): Promise<void> {
+    const r = await this.call('PUT', API, { path: `app:/${path}` });
+    if (r.status !== 201 && r.status !== 409) this.fail('mkdir', r);
+  }
+
+  /** A file's bytes (a track), as `path` inside Oni's folder. */
+  async writeBytes(path: string, data: ArrayBuffer, type = 'audio/mpeg'): Promise<void> {
+    const link = await this.call('GET', `${API}/upload`, { path: `app:/${path}`, overwrite: 'true' });
+    if (link.status !== 200) this.fail('upload', link);
+    // a track takes longer than a small file: a minute for it
+    const r = await this.transport.request({ method: 'PUT', url: (link.data as any).href, body: data, headers: { 'Content-Type': type }, responseType: 'text' });
+    if (r.status !== 201 && r.status !== 202 && !r.ok) this.fail('upload', r);
+  }
+
+  /** Opens a folder to anyone with its link; the link (yadi.sk/d/…). */
+  async publish(path: string): Promise<string> {
+    const r = await this.call('PUT', `${API}/publish`, { path: `app:/${path}` });
+    if (r.status !== 200) this.fail('publish', r);
+    const meta = await this.call('GET', API, { path: `app:/${path}`, fields: 'public_url' });
+    if (meta.status !== 200 || !(meta.data as any)?.public_url) this.fail('publish', meta);
+    return (meta.data as any).public_url;
   }
 
   async remove(name: string): Promise<void> {

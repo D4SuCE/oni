@@ -5,7 +5,8 @@ import type { Track } from '../api/types.ts';
 import { artistNames, catalogTrack } from '../api/yandex.ts';
 import { tr, useT } from '../i18n.ts';
 import { enqueue, offline, playNext, playRadio, toggle, usePlayer } from '../player/player.ts';
-import { addToPlaylist, createPlaylist, dislike, isOwn, navigate, toggleLike, useApp } from '../store.ts';
+import { addToPlaylist, createPlaylist, dislike, errorText, isOwn, navigate, toast, toggleLike, useApp } from '../store.ts';
+import { transport } from '../api/client.ts';
 import { downloadTrack, offlineState, useCover, useDownloadProgress, useOfflineVersion, type OfflineState } from '../ui/offline.ts';
 import { isIos } from '../ui/platform.ts';
 import { shareTrack } from '../ui/share.ts';
@@ -15,6 +16,7 @@ import { trackMatches } from './ListSearch.tsx';
 import { askText } from './Dialog.tsx';
 import { openMenu, type MenuItem } from './Menu.tsx';
 import { editUpload, showTrackInfo } from './TrackSheet.tsx';
+import { addToMine } from '../share/mine.ts';
 
 /** A file the user uploaded: marked in lists, with a short menu (its link opens for nobody else). */
 const isUpload = (t: Track) => t.trackSource === 'UGC';
@@ -24,6 +26,11 @@ export const plainArtists = (t: Track) => isUpload(t) && !catalogTrack(t);
 export function trackMenu(t: Track, extra: MenuItem[] = []): MenuItem[] {
   const app = useApp.getState();
   const own = app.playlists.filter((p) => isOwn(p));
+  // a friend's upload from his Disk (src/share): only "add to mine", as one's own upload
+  if (t.share)
+    return transport.canUpload
+      ? [{ label: tr().shared.toMine, icon: <Plus size={15} />, submenu: own.map((p) => ({ label: p.title, onClick: () => void addToMine(t, p).then(() => toast(tr().shared.added(1, p.title)), (e) => toast(tr().shared.addFailed(t.title, errorText(e)))) })) }, ...extra]
+      : extra;
   const liked = app.liked.has(String(t.id));
   const tx = tr();
   const playlistItems: MenuItem[] = [
