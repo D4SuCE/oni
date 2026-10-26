@@ -25,7 +25,10 @@ await step('search inside Liked: the list narrows, and a found track plays the w
   const queue = await page.evaluate(() => window.__wave.usePlayer.getState().queue.length);
   if (queue < total) throw new Error(`queue ${queue}, list ${total}`);
   console.log(`       "${word}": ${shown} of ${total}`);
-  await page.click('[data-testid="list-search"]');
+  // Escape closes the search (the user, 26.10.2026), the field no longer focused (a row played).
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('[data-testid="list-search-input"]', { state: 'detached', timeout: 3000 });
+  if ((await rows.count()) !== total) throw new Error(`after Escape ${await rows.count()} of ${total}`);
 });
 
 await step('a playing list says so on its page: Play turns Pause, then Resume, without starting over', async () => {

@@ -3693,6 +3693,25 @@ kbd {
     width: 48px !important;
     height: 48px !important;
   }
+  /* A sideways swipe along the bar seeks: a thin red line along its foot, the time in place of
+     the artists. */
+  html.ios .pb-scrub {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    background: rgba(242, 238, 232, 0.14);
+    pointer-events: none;
+  }
+  html.ios .pb-scrub > div {
+    height: 100%;
+    background: var(--accent);
+  }
+  html.ios .pb-scrub-time {
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+  }
 
   /* "For you" cards are small here: the title on the art keeps to two lines in a smaller face
      and the seal shrinks, so they no longer run into each other (the full name is under the card). */

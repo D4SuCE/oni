@@ -1,6 +1,15 @@
 // e2e: tracks (part of tests/e2e.mjs; run the whole with npm run test:e2e).
 import { app, page, step, shot, player, waitPlaying } from './harness.mjs';
 
+await step('Escape leaves the search opened from the side panel', async () => {
+  // The user, 26.10.2026: the search opened on the left closes with Escape.
+  const from = await page.evaluate(() => window.__wave.useApp.getState().route.name);
+  await page.click('[data-testid="nav-search"]');
+  await page.waitForSelector('[data-testid="search-input"]');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction((want) => window.__wave.useApp.getState().route.name === want, from, { timeout: 3000 });
+});
+
 await step('search and play a track', async () => {
   await page.click('[data-testid="nav-search"]');
   await page.fill('[data-testid="search-input"]', 'Кино');

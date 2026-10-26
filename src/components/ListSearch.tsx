@@ -6,7 +6,7 @@ import { Search, X } from 'lucide-react';
 import { useState } from 'react';
 import type { Track } from '../api/types.ts';
 import { useT } from '../i18n.ts';
-import { cx } from '../ui/util.ts';
+import { cx, useEscape } from '../ui/util.ts';
 
 export function trackMatches(t: Track, query: string) {
   const text = [t.title, t.version, ...(t.artists || []).map((a) => a.name), t.albums?.[0]?.title].filter(Boolean).join(' ').toLowerCase();
@@ -25,6 +25,7 @@ export function useListSearch() {
     setOpen(false);
     setQuery('');
   };
+  useEscape(close, open);
   const button = (
     <button className={cx('icon-btn', open && 'on')} onClick={() => (open ? close() : setOpen(true))} title={t.playlist.searchIn} data-testid="list-search">
       <Search size={18} />

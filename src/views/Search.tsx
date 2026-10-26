@@ -10,7 +10,7 @@ import { playTracks } from '../player/player.ts';
 import { back, navigate, useApp } from '../store.ts';
 import { isIos } from '../ui/platform.ts';
 import { useSwipeDown } from '../ui/swipe.ts';
-import { cx } from '../ui/util.ts';
+import { cx, useEscape } from '../ui/util.ts';
 
 function BestResult({ best }: { best: NonNullable<SearchResult['best']> }) {
   const r = best.result as any;
@@ -75,6 +75,8 @@ export function Search() {
     back();
   }, []);
   useSwipeDown(page, leave, undefined, swipeAway);
+  // Escape leaves the search, back to where it was opened from.
+  useEscape(leave);
   const t = useT();
 
   // A fresh search starts typing; with a query already there (back to the page, or a shortcut's

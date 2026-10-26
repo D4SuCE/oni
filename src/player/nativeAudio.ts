@@ -38,7 +38,8 @@ interface PlayerPlugin {
   /** Listen to the bass for the beat pulse (src/player/pulse.ts), or stop. */
   pulse(options: { on: boolean }): Promise<void>;
   /** The bass's rise, ~60 a second, sent a few at a time: when each is heard (wall clock, ms). */
-  addListener(event: 'beat', cb: (e: { at: number[]; flux: number[] }) => void): Promise<unknown>;
+  /** The levels (dB) of the four lowest analyser bins, four per moment in `at` (pulse.ts). */
+  addListener(event: 'beat', cb: (e: { at: number[]; db: number[] }) => void): Promise<unknown>;
   /** `waiting`: playing, but the track (still arriving) ran short: it goes on when more comes. */
   addListener(event: 'time', cb: (e: { time: number; duration: number; playing: boolean; waiting?: boolean; musicEnd?: number }) => void): Promise<unknown>;
   addListener(event: 'ended', cb: () => void): Promise<unknown>;

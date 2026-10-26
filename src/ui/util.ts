@@ -1,4 +1,4 @@
-import { useEffect, useState, type DependencyList } from 'react';
+import { useEffect, useRef, useState, type DependencyList } from 'react';
 import { tr } from '../i18n.ts';
 
 export function fmtTime(seconds: number) {
@@ -46,4 +46,27 @@ export function useAsync<T>(fn: () => Promise<T>, deps: DependencyList): AsyncSt
 
 export function cx(...parts: (string | false | null | undefined)[]) {
   return parts.filter(Boolean).join(' ');
+}
+
+/** What lies over the page and takes Escape itself: a menu, a dialog, Now Playing and its
+ * sheets, the sound panel, the recap stories. */
+const OVER_PAGE = '.menu, .dialog-backdrop, .nowplaying, .sound-backdrop, .stories';
+
+/**
+ * Escape for something of the page's own (a search field; the user, 26.10.2026: Escape closes
+ * the search and a playlist's search) — only when nothing lies over the page, which closes first.
+ */
+export function useEscape(onEscape: () => void, enabled = true) {
+  const handler = useRef(onEscape);
+  useEffect(() => {
+    handler.current = onEscape;
+  });
+  useEffect(() => {
+    if (!enabled) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !document.querySelector(OVER_PAGE)) handler.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [enabled]);
 }
