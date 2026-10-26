@@ -3681,6 +3681,66 @@ kbd {
     justify-content: space-between;
     margin: 0 -8px;
   }
+  /* The lyrics (NowPlaying.tsx, variant B): the cover shrinks into a row with the name, the lyrics
+     take its place, the controls stay under them; the row of buttons gives way. */
+  html.ios .nowplaying.sung .np-art {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+    column-gap: 14px;
+    align-items: center;
+  }
+  html.ios .nowplaying.sung .np-cover {
+    width: 56px;
+    height: 56px;
+    grid-column: 1;
+    grid-row: 1;
+    border-radius: 8px;
+  }
+  html.ios .nowplaying.sung .np-meta {
+    grid-column: 2;
+    grid-row: 1;
+    margin-top: 0;
+  }
+  html.ios .nowplaying.sung .np-text h1 {
+    font-size: 18px;
+    -webkit-line-clamp: 1;
+  }
+  html.ios .nowplaying.sung .np-actions {
+    display: none;
+  }
+  html.ios .nowplaying.sung .np-sung,
+  html.ios .nowplaying.sung .np-seek,
+  html.ios .nowplaying.sung .transport,
+  html.ios .nowplaying.sung .np-volume {
+    grid-column: 1 / -1;
+  }
+  html.ios .np-sung {
+    grid-row: 2;
+    align-self: stretch;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    margin: 10px -22px 6px;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12%, #000 82%, transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 12%, #000 82%, transparent 100%);
+    touch-action: pan-y;
+  }
+  html.ios .np-sung .lyrics,
+  html.ios .np-sung .lyrics-plain {
+    padding: 22vh 22px 30vh;
+  }
+  html.ios .np-sung .lyric {
+    font-size: 23px;
+    margin-bottom: 18px;
+  }
+  html.ios .np-sung .lyric.active {
+    font-size: 28px;
+    transform: none;
+  }
+  html.ios .np-sung .lyrics-none {
+    margin: auto 22px;
+  }
 
   /* The bar below: a touch taller, with previous back beside play and next. */
   html.ios .playerbar {
@@ -3692,6 +3752,34 @@ kbd {
   html.ios .pb-left .cover {
     width: 48px !important;
     height: 48px !important;
+  }
+  /* The bar's carousel (ui/swipe.ts, useSwipeTrack): the neighbours' cards, placed beside the bar
+     while a swipe goes; the new track's buttons come up a moment after its card settles. */
+  html.ios .pb-peer {
+    position: fixed;
+    z-index: 5;
+    margin: 0;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  html.ios .pb-peer .pb-left {
+    min-width: 0;
+  }
+  html.ios .playerbar.pb-fresh .pb-left > button:not(.pb-cover),
+  html.ios .playerbar.pb-fresh .pb-center {
+    animation: pb-fresh 0.45s ease both;
+  }
+  @keyframes pb-fresh {
+    0%,
+    35% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
   }
 
   /* "For you" cards are small here: the title on the art keeps to two lines in a smaller face
@@ -3838,17 +3926,6 @@ html.ios .q-row .icon-btn {
 }
 .q-sheet .queue {
   overflow: visible;
-}
-/* The lyrics: the sheet's full height, the line sung kept in the middle as it scrolls. */
-.lyrics-sheet {
-  height: 78vh;
-}
-.lyrics-sheet .q-sheet-list {
-  flex: 1;
-}
-.q-sheet .lyrics {
-  overflow: visible;
-  max-height: none;
 }
 
 /* iPhone: no magnifier over the finger on a double tap (the user: "on almost any page"). The page

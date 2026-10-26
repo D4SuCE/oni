@@ -801,15 +801,19 @@ async function swipeTrack() {
     const touch = (x: number) => new Touch({ identifier: 4, target, clientX: x, clientY: y });
     target.dispatchEvent(new TouchEvent('touchstart', { touches: [touch(xs[0])], changedTouches: [touch(xs[0])], bubbles: true, cancelable: true }));
     for (const x of xs.slice(1)) target.dispatchEvent(new TouchEvent('touchmove', { touches: [touch(x)], changedTouches: [touch(x)], bubbles: true, cancelable: true }));
+    // the neighbour's card beside the bar while the finger is down (the carousel)
+    const peer = document.querySelector<HTMLElement>(`.pb-peer[data-side="${xs[1] < xs[0] ? 'next' : 'prev'}"]`);
+    peers.push(Boolean(peer && peer.style.visibility === 'visible' && Math.abs(peer.getBoundingClientRect().left - bar.getBoundingClientRect().left) < bar.clientWidth + 20));
     target.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [touch(xs[xs.length - 1])], bubbles: true, cancelable: true }));
   };
+  const peers: boolean[] = [];
   const w = bar.clientWidth;
   swipe([w * 0.8, w * 0.75, w * 0.6, w * 0.4]);
   const forward = await until(() => app.usePlayer.getState().index === index + 1, 4000);
   await sleep(600);
   swipe([w * 0.2, w * 0.25, w * 0.4, w * 0.6]);
   const back = await until(() => app.usePlayer.getState().index === index, 4000);
-  report('swipe-track', Boolean(forward) && Boolean(back) && !document.querySelector('.nowplaying'), `${index} → ${forward ? index + 1 : '?'} → ${app.usePlayer.getState().index} of ${queue.length}`);
+  report('swipe-track', Boolean(forward) && Boolean(back) && peers.every(Boolean) && !document.querySelector('.nowplaying'), `${index} → ${forward ? index + 1 : '?'} → ${app.usePlayer.getState().index} of ${queue.length}; the neighbour's card beside it: ${peers.join(', ')}`);
 }
 
 /** Playlist import on the phone (src/views/Import.tsx): a pasted list is found in Yandex Music, and a
@@ -980,17 +984,21 @@ async function moveTracks() {
   // The queue as a sheet over Now Playing, with handles.
   click('.pb-cover');
   await until(() => document.querySelector('[data-testid="np-queue"]'), 5000);
-  // The lyrics as a sheet too (the user, 25.10.2026, found none on the phone): a track that has them.
-  // Yandex's, LRCLIB's, or none (then Genius's search is offered).
+  // The lyrics in Now Playing itself (variant B, the user 26.10.2026): the cover shrinks into the
+  // name's row and the lyrics take its place; a swipe down on the name goes back to the cover.
   const lyricsButton = document.querySelector<HTMLButtonElement>('[data-testid="np-lyrics"]');
   if (lyricsButton) {
     click('[data-testid="np-lyrics"]');
-    const sung = await until(() => document.querySelector('[data-testid="lyrics-sheet"] .lyric, [data-testid="lyrics-sheet"] .lyrics-plain, [data-testid="lyrics-sheet"] [data-testid="lyrics-genius"]'), 20000);
-    const lines = document.querySelectorAll('[data-testid="lyrics-sheet"] .lyric').length;
-    const from = document.querySelector('[data-testid="lyrics-sheet"] [data-testid="lyrics-source"]') ? 'LRCLIB' : 'Yandex';
-    report('lyrics-sheet', Boolean(sung), !sung ? 'nothing shown' : lines ? `${lines} lines, ${from}` : document.querySelector('[data-testid="lyrics-sheet"] .lyrics-plain') ? `plain, ${from}` : 'none: Genius offered');
-    click('.q-sheet-backdrop');
-    await until(() => !document.querySelector('[data-testid="lyrics-sheet"]'), 3000);
+    const sung = await until(() => document.querySelector('[data-testid="np-sung"] .lyric, [data-testid="np-sung"] .lyrics-plain, [data-testid="np-sung"] [data-testid="lyrics-genius"]'), 20000);
+    const lines = document.querySelectorAll('[data-testid="np-sung"] .lyric').length;
+    const from = document.querySelector('[data-testid="np-sung"] [data-testid="lyrics-source"]') ? 'LRCLIB' : 'Yandex';
+    const small = Math.round(document.querySelector('.nowplaying.sung .np-cover')?.getBoundingClientRect().width ?? 0);
+    const meta = document.querySelector('.nowplaying .np-meta')!;
+    const touch = (y: number) => new Touch({ identifier: 5, target: meta, clientX: 200, clientY: y });
+    meta.dispatchEvent(new TouchEvent('touchstart', { touches: [touch(120)], changedTouches: [touch(120)], bubbles: true, cancelable: true }));
+    meta.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [touch(260)], bubbles: true, cancelable: true }));
+    const back = await until(() => !document.querySelector('.nowplaying.sung') && document.querySelector('.nowplaying'), 3000);
+    report('lyrics-sheet', Boolean(sung) && small === 56 && Boolean(back), `${!sung ? 'nothing shown' : lines ? `${lines} lines, ${from}` : document.querySelector('[data-testid="np-sung"] .lyrics-plain') ? `plain, ${from}` : 'none: Genius offered'}; the cover ${small} px; a swipe down ${back ? 'went back to it' : 'did not go back'}`);
   } else report('lyrics-sheet', false, 'no lyrics button');
   click('[data-testid="np-queue"]');
   const sheet = await until(() => document.querySelector('[data-testid="queue-sheet"] [data-testid="drag-handle"]'), 3000);

@@ -38,9 +38,9 @@ export function BackgroundVideo({ src, poster }: { src: string; poster?: string 
 }
 
 /** The big cover: drifts slowly while the music plays (live covers on), still otherwise. */
-export function LiveCover({ track, className }: { track?: Track; className?: string }) {
+export function LiveCover({ track, className, onClick }: { track?: Track; className?: string; onClick?: () => void }) {
   const motion = useMotion((s) => s.enabled);
   const playing = usePlayer((s) => s.playing);
   const cover = useCover(track, 1000);
-  return <Cover src={cover} className={cx(className, motion && 'drift', motion && !playing && 'paused')} />;
+  return <Cover src={cover} className={cx(className, motion && 'drift', motion && !playing && 'paused')} onClick={onClick} />;
 }

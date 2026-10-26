@@ -1,19 +1,51 @@
-import { useCover } from '../ui/offline.ts';
-import { Ban, Heart, ListMusic, Loader2, Maximize2, Moon, MoreHorizontal, Pause, PictureInPicture2, Play, Repeat, Repeat1, Shuffle, SlidersVertical, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Waves } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
-import type { Track } from '../api/types.ts';
-import { useT } from '../i18n.ts';
-import { cycleRepeat, next, playAt, prev, seek, setSleep, setVolume, toggle, toggleShuffle, usePlayer } from '../player/player.ts';
-import { useSourceTitle } from './SourceTitle.ts';
-import { dislike, toggleLike, useApp } from '../store.ts';
-import { cx, fmtTime } from '../ui/util.ts';
-import { useEq } from '../player/eq.ts';
-import { isIos } from '../ui/platform.ts';
-import { useSwipeTrack } from '../ui/swipe.ts';
-import { ArtistLinks, Cover } from './Common.tsx';
-import { openMenu } from './Menu.tsx';
-import { DevicesButton, PlayingOn } from './Devices.tsx';
-import { plainArtists, trackMenu } from './TrackList.tsx';
+import { useCover } from "../ui/offline.ts";
+import {
+  Ban,
+  Heart,
+  ListMusic,
+  Loader2,
+  Maximize2,
+  Moon,
+  MoreHorizontal,
+  Pause,
+  PictureInPicture2,
+  Play,
+  Repeat,
+  Repeat1,
+  Shuffle,
+  SlidersVertical,
+  SkipBack,
+  SkipForward,
+  Volume1,
+  Volume2,
+  VolumeX,
+  Waves,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import type { Track } from "../api/types.ts";
+import { useT } from "../i18n.ts";
+import {
+  cycleRepeat,
+  next,
+  playAt,
+  prev,
+  seek,
+  setSleep,
+  setVolume,
+  toggle,
+  toggleShuffle,
+  usePlayer,
+} from "../player/player.ts";
+import { useSourceTitle } from "./SourceTitle.ts";
+import { dislike, toggleLike, useApp } from "../store.ts";
+import { cx, fmtTime } from "../ui/util.ts";
+import { useEq } from "../player/eq.ts";
+import { isIos } from "../ui/platform.ts";
+import { useSwipeTrack } from "../ui/swipe.ts";
+import { ArtistLinks, Cover } from "./Common.tsx";
+import { openMenu } from "./Menu.tsx";
+import { DevicesButton, PlayingOn } from "./Devices.tsx";
+import { plainArtists, trackMenu } from "./TrackList.tsx";
 
 /** The sleep timer: a moon, with the minutes left beside it while it runs; its menu sets it. */
 export function SleepButton({ size = 18 }: { size?: number }) {
@@ -27,18 +59,36 @@ export function SleepButton({ size = 18 }: { size?: number }) {
     return () => clearInterval(timer);
   }, [sleep.until]);
   const on = Boolean(sleep.until) || sleep.afterTrack;
-  const left = sleep.until ? Math.max(1, Math.ceil((sleep.until - Date.now()) / 60_000)) : 0;
-  const label = sleep.until ? t.sleepLeft(left) : sleep.afterTrack ? t.sleepEnd : '';
+  const left = sleep.until
+    ? Math.max(1, Math.ceil((sleep.until - Date.now()) / 60_000))
+    : 0;
+  const label = sleep.until
+    ? t.sleepLeft(left)
+    : sleep.afterTrack
+      ? t.sleepEnd
+      : "";
   return (
     <button
-      className={cx('icon-btn sleep-btn', on && 'on')}
+      className={cx("icon-btn sleep-btn", on && "on")}
       title={on ? `${t.sleep}: ${label}` : t.sleep}
       data-testid="sleep"
       onClick={(e) =>
         openMenu(e, [
-          ...[15, 30, 45, 60].map((n) => ({ label: t.sleepMinutes(n), onClick: () => setSleep(n) })),
-          { label: t.sleepTrack, onClick: () => setSleep('track') },
-          ...(on ? [{ label: '', separator: true }, { label: t.sleepOff, danger: true, onClick: () => setSleep(null) }] : []),
+          ...[15, 30, 45, 60].map((n) => ({
+            label: t.sleepMinutes(n),
+            onClick: () => setSleep(n),
+          })),
+          { label: t.sleepTrack, onClick: () => setSleep("track") },
+          ...(on
+            ? [
+                { label: "", separator: true },
+                {
+                  label: t.sleepOff,
+                  danger: true,
+                  onClick: () => setSleep(null),
+                },
+              ]
+            : []),
         ])
       }
     >
@@ -66,10 +116,13 @@ export function SeekBar({ className }: { className?: string }) {
   };
   const t = useT();
   return (
-    <div className={cx('seek', className)}>
+    <div className={cx("seek", className)}>
       {/* While the bar is held, the time it goes to, lit (the user: there was no telling what time a
           seek went to; there, not over the hand, by the user's choice). */}
-      <span className={cx('time', drag !== null && 'seeking')} data-testid="seek-time">
+      <span
+        className={cx("time", drag !== null && "seeking")}
+        data-testid="seek-time"
+      >
         {fmtTime(shown)}
       </span>
       <span className="seek-track">
@@ -80,12 +133,16 @@ export function SeekBar({ className }: { className?: string }) {
           max={duration || 1}
           step={0.5}
           value={shown}
-          style={{ '--p': `${p}%` } as React.CSSProperties}
+          style={{ "--p": `${p}%` } as React.CSSProperties}
           onPointerDown={() => (holding.current = true)}
           onPointerUp={release}
           onPointerCancel={release}
           // Held: follow the hand; otherwise (the keyboard) seek right away.
-          onChange={(e) => (holding.current ? setDrag(Number(e.target.value)) : seek(Number(e.target.value)))}
+          onChange={(e) =>
+            holding.current
+              ? setDrag(Number(e.target.value))
+              : seek(Number(e.target.value))
+          }
           aria-label={t.player.position}
         />
       </span>
@@ -99,36 +156,77 @@ export function Transport({ big }: { big?: boolean }) {
   const loading = usePlayer((s) => s.loading);
   const repeat = usePlayer((s) => s.repeat);
   const shuffle = usePlayer((s) => s.shuffle);
-  const isWave = usePlayer((s) => s.source?.kind === 'wave');
+  const isWave = usePlayer((s) => s.source?.kind === "wave");
   const sz = big ? 22 : 18;
   const t = useT();
   return (
-    <div className={cx('transport', big && 'big')}>
-      <button className={cx('icon-btn', shuffle && 'on')} onClick={toggleShuffle} disabled={isWave} title={t.player.shuffle}>
+    <div className={cx("transport", big && "big")}>
+      <button
+        className={cx("icon-btn", shuffle && "on")}
+        onClick={toggleShuffle}
+        disabled={isWave}
+        title={t.player.shuffle}
+      >
         <Shuffle size={sz - 2} />
       </button>
       <button className="icon-btn" onClick={prev} title={t.player.prev}>
         <SkipBack size={sz} fill="currentColor" />
       </button>
-      <button className="play-btn" onClick={toggle} title={playing ? t.player.pause : t.player.play} data-testid="play-toggle">
-        {loading && playing ? <Loader2 size={sz + 2} className="spin" /> : playing ? <Pause size={sz + 2} fill="currentColor" /> : <Play size={sz + 2} fill="currentColor" />}
+      <button
+        className="play-btn"
+        onClick={toggle}
+        title={playing ? t.player.pause : t.player.play}
+        data-testid="play-toggle"
+      >
+        {loading && playing ? (
+          <Loader2 size={sz + 2} className="spin" />
+        ) : playing ? (
+          <Pause size={sz + 2} fill="currentColor" />
+        ) : (
+          <Play size={sz + 2} fill="currentColor" />
+        )}
       </button>
-      <button className="icon-btn" onClick={() => next(true)} title={t.player.next} data-testid="next">
+      <button
+        className="icon-btn"
+        onClick={() => next(true)}
+        title={t.player.next}
+        data-testid="next"
+      >
         <SkipForward size={sz} fill="currentColor" />
       </button>
-      <button className={cx('icon-btn', repeat !== 'off' && 'on')} onClick={cycleRepeat} disabled={isWave} title={t.player.repeat}>
-        {repeat === 'one' ? <Repeat1 size={sz - 2} /> : <Repeat size={sz - 2} />}
+      <button
+        className={cx("icon-btn", repeat !== "off" && "on")}
+        onClick={cycleRepeat}
+        disabled={isWave}
+        title={t.player.repeat}
+      >
+        {repeat === "one" ? (
+          <Repeat1 size={sz - 2} />
+        ) : (
+          <Repeat size={sz - 2} />
+        )}
       </button>
     </div>
   );
 }
 
-export function LikeButton({ track, size = 18 }: { track: Track; size?: number }) {
+export function LikeButton({
+  track,
+  size = 18,
+}: {
+  track: Track;
+  size?: number;
+}) {
   const liked = useApp((s) => s.liked.has(String(track.id)));
   const t = useT();
   return (
-    <button className={cx('icon-btn', liked && 'on like')} onClick={() => toggleLike(track)} title={t.common.like} data-testid="like">
-      <Heart size={size} fill={liked ? 'currentColor' : 'none'} />
+    <button
+      className={cx("icon-btn", liked && "on like")}
+      onClick={() => toggleLike(track)}
+      title={t.common.like}
+      data-testid="like"
+    >
+      <Heart size={size} fill={liked ? "currentColor" : "none"} />
     </button>
   );
 }
@@ -139,7 +237,7 @@ export function VolumeControl({ className }: { className?: string }) {
   const Icon = volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
   const t = useT();
   return (
-    <div className={cx('volume', className)}>
+    <div className={cx("volume", className)}>
       <button
         className="icon-btn"
         onClick={() => {
@@ -159,7 +257,7 @@ export function VolumeControl({ className }: { className?: string }) {
         max={1}
         step={0.01}
         value={volume}
-        style={{ '--p': `${volume * 100}%` } as React.CSSProperties}
+        style={{ "--p": `${volume * 100}%` } as React.CSSProperties}
         onChange={(e) => setVolume(Number(e.target.value))}
         onWheel={(e) => setVolume(volume + (e.deltaY < 0 ? 0.05 : -0.05))}
         aria-label={t.player.volume}
@@ -168,11 +266,35 @@ export function VolumeControl({ className }: { className?: string }) {
   );
 }
 
-/** What follows the finger on a swipe: the track's cover and name. */
-const barTrack = () => document.querySelector<HTMLElement>('.playerbar .pb-left');
+/** The neighbours' cards beside the bar on a swipe (iPhone). */
+const barPeers = () => [...document.querySelectorAll<HTMLElement>(".pb-peer")];
+
+/** A neighbour's card in the bar's carousel: its cover and name (its buttons come once it plays). */
+function PeerCard({ track, side }: { track: Track; side: "prev" | "next" }) {
+  const cover = useCover(track, 200);
+  return (
+    <div
+      className="playerbar glass pb-peer"
+      data-side={side}
+      aria-hidden="true"
+    >
+      <div className="pb-left">
+        <span className="pb-cover">
+          <Cover src={cover} size={56} />
+        </span>
+        <div className="pb-meta">
+          <div className="pb-title">{track.title}</div>
+          <div className="pb-artists">
+            {track.artists.map((a) => a.name).join(", ")}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 /** Left: the next track; right: the previous one (none before the first: it springs back). */
-function turnTrack(dir: 'next' | 'prev') {
-  if (dir === 'next') return next(true), true;
+function turnTrack(dir: "next" | "prev") {
+  if (dir === "next") return (next(true), true);
   const { index } = usePlayer.getState();
   if (index <= 0) return false;
   playAt(index - 1);
@@ -182,7 +304,7 @@ function turnTrack(dir: 'next' | 'prev') {
 export function PlayerBar() {
   const track = usePlayer((s) => s.queue[s.index]);
   const cover = useCover(track, 200);
-  const isWave = usePlayer((s) => s.source?.kind === 'wave');
+  const isWave = usePlayer((s) => s.source?.kind === "wave");
   const t = useT();
   const source = usePlayer((s) => s.source);
   const sourceTitle = useSourceTitle(source);
@@ -190,71 +312,131 @@ export function PlayerBar() {
   const eqOn = useEq((s) => s.enabled);
   // On the iPhone a sideways swipe along the bar turns the track (as in Yandex Music's app).
   const bar = useRef<HTMLElement>(null);
-  useSwipeTrack(bar, barTrack, turnTrack, isIos && Boolean(track));
+  useSwipeTrack(bar, barPeers, turnTrack, isIos && Boolean(track));
+  const before = usePlayer((s) =>
+    s.index > 0 ? s.queue[s.index - 1] : undefined,
+  );
+  const after = usePlayer((s) => s.queue[s.index + 1]);
 
   return (
-    // On the iPhone the whole bar opens Now Playing (its buttons keep their own job).
-    <footer ref={bar} className="playerbar glass" onClick={isIos ? (e) => track && !(e.target as Element).closest('button, a, input') && openNow() : undefined}>
-      {/* The playing track has the same menu as in any list: share it, add it to a playlist… even from the wave. */}
-      <div className="pb-left" onContextMenu={(e) => track && openMenu(e, trackMenu(track))}>
-        {track ? (
-          <>
-            <button className="pb-cover" onClick={openNow} title={t.player.expand}>
-              <Cover src={cover} size={56} />
-            </button>
-            <div className="pb-meta">
-              <div className="pb-title" title={track.title} data-testid="now-title">
-                {track.title}
-                {track.version && <span className="tr-version"> {track.version}</span>}
-              </div>
-              <div className="pb-artists">
-                <ArtistLinks artists={track.artists} plain={isIos || plainArtists(track)} />
-              </div>
-              <PlayingOn />
-            </div>
-            <LikeButton track={track} />
-            {isWave && (
-              <button className="icon-btn" onClick={() => dislike(track)} title={t.common.dontRecommend}>
-                <Ban size={17} />
+    <>
+      {/* On the iPhone the whole bar opens Now Playing (its buttons keep their own job). */}
+      <footer
+        ref={bar}
+        className="playerbar glass"
+        onClick={
+          isIos
+            ? (e) =>
+                track &&
+                !(e.target as Element).closest("button, a, input") &&
+                openNow()
+            : undefined
+        }
+      >
+        {/* The playing track has the same menu as in any list: share it, add it to a playlist… even from the wave. */}
+        <div
+          className="pb-left"
+          onContextMenu={(e) => track && openMenu(e, trackMenu(track))}
+        >
+          {track ? (
+            <>
+              <button
+                className="pb-cover"
+                onClick={openNow}
+                title={t.player.expand}
+              >
+                <Cover src={cover} size={56} />
               </button>
-            )}
-            <button className="icon-btn pb-more" onClick={(e) => openMenu(e, trackMenu(track))} title={t.common.more} data-testid="now-more">
-              <MoreHorizontal size={18} />
-            </button>
-          </>
-        ) : (
-          <div className="pb-empty">{t.player.nothing}</div>
-        )}
-      </div>
-      <div className="pb-center">
-        <Transport />
-        <SeekBar />
-      </div>
-      <div className="pb-right">
-        {track && (
-          <span className="pb-source" title={t.player.source}>
-            {isWave && <Waves size={14} />}
-            <span className="pb-source-text">{sourceTitle}</span>
-          </span>
-        )}
-        <DevicesButton />
-        <SleepButton />
-        <button className="icon-btn" onClick={openNow} title={t.player.queue}>
-          <ListMusic size={18} />
-        </button>
-        <button className={cx('icon-btn', eqOn && 'on')} onClick={() => useApp.setState((s) => ({ soundOpen: !s.soundOpen }))} title={t.sound.title} data-testid="sound-button">
-          <SlidersVertical size={18} />
-        </button>
-        <VolumeControl />
-        {window.wave?.openMini && (
-          <button className="icon-btn" onClick={() => window.wave?.openMini?.()} title={t.mini.open} data-testid="mini-button">
-            <PictureInPicture2 size={17} />
+              <div className="pb-meta">
+                <div
+                  className="pb-title"
+                  title={track.title}
+                  data-testid="now-title"
+                >
+                  {track.title}
+                  {track.version && (
+                    <span className="tr-version"> {track.version}</span>
+                  )}
+                </div>
+                <div className="pb-artists">
+                  <ArtistLinks
+                    artists={track.artists}
+                    plain={isIos || plainArtists(track)}
+                  />
+                </div>
+                <PlayingOn />
+              </div>
+              <LikeButton track={track} />
+              {isWave && (
+                <button
+                  className="icon-btn"
+                  onClick={() => dislike(track)}
+                  title={t.common.dontRecommend}
+                >
+                  <Ban size={17} />
+                </button>
+              )}
+              <button
+                className="icon-btn pb-more"
+                onClick={(e) => openMenu(e, trackMenu(track))}
+                title={t.common.more}
+                data-testid="now-more"
+              >
+                <MoreHorizontal size={18} />
+              </button>
+            </>
+          ) : (
+            <div className="pb-empty">{t.player.nothing}</div>
+          )}
+        </div>
+        <div className="pb-center">
+          <Transport />
+          <SeekBar />
+        </div>
+        <div className="pb-right">
+          {track && (
+            <span className="pb-source" title={t.player.source}>
+              {isWave && <Waves size={14} />}
+              <span className="pb-source-text">{sourceTitle}</span>
+            </span>
+          )}
+          <DevicesButton />
+          <SleepButton />
+          <button className="icon-btn" onClick={openNow} title={t.player.queue}>
+            <ListMusic size={18} />
           </button>
-        )}
-        <button className="icon-btn" onClick={openNow} title={t.player.fullscreen}>
-          <Maximize2 size={16} />
-        </button>
-      </div>
-    </footer>
+          <button
+            className={cx("icon-btn", eqOn && "on")}
+            onClick={() =>
+              useApp.setState((s) => ({ soundOpen: !s.soundOpen }))
+            }
+            title={t.sound.title}
+            data-testid="sound-button"
+          >
+            <SlidersVertical size={18} />
+          </button>
+          <VolumeControl />
+          {window.wave?.openMini && (
+            <button
+              className="icon-btn"
+              onClick={() => window.wave?.openMini?.()}
+              title={t.mini.open}
+              data-testid="mini-button"
+            >
+              <PictureInPicture2 size={17} />
+            </button>
+          )}
+          <button
+            className="icon-btn"
+            onClick={openNow}
+            title={t.player.fullscreen}
+          >
+            <Maximize2 size={16} />
+          </button>
+        </div>
+      </footer>
+      {isIos && before && <PeerCard track={before} side="prev" />}
+      {isIos && after && <PeerCard track={after} side="next" />}
+    </>
   );
 }

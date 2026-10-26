@@ -124,26 +124,42 @@ export function useSwipeBack(scroller: RefObject<HTMLElement | null>, page: () =
   }, [scroller, page, onBack, enabled]);
 }
 
+/** Between a card and the next in a carousel (the player bar's neighbours). */
+const CARD_GAP = 8;
+
 /**
- * A sideways swipe along a strip turns the track — the iPhone's player bar, as in Yandex Music's
- * app (the user, 26.10.2026: the next or the previous track, not the time within it). Left: the
- * next; right: the previous. What `slide` returns follows the finger; far enough (a quarter of the
- * strip) or a quick flick turns, anything less springs back. A tap stays a tap (the bar opens Now
- * Playing, its buttons work); after a swipe the click that follows is swallowed.
+ * A sideways swipe along a card turns the track — the iPhone's player bar, a carousel of cards as
+ * in Yandex Music's app (the user, 26.10.2026, with a video of it: the whole card follows the
+ * finger, the next track's card comes in beside it, a gap between; let go, the new card settles and
+ * its buttons appear). Left: the next; right: the previous. `peers()` gives the neighbours' cards
+ * (`data-side` "prev" or "next"), placed beside the card when a swipe starts. Far enough (a quarter
+ * of the card) or a quick flick turns, anything less springs back. A tap stays a tap (the bar opens
+ * Now Playing, its buttons work); after a swipe the click that follows is swallowed.
  */
-export function useSwipeTrack(ref: RefObject<HTMLElement | null>, slide: () => HTMLElement | null, turn: (dir: 'next' | 'prev') => boolean, enabled = true) {
+export function useSwipeTrack(ref: RefObject<HTMLElement | null>, peers: () => HTMLElement[], turn: (dir: 'next' | 'prev') => boolean, enabled = true) {
   useEffect(() => {
     const el = ref.current;
     if (!el || !enabled) return;
     let start: { x: number; y: number; t: number } | null = null;
     let swiping = false;
     let dx = 0;
-    const place = (x: number, ms: number, opacity = 1) => {
-      const s = slide();
-      if (!s) return;
-      s.style.transition = ms ? `transform ${ms}ms ease, opacity ${ms}ms ease` : 'none';
-      s.style.transform = x ? `translateX(${x}px)` : '';
-      s.style.opacity = opacity === 1 ? '' : String(opacity);
+    const has = (side: 'next' | 'prev') => peers().some((p) => p.dataset.side === side);
+    const place = (x: number, ms: number) => {
+      for (const c of [el, ...peers()]) {
+        c.style.transition = ms ? `transform ${ms}ms cubic-bezier(0.25, 0.8, 0.3, 1)` : 'none';
+        c.style.transform = x ? `translateX(${x}px)` : '';
+      }
+    };
+    // the neighbours where the card is, one card and a gap to each side
+    const lay = () => {
+      const box = el.getBoundingClientRect();
+      for (const p of peers()) {
+        const side = p.dataset.side === 'prev' ? -1 : 1;
+        Object.assign(p.style, { left: `${box.left + side * (box.width + CARD_GAP)}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px`, visibility: 'visible' });
+      }
+    };
+    const hide = () => {
+      for (const p of peers()) p.style.visibility = 'hidden';
     };
     const down = (e: TouchEvent) => {
       const touch = e.touches[0];
@@ -161,13 +177,19 @@ export function useSwipeTrack(ref: RefObject<HTMLElement | null>, slide: () => H
         if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) return void (start = null);
         if (Math.abs(dx) < 12) return;
         swiping = true;
+        lay();
       }
       e.preventDefault();
-      place(dx, 0, Math.max(0.3, 1 - Math.abs(dx) / el.clientWidth));
+      // no card that way (the first track, nothing next yet): it follows, but reluctantly
+      place(has(dx < 0 ? 'next' : 'prev') ? dx : dx / 3, 0);
     };
     const swallow = (e: Event) => {
       e.stopPropagation();
       e.preventDefault();
+    };
+    const settle = () => {
+      place(0, 220);
+      setTimeout(hide, 230);
     };
     const up = (e: TouchEvent) => {
       if (!start) return;
@@ -177,18 +199,25 @@ export function useSwipeTrack(ref: RefObject<HTMLElement | null>, slide: () => H
       swiping = false;
       el.addEventListener('click', swallow, { capture: true });
       setTimeout(() => el.removeEventListener('click', swallow, { capture: true }), 400);
-      const far = Math.abs(dx) > el.clientWidth / 4 || (fast && Math.abs(dx) > 40);
       const dir = dx < 0 ? 'next' : 'prev';
-      if (e.type !== 'touchend' || !far) return place(0, 200);
-      // out the way it went, the track turns, the new one comes in from the other side
-      const out = Math.sign(dx) * el.clientWidth * 0.5;
-      place(out, 140, 0);
+      const far = Math.abs(dx) > el.clientWidth / 4 || (fast && Math.abs(dx) > 40);
+      if (e.type !== 'touchend' || !far || !has(dir)) return settle();
+      // the neighbour slides into the card's place; then the track turns, and the card (now showing
+      // it) is put back where it was without a jump, its buttons coming up a moment later
+      place(-Math.sign(dx) * (el.offsetWidth + CARD_GAP), 220);
       setTimeout(() => {
-        if (!turn(dir)) return place(0, 200);
+        if (!turn(dir)) return settle();
         haptic('tick');
-        place(-out * 0.6, 0, 0);
-        requestAnimationFrame(() => requestAnimationFrame(() => place(0, 200)));
-      }, 140);
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            place(0, 0);
+            hide();
+            el.classList.remove('pb-fresh');
+            void el.offsetWidth;
+            el.classList.add('pb-fresh');
+          }),
+        );
+      }, 230);
     };
     el.addEventListener('touchstart', down, { passive: true });
     el.addEventListener('touchmove', drag, { passive: false });
@@ -200,5 +229,5 @@ export function useSwipeTrack(ref: RefObject<HTMLElement | null>, slide: () => H
       el.removeEventListener('touchend', up);
       el.removeEventListener('touchcancel', up);
     };
-  }, [ref, slide, turn, enabled]);
+  }, [ref, peers, turn, enabled]);
 }

@@ -168,6 +168,31 @@ function QueueRow({ i, current }: { i: number; current?: boolean }) {
   );
 }
 
+/** In the iPhone's lyrics, a swipe down (not on the lyrics, which scroll) goes back to the cover.
+ * Touch events: iOS cancels a pointer as soon as anything under it scrolls. */
+function useLyricsSwipe(ref: RefObject<HTMLDivElement | null>, on: boolean, back: () => void) {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !on) return;
+    let from: { x: number; y: number } | null = null;
+    const down = (e: TouchEvent) => {
+      const t = e.touches[0];
+      from = e.touches.length === 1 && !(e.target as Element).closest('.np-sung, input, .q-sheet') ? { x: t.clientX, y: t.clientY } : null;
+    };
+    const up = (e: TouchEvent) => {
+      const t = e.changedTouches[0];
+      if (from && t && t.clientY - from.y > 60 && Math.abs(t.clientX - from.x) < t.clientY - from.y) back();
+      from = null;
+    };
+    el.addEventListener('touchstart', down, { passive: true });
+    el.addEventListener('touchend', up);
+    return () => {
+      el.removeEventListener('touchstart', down);
+      el.removeEventListener('touchend', up);
+    };
+  }, [ref, on, back]);
+}
+
 /** The iPhone: the cover takes the height the name, buttons and controls leave it, and stays square
  * (a whole name on two or three lines would push the controls off the screen). Sets --np-cover on
  * the column, read by styles.css under html.ios; the desktop's layout is left as it is. */
@@ -211,13 +236,18 @@ export function NowPlaying() {
   // The equalizer's button is red while it is on, as in the desktop's player bar (the user).
   const eqOn = useEq((s) => s.enabled);
   const [picked, setTab] = useState<'queue' | 'lyrics' | 'similar'>('queue');
-  // The iPhone has no room for the queue and the lyrics beside the cover: they open as a sheet.
-  const [sheetOpen, setSheet] = useState<'queue' | 'lyrics' | null>(null);
+  // The iPhone has no room for the queue beside the cover: it opens as a sheet.
+  const [sheetOpen, setSheet] = useState<'queue' | null>(null);
+  // The iPhone's lyrics: the cover shrinks into a row with the name and the lyrics take its place,
+  // the controls staying below (the user, 26.10.2026: variant B — not a page over Now Playing). A
+  // swipe down goes back to the cover; another closes Now Playing.
+  const [sung, setSung] = useState(false);
   const video = useCoverVideo(track);
   const t = useT();
   const close = useCallback(() => useApp.setState({ nowPlayingOpen: false }), []);
   const sheet = useRef<HTMLDivElement>(null);
-  useSwipeDown(sheet, close);
+  useSwipeDown(sheet, close, undefined, !sung);
+  useLyricsSwipe(sheet, sung, () => setSung(false));
   const volumeSlider = usePhoneSound((s) => s.volumeSlider);
   const remote = useElsewhere((s) => Boolean(s.controlling));
   useEffect(() => {
@@ -239,7 +269,7 @@ export function NowPlaying() {
   useCoverFit(art);
 
   return (
-    <div ref={sheet} className={cx('nowplaying', video && 'has-video')}>
+    <div ref={sheet} className={cx('nowplaying', video && 'has-video', sung && 'sung')}>
       {video && <BackgroundVideo key={track?.id} src={video} poster={trackCover(track, 1000)} />}
       <div className="np-drag" />
       <button className="icon-btn np-close" onClick={close} title={t.nowPlaying.collapse}>
@@ -247,7 +277,8 @@ export function NowPlaying() {
       </button>
       <div className="np-stage">
         <div ref={art} className="np-art">
-          <LiveCover track={track} className="np-cover" />
+          {/* in the lyrics the small cover takes back to the big one */}
+          <LiveCover track={track} className="np-cover" onClick={sung ? () => setSung(false) : undefined} />
           {track && (
             <>
               <div className="np-meta" onContextMenu={(e) => openMenu(e, trackMenu(track))}>
@@ -278,7 +309,7 @@ export function NowPlaying() {
                   )}
                   {/* The lyrics on the iPhone too (the user, 25.10.2026: "is there a page with the lyrics?"). */}
                   {isIos && (
-                    <button className={cx('icon-btn', !hasLyrics && 'dim')} onClick={() => setSheet('lyrics')} title={hasLyrics ? t.nowPlaying.lyrics : t.nowPlaying.lyricsMissing} data-testid="np-lyrics">
+                    <button className={cx('icon-btn', !hasLyrics && 'dim', sung && 'on')} onClick={() => setSung(!sung)} title={hasLyrics ? t.nowPlaying.lyrics : t.nowPlaying.lyricsMissing} data-testid="np-lyrics">
                       <MicVocal size={21} />
                     </button>
                   )}
@@ -292,6 +323,11 @@ export function NowPlaying() {
                   </button>
                 </div>
               </div>
+              {isIos && sung && (
+                <div className="np-sung" data-testid="np-sung">
+                  <Lyrics track={track} />
+                </div>
+              )}
               <SeekBar className="np-seek" />
               <Transport big />
               {/* A remote always has it: the volume there (the iPhone's buttons are the phone's own). */}
@@ -315,14 +351,16 @@ export function NowPlaying() {
         </aside>
         {sheetOpen && (
           <div className="q-sheet-backdrop" onClick={() => setSheet(null)}>
-            <div className={cx('q-sheet glass', sheetOpen === 'lyrics' && 'lyrics-sheet')} onClick={(e) => e.stopPropagation()} data-testid={`${sheetOpen}-sheet`}>
+            <div className="q-sheet glass" onClick={(e) => e.stopPropagation()} data-testid={`${sheetOpen}-sheet`}>
               <div className="q-sheet-head">
-                <h3>{sheetOpen === 'queue' ? t.player.queue : t.nowPlaying.lyrics}</h3>
+                <h3>{t.player.queue}</h3>
                 <button className="icon-btn" onClick={() => setSheet(null)} title={t.common.close}>
                   <X size={20} />
                 </button>
               </div>
-              <div className="q-sheet-list">{sheetOpen === 'queue' ? <Queue /> : track ? <Lyrics track={track} /> : null}</div>
+              <div className="q-sheet-list">
+                <Queue />
+              </div>
             </div>
           </div>
         )}

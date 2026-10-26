@@ -7,14 +7,14 @@ import { listKeyOf, toggle, usePlayer } from '../player/player.ts';
 import { isOwn, navigate } from '../store.ts';
 import { cx } from '../ui/util.ts';
 
-export function Cover({ src, size, round, icon = 'music', className }: { src?: string; size?: number; round?: boolean; icon?: 'music' | 'user' | 'disc'; className?: string }) {
+export function Cover({ src, size, round, icon = 'music', className, onClick }: { src?: string; size?: number; round?: boolean; icon?: 'music' | 'user' | 'disc'; className?: string; onClick?: () => void }) {
   // Failed for this address only: the kept cover that takes over with no network shows.
   const [failedSrc, setFailedSrc] = useState<string>();
   const failed = Boolean(src) && failedSrc === src;
   const Icon = icon === 'user' ? User : icon === 'disc' ? Disc3 : Music2;
   const style = size ? { width: size, height: size } : undefined;
   return (
-    <div className={cx('cover', round && 'round', className)} style={style}>
+    <div className={cx('cover', round && 'round', className)} style={style} onClick={onClick}>
       {src && !failed ? <img src={src} alt="" loading="lazy" draggable={false} onError={() => setFailedSrc(src)} /> : <Icon className="cover-icon" />}
     </div>
   );
