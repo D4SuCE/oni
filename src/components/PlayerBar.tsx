@@ -3,13 +3,13 @@ import { Ban, Heart, ListMusic, Loader2, Maximize2, Moon, MoreHorizontal, Pause,
 import { useEffect, useRef, useState } from 'react';
 import type { Track } from '../api/types.ts';
 import { useT } from '../i18n.ts';
-import { cycleRepeat, next, prev, seek, setSleep, setVolume, toggle, toggleShuffle, usePlayer } from '../player/player.ts';
+import { cycleRepeat, next, playAt, prev, seek, setSleep, setVolume, toggle, toggleShuffle, usePlayer } from '../player/player.ts';
 import { useSourceTitle } from './SourceTitle.ts';
 import { dislike, toggleLike, useApp } from '../store.ts';
 import { cx, fmtTime } from '../ui/util.ts';
 import { useEq } from '../player/eq.ts';
 import { isIos } from '../ui/platform.ts';
-import { useSwipeSeek } from '../ui/swipe.ts';
+import { useSwipeTrack } from '../ui/swipe.ts';
 import { ArtistLinks, Cover } from './Common.tsx';
 import { openMenu } from './Menu.tsx';
 import { DevicesButton, PlayingOn } from './Devices.tsx';
@@ -168,7 +168,16 @@ export function VolumeControl({ className }: { className?: string }) {
   );
 }
 
-const playerTime = () => usePlayer.getState();
+/** What follows the finger on a swipe: the track's cover and name. */
+const barTrack = () => document.querySelector<HTMLElement>('.playerbar .pb-left');
+/** Left: the next track; right: the previous one (none before the first: it springs back). */
+function turnTrack(dir: 'next' | 'prev') {
+  if (dir === 'next') return next(true), true;
+  const { index } = usePlayer.getState();
+  if (index <= 0) return false;
+  playAt(index - 1);
+  return true;
+}
 
 export function PlayerBar() {
   const track = usePlayer((s) => s.queue[s.index]);
@@ -179,14 +188,13 @@ export function PlayerBar() {
   const sourceTitle = useSourceTitle(source);
   const openNow = () => useApp.setState({ nowPlayingOpen: true });
   const eqOn = useEq((s) => s.enabled);
-  // On the iPhone a sideways swipe along the bar seeks (as in Yandex Music's app).
+  // On the iPhone a sideways swipe along the bar turns the track (as in Yandex Music's app).
   const bar = useRef<HTMLElement>(null);
-  const scrub = useSwipeSeek(bar, playerTime, seek, isIos && Boolean(track));
-  const duration = usePlayer((s) => s.duration);
+  useSwipeTrack(bar, barTrack, turnTrack, isIos && Boolean(track));
 
   return (
     // On the iPhone the whole bar opens Now Playing (its buttons keep their own job).
-    <footer ref={bar} className={cx('playerbar glass', scrub !== null && 'scrubbing')} onClick={isIos ? (e) => track && !(e.target as Element).closest('button, a, input') && openNow() : undefined}>
+    <footer ref={bar} className="playerbar glass" onClick={isIos ? (e) => track && !(e.target as Element).closest('button, a, input') && openNow() : undefined}>
       {/* The playing track has the same menu as in any list: share it, add it to a playlist… even from the wave. */}
       <div className="pb-left" onContextMenu={(e) => track && openMenu(e, trackMenu(track))}>
         {track ? (
@@ -199,15 +207,9 @@ export function PlayerBar() {
                 {track.title}
                 {track.version && <span className="tr-version"> {track.version}</span>}
               </div>
-              {scrub !== null ? (
-                <div className="pb-artists pb-scrub-time" data-testid="scrub-time">
-                  {fmtTime(scrub)} / {fmtTime(duration)}
-                </div>
-              ) : (
-                <div className="pb-artists">
-                  <ArtistLinks artists={track.artists} plain={isIos || plainArtists(track)} />
-                </div>
-              )}
+              <div className="pb-artists">
+                <ArtistLinks artists={track.artists} plain={isIos || plainArtists(track)} />
+              </div>
               <PlayingOn />
             </div>
             <LikeButton track={track} />
@@ -253,11 +255,6 @@ export function PlayerBar() {
           <Maximize2 size={16} />
         </button>
       </div>
-      {scrub !== null && duration > 0 && (
-        <div className="pb-scrub" aria-hidden="true">
-          <div style={{ width: `${(scrub / duration) * 100}%` }} />
-        </div>
-      )}
     </footer>
   );
 }
