@@ -2,6 +2,7 @@
 // shared track as the player takes it, the file name "+ Mine" uploads it under.
 // Run: npm run test:share
 import { readMark, visible, withMark } from '../src/share/mark.ts';
+import { trimTrack } from '../src/player/recent.ts';
 import { asTrack, fileName, shareLinkOf } from '../src/share/shared.ts';
 
 let passed = 0;
@@ -45,6 +46,13 @@ test('a shared track: not Yandex\'s (its own id), its file and owner with it', (
   const t = asTrack({ id: 'abc-1', file: 'abc-1.mp3', title: 'Песня', artists: ['Автор', 'Второй'], durationMs: 200000 }, LINK, 'Друг');
   assert(t.id === 'share-abc-1' && t.share?.file === 'abc-1.mp3' && t.share.link === LINK && t.share.owner === 'Друг', JSON.stringify(t));
   assert(t.artists.map((a) => a.name).join('|') === 'Автор|Второй' && t.durationMs === 200000, 'artists, length');
+});
+
+test("a shared track kept (History, downloads, the queue, the remote) is still a friend's upload", () => {
+  // The user's picture, 27.10.2026: "Add to playlist" on one said "Parameters requirements are not
+  // met" — kept without its share it had Yandex's menu, and Yandex knows no "share-…" track.
+  const t = trimTrack(asTrack({ id: 'abc-1', file: 'abc-1.mp3', title: 'Песня', artists: ['Автор'], durationMs: 200000 }, LINK, 'Друг'));
+  assert(t.share?.file === 'abc-1.mp3' && t.share.link === LINK && t.share.owner === 'Друг' && t.trackSource === 'SHARE', JSON.stringify(t));
 });
 
 test('"+ Mine" names the file "Artist - Title.mp3", with nothing a file name cannot have', () => {

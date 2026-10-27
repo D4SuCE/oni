@@ -39,6 +39,8 @@ export function trimTrack(t: Track): Track {
     r128: t.r128,
     lyricsInfo: t.lyricsInfo,
     backgroundVideoUri: t.backgroundVideoUri,
+    // a friend's upload (src/share): without it, it would be taken for Yandex's own track
+    share: t.share,
   };
 }
 

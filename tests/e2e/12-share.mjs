@@ -44,6 +44,10 @@ await step("shared uploads: a playlist's own uploads go to a folder on Disk open
       await page.evaluate((t) => window.__wave.share.downloadShared(t), one);
       const kept = await page.evaluate((id) => window.__wave.offline.entry(id)?.size ?? 0, one.id);
       if (kept < 50000) throw new Error(`downloaded ${kept} bytes`);
+      // kept as a friend's upload (the user's picture, 27.10.2026: one kept without it got Yandex's
+      // "Add to playlist", which said "Parameters requirements are not met")
+      const keptShare = await page.evaluate((id) => window.__wave.offline.entry(id)?.track.share?.file, one.id);
+      if (keptShare !== one.share.file) throw new Error(`kept without its share: ${keptShare}`);
     } finally {
       await page.evaluate((id) => window.__wave.offline.remove(id), one.id);
     }
@@ -52,6 +56,14 @@ await step("shared uploads: a playlist's own uploads go to a folder on Disk open
     await page.evaluate(() => window.__wave.audio.pause());
     await page.evaluate((l) => window.__wave.navigate({ name: 'shared', link: l, owner: 'e2e' }), link);
     await page.waitForFunction((n) => document.querySelectorAll('[data-testid="shared-row"]').length === n, pl.tracks.length, { timeout: 20000 });
+    // each row on one line: "+ Mine" beside the track, not under it (the user's picture, 27.10.2026)
+    const off = await page.evaluate(() =>
+      [...document.querySelectorAll('[data-testid="shared-row"]')].flatMap((r) => {
+        const row = r.getBoundingClientRect();
+        return [...r.children].map((c) => c.getBoundingClientRect()).filter((b) => b.top < row.top - 1 || b.bottom > row.bottom + 1 || row.height > 70).map(() => Math.round(row.height));
+      }),
+    );
+    if (off.length) throw new Error(`a row's buttons not on its line (row heights ${off.join(', ')})`);
     await page.click('[data-testid="shared-play"]');
     await waitPlaying(1, 60000);
     await shot('12-shared');

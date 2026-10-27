@@ -132,7 +132,20 @@ async function request(req) {
     body.set(field, new Blob([data], { type: contentType }), filename);
   }
 
-  const resp = await fetch(url, { method: req.method || (body ? 'POST' : 'GET'), headers, body });
+  const method = req.method || (body ? 'POST' : 'GET');
+  // A read not answered (the connection dropped: "fetch failed") is tried twice more — through a VPN
+  // Yandex's servers now and then drop one (the user's picture of a friend's uploads, 27.10.2026).
+  // A write is not: it may have been done.
+  let resp;
+  for (let i = 1; ; i++) {
+    try {
+      resp = await fetch(url, { method, headers, body });
+      break;
+    } catch (e) {
+      if (method === 'GET' && i < 3 && !networkDown) continue;
+      throw e;
+    }
+  }
   const text = await resp.text();
   let data = text;
   if (req.responseType !== 'text') {
