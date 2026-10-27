@@ -294,7 +294,6 @@ private struct WaveLabel: View {
 /// widget may not show it), back / play / next, and the bar with the times, moved by iOS itself.
 @available(iOS 17.0, *)
 private struct PlayerCard: View {
-    @Environment(\.widgetRenderingMode) private var mode
     let track: NowPlayingShare.State
     let cover: UIImage?
 
@@ -306,15 +305,7 @@ private struct PlayerCard: View {
                     HStack(alignment: .top, spacing: 8) {
                         Names(track: track, size: 15)
                         Spacer(minLength: 0)
-                        Button(intent: LikeIntent()) {
-                            Image(systemName: track.liked == true ? "heart.fill" : "heart")
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundColor(mode.inColor ? Palette.red : .primary)
-                                .frame(width: 34, height: 34)
-                                .background(Circle().fill(mode.inColor ? Palette.line.opacity(0.45) : .clear))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(Text("Мне нравится"))
+                        LikeButton(liked: track.liked == true, size: 34)
                     }
                     Spacer(minLength: 0)
                     Controls(playing: track.playing, play: 46, skip: 40)
@@ -327,8 +318,8 @@ private struct PlayerCard: View {
     }
 }
 
-/// The small widget with a track (the user, 27.10.2026: back and next there too): the cover, the
-/// names, back / play / next.
+/// The small widget with a track (the user, 27.10.2026: back and next there too, the like at the top
+/// right): the cover and the like, the names, back / play / next.
 @available(iOS 17.0, *)
 private struct SmallCard: View {
     let track: NowPlayingShare.State
@@ -336,12 +327,36 @@ private struct SmallCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            CoverArt(cover: cover, corner: 10).frame(width: 48, height: 48)
+            HStack(alignment: .top, spacing: 0) {
+                CoverArt(cover: cover, corner: 10).frame(width: 48, height: 48)
+                Spacer(minLength: 0)
+                LikeButton(liked: track.liked == true, size: 30)
+            }
             Spacer(minLength: 0)
             Names(track: track, size: 13)
             Controls(playing: track.playing, play: 40, skip: 34)
         }
         .padding(12)
+    }
+}
+
+/// The like, filled when the track is liked; red on its plate, plain on tinted and clear screens.
+@available(iOS 17.0, *)
+private struct LikeButton: View {
+    @Environment(\.widgetRenderingMode) private var mode
+    let liked: Bool
+    let size: CGFloat
+
+    var body: some View {
+        Button(intent: LikeIntent()) {
+            Image(systemName: liked ? "heart.fill" : "heart")
+                .font(.system(size: size * 0.5, weight: .semibold))
+                .foregroundColor(mode.inColor ? Palette.red : .primary)
+                .frame(width: size, height: size)
+                .background(Circle().fill(mode.inColor ? Palette.line.opacity(0.45) : .clear))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text("Мне нравится"))
     }
 }
 
