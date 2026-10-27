@@ -782,7 +782,9 @@ async function playlistActions() {
   const own = playlists.find((p) => String(p.uid) === String(account?.uid));
   if (!own) return report('playlist-actions', false, 'no own playlist');
   app.navigate({ name: 'playlist', uid: own.uid, kind: own.kind });
-  await until(() => document.querySelector('[data-testid="playlist-more"]'), 15000);
+  // its tracks in too: the search shows with them (the first own playlist may be a long one that
+  // comes in parts — "Shiganari", 302, since 27.10.2026)
+  await until(() => document.querySelector('[data-testid="playlist-more"]') && document.querySelector('[data-testid="list-search"]'), 30000);
   const over = [...document.querySelectorAll<HTMLElement>('.page-actions > *')].filter((b) => b.getBoundingClientRect().right > window.innerWidth + 1).length;
   click('[data-testid="playlist-more"]');
   await until(() => document.querySelector('.menu'), 3000);
