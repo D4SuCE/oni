@@ -33,6 +33,29 @@ enum NowPlayingShare {
         /// The cover's address, so a cover saved for an earlier track is not shown with this one.
         var cover: String?
         var coverSaved: String?
+        /// The widget's bar (the user, 27.10.2026: like the Control Center's player). iOS moves a
+        /// bar that knows its start and end by itself, so only a seek, a pause or the next track is
+        /// written, not every second. Optional, so a state written by an older Oni still reads.
+        var duration: Double?
+        /// Playing: when the track would have begun had it played without a stop.
+        var started: Date?
+        /// Paused: where it stands, in whole seconds.
+        var elapsed: Double?
+        var liked: Bool?
+
+        /// Where the track is, at `position` seconds of `duration`; a start within 2 s of the one
+        /// written stays, so the page's calls as it plays write nothing.
+        mutating func place(at position: Double, of duration: Double, playing: Bool, was: State?) {
+            self.duration = duration > 0 ? duration : nil
+            if playing {
+                let start = Date().addingTimeInterval(-position)
+                if let old = was?.started, abs(old.timeIntervalSince(start)) < 2 { started = old } else { started = start }
+                elapsed = nil
+            } else {
+                started = nil
+                elapsed = position.rounded()
+            }
+        }
     }
 
     static func read() -> State? {

@@ -289,6 +289,145 @@ private struct WaveLabel: View {
     }
 }
 
+/// The medium widget with a track: laid out like the Control Center's player (the user's screenshot,
+/// 27.10.2026) in Oni's colours: a big cover, the names and the like where Apple keeps AirPlay (a
+/// widget may not show it), back / play / next, and the bar with the times, moved by iOS itself.
+@available(iOS 17.0, *)
+private struct PlayerCard: View {
+    @Environment(\.widgetRenderingMode) private var mode
+    let track: NowPlayingShare.State
+    let cover: UIImage?
+
+    private var ink: Color { mode.inColor ? Palette.text : .primary }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(alignment: .top, spacing: 14) {
+                art
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(alignment: .top, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(track.title)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(ink)
+                                .lineLimit(1)
+                            Text(track.artist)
+                                .font(.system(size: 13))
+                                .foregroundColor(mode.inColor ? Palette.muted : .secondary)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                        Button(intent: LikeIntent()) {
+                            Image(systemName: track.liked == true ? "heart.fill" : "heart")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(mode.inColor ? Palette.red : .primary)
+                                .frame(width: 34, height: 34)
+                                .background(Circle().fill(mode.inColor ? Palette.line.opacity(0.45) : .clear))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Text("Мне нравится"))
+                    }
+                    Spacer(minLength: 0)
+                    HStack(spacing: 0) {
+                        skip(PreviousTrackIntent(), "backward.fill", "Предыдущий трек")
+                        Button(intent: TogglePlaybackIntent()) {
+                            Image(systemName: track.playing ? "pause.fill" : "play.fill")
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(mode.inColor ? Palette.text : .primary)
+                                .frame(width: 46, height: 46)
+                                .background {
+                                    if mode.inColor {
+                                        Circle().fill(Palette.red)
+                                    } else {
+                                        Circle().strokeBorder(.primary.opacity(0.6), lineWidth: 1.2)
+                                    }
+                                }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Text("Пауза / продолжить"))
+                        .frame(maxWidth: .infinity)
+                        skip(NextTrackIntent(), "forward.fill", "Следующий трек")
+                    }
+                }
+            }
+            .frame(maxHeight: .infinity)
+            bar
+        }
+        .padding(14)
+    }
+
+    @ViewBuilder private var art: some View {
+        Group {
+            if let cover = cover {
+                Image(uiImage: cover).resizable().coverInColor()
+            } else {
+                ZStack {
+                    Palette.line.opacity(0.5)
+                    Text("鬼").font(.system(size: 34, weight: .bold, design: .serif)).foregroundColor(Palette.red)
+                }
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func skip<I: AppIntent>(_ intent: I, _ symbol: String, _ label: String) -> some View {
+        Button(intent: intent) {
+            Image(systemName: symbol)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(ink)
+                .frame(width: 40, height: 40)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(label))
+        .frame(maxWidth: .infinity)
+    }
+
+    /// Playing, iOS moves the bar and the times from the start to the end; paused, they stand.
+    @ViewBuilder private var bar: some View {
+        let duration = track.duration ?? 0
+        let tint = mode.inColor ? Palette.red : Color.primary
+        let times = Font.system(size: 11, weight: .medium).monospacedDigit()
+        let faint = mode.inColor ? Palette.muted : Color.secondary
+        VStack(spacing: 3) {
+            if let start = track.started, duration > 0 {
+                let span = start...start.addingTimeInterval(duration)
+                ProgressView(timerInterval: span, countsDown: false) { EmptyView() } currentValueLabel: { EmptyView() }
+                    .progressViewStyle(.linear)
+                    .tint(tint)
+                HStack {
+                    Text(timerInterval: span, countsDown: false).frame(width: 52, alignment: .leading)
+                    Spacer(minLength: 0)
+                    HStack(spacing: 0) {
+                        Text("-")
+                        Text(timerInterval: span, countsDown: true)
+                    }
+                    .frame(width: 52, alignment: .trailing)
+                }
+                .font(times)
+                .foregroundColor(faint)
+            } else {
+                let at = min(track.elapsed ?? 0, duration)
+                ProgressView(value: duration > 0 ? at / duration : 0)
+                    .progressViewStyle(.linear)
+                    .tint(tint)
+                HStack {
+                    Text(duration > 0 ? clock(at) : "--:--")
+                    Spacer(minLength: 0)
+                    Text(duration > 0 ? "-" + clock(duration - at) : "--:--")
+                }
+                .font(times)
+                .foregroundColor(faint)
+            }
+        }
+    }
+
+    private func clock(_ seconds: Double) -> String {
+        let s = max(0, Int(seconds.rounded()))
+        return String(format: "%d:%02d", s / 60, s % 60)
+    }
+}
+
 /// The mask's kanji and the name, as in the app's sidebar.
 private struct Brand: View {
     var body: some View {
@@ -332,6 +471,23 @@ struct RemoteView: View {
         }
     }
 
+    /// The medium widget before anything played: the brand, My Wave and the round buttons.
+    private var medium: some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 10) {
+                top(compact: false)
+                Spacer(minLength: 0)
+                WaveButton()
+            }
+            HStack(spacing: 10) {
+                RoundButton(intent: TogglePlaybackIntent(), symbol: toggleSymbol, label: "Пауза / продолжить", size: 46)
+                RoundButton(intent: NextTrackIntent(), symbol: "forward.fill", label: "Следующий трек", size: 46)
+                RoundButton(intent: LikeIntent(), symbol: "heart.fill", label: "Мне нравится", size: 46, tint: Palette.red)
+            }
+        }
+        .padding(16)
+    }
+
     var body: some View {
         switch family {
         case .accessoryCircular:
@@ -353,19 +509,11 @@ struct RemoteView: View {
                 }
             }
         case .systemMedium:
-            HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 10) {
-                    top(compact: false)
-                    Spacer(minLength: 0)
-                    WaveButton()
-                }
-                HStack(spacing: 10) {
-                    RoundButton(intent: TogglePlaybackIntent(), symbol: toggleSymbol, label: "Пауза / продолжить", size: 46)
-                    RoundButton(intent: NextTrackIntent(), symbol: "forward.fill", label: "Следующий трек", size: 46)
-                    RoundButton(intent: LikeIntent(), symbol: "heart.fill", label: "Мне нравится", size: 46, tint: Palette.red)
-                }
+            if let track = entry.track, hasTrack {
+                PlayerCard(track: track, cover: entry.cover)
+            } else {
+                medium
             }
-            .padding(16)
         default:
             // What plays and its play/pause, or My Wave.
             VStack(alignment: .leading, spacing: 10) {
@@ -403,7 +551,7 @@ struct RemoteWidget: Widget {
                 }
         }
         .configurationDisplayName("Oni")
-        .description("Что играет; «Моя волна», пауза, следующий трек и «Мне нравится» одним нажатием.")
+        .description("Что играет, с полоской времени; назад, пауза, вперёд и «Мне нравится» одним нажатием, «Моя волна» — пока ничего не играло.")
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular])
         .contentMarginsDisabled()
     }

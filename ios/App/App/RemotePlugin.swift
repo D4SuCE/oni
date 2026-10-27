@@ -106,7 +106,9 @@ public class RemotePlugin: CAPPlugin, CAPBridgedPlugin {
             MPRemoteCommandCenter.shared().likeCommand.isActive = liked
             if artworkURL != self.artworkURL { self.loadArtwork(artworkURL) }
             // The Home screen widget shows what plays (NowPlayingShare.swift).
-            let shared = NowPlayingShare.State(title: title, artist: artist, playing: playing, cover: artworkURL, coverSaved: NowPlayingShare.read()?.coverSaved)
+            let was = NowPlayingShare.read()
+            var shared = NowPlayingShare.State(title: title, artist: artist, playing: playing, cover: artworkURL, coverSaved: was?.coverSaved, liked: liked)
+            shared.place(at: position, of: duration, playing: playing, was: was?.title == title ? was : nil)
             if NowPlayingShare.write(shared) { WidgetCenter.shared.reloadTimelines(ofKind: "OniRemote") }
             call.resolve()
         }
@@ -186,8 +188,10 @@ func showOnLockScreen(playing: Bool, at time: Double) {
     info[MPNowPlayingInfoPropertyPlaybackRate] = playing ? 1.0 : 0.0
     MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     MPNowPlayingInfoCenter.default().playbackState = playing ? .playing : .paused
-    if var shared = NowPlayingShare.read(), shared.playing != playing {
+    if let was = NowPlayingShare.read() {
+        var shared = was
         shared.playing = playing
+        shared.place(at: time, of: was.duration ?? 0, playing: playing, was: was)
         if NowPlayingShare.write(shared) { WidgetCenter.shared.reloadTimelines(ofKind: "OniRemote") }
     }
 }
