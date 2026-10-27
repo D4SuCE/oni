@@ -4430,6 +4430,18 @@ html.anim-hamon .play-btn:active {
   padding: 4px 8px;
   border-radius: 10px;
 }
+/* the iPhone: "+ Mine" only its sign, its words in the hint a hold brings (the user's picture,
+   27.10.2026: the buttons did not fit beside the track) */
+html.ios .shared-row .shared-add .btn-label,
+html.ios .shared-row .import-taken .btn-label {
+  display: none;
+}
+html.ios .shared-row .shared-add {
+  padding: 0;
+  width: 36px;
+  height: 36px;
+  justify-content: center;
+}
 .shared-row:hover {
   background: var(--hover);
 }

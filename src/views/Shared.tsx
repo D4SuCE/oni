@@ -156,11 +156,11 @@ export function SharedView({ link, owner }: { link: string; owner?: string }) {
                 {transport.canUpload &&
                   (adding[x.id] === 'done' ? (
                     <span className="import-taken">
-                      <Check size={15} /> {s.addedOne}
+                      <Check size={15} /> <span className="btn-label">{s.addedOne}</span>
                     </span>
                   ) : (
-                    <button className="btn ghost small" disabled={adding[x.id] === 'busy'} onClick={(e) => choose(e, [x])} data-testid="shared-add">
-                      {adding[x.id] === 'busy' ? <Loader2 size={14} className="spin" /> : <Plus size={14} />} {s.addOne}
+                    <button className="btn ghost small shared-add" disabled={adding[x.id] === 'busy'} onClick={(e) => choose(e, [x])} title={s.toMine} data-testid="shared-add">
+                      {adding[x.id] === 'busy' ? <Loader2 size={14} className="spin" /> : <Plus size={14} />} <span className="btn-label">{s.addOne}</span>
                     </button>
                   ))}
               </div>
