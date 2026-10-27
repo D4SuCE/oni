@@ -223,9 +223,10 @@ await step('the full remote: what a remote starts (a list, «Своя волна
     }
     throw new Error(`not so after 15 s: ${cond}`);
   };
-  /** The command sent there, once it is up (a press goes up on its own a moment after). */
+  /** The command sent there, once it is up (a press goes up on its own a moment after). 30 s: through
+   * the user's VPN the Disk took longer than 15 at times (on GitHub, without one, it passed, 27.10.2026). */
   const sent = async (fn) => {
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 30; i++) {
       const c = await read(names[1]).then((f) => f.commands.filter((x) => x.fn === fn).at(-1), () => null);
       if (c) return c;
       await page.waitForTimeout(1000);
