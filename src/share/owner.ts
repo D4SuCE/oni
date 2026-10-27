@@ -52,6 +52,19 @@ export async function tracksOf(pl: Playlist): Promise<Track[]> {
 export const isUpload = (t: Track) => t.trackSource === 'UGC';
 export const fileOf = (t: Track) => `${t.id}.mp3`;
 
+/** An upload put on the Disk as `path`, the Disk fetching it from Yandex itself. The Disk fails on
+ * about every other link to Yandex's streams at once ("failed" in a second, any server, 27.10.2026),
+ * and takes a fresh link to the same track: up to four tries. */
+export async function sendUpload(path: string, id: string) {
+  for (let i = 1; ; i++) {
+    try {
+      return await disk.uploadFrom(path, (await api.stream(id)).url);
+    } catch (e) {
+      if (i === 4 || !/upload: failed/.test(String((e as Error)?.message))) throw e;
+    }
+  }
+}
+
 let running: Promise<void> | null = null;
 
 /** Brings the shared folder up to date with the playlists (one round at a time). */
@@ -124,7 +137,7 @@ export async function round(opts: RoundOptions = {}): Promise<string | null> {
     }
     let written = Date.now();
     for (const [i, [file, t]] of send.entries()) {
-      await disk.uploadFrom(`${folder}/${file}`, (await api.stream(String(t.id))).url);
+      await sendUpload(`${folder}/${file}`, String(t.id));
       present.add(file);
       useShare.setState((s) => ({ done: s.done + 1 }));
       // the index again after the first track, then every few or every 10 s

@@ -94,6 +94,51 @@ await step("shared uploads: a playlist's own uploads go to a folder on Disk open
     await page.click('[data-testid="shared-play"]');
     await waitPlaying(1, 60000);
     await shot('12-shared');
+    // while it plays: Play is Pause and the row shows it playing, as a playlist's page does; pressed
+    // again it pauses and goes on — not the first track over (the user, 27.10.2026)
+    await page.waitForSelector('[data-testid="shared-play"][data-playing]', { timeout: 5000 });
+    if (!(await page.locator('[data-testid="shared-row"]').first().locator('.eq').count())) throw new Error('no playing bars on the row');
+    await page.click('[data-testid="shared-play"]');
+    await page.waitForFunction(() => window.__wave.audio.paused, null, { timeout: 5000 });
+    const at = await page.evaluate(() => window.__wave.audio.currentTime);
+    await page.click('[data-testid="shared-play"]');
+    await waitPlaying(at + 0.3, 20000);
+    if ((await page.evaluate(() => window.__wave.usePlayer.getState().index)) !== 0) throw new Error('Play started another track');
+    await page.evaluate(() => window.__wave.audio.pause());
+    // "Download" stopped by a press while it runs: what came is kept, the rest is not fetched (removed again)
+    const ids = pl.tracks.map((x) => `share-${x.id}`);
+    try {
+      await page.click('[data-testid="shared-download-all"]');
+      await page.waitForSelector('[data-testid="shared-download-all"][data-busy]', { timeout: 5000 });
+      await page.click('[data-testid="shared-download-all"]');
+      await page.waitForSelector('[data-testid="shared-download-all"]:not([data-busy])', { timeout: 60000 });
+      const kept = await page.evaluate((list) => list.filter((id) => window.__wave.offline.has(id)).length, ids);
+      if (kept >= ids.length) throw new Error(`all ${kept} downloaded after Cancel`);
+    } finally {
+      await page.evaluate((list) => Promise.all(list.map((id) => window.__wave.offline.remove(id))), ids);
+    }
+    // "Add all to mine" stopped the same way, into a playlist of its own (removed again)
+    const target = await page.evaluate(async () => {
+      const { api, useApp } = window.__wave;
+      const p = await api.createPlaylist('oni-e2e-mine-all');
+      useApp.setState({ playlists: [...useApp.getState().playlists, p] });
+      return p;
+    });
+    try {
+      await page.click('[data-testid="shared-add-all"]');
+      await page.locator('.menu-item', { hasText: 'oni-e2e-mine-all' }).click();
+      await page.waitForSelector('[data-testid="shared-add-all"][data-busy]', { timeout: 5000 });
+      await page.click('[data-testid="shared-add-all"]');
+      await page.waitForSelector('[data-testid="shared-add-all"]:not([data-busy])', { timeout: 120000 });
+      const added = await page.locator('[data-testid="shared-row"] .import-taken').count();
+      if (added >= pl.tracks.length) throw new Error(`all ${added} added after Stop`);
+    } finally {
+      await page.evaluate(async (k) => {
+        const { api, useApp } = window.__wave;
+        await api.deletePlaylist(k);
+        useApp.setState({ playlists: useApp.getState().playlists.filter((p) => String(p.kind) !== String(k)) });
+      }, target.kind);
+    }
   } finally {
     await page.evaluate(() => window.__wave.audio.pause());
     await page.evaluate(() => window.__wave.navigate({ name: 'home' }));

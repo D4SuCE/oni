@@ -14,7 +14,7 @@ import type { Playlist, Track } from '../api/types.ts';
 import { offline } from '../player/player.ts';
 import { withTitle } from '../share/id3.ts';
 import { visible } from '../share/mark.ts';
-import { fileOf, isUpload, tracksOf } from '../share/owner.ts';
+import { fileOf, isUpload, sendUpload, tracksOf } from '../share/owner.ts';
 import { fileName, SHARED } from '../share/shared.ts';
 import { disk, thisDevice } from '../sync/index.ts';
 import { sweepUploads } from './sweep.ts';
@@ -107,7 +107,7 @@ export async function keepUploads(met: Track[], before: Backup['uploads'] = {}, 
       if (!there.has(fileOf(t))) {
         let moved = false;
         for (const f of before[id]?.files ?? []) if (!moved && f !== path) moved = await disk.move(f, path).then(() => true, () => false);
-        if (!moved) await disk.uploadFrom(path, (await api.stream(id)).url);
+        if (!moved) await sendUpload(path, id);
         there.add(fileOf(t));
       }
       out[id] = { title: t.title, artists: (t.artists ?? []).map((a) => a.name), files: [path] };

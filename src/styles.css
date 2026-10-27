@@ -4464,3 +4464,15 @@ html.ios .shared-row .shared-add {
 .shared-row.playing .import-title {
   color: var(--accent-hi);
 }
+/* the row playing: the bars, as a track list shows them; Pause in their place under the pointer */
+.shared-row-play .shared-pause {
+  display: none;
+}
+@media (hover: hover) {
+  .shared-row:hover .shared-row-play .eq {
+    display: none;
+  }
+  .shared-row:hover .shared-row-play .shared-pause {
+    display: block;
+  }
+}
