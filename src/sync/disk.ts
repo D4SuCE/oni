@@ -7,10 +7,13 @@ import type { Transport } from '../api/transport.ts';
 const API = 'https://cloud-api.yandex.net/v1/disk/resources';
 /** A request that hangs (a stalled network) fails after this long; the next round tries again. */
 const TIMEOUT = 20_000;
+/** A file sent to an upload server that does not answer goes again through another one: through a
+ * VPN some of them are not reached or hang (27.10.2026: 2 of 12 small files), the API answers. */
+const SENDS = 3;
 
-function timed<T>(what: Promise<T>): Promise<T> {
+function timed<T>(what: Promise<T>, ms = TIMEOUT): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
-  const late = new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error('Yandex Disk: no answer')), TIMEOUT)));
+  const late = new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error('Yandex Disk: no answer')), ms)));
   return Promise.race([what, late]).finally(() => clearTimeout(timer));
 }
 
@@ -35,13 +38,16 @@ export interface DiskLike {
 
 export class YandexDisk implements DiskLike {
   private transport: Transport;
+  private wait: number;
 
-  constructor(transport: Transport) {
+  /** `wait`: how long a request may hang (tests make it short). */
+  constructor(transport: Transport, wait = TIMEOUT) {
     this.transport = transport;
+    this.wait = wait;
   }
 
   private async call<T = any>(method: 'GET' | 'DELETE' | 'PUT' | 'POST', url: string, query: Record<string, string | number>): Promise<{ status: number; data: T }> {
-    const r = await timed(this.transport.request<T>({ method, url, query }));
+    const r = await timed(this.transport.request<T>({ method, url, query }), this.wait);
     if (r.status === 401) throw new DiskAuthError('Yandex Disk: not authorized');
     return r;
   }
@@ -60,16 +66,26 @@ export class YandexDisk implements DiskLike {
   async read(name: string): Promise<string> {
     const link = await this.call('GET', `${API}/download`, { path: `app:/${name}` });
     if (link.status !== 200) this.fail('download', link);
-    const r = await timed(this.transport.request<string>({ url: (link.data as any).href, responseType: 'text' }));
+    const r = await timed(this.transport.request<string>({ url: (link.data as any).href, responseType: 'text' }), this.wait);
     if (!r.ok) this.fail('download', r);
     return r.data;
   }
 
   async write(name: string, text: string): Promise<void> {
-    const link = await this.call('GET', `${API}/upload`, { path: `app:/${name}`, overwrite: 'true' });
-    if (link.status !== 200) this.fail('upload', link);
-    const r = await timed(this.transport.request({ method: 'PUT', url: (link.data as any).href, body: text, headers: { 'Content-Type': 'application/json' }, responseType: 'text' }));
-    if (r.status !== 201 && r.status !== 202 && !r.ok) this.fail('upload', r);
+    for (let i = 1; ; i++) {
+      const link = await this.call('GET', `${API}/upload`, { path: `app:/${name}`, overwrite: 'true' });
+      if (link.status !== 200) this.fail('upload', link);
+      let r;
+      try {
+        r = await timed(this.transport.request({ method: 'PUT', url: (link.data as any).href, body: text, headers: { 'Content-Type': 'application/json' }, responseType: 'text' }), this.wait);
+      } catch (e) {
+        // silence or no connection: a new link, another server (an answer, even a refusal, is final)
+        if (i < SENDS) continue;
+        throw e;
+      }
+      if (r.status !== 201 && r.status !== 202 && !r.ok) this.fail('upload', r);
+      return;
+    }
   }
 
   // ---------------------------------------------------------- a folder of its own (shared uploads)
@@ -112,7 +128,7 @@ export class YandexDisk implements DiskLike {
     const op = (r.data as any)?.href;
     for (let i = 0; op && i < 60; i++) {
       await new Promise((ok) => setTimeout(ok, i ? 1000 : 300));
-      const s = await timed(this.transport.request<any>({ url: op }));
+      const s = await timed(this.transport.request<any>({ url: op }), this.wait);
       if (s.status === 401) throw new DiskAuthError('Yandex Disk: not authorized');
       if (s.data?.status === 'success') return;
       if (s.data?.status === 'failed') throw new Error('Yandex Disk upload: failed');

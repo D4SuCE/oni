@@ -265,9 +265,19 @@ ipcMain.handle('wave:files:list', async () => {
 ipcMain.handle('wave:fetch-bytes', async (_e, url) => {
   if (networkDown) throw new TypeError('fetch failed');
   if (new URL(url).protocol !== 'https:') throw new Error('https only');
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.arrayBuffer();
+  // A server not reached is tried twice more: through a VPN some of Yandex's are now and then
+  // (27.10.2026); an answer, even a refusal, is final.
+  for (let i = 1; ; i++) {
+    let r;
+    try {
+      r = await fetch(url);
+    } catch (e) {
+      if (i < 3 && !networkDown) continue;
+      throw e;
+    }
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.arrayBuffer();
+  }
 });
 // Tests only: requests fail as with no network, to check the offline mode.
 ipcMain.on('wave:test:network', (_e, up) => {
