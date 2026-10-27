@@ -298,24 +298,13 @@ private struct PlayerCard: View {
     let track: NowPlayingShare.State
     let cover: UIImage?
 
-    private var ink: Color { mode.inColor ? Palette.text : .primary }
-
     var body: some View {
         VStack(spacing: 8) {
             HStack(alignment: .top, spacing: 14) {
-                art
+                CoverArt(cover: cover, corner: 12)
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .top, spacing: 8) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(track.title)
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(ink)
-                                .lineLimit(1)
-                            Text(track.artist)
-                                .font(.system(size: 13))
-                                .foregroundColor(mode.inColor ? Palette.muted : .secondary)
-                                .lineLimit(1)
-                        }
+                        Names(track: track, size: 15)
                         Spacer(minLength: 0)
                         Button(intent: LikeIntent()) {
                             Image(systemName: track.liked == true ? "heart.fill" : "heart")
@@ -328,98 +317,169 @@ private struct PlayerCard: View {
                         .accessibilityLabel(Text("Мне нравится"))
                     }
                     Spacer(minLength: 0)
-                    HStack(spacing: 0) {
-                        skip(PreviousTrackIntent(), "backward.fill", "Предыдущий трек")
-                        Button(intent: TogglePlaybackIntent()) {
-                            Image(systemName: track.playing ? "pause.fill" : "play.fill")
-                                .font(.system(size: 20, weight: .bold))
-                                .foregroundColor(mode.inColor ? Palette.text : .primary)
-                                .frame(width: 46, height: 46)
-                                .background {
-                                    if mode.inColor {
-                                        Circle().fill(Palette.red)
-                                    } else {
-                                        Circle().strokeBorder(.primary.opacity(0.6), lineWidth: 1.2)
-                                    }
-                                }
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(Text("Пауза / продолжить"))
-                        .frame(maxWidth: .infinity)
-                        skip(NextTrackIntent(), "forward.fill", "Следующий трек")
-                    }
+                    Controls(playing: track.playing, play: 46, skip: 40)
                 }
             }
             .frame(maxHeight: .infinity)
-            bar
+            TimeBar(track: track)
         }
         .padding(14)
     }
+}
 
-    @ViewBuilder private var art: some View {
+/// The small widget with a track (the user, 27.10.2026: back and next there too): the cover, the
+/// names, back / play / next.
+@available(iOS 17.0, *)
+private struct SmallCard: View {
+    let track: NowPlayingShare.State
+    let cover: UIImage?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            CoverArt(cover: cover, corner: 10).frame(width: 48, height: 48)
+            Spacer(minLength: 0)
+            Names(track: track, size: 13)
+            Controls(playing: track.playing, play: 40, skip: 34)
+        }
+        .padding(12)
+    }
+}
+
+/// The cover, square (the kanji on a plate while it has not come).
+private struct CoverArt: View {
+    let cover: UIImage?
+    let corner: CGFloat
+
+    var body: some View {
         Group {
             if let cover = cover {
                 Image(uiImage: cover).resizable().coverInColor()
             } else {
                 ZStack {
                     Palette.line.opacity(0.5)
-                    Text("鬼").font(.system(size: 34, weight: .bold, design: .serif)).foregroundColor(Palette.red)
+                    Text("鬼").font(.system(size: 30, weight: .bold, design: .serif)).foregroundColor(Palette.red)
                 }
             }
         }
         .aspectRatio(1, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: corner))
+    }
+}
+
+@available(iOS 17.0, *)
+private struct Names: View {
+    @Environment(\.widgetRenderingMode) private var mode
+    let track: NowPlayingShare.State
+    let size: CGFloat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(track.title)
+                .font(.system(size: size, weight: .semibold))
+                .foregroundColor(mode.inColor ? Palette.text : .primary)
+                .lineLimit(1)
+            Text(track.artist)
+                .font(.system(size: size - 2))
+                .foregroundColor(mode.inColor ? Palette.muted : .secondary)
+                .lineLimit(1)
+        }
+    }
+}
+
+/// Back / play / next. On tinted and clear Home screens iOS paints all in one colour: a filled circle
+/// came out a white disc with no sign on it (the user's video, 27.10.2026), so there it is outlined.
+@available(iOS 17.0, *)
+private struct Controls: View {
+    @Environment(\.widgetRenderingMode) private var mode
+    let playing: Bool
+    let play: CGFloat
+    let skip: CGFloat
+
+    var body: some View {
+        HStack(spacing: 0) {
+            button(PreviousTrackIntent(), "backward.fill", "Предыдущий трек")
+            Button(intent: TogglePlaybackIntent()) {
+                Image(systemName: playing ? "pause.fill" : "play.fill")
+                    .font(.system(size: play * 0.43, weight: .bold))
+                    .foregroundColor(mode.inColor ? Palette.text : .primary)
+                    .frame(width: play, height: play)
+                    .background {
+                        if mode.inColor {
+                            Circle().fill(Palette.red)
+                        } else {
+                            Circle().strokeBorder(.primary.opacity(0.6), lineWidth: 1.2)
+                        }
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("Пауза / продолжить"))
+            .frame(maxWidth: .infinity)
+            button(NextTrackIntent(), "forward.fill", "Следующий трек")
+        }
     }
 
-    private func skip<I: AppIntent>(_ intent: I, _ symbol: String, _ label: String) -> some View {
+    private func button<I: AppIntent>(_ intent: I, _ symbol: String, _ label: String) -> some View {
         Button(intent: intent) {
             Image(systemName: symbol)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(ink)
-                .frame(width: 40, height: 40)
+                .font(.system(size: skip * 0.5, weight: .semibold))
+                .foregroundColor(mode.inColor ? Palette.text : .primary)
+                .frame(width: skip, height: skip)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(label))
         .frame(maxWidth: .infinity)
     }
+}
 
-    /// Playing, iOS moves the bar and the times from the start to the end; paused, they stand.
-    @ViewBuilder private var bar: some View {
+/// The bar and the times. Playing, iOS moves them from the start to the end; paused, they stand.
+/// Each part has a set height: the moving ones came out a little taller, and pressing play shrank
+/// the cover and moved the whole widget (the user's video, 27.10.2026).
+@available(iOS 17.0, *)
+private struct TimeBar: View {
+    @Environment(\.widgetRenderingMode) private var mode
+    let track: NowPlayingShare.State
+
+    var body: some View {
         let duration = track.duration ?? 0
         let tint = mode.inColor ? Palette.red : Color.primary
-        let times = Font.system(size: 11, weight: .medium).monospacedDigit()
-        let faint = mode.inColor ? Palette.muted : Color.secondary
         VStack(spacing: 3) {
-            if let start = track.started, duration > 0 {
-                let span = start...start.addingTimeInterval(duration)
-                ProgressView(timerInterval: span, countsDown: false) { EmptyView() } currentValueLabel: { EmptyView() }
-                    .progressViewStyle(.linear)
-                    .tint(tint)
-                HStack {
-                    Text(timerInterval: span, countsDown: false).frame(width: 52, alignment: .leading)
-                    Spacer(minLength: 0)
-                    HStack(spacing: 0) {
-                        Text("-")
-                        Text(timerInterval: span, countsDown: true)
+            Group {
+                if let start = track.started, duration > 0 {
+                    ProgressView(timerInterval: start...start.addingTimeInterval(duration), countsDown: false) {
+                        EmptyView()
+                    } currentValueLabel: {
+                        EmptyView()
                     }
-                    .frame(width: 52, alignment: .trailing)
+                    .labelsHidden()
+                } else {
+                    ProgressView(value: duration > 0 ? min(track.elapsed ?? 0, duration) / duration : 0)
+                        .labelsHidden()
                 }
-                .font(times)
-                .foregroundColor(faint)
-            } else {
-                let at = min(track.elapsed ?? 0, duration)
-                ProgressView(value: duration > 0 ? at / duration : 0)
-                    .progressViewStyle(.linear)
-                    .tint(tint)
-                HStack {
+            }
+            .progressViewStyle(.linear)
+            .tint(tint)
+            .frame(height: 4)
+            HStack(spacing: 0) {
+                if let start = track.started, duration > 0 {
+                    let span = start...start.addingTimeInterval(duration)
+                    Text(timerInterval: span, countsDown: false)
+                        .multilineTextAlignment(.leading)
+                    Spacer(minLength: 0)
+                    (Text("-") + Text(timerInterval: span, countsDown: true))
+                        .multilineTextAlignment(.trailing)
+                } else {
+                    let at = min(track.elapsed ?? 0, duration)
                     Text(duration > 0 ? clock(at) : "--:--")
                     Spacer(minLength: 0)
                     Text(duration > 0 ? "-" + clock(duration - at) : "--:--")
                 }
-                .font(times)
-                .foregroundColor(faint)
             }
+            .font(.system(size: 11, weight: .medium).monospacedDigit())
+            .foregroundColor(mode.inColor ? Palette.muted : .secondary)
+            .lineLimit(1)
+            .frame(height: 13)
         }
+        .frame(height: 20)
     }
 
     private func clock(_ seconds: Double) -> String {
@@ -515,28 +575,17 @@ struct RemoteView: View {
                 medium
             }
         default:
-            // What plays and its play/pause, or My Wave.
-            VStack(alignment: .leading, spacing: 10) {
-                top(compact: true)
-                Spacer(minLength: 0)
-                if hasTrack {
-                    HStack {
-                        Spacer(minLength: 0)
-                        Button(intent: TogglePlaybackIntent()) {
-                            Image(systemName: toggleSymbol)
-                                .font(.system(size: 22, weight: .semibold))
-                                .frame(width: 52, height: 52)
-                                .background(Circle().fill(Palette.red))
-                                .foregroundColor(Palette.text)
-                        }
-                        .buttonStyle(.plain)
-                        Spacer(minLength: 0)
-                    }
-                } else {
+            // What plays with back / play / next, or My Wave.
+            if let track = entry.track, hasTrack {
+                SmallCard(track: track, cover: entry.cover)
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    Brand()
+                    Spacer(minLength: 0)
                     WaveButton(compact: true)
                 }
+                .padding(14)
             }
-            .padding(14)
         }
     }
 }
