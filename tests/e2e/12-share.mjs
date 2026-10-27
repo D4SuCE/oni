@@ -98,7 +98,7 @@ await step('backup: a snapshot holds the playlists in order and Liked; a playlis
   }
 });
 
-await step("backup: each device's downloads are listed; own uploads kept as files, a folder a playlist (one met again elsewhere copied by Disk, not sent); a playlist with an upload comes back (a folder of its own, removed again)", async () => {
+await step("backup: each device's downloads are listed; own uploads kept as files, each track once beside the shared ones (met again: nothing sent; an old copy's file moved in by Disk); a playlist with an upload comes back (a folder of its own, removed again)", async () => {
   // The user, 26.10.2026: "keep the likes, add the downloaded list, and the uploads by playlist as the songs themselves".
   const copy = await page.evaluate(() => window.__wave.backup.snapshot());
   const mine = Object.values(copy.downloads ?? {});
@@ -118,21 +118,31 @@ await step("backup: each device's downloads are listed; own uploads kept as file
   const root = `backup-e2e-${Date.now()}`;
   let made = null;
   try {
-    const first = await page.evaluate(([m, r]) => window.__wave.backup.keepUploads(m.tracks.map((t) => ({ track: t, playlist: m.title })), {}, r), [met, root]);
+    const first = await page.evaluate(([m, r]) => window.__wave.backup.keepUploads(m.tracks, {}, r), [met, root]);
     const files = Object.values(first).flatMap((u) => u.files);
-    if (files.length !== met.tracks.length || !files.every((f) => f.startsWith(`${root}/`) && f.endsWith('.mp3'))) throw new Error(`kept ${JSON.stringify(first)}`);
+    if (files.length !== met.tracks.length || !files.every((f, i) => f === `${root}/${met.tracks[i].id}.mp3`)) throw new Error(`kept ${JSON.stringify(first)}`);
     const sizes = await page.evaluate((fs) => Promise.all(fs.map((f) => window.__wave.sync.disk.readBytes(f).then((b) => b.byteLength))), files);
     if (sizes.some((n) => n < 50000)) throw new Error(`file sizes ${sizes}`);
-    // the same tracks in another playlist: copied on the Disk, the first files kept
-    const again = await page.evaluate(([m, r, before]) => window.__wave.backup.keepUploads(m.tracks.map((t) => ({ track: t, playlist: `${m.title} 2` })), before, r), [met, root, first]);
-    const second = Object.values(again).flatMap((u) => u.files);
-    if (second.length !== files.length || second.some((f) => files.includes(f) || !f.includes(' 2/'))) throw new Error(`again ${JSON.stringify(again)}`);
+    // the same tracks again (another playlist, the next day): the same files, nothing new
+    const again = await page.evaluate(([m, r, before]) => window.__wave.backup.keepUploads(m.tracks, before, r), [met, root, first]);
+    if (JSON.stringify(again) !== JSON.stringify(first)) throw new Error(`again ${JSON.stringify(again)}`);
+    // a copy made before 27.10.2026 kept its file in a folder of its own: Disk moves it in, nothing sent
+    const t = met.tracks[0];
+    const old = `${root}/old/${t.id}.mp3`;
+    const moved = await page.evaluate(async ([tr, r, f, o]) => {
+      const { disk } = window.__wave.sync;
+      await disk.mkdir(`${r}/old`);
+      await disk.copy(f, o);
+      const out = await window.__wave.backup.keepUploads([tr], { [tr.id]: { title: tr.title, artists: [], files: [o] } }, `${r}/pool`);
+      return { out, old: (await disk.folder(`${r}/old`)).length, pool: (await disk.folder(`${r}/pool`)).map((x) => x.size) };
+    }, [t, root, files[0], old]);
+    if (moved.old !== 0 || moved.pool.length !== 1 || moved.pool[0] !== sizes[0]) throw new Error(`moved ${JSON.stringify(moved)}`);
     // a playlist of a copy, its uploads still Yandex's: they come back by their ids, none sent again
     const backup = { v: 1, at: 0, likes: [], playlists: [{ kind: met.kind, title: met.title, tracks: met.tracks.map((t) => ({ id: String(t.id) })) }], uploads: first };
     made = await page.evaluate((b) => window.__wave.backup.restorePlaylist(b, b.playlists[0].kind, 'oni-e2e-backup uploads'), backup);
     const ids = await page.evaluate((k) => window.__wave.api.playlist(window.__wave.useApp.getState().account.uid, k, false).then((p) => (p.tracks ?? []).map((i) => String(i.id))), made.kind);
     if (made.lost || ids.join() !== met.tracks.map((t) => String(t.id)).join()) throw new Error(`restored ${ids}, lost ${made.lost}`);
-    console.log(`       ${have} downloads listed; "${met.title}": ${files.length} own mp3s kept (${sizes.map((n) => Math.round(n / 1024)).join(', ')} KB), copied for a second playlist, brought back`);
+    console.log(`       ${have} downloads listed; "${met.title}": ${files.length} own mp3s kept (${sizes.map((n) => Math.round(n / 1024)).join(', ')} KB), once; an old file moved in; brought back`);
   } finally {
     if (made) await page.evaluate((k) => window.__wave.api.deletePlaylist(k), made.kind);
     await page.evaluate((r) => window.__wave.sync.disk.remove(r), root);

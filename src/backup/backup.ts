@@ -4,19 +4,23 @@
 // of one comes back (as a new playlist "… (copy of <date>)") or Liked gets back what left it.
 // Then (the user: "keep the likes, add the downloaded list, and the uploads by playlist as the
 // songs themselves"): each device's downloaded tracks, as a list to download again, and the user's
-// own uploaded mp3s as files, a folder a playlist (backup/uploads/<playlist>/<Artist - Title>.mp3),
-// so a playlist whose uploads are gone from Yandex comes back with them. The Disk fetches the files
-// itself (any device); a file stays while any kept copy names it.
+// own uploaded mp3s as files, so a playlist whose uploads are gone from Yandex comes back with them.
+// The Disk fetches the files itself (any device). A track is kept once, in the shared folder beside
+// the files a friend plays (the user, 27.10.2026: not both there and in backup/uploads, the copies'
+// own folders before); a file stays while any kept copy names it, shared or not.
 
 import { api, storage, transport } from '../api/client.ts';
 import type { Playlist, Track } from '../api/types.ts';
 import { offline } from '../player/player.ts';
 import { visible } from '../share/mark.ts';
-import { isUpload, tracksOf } from '../share/owner.ts';
-import { fileName } from '../share/shared.ts';
+import { fileOf, isUpload, tracksOf } from '../share/owner.ts';
+import { fileName, SHARED } from '../share/shared.ts';
 import { disk, thisDevice } from '../sync/index.ts';
+import { sweepUploads } from './sweep.ts';
 
 export const FOLDER = 'backup';
+/** The uploads' files of the copies made before 27.10.2026, a folder a playlist: they go as their
+ * tracks reach the shared folder or no kept copy names them. */
 const UPLOADS = `${FOLDER}/uploads`;
 const KEEP = 14;
 const DONE = 'backup.day';
@@ -26,8 +30,8 @@ export interface BackupItem {
   albumId?: number;
 }
 
-/** An uploaded mp3 kept as a file: where (the first file is the one restored from; a track in two
- * playlists has a file in each one's folder). */
+/** An uploaded mp3 kept as a file: where (the first file is the one restored from; the copies made
+ * before 27.10.2026 had one in each of its playlists' folders). */
 export interface BackupUpload {
   title: string;
   artists: string[];
@@ -66,18 +70,15 @@ const keyOf = (x: BackupItem) => (x.albumId ? `${x.id}:${x.albumId}` : x.id);
 /** Uploading to Yandex again (a playlist's uploads gone from it) takes the file's bytes. */
 const canUploadAgain = () => Boolean(transport.canUpload && transport.fetchBytes);
 
-/** A playlist's folder name: no characters a folder cannot have. */
-const folderName = (title: string) => title.replace(/[<>:"|?*\\/]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100) || 'Playlist';
-
-/** The library as it is now; with the own uploads met in the playlists, each with its playlist. */
+/** The library as it is now; with the own uploads met in the playlists. */
 async function take(now: number) {
   const likes = await api.likedTrackKeys();
   const playlists: Backup['playlists'] = [];
-  const uploads: { track: Track; playlist: string }[] = [];
+  const uploads: Track[] = [];
   for (const pl of await api.playlists()) {
     const tracks = await tracksOf(pl);
     playlists.push({ kind: pl.kind, title: pl.title, description: visible(pl.description) || undefined, tracks: tracks.map(itemOfTrack) });
-    for (const t of tracks) if (isUpload(t)) uploads.push({ track: t, playlist: pl.title });
+    uploads.push(...tracks.filter(isUpload));
   }
   const downloads = offline ? { [thisDevice.id]: { platform: thisDevice.platform, tracks: offline.entries().map((e) => itemOfTrack(e.track)) } } : {};
   const backup: Backup = { v: 1, at: now, likes, playlists, downloads };
@@ -89,50 +90,26 @@ export async function snapshot(now = Date.now()): Promise<Backup> {
   return (await take(now)).backup;
 }
 
-/** Puts the uploads' files in place for a copy: a file already there stays, one kept in another
- * folder before is copied by Disk itself, a new one is sent. A track that fails is left out
- * (tried the next day). */
-export async function keepUploads(met: { track: Track; playlist: string }[], before: Backup['uploads'] = {}, root = UPLOADS): Promise<Record<string, BackupUpload>> {
+/** Puts the uploads' files in place for a copy, one a track, in the shared folder (`pool`): a file
+ * there already stays, one an earlier copy kept elsewhere is moved in by Disk itself, a new one is
+ * sent. A track that fails is left out (tried the next day). */
+export async function keepUploads(met: Track[], before: Backup['uploads'] = {}, pool = SHARED): Promise<Record<string, BackupUpload>> {
   const out: Record<string, BackupUpload> = {};
-  const there = new Map<string, Set<string>>();
-  const inFolder = async (folder: string) => {
-    let names = there.get(folder);
-    if (!names) {
-      names = new Set((await disk.folder(folder)).map((f) => f.name));
-      there.set(folder, names);
-    }
-    return names;
-  };
-  const exists = async (path: string) => {
-    const i = path.lastIndexOf('/');
-    return (await inFolder(path.slice(0, i))).has(path.slice(i + 1));
-  };
-  if (met.length) await disk.mkdir(FOLDER).then(() => disk.mkdir(root));
-  const taken = new Map<string, string>();
-  for (const { track: t, playlist } of met) {
+  if (!met.length) return out;
+  await disk.mkdir(pool);
+  const there = new Set((await disk.folder(pool)).map((f) => f.name));
+  for (const t of met) {
     const id = String(t.id);
-    const folder = `${root}/${folderName(playlist)}`;
-    let path = `${folder}/${fileName(t)}`;
-    // two uploads of one name in one playlist: the second one's file gets its id
-    if (taken.has(path) && taken.get(path) !== id) path = path.replace(/\.mp3$/, ` (${id}).mp3`);
-    if (out[id]?.files.includes(path)) continue;
+    if (out[id]) continue;
+    const path = `${pool}/${fileOf(t)}`;
     try {
-      if (!(await exists(path))) {
-        await disk.mkdir(folder);
-        const from = [...(out[id]?.files ?? []), ...(before[id]?.files ?? [])];
-        let copied = false;
-        for (const f of from) {
-          if (!(await exists(f))) continue;
-          await disk.copy(f, path);
-          copied = true;
-          break;
-        }
-        if (!copied) await disk.uploadFrom(path, (await api.stream(id)).url);
-        (await inFolder(folder)).add(path.slice(folder.length + 1));
+      if (!there.has(fileOf(t))) {
+        let moved = false;
+        for (const f of before[id]?.files ?? []) if (!moved && f !== path) moved = await disk.move(f, path).then(() => true, () => false);
+        if (!moved) await disk.uploadFrom(path, (await api.stream(id)).url);
+        there.add(fileOf(t));
       }
-      taken.set(path, id);
-      out[id] ??= { title: t.title, artists: (t.artists ?? []).map((a) => a.name), files: [] };
-      out[id].files.push(path);
+      out[id] = { title: t.title, artists: (t.artists ?? []).map((a) => a.name), files: [path] };
     } catch (e) {
       console.warn('backup: an upload not kept', id, e);
     }
@@ -140,16 +117,11 @@ export async function keepUploads(met: { track: Track; playlist: string }[], bef
   return out;
 }
 
-/** The files no kept copy names leave the uploads' folders (and a folder left empty goes). */
-async function sweepUploads(copies: Backup[], root = UPLOADS) {
-  const named = new Set(copies.flatMap((c) => Object.values(c.uploads ?? {}).flatMap((u) => u.files)));
-  for (const dir of await disk.folders(root)) {
-    const folder = `${root}/${dir}`;
-    const files = await disk.folder(folder);
-    const gone = files.filter((f) => !named.has(`${folder}/${f.name}`));
-    for (const f of gone) await disk.remove(`${folder}/${f.name}`);
-    if (gone.length === files.length) await disk.remove(folder);
-  }
+/** The uploads the kept copies name, by track id: their files stay in the shared folder after the
+ * tracks leave the playlists (null: a copy would not read, so none may go). */
+export async function keptUploads(): Promise<Set<string> | null> {
+  const copies = await Promise.all((await list()).map((d) => read(d).catch(() => null)));
+  return copies.every(Boolean) ? new Set(copies.flatMap((c) => Object.keys(c!.uploads ?? {}))) : null;
 }
 
 /** Once a day (a device that made today's copy does not make it again); the oldest beyond a
@@ -171,7 +143,7 @@ export async function backUp(now = Date.now()) {
   for (const d of old) await disk.remove(`${FOLDER}/${d}.json`);
   const kept = [backup, ...(await Promise.all(days.filter((d) => d !== day && !old.includes(d)).map((d) => read(d).catch(() => null))))];
   // a copy that would not read: its files are not known, so nothing is swept this time
-  if (kept.every(Boolean)) await sweepUploads(kept as Backup[]);
+  if (kept.every(Boolean)) await sweepUploads(disk, kept as Backup[], new Set(uploads.map((t) => String(t.id))), { pool: SHARED, old: UPLOADS });
   return true;
 }
 
@@ -205,10 +177,14 @@ export async function restorePlaylist(b: Backup, kind: number | string, title: s
   for (let i = 0; i < tracks.length; i += 100) made = await api.addToPlaylist(made, tracks.slice(i, i + 100), made.trackCount ?? i);
   let lost = 0;
   for (const x of gone) {
-    const file = b.uploads![x.id].files[0];
+    const u = b.uploads![x.id];
     try {
       if (!canUploadAgain()) throw new Error('no uploads here');
-      await api.upload({ name: file.slice(file.lastIndexOf('/') + 1), data: await disk.readBytes(file) }, made);
+      // where the copy kept it, or else the shared folder (an old copy's file goes once it is there)
+      let data: ArrayBuffer | null = null;
+      for (const f of new Set([...u.files, `${SHARED}/${x.id}.mp3`])) data ??= await disk.readBytes(f).catch(() => null);
+      if (!data) throw new Error('the file is not on the Disk');
+      await api.upload({ name: fileName({ title: u.title, artists: u.artists.map((name) => ({ name })) } as Track), data }, made);
     } catch (e) {
       console.warn('backup: an upload not brought back', x.id, e);
       lost++;

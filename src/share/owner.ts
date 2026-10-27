@@ -2,7 +2,8 @@
 // own uploads in it goes into the "shared" folder of Oni's folder on his Yandex Disk — a file per
 // track (one for a track in two playlists) and index.json — the folder is opened by a link, and
 // the link goes, hidden, into the description of each of his playlists (mark.ts), so a friend he
-// sends any of them finds it. What left the playlists leaves the folder. Any device does it: the
+// sends any of them finds it. What left the playlists leaves the folder, unless a kept backup copy
+// names it: the backup keeps its uploads here too, a track once (backup.ts). Any device does it: the
 // Disk fetches each file itself from the upload's stream (the user, 26.10.2026: "why only the PC?").
 
 import { create } from 'zustand';
@@ -49,7 +50,7 @@ export async function tracksOf(pl: Playlist): Promise<Track[]> {
 }
 
 export const isUpload = (t: Track) => t.trackSource === 'UGC';
-const fileOf = (t: Track) => `${t.id}.mp3`;
+export const fileOf = (t: Track) => `${t.id}.mp3`;
 
 let running: Promise<void> | null = null;
 
@@ -91,6 +92,14 @@ export async function round(opts: RoundOptions = {}): Promise<string | null> {
     await disk.mkdir(folder);
     const there = new Set((await disk.folder(folder)).map((f) => f.name));
     const send = [...wanted].filter(([file]) => !there.has(file));
+    // what left every playlist leaves the folder first, so a round cut short (no answer) frees the room too
+    const left = [...there].filter((name) => name !== INDEX && !wanted.has(name));
+    const kept = left.length ? await import('../backup/backup.ts').then((m) => m.keptUploads()).catch(() => null) : null;
+    for (const name of left) {
+      if (!kept || kept.has(name.replace(/\.mp3$/, ''))) continue;
+      await disk.remove(`${folder}/${name}`);
+      there.delete(name);
+    }
     useShare.setState({ total: send.length });
     // The index lists what is in the folder already, so a friend sees the first tracks at once and
     // the rest as they come (the user, 27.10.2026: "why not as soon as the first track is there?");
@@ -125,8 +134,6 @@ export async function round(opts: RoundOptions = {}): Promise<string | null> {
         written = Date.now();
       }
     }
-    // what left every playlist leaves the folder
-    for (const name of there) if (name !== INDEX && !wanted.has(name)) await disk.remove(`${folder}/${name}`);
     await writeIndex(0);
     useShare.setState({ at: Date.now(), tracks: wanted.size, playlists: shared.length });
     return link;
@@ -138,11 +145,13 @@ export async function round(opts: RoundOptions = {}): Promise<string | null> {
   }
 }
 
-/** Sharing off: the marks leave the playlists and the folder is closed and removed. */
+/** Sharing off: the marks leave the playlists and the folder is closed; its tracks stay for the
+ * backup, which takes away those it does not need. */
 async function unshare() {
   try {
     for (const pl of await api.playlists()) if (readMark(pl.description)) await api.setPlaylistDescription(pl.kind, withMark(pl.description, null));
-    await disk.remove(SHARED);
+    await disk.unpublish(SHARED);
+    await disk.remove(`${SHARED}/${INDEX}`);
     storage.setItem(LINK, '');
     useShare.setState({ at: null, tracks: 0, playlists: 0, error: null });
   } catch (e) {

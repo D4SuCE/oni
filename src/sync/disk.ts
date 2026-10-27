@@ -143,6 +143,12 @@ export class YandexDisk implements DiskLike {
     return this.transport.fetchBytes!((link.data as any).href);
   }
 
+  /** A file moved by Disk itself, nothing sent (a backup's old file into the shared folder). */
+  async move(from: string, to: string): Promise<void> {
+    const r = await this.call('POST', `${API}/move`, { from: `app:/${from}`, path: `app:/${to}`, overwrite: 'true' });
+    if (r.status !== 201 && r.status !== 202) this.fail('move', r);
+  }
+
   /** A copy made by Disk itself, nothing sent (one track in two playlists of the backup). */
   async copy(from: string, to: string): Promise<void> {
     const r = await this.call('POST', `${API}/copy`, { from: `app:/${from}`, path: `app:/${to}`, overwrite: 'true' });
@@ -156,6 +162,12 @@ export class YandexDisk implements DiskLike {
     const meta = await this.call('GET', API, { path: `app:/${path}`, fields: 'public_url' });
     if (meta.status !== 200 || !(meta.data as any)?.public_url) this.fail('publish', meta);
     return (meta.data as any).public_url;
+  }
+
+  /** Closes a folder opened by `publish`: its link leads nowhere. */
+  async unpublish(path: string): Promise<void> {
+    const r = await this.call('PUT', `${API}/unpublish`, { path: `app:/${path}` });
+    if (r.status !== 200 && r.status !== 404) this.fail('unpublish', r);
   }
 
   async remove(name: string): Promise<void> {

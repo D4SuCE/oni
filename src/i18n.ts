@@ -594,7 +594,7 @@ const ru = {
   backup: {
     kicker: 'Яндекс Диск',
     title: 'Резервные копии',
-    hint: 'Раз в день Oni сохраняет плейлисты, «Мне нравится» и список скачанного в свою папку на Диске, а ваши загруженные mp3 — файлами по плейлистам («Приложения/Oni/backup/uploads»); хранятся две недели',
+    hint: 'Раз в день Oni сохраняет плейлисты, «Мне нравится» и список скачанного в свою папку на Диске, а ваши загруженные mp3 — файлами, каждый трек один раз, рядом с выложенными для друзей («Приложения/Oni/shared»); хранятся две недели',
     none: 'Копий пока нет — первая появится в течение дня после подключения Диска',
     restore: 'Вернуть',
     restoring: 'Возвращаю…',
@@ -1314,7 +1314,7 @@ const en: Dict = {
   backup: {
     kicker: 'Yandex Disk',
     title: 'Backups',
-    hint: "Once a day Oni keeps your playlists, Liked and the list of downloads in its folder on your Disk, and your uploaded mp3s as files by playlist (\"Applications/Oni/backup/uploads\"); two weeks' worth are kept",
+    hint: "Once a day Oni keeps your playlists, Liked and the list of downloads in its folder on your Disk, and your uploaded mp3s as files, each track once, beside those shared with friends (\"Applications/Oni/shared\"); two weeks' worth are kept",
     none: 'No backups yet — the first comes within a day of connecting the Disk',
     restore: 'Restore',
     restoring: 'Restoring…',
