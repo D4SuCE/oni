@@ -12,41 +12,15 @@ import { askText } from '../components/Dialog.tsx';
 import { openMenu } from '../components/Menu.tsx';
 import { useT } from '../i18n.ts';
 import { offline, playTracks, toggle, usePlayer } from '../player/player.ts';
+import { runJob, stopJob, useJobs } from '../share/jobs.ts';
 import { addToMine } from '../share/mine.ts';
 import { asTrack, readShared } from '../share/shared.ts';
 import { createPlaylist, errorText, isOwn, toast, useApp } from '../store.ts';
 import { downloadShared, useOfflineVersion } from '../ui/offline.ts';
 import { cx, fmtTime, fmtTotal, useAsync } from '../ui/util.ts';
 
-/**
- * "Add all to mine" and "Download" of a friend's playlist while they run, by key: their progress,
- * and a press then stops them after the track under way, as a list's Download does (the user,
- * 27.10.2026: neither could be stopped). Kept outside the page: left and come back to, it still
- * shows them.
- */
-const useJobs = create<Record<string, { done: number; total: number }>>(() => ({}));
 /** The tracks being fetched now, for their row's spinner. */
 const useFetching = create<Record<string, true>>(() => ({}));
-const stopping = new Set<string>();
-
-/** `step` on each track in turn; false when stopped before the end. */
-async function runJob(key: string, list: Track[], step: (x: Track) => Promise<void>) {
-  useJobs.setState({ [key]: { done: 0, total: list.length } });
-  try {
-    for (const [i, x] of list.entries()) {
-      if (stopping.has(key)) return false;
-      await step(x);
-      useJobs.setState({ [key]: { done: i + 1, total: list.length } });
-    }
-    return true;
-  } finally {
-    stopping.delete(key);
-    useJobs.setState((s) => {
-      const { [key]: _, ...rest } = s;
-      return rest;
-    }, true);
-  }
-}
 
 async function fetchOne(x: Track) {
   useFetching.setState({ [x.id]: true });
@@ -172,7 +146,7 @@ export function SharedView({ link, owner }: { link: string; owner?: string }) {
             <ListPlayButton list={list} onPlay={() => play(0)} disabled={!tracks.length} testId="shared-play" />
             {transport.canUpload &&
               (addJob ? (
-                <button className="btn glass-btn busy" onClick={() => stopping.add(addKey)} title={s.stopAdding} data-testid="shared-add-all" data-busy>
+                <button className="btn glass-btn busy" onClick={() => stopJob(addKey)} title={s.stopAdding} data-testid="shared-add-all" data-busy>
                   <Loader2 size={16} className="spin" /> {s.adding(addJob.done, addJob.total)}
                   <X size={15} />
                 </button>
@@ -183,7 +157,7 @@ export function SharedView({ link, owner }: { link: string; owner?: string }) {
               ))}
             {offline &&
               (downloadJob ? (
-                <button className="btn glass-btn busy" onClick={() => stopping.add(downloadKey)} title={t.downloads.cancel} data-testid="shared-download-all" data-busy>
+                <button className="btn glass-btn busy" onClick={() => stopJob(downloadKey)} title={t.downloads.cancel} data-testid="shared-download-all" data-busy>
                   <Loader2 size={16} className="spin" /> {t.downloads.progress(downloadJob.done, downloadJob.total)}
                   <X size={15} />
                 </button>

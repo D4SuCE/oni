@@ -136,6 +136,19 @@ export class YandexDisk implements DiskLike {
     throw new Error('Yandex Disk upload: no answer');
   }
 
+  /** `uploadFrom` a link `link` gives, a fresh one each try: the Disk fails on about every other
+   * link to Yandex's streams at once ("failed" in a second, any server, 27.10.2026), and takes a
+   * fresh link to the same track. Up to four tries; any other error at once. */
+  async uploadFresh(path: string, link: () => Promise<string>): Promise<void> {
+    for (let i = 1; ; i++) {
+      try {
+        return await this.uploadFrom(path, await link());
+      } catch (e) {
+        if (i === 4 || !/upload: failed/.test(String((e as Error)?.message))) throw e;
+      }
+    }
+  }
+
   /** A file's bytes, `path` inside Oni's folder (an uploaded track kept by the backup). */
   async readBytes(path: string): Promise<ArrayBuffer> {
     const link = await this.call('GET', `${API}/download`, { path: `app:/${path}` });
