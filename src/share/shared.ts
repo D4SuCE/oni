@@ -80,7 +80,8 @@ export const isShared = (t: Track | undefined) => Boolean(t?.share);
 /** A file name Yandex takes: "Artist - Title.mp3", no characters a file name cannot have. */
 export function fileName(t: Track) {
   const artists = (t.artists ?? []).map((a) => a.name).join(', ');
-  return `${artists ? `${artists} - ` : ''}${t.title}`.replace(/[<>:"|?*\\]+/g, ' ').replaceAll('/', ' ').replace(/\s+/g, ' ').trim().slice(0, 150) + '.mp3';
+  // a title that is still a file's name ("x.mp3") gets no second ".mp3"
+  return `${artists ? `${artists} - ` : ''}${t.title.replace(/\.mp3$/i, '')}`.replace(/[<>:"|?*\\]+/g, ' ').replaceAll('/', ' ').replace(/\s+/g, ' ').trim().slice(0, 150) + '.mp3';
 }
 
 const links = new Map<string, Promise<string | null>>();

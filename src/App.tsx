@@ -5,6 +5,8 @@ import { api, storage, transport } from './api/client.ts';
 import { Spinner } from './components/Common.tsx';
 import { DialogHost } from './components/Dialog.tsx';
 import { TrackSheetHost } from './components/TrackSheet.tsx';
+import { trackMenu } from './components/TrackList.tsx';
+import { addToMine } from './share/mine.ts';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { MenuHost } from './components/Menu.tsx';
 import { NowPlaying } from './components/NowPlaying.tsx';
@@ -234,6 +236,11 @@ export function App() {
       {toastMsg && (
         <div key={toastMsg.id} className="toast glass" onClick={() => useApp.setState({ toast: null })} data-testid="toast">
           {toastMsg.text}
+          {toastMsg.action && (
+            <button className="toast-action" onClick={toastMsg.action.run} data-testid="toast-action">
+              {toastMsg.action.label}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -242,5 +249,5 @@ export function App() {
 
 // Handy for debugging and for the automated UI test.
 Object.assign(window, {
-  __wave: { backup: { snapshot, restorePlaylist, restoreLikes, keepUploads, keepGoneDownloads }, share: { round: shareRound, useShare, downloadShared, read: (link: string) => readShared(link, (r) => transport.request(r)), asTrack, readMark, withMark }, offline, storage, ownToKeep, silence: { leadingSilence }, usePlayer, useApp, audio, api, navigate, recsFeedback, current, playTracks, setSleep, setVolume, toggleShuffle, toggleLike, findMix, eqOutputLevel, levelLift, pulseLevel, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } } },
+  __wave: { backup: { snapshot, restorePlaylist, restoreLikes, keepUploads, keepGoneDownloads }, share: { round: shareRound, useShare, downloadShared, read: (link: string) => readShared(link, (r) => transport.request(r)), asTrack, readMark, withMark, addToMine }, offline, storage, ownToKeep, silence: { leadingSilence }, usePlayer, useApp, audio, api, navigate, recsFeedback, current, playTracks, setSleep, setVolume, toggleShuffle, toggleLike, trackMenu, findMix, eqOutputLevel, levelLift, pulseLevel, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } } },
 });

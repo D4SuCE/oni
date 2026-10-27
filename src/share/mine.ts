@@ -4,11 +4,13 @@
 
 import { api, transport } from '../api/client.ts';
 import type { Playlist, Track } from '../api/types.ts';
+import { withTitle } from './id3.ts';
 import { fileName, sharedFileUrl } from './shared.ts';
 
 export async function addToMine(t: Track, pl: Playlist) {
   if (!t.share || !transport.fetchBytes) throw new Error('not a shared track');
   const url = await sharedFileUrl(t.share.link, t.share.file, (r) => transport.request(r));
   const data = await transport.fetchBytes(url);
-  await api.upload({ name: fileName(t), data }, pl);
+  // named inside the file too: Yandex takes the name from there, else the file's name is the title
+  await api.upload({ name: fileName(t), data: withTitle(data, t.title, (t.artists ?? []).map((a) => a.name).join(', ')) }, pl);
 }

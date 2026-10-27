@@ -115,6 +115,44 @@ await step('share a track: its link goes to the clipboard', async () => {
   }
 });
 
+await step('a dislike pressed by mistake: undone from its toast, or from the menu (Recommend again), or in Settings (reverted)', async () => {
+  // The user, 27.10.2026: a track marked by mistake could not be brought back.
+  const marks = () => page.evaluate(() => [...window.__wave.useApp.getState().disliked]);
+  const before = await marks();
+  try {
+    await page.locator('.track-row').nth(1).click({ button: 'right' });
+    await page.locator('.menu-item', { hasText: 'Не рекомендовать' }).click();
+    await page.locator('[data-testid="toast-action"]', { hasText: 'Отменить' }).click({ timeout: 10000 });
+    await page.locator('.toast', { hasText: 'Снова будет звучать' }).waitFor({ timeout: 10000 });
+    if ((await marks()).length !== before.length) throw new Error('the toast did not undo it');
+    if ((await page.evaluate(() => window.__wave.api.dislikedTrackIds())).length !== before.length) throw new Error('Yandex still has it');
+    // marked again: its menu brings it back
+    await page.locator('.track-row').nth(1).click({ button: 'right' });
+    await page.locator('.menu-item', { hasText: 'Не рекомендовать' }).click();
+    await page.waitForFunction((n) => window.__wave.useApp.getState().disliked.size === n + 1, before.length);
+    await page.locator('.track-row').nth(1).click({ button: 'right' });
+    await page.locator('.menu-item', { hasText: 'Снова рекомендовать' }).click();
+    await page.waitForFunction((n) => window.__wave.useApp.getState().disliked.size === n, before.length, { timeout: 10000 });
+    // and the list in Settings, a track to bring back by its button
+    await page.locator('.track-row').nth(1).click({ button: 'right' });
+    await page.locator('.menu-item', { hasText: 'Не рекомендовать' }).click();
+    await page.waitForFunction((n) => window.__wave.useApp.getState().disliked.size === n + 1, before.length);
+    const was = await page.evaluate(() => window.__wave.useApp.getState().route);
+    await page.evaluate(() => window.__wave.navigate({ name: 'settings' }));
+    await page.locator('[data-testid="disliked-toggle"]').click();
+    await page.locator('[data-testid="disliked-row"]').first().waitFor({ timeout: 15000 });
+    const rows = await page.locator('[data-testid="disliked-row"]').count();
+    await page.locator('[data-testid="disliked-back"]').first().click();
+    await page.waitForFunction((n) => window.__wave.useApp.getState().disliked.size === n, before.length, { timeout: 10000 });
+    console.log(`       ${rows} in the Settings list`);
+    await page.evaluate((r) => window.__wave.navigate(r), was);
+    await page.locator('.track-row').nth(1).waitFor({ timeout: 15000 });
+  } finally {
+    const extra = (await marks()).filter((id) => !before.includes(id));
+    if (extra.length) await page.evaluate((ids) => window.__wave.api.setDisliked(ids, false), extra);
+  }
+});
+
 await step('the playing track has its menu: player bar and now playing', async () => {
   await page.locator('.pb-left').click({ button: 'right' });
   await page.locator('.menu-item', { hasText: 'Поделиться' }).waitFor({ timeout: 3000 });

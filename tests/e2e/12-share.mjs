@@ -48,10 +48,37 @@ await step("shared uploads: a playlist's own uploads go to a folder on Disk open
       // "Add to playlist", which said "Parameters requirements are not met")
       const keptShare = await page.evaluate((id) => window.__wave.offline.entry(id)?.track.share?.file, one.id);
       if (keptShare !== one.share.file) throw new Error(`kept without its share: ${keptShare}`);
+      // its menu: removed from the device as any download is; no like (Yandex refuses it — the
+      // user's pictures, 27.10.2026)
+      const items = await page.evaluate((id) => window.__wave.trackMenu(window.__wave.offline.entry(id).track).map((i) => i.label), one.id);
+      if (!items.includes('Удалить с устройства') || items.includes('Скачать')) throw new Error(`a downloaded one's menu: ${items.join(', ')}`);
+      await page.evaluate((t) => window.__wave.toggleLike(t), one);
+      await page.waitForTimeout(500);
+      const toast = await page.locator('[data-testid="toast"]').innerText().catch(() => '');
+      if (await page.evaluate((id) => window.__wave.useApp.getState().liked.has(id), one.id) || /Parameters|не удалось|failed/i.test(toast)) throw new Error(`liked: ${toast}`);
     } finally {
       await page.evaluate((id) => window.__wave.offline.remove(id), one.id);
     }
-    console.log(`       "${pl.title}": the index there with ${early.pending} on their way; ${pl.tracks.map((t) => t.title).join(', ')} — played from the Disk, one downloaded`);
+    // "+ Mine": the file up as one's own upload, named as the owner named it — not "Artist - Title.mp3"
+    // (the user's picture, 27.10.2026); into a playlist of its own, removed again
+    const mine = await page.evaluate(async ([l, x]) => {
+      const { api, share } = window.__wave;
+      const t = share.asTrack(x, l, 'e2e');
+      const made = await api.createPlaylist('oni-e2e-mine');
+      try {
+        await share.addToMine(t, made);
+        for (let i = 0; i < 40; i++) {
+          await new Promise((r) => setTimeout(r, 3000));
+          const got = (await api.playlist(made.uid, made.kind)).tracks?.[0]?.track;
+          if (got) return { want: [t.title, t.artists.map((a) => a.name).join(', ')], got: [got.title, (got.artists ?? []).map((a) => a.name).join(', ')] };
+        }
+        return { want: [t.title], got: null };
+      } finally {
+        await api.deletePlaylist(made.kind);
+      }
+    }, [link, pl.tracks[2]]);
+    if (!mine.got || mine.got[0] !== mine.want[0] || mine.got[1] !== mine.want[1]) throw new Error(`"+ Mine" made ${JSON.stringify(mine)}`);
+    console.log(`       "${pl.title}": the index there with ${early.pending} on their way; ${pl.tracks.map((t) => t.title).join(', ')} — played from the Disk, one downloaded, one added to mine as "${mine.got.join(' — ')}"`);
     // the friend's page: his uploaded playlists by the link, a row per track, Play plays them
     await page.evaluate(() => window.__wave.audio.pause());
     await page.evaluate((l) => window.__wave.navigate({ name: 'shared', link: l, owner: 'e2e' }), link);

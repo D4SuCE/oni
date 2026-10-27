@@ -45,7 +45,8 @@ interface AppState {
   libraryReady: boolean;
   /** No network: started from the cached account, only downloaded tracks play. */
   offline: boolean;
-  toast: { id: number; text: string } | null;
+  /** With a button ("Undo") when `action` is there. */
+  toast: { id: number; text: string; action?: { label: string; run: () => void } } | null;
   nowPlayingOpen: boolean;
   tuningOpen: boolean;
   soundOpen: boolean;
@@ -117,10 +118,11 @@ export function historyStep(dir: 'back' | 'forward') {
 }
 
 let toastSeq = 0;
-export function toast(text: string) {
+export function toast(text: string, action?: { label: string; run: () => void }) {
   const id = ++toastSeq;
-  set({ toast: { id, text } });
-  setTimeout(() => get().toast?.id === id && set({ toast: null }), 3200);
+  set({ toast: { id, text, action } });
+  // one with a button stays longer: time to press it
+  setTimeout(() => get().toast?.id === id && set({ toast: null }), action ? 6000 : 3200);
 }
 
 export function errorText(e: unknown) {
@@ -291,6 +293,8 @@ export async function refreshPlaylists() {
 }
 
 export async function toggleLike(t: Track) {
+  // a friend's upload (src/share) is not Yandex's: there is nothing to like (Yandex refuses it)
+  if (t.share) return;
   const id = String(t.id);
   const wasLiked = get().liked.has(id);
   const liked = new Set(get().liked);
@@ -314,6 +318,7 @@ export async function toggleLike(t: Track) {
 }
 
 export async function dislike(t: Track) {
+  if (t.share) return;
   const id = String(t.id);
   const disliked = new Set(get().disliked);
   disliked.add(id);
@@ -324,7 +329,8 @@ export async function dislike(t: Track) {
   waveFeedback('dislike', t);
   try {
     await api.setDisliked([trackKey(t)], true);
-    toast(tr().toast.disliked);
+    // pressed by mistake: undone right here (the user, 27.10.2026: "can't bring it back")
+    toast(tr().toast.disliked, { label: tr().toast.undo, run: () => void undislike(t) });
   } catch (e) {
     toast(tr().common.failed(errorText(e)));
   }
@@ -334,7 +340,12 @@ export async function undislike(t: Track) {
   const disliked = new Set(get().disliked);
   disliked.delete(String(t.id));
   set({ disliked });
-  await api.setDisliked([trackKey(t)], false).catch((e) => toast(errorText(e)));
+  try {
+    await api.setDisliked([trackKey(t)], false);
+    toast(tr().toast.recommendedAgain);
+  } catch (e) {
+    toast(errorText(e));
+  }
 }
 
 export async function addToPlaylist(pl: Playlist, t: Track) {

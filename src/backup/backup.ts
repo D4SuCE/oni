@@ -12,6 +12,7 @@
 import { api, storage, transport } from '../api/client.ts';
 import type { Playlist, Track } from '../api/types.ts';
 import { offline } from '../player/player.ts';
+import { withTitle } from '../share/id3.ts';
 import { visible } from '../share/mark.ts';
 import { fileOf, isUpload, tracksOf } from '../share/owner.ts';
 import { fileName, SHARED } from '../share/shared.ts';
@@ -184,7 +185,8 @@ export async function restorePlaylist(b: Backup, kind: number | string, title: s
       let data: ArrayBuffer | null = null;
       for (const f of new Set([...u.files, `${SHARED}/${x.id}.mp3`])) data ??= await disk.readBytes(f).catch(() => null);
       if (!data) throw new Error('the file is not on the Disk');
-      await api.upload({ name: fileName({ title: u.title, artists: u.artists.map((name) => ({ name })) } as Track), data }, made);
+      // named inside the file too (share/id3.ts): Yandex would take the file's name for the title
+      await api.upload({ name: fileName({ title: u.title, artists: u.artists.map((name) => ({ name })) } as Track), data: withTitle(data, u.title, u.artists.join(', ')) }, made);
     } catch (e) {
       console.warn('backup: an upload not brought back', x.id, e);
       lost++;

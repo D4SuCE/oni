@@ -537,19 +537,40 @@ export class YandexMusic {
   // ------------------------------------------------------------------ upload
 
   /** Uploads a local audio file into one of the user's playlists (processed by Yandex asynchronously). */
-  async upload(file: { name: string; data: ArrayBuffer }, pl: Playlist) {
+  async upload(file: { name: string; data: ArrayBuffer }, pl: Playlist, wait = (ms: number) => new Promise((r) => setTimeout(r, ms))) {
     const uid = await this.uid();
-    const target = await this.call<any>('/loader/upload-url', {
-      method: 'POST',
-      query: { uid, 'playlist-id': `${uid}:${pl.kind}`, path: file.name },
-    });
-    if (target.result === 'TOO_MANY_FILES') throw new ApiError(429, tr().playlist.tooManyFiles);
-    const resp = await this.transport.request({
-      method: 'POST',
-      url: target['post-target'],
-      multipart: { field: 'file', filename: file.name, contentType: 'audio/mpeg', data: file.data },
-    });
-    if (!resp.ok) throw new ApiError(resp.status, tr().playlist.uploadFailed(resp.status));
-    return target['ugc-track-id'] as string | undefined;
+    // The upload server not answering in time (HTTP 504 — the user, through a VPN, 27.10.2026) or
+    // not reached: the file may have gone in all the same, so the playlist is looked at for its
+    // track for half a minute before it goes up again, through another server; three tries.
+    for (let i = 1; ; i++) {
+      const target = await this.call<any>('/loader/upload-url', {
+        method: 'POST',
+        query: { uid, 'playlist-id': `${uid}:${pl.kind}`, path: file.name },
+      });
+      if (target.result === 'TOO_MANY_FILES') throw new ApiError(429, tr().playlist.tooManyFiles);
+      const id = target['ugc-track-id'] as string | undefined;
+      let failed: Error;
+      try {
+        const resp = await this.transport.request({
+          method: 'POST',
+          url: target['post-target'],
+          multipart: { field: 'file', filename: file.name, contentType: 'audio/mpeg', data: file.data },
+        });
+        if (resp.ok) return id;
+        failed = new ApiError(resp.status, tr().playlist.uploadFailed(resp.status));
+        if (resp.status < 500) throw failed;
+      } catch (e) {
+        if (e instanceof ApiError) throw e;
+        failed = new NetworkError(e instanceof Error ? e.message : String(e));
+      }
+      if (id) {
+        for (let w = 0; w < 6; w++) {
+          await wait(5000);
+          const now = await this.playlist(pl.uid, pl.kind).catch(() => null);
+          if (now?.tracks?.some((x) => String(x.id) === id || String(x.track?.id) === id)) return id;
+        }
+      }
+      if (i >= 3) throw failed;
+    }
   }
 }

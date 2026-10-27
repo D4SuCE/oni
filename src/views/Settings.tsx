@@ -9,7 +9,7 @@ import { canAnalyzeAudio } from '../player/eq.ts';
 import { offline, recsFeedback, setCrossfade, setNormalize, stats, usePlayer } from '../player/player.ts';
 import { SMART_EVERY, setSmartEvery, useSmartEvery } from '../recs/smartShuffle.ts';
 import type { SpaceRules } from '../player/offline.ts';
-import { logout, navigate, toast, useApp } from '../store.ts';
+import { logout, navigate, toast, undislike, useApp } from '../store.ts';
 import { setMotion, setPulse, useMotion, usePulse } from '../ui/motion.ts';
 import { isIos } from '../ui/platform.ts';
 import { setPhoneSound, usePhoneSound } from '../player/phoneSound.ts';
@@ -21,6 +21,8 @@ import { addVoiceShortcut, VOICE_SHORTCUTS } from '../ui/voice.ts';
 import { cx } from '../ui/util.ts';
 import { ANIM_EFFECTS, setAnimEffect, setAnimEnabled, useAnim } from '../ui/anim.ts';
 import { artistNames } from '../api/yandex.ts';
+import { api } from '../api/client.ts';
+import type { Track } from '../api/types.ts';
 import { connectDisk, disconnectDisk, syncNow, useSync } from '../sync/index.ts';
 import { setSharing, shareUploads, useShare } from '../share/owner.ts';
 
@@ -248,6 +250,7 @@ export function SettingsView() {
           <div className="hint">{t.stats.empty}</div>
         )}
         <MixFeedback />
+        <Disliked />
       </div>
 
       {isIos && (
@@ -582,6 +585,51 @@ function MixFeedback() {
                 </div>
               </div>
               <button className="btn ghost small" onClick={() => recsFeedback.bringBack(track.id)} data-testid="skipped-back">
+                <Undo2 size={14} /> {t.back}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** "Don't recommend": the tracks marked so, each to bring back (the user, 27.10.2026: one pressed by
+ * mistake could not be). Yandex keeps the marks; the tracks are asked for when the list opens. */
+function Disliked() {
+  const t = useT().stats;
+  const ids = useApp((s) => s.disliked);
+  const [open, setOpen] = useState(false);
+  const [tracks, setTracks] = useState<Track[] | null>(null);
+  useEffect(() => {
+    if (!open || tracks) return;
+    // the newest marks are last in Yandex's list
+    void api.tracks([...ids].slice(-100).reverse()).then(setTracks, () => setTracks([]));
+  }, [open, tracks, ids]);
+  if (!ids.size) return null;
+  const shown = (tracks ?? []).filter((x) => ids.has(String(x.id)));
+  return (
+    <div className="mix-feedback" data-testid="disliked">
+      <div className="settings-row">
+        <div className="hint">{t.dislikedList(ids.size)}</div>
+        <div className="update-actions">
+          <button className="btn ghost" onClick={() => setOpen((o) => !o)} data-testid="disliked-toggle">
+            {open ? t.hideList : t.showList}
+          </button>
+        </div>
+      </div>
+      {open && (
+        <div className="skipped-list" data-testid="disliked-list">
+          <div className="hint">{t.dislikedHint}</div>
+          {!tracks && <div className="hint">…</div>}
+          {shown.map((track) => (
+            <div className="skipped-row" key={track.id} data-testid="disliked-row">
+              <div className="skipped-name">
+                <div className="skipped-title">{track.title}</div>
+                <div className="hint">{artistNames(track)}</div>
+              </div>
+              <button className="btn ghost small" onClick={() => void undislike(track)} data-testid="disliked-back">
                 <Undo2 size={14} /> {t.back}
               </button>
             </div>

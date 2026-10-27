@@ -1,11 +1,11 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { useDragSort } from '../ui/dragSort.ts';
-import { ArrowDownToLine, ArrowUp, Ban, GripVertical, CircleCheck, Disc3, Download, Info, Loader2, Pencil, Heart, Link, ListEnd, ListPlus, ListStart, MoreHorizontal, Play, Plus, Radio, Share, Trash2, User } from 'lucide-react';
+import { ArrowDownToLine, ArrowUp, Ban, GripVertical, CircleCheck, Disc3, Download, Info, Loader2, Pencil, Heart, Link, ListEnd, ListPlus, ListStart, MoreHorizontal, Play, Plus, Radio, Share, Trash2, Undo2, User } from 'lucide-react';
 import type { Track } from '../api/types.ts';
 import { artistNames, catalogTrack } from '../api/yandex.ts';
 import { tr, useT } from '../i18n.ts';
 import { enqueue, offline, playNext, playRadio, toggle, usePlayer } from '../player/player.ts';
-import { addToPlaylist, createPlaylist, dislike, errorText, isOwn, navigate, toast, toggleLike, useApp } from '../store.ts';
+import { addToPlaylist, createPlaylist, dislike, errorText, isOwn, navigate, toast, toggleLike, undislike, useApp } from '../store.ts';
 import { transport } from '../api/client.ts';
 import { downloadTrack, offlineState, useCover, useDownloadProgress, useOfflineVersion, type OfflineState } from '../ui/offline.ts';
 import { isIos } from '../ui/platform.ts';
@@ -30,7 +30,8 @@ export function trackMenu(t: Track, extra: MenuItem[] = []): MenuItem[] {
   if (t.share)
     return [
       ...(transport.canUpload ? [{ label: tr().shared.toMine, icon: <Plus size={15} />, submenu: own.map((p) => ({ label: p.title, onClick: () => void addToMine(t, p).then(() => toast(tr().shared.added(1, p.title)), (e) => toast(tr().shared.addFailed(t.title, errorText(e)))) })) }] : []),
-      ...(offline && !offline.has(t.id) ? [{ label: tr().menu.download, icon: <Download size={15} />, onClick: () => void downloadTrack(t) }] : []),
+      // downloaded: removed from the device here too (the user, 27.10.2026: it could not be)
+      ...(!offline ? [] : offline.has(t.id) ? [{ label: tr().menu.removeDownload, icon: <CircleCheck size={15} />, onClick: () => offline?.remove(t.id) }] : [{ label: tr().menu.download, icon: <Download size={15} />, onClick: () => void downloadTrack(t) }]),
       ...extra,
     ];
   const liked = app.liked.has(String(t.id));
@@ -48,7 +49,10 @@ export function trackMenu(t: Track, extra: MenuItem[] = []): MenuItem[] {
     ...own.map((p) => ({ label: p.title, onClick: () => addToPlaylist(p, t) })),
   ];
   const like: MenuItem = { label: liked ? tx.menu.unlike : tx.common.like, icon: <Heart size={15} />, onClick: () => toggleLike(t) };
-  const dontRecommend: MenuItem = { label: tx.common.dontRecommend, icon: <Ban size={15} />, danger: true, onClick: () => dislike(t) };
+  // once disliked, brought back the same way
+  const dontRecommend: MenuItem = app.disliked.has(String(t.id))
+    ? { label: tx.menu.recommendAgain, icon: <Undo2 size={15} />, onClick: () => void undislike(t) }
+    : { label: tx.common.dontRecommend, icon: <Ban size={15} />, danger: true, onClick: () => dislike(t) };
   const addTo: MenuItem = { label: tx.menu.addToPlaylist, icon: <ListPlus size={15} />, submenu: playlistItems };
   // Your own upload gets what the official app offers for one: no radio, album, artist or link,
   // none of which exist for a private file.
@@ -193,9 +197,14 @@ const TrackRow = memo(function TrackRow({ track: t, index, active, playing, like
           )}
         </div>
       )}
-      <button className={cx('icon-btn tr-like', liked && 'on')} onClick={() => toggleLike(t)} title={tx.common.like}>
-        <Heart size={16} fill={liked ? 'currentColor' : 'none'} />
-      </button>
+      {/* a friend's upload has nothing to like: its place kept empty */}
+      {t.share ? (
+        <span className="tr-like" />
+      ) : (
+        <button className={cx('icon-btn tr-like', liked && 'on')} onClick={() => toggleLike(t)} title={tx.common.like}>
+          <Heart size={16} fill={liked ? 'currentColor' : 'none'} />
+        </button>
+      )}
       <div className="tr-dur">
         {saved !== 'none' && <DownloadMark id={t.id} saved={saved} label={tx.menu.downloaded} />}
         <span className="tr-time">{fmtTime((t.durationMs || 0) / 1000)}</span>

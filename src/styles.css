@@ -2526,6 +2526,17 @@ html.ios .offline-banner {
   cursor: pointer;
   animation: toast-in 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+/* "Undo" in a toast (a dislike pressed by mistake): gold words beside the text */
+.toast-action {
+  margin-left: 14px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--gold);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
 html.ios .toast {
   top: calc(env(safe-area-inset-top) + 8px);
 }
@@ -4416,6 +4427,11 @@ html.anim-hamon .play-btn:active {
 .shared-banner-hint {
   color: var(--text-2);
   font-size: 13px;
+}
+/* the tracks a little below Play / Add all / Download, as a track list is (they touched — the
+   user's picture, 27.10.2026) */
+.shared-page .import-rows {
+  margin-top: 18px;
 }
 .shared-row {
   display: grid;
