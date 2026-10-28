@@ -320,6 +320,27 @@ await step('Discord status: gone on a pause; the switch in Settings turns it off
   await page.evaluate(() => window.__wave.audio.pause());
 });
 
+await step('a link the page opens goes to the browser only when it is a web address', async () => {
+  // What Windows is asked to open is kept instead (a file or another program's link would run it).
+  await app.evaluate(({ shell }) => {
+    globalThis.__opened = [];
+    shell.openExternal = async (url) => void globalThis.__opened.push(url);
+  });
+  await page.evaluate(() => {
+    for (const url of ['file:///C:/Windows/System32/calc.exe', 'ms-settings:privacy', 'https://genius.com/search?q=oni', 'http://example.com/']) window.open(url, '_blank');
+  });
+  await page.waitForTimeout(500);
+  const opened = await app.evaluate(() => globalThis.__opened);
+  if (JSON.stringify(opened) !== JSON.stringify(['https://genius.com/search?q=oni', 'http://example.com/'])) throw new Error(`opened ${JSON.stringify(opened)}`);
+  // The window itself never leaves Oni's page: another page there would have its bridge (preload.cjs).
+  const before = page.url();
+  await page.evaluate(() => void (location.href = 'https://example.com/away'));
+  await page.waitForTimeout(1500);
+  if (page.url() !== before) throw new Error(`the window went to ${page.url()}`);
+  const after = await app.evaluate(() => globalThis.__opened);
+  if (after.at(-1) !== 'https://example.com/away') throw new Error(`not opened in the browser: ${JSON.stringify(after)}`);
+});
+
 await app.close().catch(() => {});
 discord.close();
 fs.rmSync(userData, { recursive: true, force: true });
