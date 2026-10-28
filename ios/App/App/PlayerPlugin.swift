@@ -114,6 +114,9 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     private var tailGain: Float = 1
     /// The new track's fade in (s): the whole crossfade, or a moment when the old one has faded out already.
     private var crossIn: Double = 0
+    /// When the crossfade began, and the old track's fade out (s).
+    private var crossStart = Date()
+    private var crossOut: Double = 0
     /// Where the current schedule starts, in frames; position = this + what the node has played.
     private var startFrame: AVAudioFramePosition = 0
     /// Bumped on every new schedule: the completion of an older one (stopped, replaced) is ignored.
@@ -567,17 +570,24 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         schedule(from: AVAudioFramePosition(lead * file.processingFormat.sampleRate))
         if !stalled { node.play() }
         tail = old
-        let start = Date()
+        crossStart = Date()
+        crossOut = seconds
         crossing = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            let passed = Date().timeIntervalSince(start)
-            let out = min(1, passed / max(0.1, seconds))
-            let into = min(1, passed / max(0.05, self.crossIn))
-            old.volume = min(1, self.tailGain / max(self.gain, 0.0001)) * Float(cos(out * .pi / 2))
-            self.node.volume = Float(sin(into * .pi / 2))
-            if out >= 1 { self.endCross() }
+            self?.crossStep()
         }
         tick()
+    }
+
+    /// The crossfade's volumes now: the old node down (at its own level), the new one up; done at the end.
+    /// Also on a new level (`setGain`), at once: till the next tick the old one would play at the new one's.
+    private func crossStep() {
+        guard let old = tail else { return }
+        let passed = Date().timeIntervalSince(crossStart)
+        let out = min(1, passed / max(0.1, crossOut))
+        let into = min(1, passed / max(0.05, crossIn))
+        old.volume = min(1, tailGain / max(gain, 0.0001)) * Float(cos(out * .pi / 2))
+        node.volume = Float(sin(into * .pi / 2))
+        if out >= 1 { endCross() }
     }
 
     /// A crossfade still running is done now: the old track stops, the new one at full volume.
@@ -824,6 +834,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         let value = max(0, Float(call.getDouble("value") ?? 1))
         DispatchQueue.main.async {
             self.gain = value
+            self.crossStep()
             self.engine.mainMixerNode.outputVolume = min(1, value)
             self.lift.globalGain = value > 1 ? min(24, 20 * log10(value)) : 0
             call.resolve()
