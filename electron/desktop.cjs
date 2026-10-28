@@ -1,11 +1,39 @@
 // Desktop shell around the main window: remembered size and position, taskbar
 // thumbnail buttons, the tray, and playback commands sent back to the page.
-const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, screen } = require('electron');
+const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, screen, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const discord = require('./discord.cjs');
 
 const asset = (name) => path.join(__dirname, 'assets', name);
+
+/**
+ * A window with Oni's bridge (preload.cjs) keeps to Oni's page, and only web addresses go to the
+ * browser: another page in the window would have the bridge, and Windows opens a file:// link or
+ * another program's own (ms-settings:, …) as well, so a link in a description could start a program.
+ */
+function keepHome(contents) {
+  const outside = (url) => /^https?:\/\//i.test(url) && void shell.openExternal(url);
+  contents.setWindowOpenHandler(({ url }) => {
+    outside(url);
+    return { action: 'deny' };
+  });
+  // Oni's own page (a #hash, or the dev server's other addresses) may be shown again; nothing else.
+  const home = (url) => {
+    try {
+      const [to, now] = [new URL(url), new URL(contents.getURL())];
+      return to.protocol === now.protocol && to.host === now.host && (to.protocol !== 'file:' || to.pathname === now.pathname);
+    } catch {
+      return false;
+    }
+  };
+  contents.on('will-navigate', (e, url) => {
+    if (home(url)) return;
+    e.preventDefault();
+    outside(url);
+  });
+}
+
 const prefsFile = () => path.join(app.getPath('userData'), 'shell.json');
 
 /** { bounds, maximized, closeToTray, discord } */
@@ -213,6 +241,7 @@ function openMini() {
     icon: asset('icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, backgroundThrottling: false },
   });
+  keepHome(mini.webContents);
   if (process.env.VITE_DEV_URL) mini.loadURL(`${process.env.VITE_DEV_URL}#mini`);
   else mini.loadFile(path.join(__dirname, '..', 'dist', 'index.html'), { hash: 'mini' });
   const self = mini;
@@ -300,4 +329,4 @@ ipcMain.on('wave:shell:close-to-tray', (_e, enabled) => {
 /** For tests: whether the tray icon is there. */
 const hasTray = () => Boolean(tray);
 
-module.exports = { windowBounds, attachWindow, showWindow, openMini, asset, setLogger, hasTray, startedHidden };
+module.exports = { windowBounds, keepHome, attachWindow, showWindow, openMini, asset, setLogger, hasTray, startedHidden };

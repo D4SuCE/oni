@@ -229,10 +229,7 @@ function createWindow() {
     if (details.reason !== 'clean-exit' && !mainWindow.isDestroyed()) mainWindow.webContents.reload();
   });
   mainWindow.on('unresponsive', () => writeLog('warn', 'renderer', 'window is not responding'));
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
-    return { action: 'deny' };
-  });
+  desktop.keepHome(mainWindow.webContents);
   if (process.env.VITE_DEV_URL) mainWindow.loadURL(process.env.VITE_DEV_URL);
   else mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
 }
