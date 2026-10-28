@@ -88,6 +88,8 @@ await step('smart playlists: a section of their own on Home; "Liked this month" 
   });
   await month.click();
   await page.waitForSelector('.track-row');
+  // A long list is drawn in parts: on GitHub's slower machine 40 of 83 rows were counted (28.10.2026).
+  await page.waitForFunction((n) => document.querySelectorAll('.track-row').length >= n - 1, want, { timeout: 15000 }).catch(() => {});
   const kicker = await page.locator('.kicker').first().innerText();
   const meta = await page.locator('.page-meta').innerText();
   const rows = await page.locator('.track-row').count();
