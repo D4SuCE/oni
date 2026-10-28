@@ -1,5 +1,6 @@
 # A "Release x.y.z" commit on main is released without a tag pushed by hand: the cloud autopilot
-# cannot push tags (25.10.2026: 1.16.1 waited in main). Here the tag vX.Y.Z is made for the version in
+# cannot push tags (25.10.2026: 1.16.1 waited in main), and since 28.10.2026 main takes only PRs, so
+# this is the way every release goes. Here the tag vX.Y.Z is made for the version in
 # package.json, and the Windows and iPhone builds are started on it. A tag made with GITHUB_TOKEN
 # starts no workflow by itself, so both are started by hand (workflow_dispatch is the exception).
 # A tag pushed from the PC as before (CLAUDE.md, "Выпуск") starts them by itself; then nothing is done here.
@@ -28,7 +29,8 @@ jobs:
         run: |
           version=$(node -p "require('./package.json').version")
           tag="v$version"
-          title=$(head -1 <<<"$MESSAGE")
+          # A squash-merged PR "Release x.y.z" comes as "Release x.y.z (#N)".
+          title=$(head -1 <<<"$MESSAGE" | sed -E 's/ \(#[0-9]+\)$//')
           if [ "$title" != "Release $version" ]; then
             echo "The commit says \"$title\", package.json $version: not released"
             exit 1

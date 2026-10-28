@@ -9,6 +9,13 @@
 новую версию официального приложения Яндекс Музыки и прогнал тесты API на аккаунте. Если он нашёл, что
 разобрать, на ветке `ym-watch` лежит `pending.md` (отчёт), а в GitHub открыта задача с меткой `ym-watch`.
 
+**В `main` писать напрямую нельзя** (правило репозитория с 28.10.2026) — только PR, и только с зелёной проверкой
+`check`. `gh pr …` здесь не работает (GraphQL), поэтому через REST:
+- открыть: `gh api repos/D4SuCE/oni/pulls -f title="…" -f head=<ветка> -f base=main -f body="…" --jq .number`;
+- дождаться `check`: `gh run list --workflow check.yml --branch <ветка> --limit 1`, `gh run watch <id> --exit-status`;
+- слить: `gh api -X PUT repos/D4SuCE/oni/pulls/<N>/merge -f merge_method=squash` (ветку GitHub удалит сам).
+Не дал открыть или слить PR — ветку оставь в `origin` и напиши об этом в задаче сторожа.
+
 ## 0. Есть ли что разбирать
 
 ```
@@ -50,23 +57,24 @@ git fetch origin ym-watch && git show origin/ym-watch:pending.md
 3. `git push -u origin <ветка>`; на GitHub: `gh workflow run e2e.yml --ref <ветка>` (Windows) и, если тронут
    код iPhone или общий плеер, `gh workflow run ios.yml --ref <ветка>`; дождись: `gh run watch <id> --exit-status`.
    Что-то красное — разберись; не выходит — пункт 4.
-4. Всё зелёное: `git fetch && git rebase origin/main`, снова `npm run check`, `git checkout main &&
-   git merge --ff-only <ветка> && git push`.
-5. Выпуск PATCH по разделу «Выпуск» в `CLAUDE.md`: раздел в `CHANGELOG.md`, `npm version x.y.z
-   --no-git-tag-version`, коммит «Release x.y.z», `git tag -a vx.y.z -m "Oni x.y.z"`, `git push --follow-tags`.
-   Метка сама запускает `release.yml` (Windows; он же прикладывает IPA и `sidestore.json`) и `ios.yml`
-   (iPhone): дождись обоих (`gh run list --workflow release.yml --limit 1`, `gh run watch <id> --exit-status`).
+4. Всё зелёное: `git fetch && git rebase origin/main`, снова `npm run check`, `git push`, PR в `main` и слить
+   (выше, «В `main` писать напрямую нельзя»).
+5. Выпуск PATCH по разделу «Выпуск» в `CLAUDE.md`: ветка `release/x.y.z` от свежего `origin/main`, раздел
+   в `CHANGELOG.md`, `npm version x.y.z --no-git-tag-version`, коммит «Release x.y.z», PR с тем же названием —
+   слить. Метку `vx.y.z` ставит `tag-release.yml` и запускает `release.yml` (Windows; он же прикладывает IPA
+   и `sidestore.json`) и `ios.yml` (iPhone): дождись `tag-release`, потом обоих (`gh run list --workflow release.yml --limit 1`, `gh run watch <id> --exit-status`).
    В `oni-releases` отсюда не заглянуть — итог выпуска виден по `release.yml` (строка «released vx.y.z»).
 6. ROADMAP: пункт с доводами и что сделано; сводка в начале.
 
 ## 3. Если интересно — не встраивать
 
 Допиши в `ROADMAP.md`, раздел «Идеи от сторожа»: дата, версия Яндекса, что это, как выглядело бы в Oni,
-сложность. Коммит в `main` («Watch: ideas from Yandex Music x.y.z»), `git push`.
+сложность. Записи в ROADMAP (идеи и журнал ниже) — одной веткой `watch/<дата>` и одним PR «Watch: …» в конце запуска.
 
 ## 4. Всегда в конце
 
-1. `ROADMAP.md`, «Журнал сторожа»: дата, версия, итог одной фразой (коммит в `main`, `git push`).
+1. `ROADMAP.md`, «Журнал сторожа»: дата, версия, итог одной фразой — в ветке `watch/<дата>` (вместе с идеями),
+   PR «Watch: <дата>» и слить.
 2. Сообщи пользователю комментарием к задаче сторожа — что нашёл, что сделал (выпущено x.y.z — с доводами;
    интересное — «скажи, если встроить»; ничего) — и закрой её. Комментарий приходит ему письмом.
    Задача: `gh api 'repos/D4SuCE/oni/issues?labels=ym-watch&state=open' --jq '.[0].number'`;
