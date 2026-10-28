@@ -1,7 +1,7 @@
 {
   "name": "wave-player",
   "productName": "Oni",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "private": true,
   "description": "ÐÐµÐ¾Ñ„Ð¸Ñ†Ð¸Ð°Ð»ÑŒÐ½Ñ‹Ð¹ ÐºÐ»Ð¸ÐµÐ½Ñ‚ Ð¯Ð½Ð´ÐµÐºÑ ÐœÑƒÐ·Ñ‹ÐºÐ¸ Ñ ÑÐ¾Ð±ÑÑ‚Ð²ÐµÐ½Ð½Ñ‹Ð¼ Ð¸Ð½Ñ‚ÐµÑ€Ñ„ÐµÐ¹ÑÐ¾Ð¼",
   "main": "electron/main.cjs",
