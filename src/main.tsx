@@ -20,5 +20,7 @@ else
   void loadStorage().then(async () => {
     await import('./boot.tsx');
     // iOS simulator runs in CI (Debug builds only set the flag): walk the main path once.
-    if ((window as { __oniTest?: boolean }).__oniTest) import('./ios-smoke.ts').then((m) => m.runSmoke());
+    // The screens for the releases page instead (screens.yml).
+    if ((window as { __oniScreens?: boolean }).__oniScreens) import('./ios-screens.ts').then((m) => m.runScreens());
+    else if ((window as { __oniTest?: boolean }).__oniTest) import('./ios-smoke.ts').then((m) => m.runSmoke());
   });

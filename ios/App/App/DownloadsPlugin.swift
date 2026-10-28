@@ -304,6 +304,10 @@ public class DownloadsPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDownloadDel
             me.labels = ["progress": call.getString("progress") ?? "", "done": call.getString("done") ?? "", "stale": call.getString("stale") ?? ""]
             if me.title.isEmpty { me.title = call.getString("title") ?? "" }
         }
+        #if DEBUG
+        // The screens for the releases page (screens.yml): no permission alert over them.
+        if ProcessInfo.processInfo.environment["ONI_SCREENS"] == "1" { return call.resolve(["granted": false]) }
+        #endif
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { granted, _ in
             call.resolve(["granted": granted])
         }

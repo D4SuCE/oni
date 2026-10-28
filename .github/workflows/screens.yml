@@ -1,0 +1,78 @@
+# Pictures of the iPhone's main screens for the releases page (D4SuCE/oni-releases): the biggest
+# iPhone the cloud Mac has (a Pro Max, Dynamic Island and all), a clean status bar (9:41, full
+# battery). The Debug build walks the screens itself (src/ios-screens.ts); each time it leaves
+# Documents/shot-<name>.png, the whole screen is taken from outside. Started by hand; the pictures
+# are framed with scripts/iphone-frame.py.
+name: screens
+
+on:
+  workflow_dispatch:
+
+jobs:
+  screens:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Web build and sync
+        run: |
+          npx vite build
+          npx cap sync ios
+      - name: Simulator build
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/sim CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= build | tail -20
+      - name: Screens
+        run: |
+          mkdir -p screens
+          # the newest iOS, its biggest Pro Max (the highest number)
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c "
+          import json, re, sys
+          devices = json.load(sys.stdin)['devices']
+          runtime = sorted((r for r in devices if 'iOS' in r and any('Pro Max' in d['name'] for d in devices[r])), key=lambda r: [int(x) for x in re.findall(r'\d+', r)])[-1]
+          d = max((d for d in devices[runtime] if 'Pro Max' in d['name']), key=lambda d: int(re.findall(r'\d+', d['name'])[0]))
+          print(d['udid'], d['name'], runtime, file=sys.stderr)
+          print(d['udid'])")
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl status_bar "$DEVICE" override --time 9:41 --dataNetwork wifi --wifiMode active --wifiBars 3 \
+            --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
+          xcrun simctl ui "$DEVICE" appearance dark
+          xcrun simctl install "$DEVICE" build/sim/Build/Products/Debug-iphonesimulator/App.app
+          SIMCTL_CHILD_ONI_TEST_TOKEN="$ONI_TEST_TOKEN" SIMCTL_CHILD_ONI_SCREENS=1 \
+            xcrun simctl launch --console-pty "$DEVICE" local.wave.player > console.log 2>&1 &
+          APP=$!
+          DOCS="$(xcrun simctl get_app_container "$DEVICE" local.wave.player data)/Documents"
+          # each new picture the app leaves: the whole screen, now, while the app holds still
+          for i in $(seq 1 1200); do
+            for f in "$DOCS"/shot-*.png; do
+              [ -e "$f" ] || continue
+              name=$(basename "$f" .png); name=${name#shot-}
+              [ -e "screens/$name.png" ] && continue
+              sleep 0.5
+              xcrun simctl io "$DEVICE" screenshot --mask=alpha "screens/$name.png" && echo "screen $name"
+            done
+            grep -q "SCREENS done" console.log && break
+            sleep 0.5
+          done
+          kill $APP || true
+          # the Debug bridge logs the token: only the screens' own lines leave the machine
+          grep "SCREENS" console.log > screens/screens.log || true
+          cat screens/screens.log
+          ls -la screens
+        env:
+          ONI_TEST_TOKEN: ${{ secrets.YANDEX_MUSIC_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screens
+          path: screens/

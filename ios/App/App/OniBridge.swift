@@ -29,7 +29,9 @@ class OniViewController: CAPBridgeViewController {
         // the smoke run in src/ios-smoke.ts). Debug builds only: the phone IPA is Release.
         if let token = ProcessInfo.processInfo.environment["ONI_TEST_TOKEN"], !token.isEmpty {
             _ = KeychainPlugin.store(key: KeychainPlugin.tokenKey, value: token)
-            let flag = WKUserScript(source: "window.__oniTest = true;", injectionTime: .atDocumentStart, forMainFrameOnly: true)
+            // ONI_SCREENS: the screens for the releases page instead of the smoke run (screens.yml).
+            let screens = ProcessInfo.processInfo.environment["ONI_SCREENS"] == "1"
+            let flag = WKUserScript(source: screens ? "window.__oniTest = true; window.__oniScreens = true;" : "window.__oniTest = true;", injectionTime: .atDocumentStart, forMainFrameOnly: true)
             webView?.configuration.userContentController.addUserScript(flag)
         }
         #endif
