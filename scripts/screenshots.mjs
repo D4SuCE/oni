@@ -36,8 +36,9 @@ const closeFullscreen = async () => {
   await page.waitForTimeout(600);
 };
 
-// Home with the "For you" shelf filled in.
+// Home with the "For you" shelf filled in, all of it ("Собираю подборки…" gone; ~25 s).
 await page.waitForSelector('[data-testid="mix-card"]', { timeout: 60000 });
+await page.waitForFunction(() => !document.body.innerText.includes('Собираю'), null, { timeout: 90000 }).catch(() => {});
 await settle();
 await shot('home');
 
@@ -55,7 +56,18 @@ await page.click('[data-testid="nav-home"]');
 await page.click('[data-testid="wave-play"]');
 await page.waitForFunction(() => !window.__wave.audio.paused && window.__wave.audio.currentTime > 1, null, { timeout: 30000 });
 await page.click('.pb-cover');
+// a track with words in time, for the lyrics (a few along the wave)
+for (let i = 0; i < 10; i++) {
+  await page.click('[data-testid="tab-lyrics"]');
+  if (await page.waitForSelector('.np-side .lyric', { timeout: 12000 }).catch(() => null)) break;
+  await page.locator('.np-stage [data-testid="next"]').click();
+  await page.waitForFunction(() => !window.__wave.audio.paused && window.__wave.audio.currentTime > 1, null, { timeout: 30000 });
+}
 await settle(3000);
+// The words in time, beside the cover.
+await shot('lyrics');
+await page.locator('.np-side .tab').first().click();
+await settle(1500);
 await shot('now-playing');
 await closeFullscreen();
 
@@ -77,6 +89,20 @@ await shot('sound');
 await page.keyboard.press('Escape');
 await page.mouse.click(700, 300);
 await page.waitForTimeout(500);
+
+// A smart playlist (the first: liked this month).
+await page.click('[data-testid="nav-home"]');
+await page.locator('[data-testid="smart-playlists"] [data-testid="mix-card"], [data-testid="smart-playlists"] .card').first().click();
+await page.waitForSelector('.track-row', { timeout: 30000 });
+await settle();
+await shot('smart');
+
+// History: what the account played, on all devices.
+await page.click('[data-testid="nav-history"]');
+await page.click('[data-testid="history-yandex"]');
+await page.waitForSelector('.history-group .track-row', { timeout: 30000 });
+await settle();
+await shot('history');
 
 // The artist of the playing track.
 await page.evaluate(() => {

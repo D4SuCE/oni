@@ -899,6 +899,18 @@ html.acrylic .backdrop {
   background: linear-gradient(180deg, var(--accent-hi), var(--accent) 70%, var(--accent-deep));
   vertical-align: -0.06em;
 }
+/* The iPhone: a title keeps its line, a hint beside it (Smart playlists: "made by themselves from
+   your music") goes under it — beside it the title broke in two (the README's pictures, 28.10.2026). */
+html.ios .section-head {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+html.ios .section-head h2 {
+  white-space: nowrap;
+}
+html.ios .section-head > .muted {
+  flex-basis: 100%;
+}
 
 .shelf {
   display: grid;

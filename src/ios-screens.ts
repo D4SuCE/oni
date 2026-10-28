@@ -31,9 +31,13 @@ const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.qu
 /** The screen as it is: the runner takes it from outside once the file comes, this holds still. */
 async function screen(name: string) {
   await sleep(1800);
+  // no account name in the greeting
+  const greeting = $('.greeting');
+  if (greeting) greeting.textContent = greeting.textContent!.split(',')[0];
   await OniPlayer.snapshot({ name }).catch((e) => console.log(`SCREENS ${name} failed: ${e}`));
   console.log(`SCREENS ${name}`);
-  await sleep(5000);
+  // the runner's picture from outside takes its time (up to ~20 s on the cloud Mac)
+  await sleep(25000);
 }
 
 /** Back to a page with nothing open over it. */
@@ -100,7 +104,10 @@ export async function runScreens() {
     }
     await screen('search');
 
-    await go({ name: 'history' }, '.track-row');
+    // what the account played, all devices (this new phone has played one track)
+    await go({ name: 'history' }, '[data-testid="history-yandex"]');
+    $('[data-testid="history-yandex"]')?.click();
+    await until(() => document.querySelectorAll('.history-group .track-row').length > 3, 30000);
     await screen('history');
 
     // Sound: the equalizer on, the "Bass" preset (over the mix's page)
