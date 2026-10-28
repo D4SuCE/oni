@@ -1,8 +1,9 @@
 // Pictures of the iPhone's main screens for the releases page (.github/workflows/screens.yml).
 // The Debug build signs in with the runner's token and sets window.__oniScreens; this walks the
-// screens, and on each one leaves Documents/shot-<name>.png (OniPlayer.snapshot) — the runner sees
-// the file come and takes the whole screen from outside (status bar and Dynamic Island with it),
-// while this holds still. "SCREENS done" ends it. Nothing is sent to the account (test mode).
+// screens and leaves each as Documents/shot-<name>.png (OniPlayer.snapshot: Oni's window, exact).
+// A picture taken from outside (simctl, with the status bar) came late and at random on the cloud
+// Mac — another screen's under the name — so the status bar and the Dynamic Island are laid over
+// later (scripts/readme-art.mjs, design/iphone-statusbar.png). Nothing is sent to the account.
 
 import { OniPlayer } from './player/nativeAudio.ts';
 import { next } from './player/player.ts';
@@ -28,7 +29,7 @@ async function until(what: () => unknown, timeout: number) {
 
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.querySelector<T>(selector);
 
-/** The screen as it is: the runner takes it from outside once the file comes, this holds still. */
+/** The screen as it is now. */
 async function screen(name: string) {
   await sleep(1800);
   // no account name in the greeting
@@ -36,8 +37,6 @@ async function screen(name: string) {
   if (greeting) greeting.textContent = greeting.textContent!.split(',')[0];
   await OniPlayer.snapshot({ name }).catch((e) => console.log(`SCREENS ${name} failed: ${e}`));
   console.log(`SCREENS ${name}`);
-  // the runner's picture from outside takes its time (up to ~20 s on the cloud Mac)
-  await sleep(25000);
 }
 
 /** Back to a page with nothing open over it. */
@@ -59,30 +58,29 @@ export async function runScreens() {
     await until(() => document.querySelectorAll('[data-testid="mix-card"]').length > 3, 60000);
     $('[data-testid="wave-play"]')?.click();
     await until(() => !wave().audio.paused && wave().audio.currentTime > 1, 60000);
-    // a track with words, for the lyrics (a few tries along the wave)
-    for (let i = 0; i < 6; i++) {
-      wave().useApp.setState({ nowPlayingOpen: true });
-      const button = await until(() => $('[data-testid="np-lyrics"]'), 10000);
+    // a track with words in time, for the lyrics (a few along the wave; "Text unavailable" on some)
+    wave().useApp.setState({ nowPlayingOpen: true });
+    await until(() => $('[data-testid="np-lyrics"]'), 10000);
+    for (let i = 0; i < 10; i++) {
       await sleep(1500);
-      if (button && !$('[data-testid="np-lyrics"]')!.classList.contains('dim')) break;
+      $('[data-testid="np-lyrics"]')?.click();
+      if (await until(() => $('[data-testid="np-sung"] .lyric'), 12000)) break;
+      $('[data-testid="np-lyrics"]')?.click();
       void next(true);
       await until(() => !wave().audio.paused && wave().audio.currentTime > 1, 30000);
     }
+    // the lyrics now, while they are there; the cover after
+    await sleep(3000);
+    await screen('lyrics');
+    $('[data-testid="np-lyrics"]')?.click();
+    await sleep(1000);
+    await screen('now-playing');
     closeAll();
     // Home: My Wave and the shelves under it, all filled in
     await until(() => !document.body.innerText.includes('Собираю'), 60000);
     await sleep(2500);
     await screen('home');
 
-    wave().useApp.setState({ nowPlayingOpen: true });
-    await until(() => $('.nowplaying'), 5000);
-    await screen('now-playing');
-
-    $('[data-testid="np-lyrics"]')?.click();
-    await until(() => $('[data-testid="np-sung"] .lyric, [data-testid="np-sung"] .lyrics-plain'), 20000);
-    await sleep(3000);
-    await screen('lyrics');
-    $('[data-testid="np-lyrics"]')?.click();
 
     // A mix from "For you" (the first card: the daylist)
     await go({ name: 'home' }, '[data-testid="mix-card"]');
