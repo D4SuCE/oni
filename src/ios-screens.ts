@@ -86,6 +86,9 @@ export async function runScreens() {
     await go({ name: 'home' }, '[data-testid="mix-card"]');
     $('[data-testid="mix-card"]')?.click();
     await until(() => document.querySelectorAll('.track-row').length > 5, 30000);
+    // the rows' covers drawn (they were empty squares)
+    await until(() => [...document.querySelectorAll<HTMLImageElement>('.track-row img')].slice(0, 8).every((i) => i.complete && i.naturalWidth > 0), 15000);
+    await sleep(1500);
     await screen('mix');
 
     await go({ name: 'library', tab: 'playlists' }, '.card, .track-row');
@@ -108,8 +111,8 @@ export async function runScreens() {
     await until(() => document.querySelectorAll('.history-group .track-row').length > 3, 30000);
     await screen('history');
 
-    // Sound: the equalizer on, the "Bass" preset (over the mix's page)
-    await go({ name: 'home' }, '.wave-hero');
+    // Sound: the equalizer on, the "Bass" preset (over Collection: home's greeting has a name in it)
+    await go({ name: 'library', tab: 'playlists' }, '.card, .track-row');
     wave().useApp.setState({ soundOpen: true });
     await until(() => $('[data-testid="sound-panel"]'), 5000);
     const eq = $<HTMLInputElement>('[data-testid="eq-toggle"]');

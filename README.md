@@ -1,10 +1,23 @@
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/D4SuCE/oni-releases/main/assets/banner.jpg" alt="Oni — неофициальный клиент Яндекс Музыки для Windows и iPhone" width="100%">
+
+**[Скачать и посмотреть, что умеет →](https://github.com/D4SuCE/oni-releases)**
+
+</div>
+
 # Oni
 
-Неофициальный клиент Яндекс Музыки для Windows с собственным интерфейсом:
-«Моя волна» с фильтром повторов, поиск, коллекция, плейлисты, загрузка своих mp3,
-синхронный текст песен. Интерфейс на русском и английском.
+Неофициальный клиент Яндекс Музыки для Windows и iPhone в японском стиле: «Моя волна» с фильтром повторов
+и «Своя волна», подборки в духе Spotify, умные плейлисты, текст в такт, эквалайзер на 10 полос, скачивание
+и работа без сети, пульт и общая история ПК ↔ iPhone через Яндекс Диск. Интерфейс на русском и английском.
 
-Electron + React 19 + Vite + zustand. Не связан с Яндексом.
+Windows — Electron; iPhone — Capacitor и свой плеер на Swift (AVAudioEngine), ставится через SideStore.
+Общее — React 19 + Vite + zustand. Не связан с Яндексом.
+
+Установщики, IPA и описание с картинками — в [D4SuCE/oni-releases](https://github.com/D4SuCE/oni-releases);
+картинки для него — `npm run screenshots` (ПК), облачный прогон `screens.yml` (iPhone) и
+`node scripts/readme-art.mjs` (рамки, шапка, заголовки).
 
 ## Установка как обычной программы
 
@@ -82,13 +95,15 @@ npm run test:e2e   # UI-тест реального приложения (нуж
 ```
 
 На GitHub `npm run check` и сборка запускаются на каждый push
-(`.github/workflows/check.yml`); e2e — только локально.
+(`.github/workflows/check.yml`); e2e — локально или `gh workflow run e2e.yml`, iPhone на симуляторе —
+`gh workflow run ios.yml`.
 
 ## Устройство
 
 | Папка | Что внутри |
 | --- | --- |
 | `electron/` | main-процесс: окно, хранение токена, HTTP-запросы к Яндексу (без CORS) |
+| `ios/` | приложение для iPhone: плеер, скачивание, виджет, Siri (Swift) |
 | `src/api/` | клиент API Яндекс Музыки поверх абстрактного `Transport` |
 | `src/player/` | воспроизведение, очередь, Media Session |
 | `src/wave/` | «Моя волна»: фильтр повторов и история прослушиваний |
