@@ -12,7 +12,9 @@ export class DualAudio extends EventTarget {
   private active = 0;
   /** The volume asked for; a fade scales it per element. */
   private level = 1;
-  private fade: { from: HTMLAudioElement; to: HTMLAudioElement; start: number; ms: number; frame: number; done: () => void } | null = null;
+  /** `ms`: the old one's fade out; `inMs`: the new one's fade in; `fromLevel`: the old one's own
+   * volume, kept while it fades (the volume asked for from then on is the new track's). */
+  private fade: { from: HTMLAudioElement; to: HTMLAudioElement; start: number; ms: number; inMs: number; fromLevel: number; frame: number; done: () => void } | null = null;
 
   constructor() {
     super();
@@ -46,11 +48,14 @@ export class DualAudio extends EventTarget {
 
   /**
    * Starts `url` on the other element and crosses over to it in `ms`. Resolves when it plays;
-   * `ended` is called once the old one is silent (for freeing what it played).
+   * `ended` is called once the old one is silent (for freeing what it played). `inMs`: the new
+   * one comes in this fast (the old one already quiet: nothing to blend with, see player.ts);
+   * `fromLevel`: the old one's volume as it fades (its own level, not the new track's).
    */
-  async crossfade(url: string, ms: number, ended: () => void = () => {}, startAt = 0) {
+  async crossfade(url: string, ms: number, ended: () => void = () => {}, startAt = 0, { inMs = ms, fromLevel }: { inMs?: number; fromLevel?: number } = {}) {
     this.endFade();
     const from = this.el;
+    const fromAt = Math.max(0, Math.min(1, fromLevel ?? from.volume));
     const to = this.other;
     to.src = url;
     // Past its silence at the start (the smart crossfade, silence.ts).
@@ -68,14 +73,16 @@ export class DualAudio extends EventTarget {
     const step = () => {
       const f = this.fade;
       if (!f) return;
-      const p = Math.min(1, (performance.now() - f.start) / f.ms);
+      const passed = performance.now() - f.start;
+      const out = Math.min(1, passed / f.ms);
+      const into = Math.min(1, passed / f.inMs);
       // Equal power: the sum stays as loud through the middle.
-      f.from.volume = this.level * Math.cos((p * Math.PI) / 2);
-      f.to.volume = this.level * Math.sin((p * Math.PI) / 2);
-      if (p >= 1) this.endFade();
+      f.from.volume = f.fromLevel * Math.cos((out * Math.PI) / 2);
+      f.to.volume = this.level * Math.sin((into * Math.PI) / 2);
+      if (out >= 1 && into >= 1) this.endFade();
       else f.frame = requestAnimationFrame(step);
     };
-    this.fade = { from, to, start: performance.now(), ms, frame: requestAnimationFrame(step), done: ended };
+    this.fade = { from, to, start: performance.now(), ms, inMs: Math.max(1, Math.min(ms, inMs)), fromLevel: fromAt, frame: requestAnimationFrame(step), done: ended };
   }
 
   // ------------------------------------------------- the surface of one element

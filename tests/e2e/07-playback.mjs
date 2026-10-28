@@ -61,6 +61,69 @@ await step('crossfade: the next track starts before this one ends, both sound fo
   }
 });
 
+await step("crossfade levels: the old track fades at its own level (not lifted to the next one's), the next one comes in at once after a fade-out", async () => {
+  // The user, 28.10.2026: "the track is quieter at first, then sharply louder after 1–2 s".
+  await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
+  await page.locator('[data-testid="crossfade"]').fill('3');
+  try {
+    const got = await page.evaluate(async () => {
+      const w = window.__wave;
+      const a = w.audio;
+      // A loud one turned down 4 dB, then a quiet one lifted 1 dB (the lift both elements share).
+      const chart = (await w.api.chart()).filter((t) => t.available !== false && t.durationMs > 60000).slice(0, 2);
+      const tracks = [{ ...chart[0], r128: { i: -4, tp: -1 } }, { ...chart[1], r128: { i: -9, tp: -3 } }];
+      await w.playTracks(tracks, 0, 'e2e crossfade levels');
+      const until = async (what, ms) => {
+        const end = performance.now() + ms;
+        while (!what() && performance.now() < end) await new Promise((r) => setTimeout(r, 20));
+        return what();
+      };
+      await until(() => !a.paused && a.currentTime > 0.3 && Number.isFinite(a.duration), 15000);
+      const before = a.el.volume;
+      const old = a.el;
+      a.currentTime = a.duration - 4;
+      let highest = 0;
+      await until(() => {
+        if (!old.paused) highest = Math.max(highest, old.volume);
+        return w.usePlayer.getState().index === 1 && a.el !== old && old.paused;
+      }, 15000);
+      a.pause();
+
+      // Two made-up tracks: the old one silent (its music over), so the next one has nothing to blend with.
+      const wav = (seconds, tone) => {
+        const rate = 22050;
+        const n = rate * seconds;
+        const v = new DataView(new ArrayBuffer(44 + n * 2));
+        const text = (o, t) => [...t].forEach((ch, k) => v.setUint8(o + k, ch.charCodeAt(0)));
+        text(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); text(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+        v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); text(36, 'data'); v.setUint32(40, n * 2, true);
+        for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, tone ? Math.round(12000 * Math.sin((2 * Math.PI * 440 * i) / rate)) : 0, true);
+        return URL.createObjectURL(new Blob([v.buffer], { type: 'audio/wav' }));
+      };
+      const [quiet, next] = [wav(8, false), wav(8, true)];
+      a.src = quiet;
+      a.volume = 0.5;
+      await a.play();
+      const from = a.el;
+      await a.crossfade(next, 3000, () => {}, 0, { inMs: 300, fromLevel: 0.5 });
+      await new Promise((r) => setTimeout(r, 700));
+      const quick = { to: a.el.volume, from: from.volume, fromPlaying: !from.paused };
+      a.pause();
+      a.volume = w.usePlayer.getState().volume;
+      URL.revokeObjectURL(quiet);
+      URL.revokeObjectURL(next);
+      return { before, highest, quick };
+    });
+    if (got.highest > got.before + 0.005) throw new Error(`the old track got louder as it faded: ${JSON.stringify(got)}`);
+    // 0.7 s into a 3 s crossfade: the new one is in already, the old one still fading.
+    if (Math.abs(got.quick.to - 0.5) > 0.01 || !got.quick.fromPlaying || got.quick.from > 0.5 || got.quick.from < 0.3) throw new Error(`after a fade-out: ${JSON.stringify(got)}`);
+  } finally {
+    await page.locator('[data-testid="crossfade"]').fill('0');
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.evaluate(() => window.__wave.audio.pause());
+  }
+});
+
 await step("smart crossfade: the next track's silence at its start is found and skipped (a made-up track: 1.5 s silence, then a tone)", async () => {
   // The user's pick, 24.10.2026: the next track comes in with its first sound, not with silence.
   const got = await page.evaluate(async () => {
