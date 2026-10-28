@@ -104,6 +104,10 @@ await step("shared uploads: a playlist's own uploads go to a folder on Disk open
     await page.click('[data-testid="shared-play"]');
     await waitPlaying(at + 0.3, 20000);
     if ((await page.evaluate(() => window.__wave.usePlayer.getState().index)) !== 0) throw new Error('Play started another track');
+    // a track plays from its row itself, as in any list: a double click here, a tap on the iPhone (a
+    // row that took no tap brought iOS's loupe up on a double tap — the user, 28.10.2026)
+    await page.locator('[data-testid="shared-row"]').nth(1).locator('.import-title').dblclick();
+    await page.waitForFunction(() => window.__wave.usePlayer.getState().index === 1, null, { timeout: 10000 });
     await page.evaluate(() => window.__wave.audio.pause());
     // "Download" stopped by a press while it runs: what came is kept, the rest is not fetched (removed again)
     const ids = pl.tracks.map((x) => `share-${x.id}`);

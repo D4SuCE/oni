@@ -18,6 +18,7 @@ import { asTrack, readShared } from '../share/shared.ts';
 import { createPlaylist, errorText, isOwn, toast, useApp } from '../store.ts';
 import { downloadShared, useOfflineVersion } from '../ui/offline.ts';
 import { cx, fmtTime, fmtTotal, useAsync } from '../ui/util.ts';
+import { isIos } from '../ui/platform.ts';
 
 /** The tracks being fetched now, for their row's spinner. */
 const useFetching = create<Record<string, true>>(() => ({}));
@@ -175,7 +176,15 @@ export function SharedView({ link, owner }: { link: string; owner?: string }) {
             {tracks.map((x, i) => {
               const active = current === x.id;
               return (
-                <div key={x.id} className={cx('shared-row', active && 'playing')} data-testid="shared-row">
+                // the row plays its track, as in any list: a tap on the iPhone (a row that took no tap
+                // brought iOS's loupe up on a double tap, the user, 28.10.2026), a double click here
+                <div
+                  key={x.id}
+                  className={cx('shared-row', active && 'playing')}
+                  data-testid="shared-row"
+                  onDoubleClick={isIos ? undefined : (e) => !(e.target as Element).closest('button, a') && (active ? toggle() : play(i))}
+                  onClick={isIos ? (e) => !(e.target as Element).closest('button, a') && (active ? toggle() : play(i)) : undefined}
+                >
                   {/* playing: the bars, as a track list shows them (Pause under the pointer) */}
                   <button className="icon-btn shared-row-play" onClick={() => (active ? toggle() : play(i))} title={active && playing ? t.player.pause : t.common.play}>
                     {active && playing ? (
