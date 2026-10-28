@@ -217,7 +217,7 @@ export function PlayerBar() {
   return (
     <>
       {/* On the iPhone the whole bar opens Now Playing (its buttons keep their own job). */}
-      <footer ref={bar} className="playerbar glass" onClick={isIos ? (e) => track && !(e.target as Element).closest('button, a, input') && openNow() : undefined}>
+      <footer ref={bar} className="playerbar glass" data-track={track?.id} onClick={isIos ? (e) => track && !(e.target as Element).closest('button, a, input') && openNow() : undefined}>
         {/* The playing track has the same menu as in any list: share it, add it to a playlist… even from the wave. */}
         <div className="pb-left" onContextMenu={(e) => track && openMenu(e, trackMenu(track))}>
           {track ? (

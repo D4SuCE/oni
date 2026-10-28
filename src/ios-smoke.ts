@@ -91,15 +91,19 @@ function noZoom() {
 function noLoupe() {
   const lyric = Object.assign(document.createElement('div'), { className: 'lyric', textContent: 'la' });
   const field = Object.assign(document.createElement('input'), { className: 'input' });
-  document.body.append(lyric, field);
+  // a disabled button lets a tap through (a friend's uploads: a downloaded track's tick)
+  const off = Object.assign(document.createElement('button'), { className: 'icon-btn', disabled: true });
+  document.body.append(lyric, field, off);
   const sample = [lyric, ...document.querySelectorAll('.page-title, .track-row, .card, .nav-item, button')].slice(0, 30) as HTMLElement[];
   const css = (el: Element) => getComputedStyle(el) as CSSStyleDeclaration & { webkitUserSelect: string; webkitTouchCallout?: string };
   const selectable = sample.filter((el) => css(el).webkitUserSelect !== 'none' || (css(el).webkitTouchCallout ?? 'none') !== 'none');
   const fieldOk = css(field).webkitUserSelect !== 'none';
   const touch = getComputedStyle(document.body).touchAction;
+  const through = getComputedStyle(off).pointerEvents === 'none';
   lyric.remove();
   field.remove();
-  report('no-loupe', !selectable.length && fieldOk && touch === 'manipulation', `${sample.length} checked, selectable: ${selectable.map((el) => el.className).join(',') || 'none'}, field ${fieldOk ? 'editable' : 'not selectable'}, body ${touch}`);
+  off.remove();
+  report('no-loupe', !selectable.length && fieldOk && through && touch === 'manipulation', `${sample.length} checked, selectable: ${selectable.map((el) => el.className).join(',') || 'none'}, field ${fieldOk ? 'editable' : 'not selectable'}, body ${touch}, a disabled button ${through ? 'lets taps through' : 'takes them'}`);
 }
 
 /** Now Playing on a phone: the collapse button below the status bar (taps up there belong to
@@ -820,8 +824,16 @@ async function swipeTrack() {
     const peer = document.querySelector<HTMLElement>(`.pb-peer[data-side="${xs[1] < xs[0] ? 'next' : 'prev'}"]`);
     peers.push(Boolean(peer && peer.style.visibility === 'visible' && Math.abs(peer.getBoundingClientRect().left - bar.getBoundingClientRect().left) < bar.clientWidth + 20));
     if (hold) await picture('carousel');
+    const at = shift();
     target.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [touch(xs[xs.length - 1])], bubbles: true, cancelable: true }));
+    // let go halfway, the cards go on the way the finger went, not back through the other neighbour
+    // (the user, 28.10.2026: it jumped to the previous track's card, then to the next one's)
+    await sleep(80);
+    onward.push(Math.sign(shift() - at) === Math.sign(xs[xs.length - 1] - xs[0]));
   };
+  // where the bar is now, mid-slide too
+  const shift = () => new DOMMatrix(getComputedStyle(bar).transform).m41;
+  const onward: boolean[] = [];
   const peers: boolean[] = [];
   const w = bar.clientWidth;
   await swipe([w * 0.8, w * 0.75, w * 0.6, w * 0.4], true);
@@ -829,7 +841,7 @@ async function swipeTrack() {
   await sleep(600);
   await swipe([w * 0.2, w * 0.25, w * 0.4, w * 0.6]);
   const back = await until(() => app.usePlayer.getState().index === index, 4000);
-  report('swipe-track', Boolean(forward) && Boolean(back) && peers.every(Boolean) && !document.querySelector('.nowplaying'), `${index} → ${forward ? index + 1 : '?'} → ${app.usePlayer.getState().index} of ${queue.length}; the neighbour's card beside it: ${peers.join(', ')}`);
+  report('swipe-track', Boolean(forward) && Boolean(back) && peers.every(Boolean) && onward.every(Boolean) && !document.querySelector('.nowplaying'), `${index} → ${forward ? index + 1 : '?'} → ${app.usePlayer.getState().index} of ${queue.length}; the neighbour's card beside it: ${peers.join(', ')}; on after letting go: ${onward.join(', ')}`);
 }
 
 /** Tabs by a swipe (src/ui/swipe.ts, useSwipeTabs; the user, 26.10.2026): Collection — left through

@@ -134,7 +134,8 @@ const CARD_GAP = 8;
  * its buttons appear). Left: the next; right: the previous. `peers()` gives the neighbours' cards
  * (`data-side` "prev" or "next"), placed beside the card when a swipe starts. Far enough (a quarter
  * of the card) or a quick flick turns, anything less springs back. A tap stays a tap (the bar opens
- * Now Playing, its buttons work); after a swipe the click that follows is swallowed.
+ * Now Playing, its buttons work); after a swipe the click that follows is swallowed. The card's
+ * `data-track` changes once it shows the new track: till then the neighbour stays in its place.
  */
 export function useSwipeTrack(ref: RefObject<HTMLElement | null>, peers: () => HTMLElement[], turn: (dir: 'next' | 'prev') => boolean, enabled = true) {
   useEffect(() => {
@@ -143,6 +144,13 @@ export function useSwipeTrack(ref: RefObject<HTMLElement | null>, peers: () => H
     let start: { x: number; y: number; t: number } | null = null;
     let swiping = false;
     let dx = 0;
+    // the finger's last moves, for its speed as it lets go
+    let trail: { x: number; t: number }[] = [];
+    // a turn under way (the cards sliding, the new track not shown yet): a new swipe waits
+    let busy = false;
+    let timers: number[] = [];
+    let watch: MutationObserver | null = null;
+    const later = (ms: number, fn: () => void) => void timers.push(window.setTimeout(fn, ms));
     const has = (side: 'next' | 'prev') => peers().some((p) => p.dataset.side === side);
     const place = (x: number, ms: number) => {
       for (const c of [el, ...peers()]) {
@@ -163,15 +171,17 @@ export function useSwipeTrack(ref: RefObject<HTMLElement | null>, peers: () => H
     };
     const down = (e: TouchEvent) => {
       const touch = e.touches[0];
-      start = e.touches.length === 1 && !(e.target as Element).closest(NOT_A_SWIPE) ? { x: touch.clientX, y: touch.clientY, t: e.timeStamp } : null;
+      start = !busy && e.touches.length === 1 && !(e.target as Element).closest(NOT_A_SWIPE) ? { x: touch.clientX, y: touch.clientY, t: e.timeStamp } : null;
       swiping = false;
       dx = 0;
+      trail = [];
     };
     const drag = (e: TouchEvent) => {
       if (!start) return;
       const touch = e.touches[0];
       dx = touch.clientX - start.x;
       const dy = touch.clientY - start.y;
+      trail = [...trail.filter((p) => e.timeStamp - p.t < 100), { x: touch.clientX, t: e.timeStamp }];
       if (!swiping) {
         // Up or down first: not a swipe (the page scrolls, Now Playing opens).
         if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) return void (start = null);
@@ -189,41 +199,63 @@ export function useSwipeTrack(ref: RefObject<HTMLElement | null>, peers: () => H
     };
     const settle = () => {
       place(0, 220);
-      setTimeout(hide, 230);
+      later(230, () => {
+        hide();
+        busy = false;
+      });
+    };
+    // the card shows the new track: it takes the neighbour's place, still, its buttons coming up
+    const done = () => {
+      watch?.disconnect();
+      watch = null;
+      place(0, 0);
+      hide();
+      el.classList.remove('pb-fresh');
+      void el.offsetWidth;
+      el.classList.add('pb-fresh');
+      busy = false;
     };
     const up = (e: TouchEvent) => {
       if (!start) return;
       const fast = Math.abs(dx) / Math.max(1, e.timeStamp - start.t) > FLICK;
+      // px per ms over the last moves: what the cards go on at, once the finger is off
+      const speed = trail.length > 1 ? (trail[trail.length - 1].x - trail[0].x) / Math.max(1, trail[trail.length - 1].t - trail[0].t) : 0;
       start = null;
       if (!swiping) return;
       swiping = false;
+      busy = true;
       el.addEventListener('click', swallow, { capture: true });
-      setTimeout(() => el.removeEventListener('click', swallow, { capture: true }), 400);
+      later(400, () => el.removeEventListener('click', swallow, { capture: true }));
       const dir = dx < 0 ? 'next' : 'prev';
       const far = Math.abs(dx) > el.clientWidth / 4 || (fast && Math.abs(dx) > 40);
-      if (e.type !== 'touchend' || !far || !has(dir)) return settle();
-      // the neighbour slides into the card's place; then the track turns, and the card (now showing
-      // it) is put back where it was without a jump, its buttons coming up a moment later
-      place(-Math.sign(dx) * (el.offsetWidth + CARD_GAP), 220);
-      setTimeout(() => {
+      // flicked back against the swipe: the finger changed its mind
+      const back = Math.sign(speed) === -Math.sign(dx) && Math.abs(speed) > 0.3;
+      if (e.type !== 'touchend' || !far || back || !has(dir)) return settle();
+      // The neighbour slides on into the card's place, the way the finger went and as fast (the
+      // curve starts at about three times its mean speed), never quicker than a flick would take it.
+      // It went the other way once, through the other neighbour (the user, 28.10.2026, a video).
+      const to = Math.sign(dx) * (el.offsetWidth + CARD_GAP);
+      const ms = Math.round(Math.min(360, Math.max(160, (3 * Math.abs(to - dx)) / Math.max(Math.abs(speed), 0.5))));
+      place(to, ms);
+      later(ms + 10, () => {
         if (!turn(dir)) return settle();
         haptic('tick');
-        requestAnimationFrame(() =>
-          requestAnimationFrame(() => {
-            place(0, 0);
-            hide();
-            el.classList.remove('pb-fresh');
-            void el.offsetWidth;
-            el.classList.add('pb-fresh');
-          }),
-        );
-      }, 230);
+        // The card is put back once it shows the new track, so the old one never flashes in the
+        // middle (a wave's next track may still be on its way); a remote's may never come.
+        watch = new MutationObserver(done);
+        watch.observe(el, { attributes: true, attributeFilter: ['data-track'] });
+        later(1500, () => watch && done());
+      });
     };
     el.addEventListener('touchstart', down, { passive: true });
     el.addEventListener('touchmove', drag, { passive: false });
     el.addEventListener('touchend', up);
     el.addEventListener('touchcancel', up);
     return () => {
+      for (const t of timers) clearTimeout(t);
+      timers = [];
+      watch?.disconnect();
+      el.removeEventListener('click', swallow, { capture: true });
       el.removeEventListener('touchstart', down);
       el.removeEventListener('touchmove', drag);
       el.removeEventListener('touchend', up);
