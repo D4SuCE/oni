@@ -237,6 +237,18 @@ await step("backup: each device's downloads are listed; own uploads kept as file
   }
 });
 
+await step("backup: a device's downloads with a friend's upload in them download here (Yandex is not asked about it; the track kept in the copy comes back as is)", async () => {
+  // The user, 28.10.2026: "Downloaded — this device", 1 track (a friend's), gave "Parameters requirements are not met".
+  const track = await page.evaluate(() => window.__wave.api.chart().then((l) => l.find((t) => t.available !== false && !window.__wave.offline.has(t.id))));
+  const friend = await page.evaluate(() => window.__wave.share.asTrack({ id: '00000000-e2e0-4000-8000-000000000000', file: 'x.mp3', title: 'e2e', artists: ['e2e'] }, 'https://disk.yandex.ru/d/e2e', 'e2e'));
+  const got = await page.evaluate(([y, f]) => window.__wave.backup.toDownload([{ id: f.id }, { id: String(y.id) }, { id: f.id + '0', track: f }]), [track, friend]);
+  const ids = got.map((t) => String(t.id)).join();
+  if (ids !== `${track.id},${friend.id}` || !got[1].share) throw new Error(`to download: ${ids}`);
+  const none = await page.evaluate((f) => window.__wave.backup.toDownload([{ id: f.id }]), friend);
+  if (none.length) throw new Error("an old copy's friend track without the track came back");
+  console.log(`       "${track.title}" from Yandex, the friend's upload as kept`);
+});
+
 await step('downloads: one Yandex took away is marked to keep, one it still gives is not (a download of its own, removed again)', async () => {
   // The user, 26.10.2026: "Pink Blush" gone from Yandex (and from Liked) the day after the like.
   const track = await page.evaluate(() => window.__wave.api.chart().then((l) => l.find((t) => t.available !== false && !window.__wave.offline.has(t.id))));

@@ -12,6 +12,7 @@
 import { api, storage, transport } from '../api/client.ts';
 import type { Playlist, Track } from '../api/types.ts';
 import { offline } from '../player/player.ts';
+import { trimTrack } from '../player/recent.ts';
 import { withTitle } from '../share/id3.ts';
 import { visible } from '../share/mark.ts';
 import { fileOf, isUpload, sendUpload, tracksOf } from '../share/owner.ts';
@@ -29,6 +30,9 @@ const DONE = 'backup.day';
 export interface BackupItem {
   id: string;
   albumId?: number;
+  /** A friend's upload downloaded here (src/share): Yandex does not know it, so the track itself is
+   * kept, to download it from the friend's Disk again (not in the copies before 28.10.2026). */
+  track?: Track;
 }
 
 /** An uploaded mp3 kept as a file: where (the first file is the one restored from; the copies made
@@ -59,12 +63,16 @@ const itemOf = (key: string): BackupItem => {
 };
 
 const itemOfTrack = (t: Track): BackupItem => {
+  if (t.share) return { id: String(t.id), track: trimTrack(t) };
   const album = t.albums?.[0]?.id;
   return album ? { id: String(t.id), albumId: Number(album) } : { id: String(t.id) };
 };
 
 /** A Track enough to add to a playlist or ask Yandex about. */
 const asTrack = (x: BackupItem) => ({ id: x.id, albums: x.albumId ? [{ id: x.albumId }] : [] }) as unknown as Track;
+
+/** A friend's upload's id (share/shared.ts, asTrack). */
+const isFriends = (id: string) => id.startsWith('share-');
 
 const keyOf = (x: BackupItem) => (x.albumId ? `${x.id}:${x.albumId}` : x.id);
 
@@ -203,9 +211,12 @@ export async function restoreLikes(b: Backup): Promise<number> {
   return back.length;
 }
 
-/** A device's downloads of a copy that are not downloaded here, as tracks Yandex still gives. */
+/** A device's downloads of a copy that are not downloaded here, as tracks Yandex still gives, and
+ * friends' uploads as kept (one of those in the ids, Yandex turns down the whole ask: "Parameters
+ * requirements are not met", the user, 28.10.2026; an older copy's, without the track, is left out). */
 export async function toDownload(items: BackupItem[]): Promise<Track[]> {
   const missing = items.filter((x) => !offline?.has(x.id));
-  if (!missing.length) return [];
-  return (await api.tracks(missing.map(keyOf))).filter((t) => t.available !== false);
+  const shared = missing.filter((x) => x.track?.share).map((x) => x.track!);
+  const theirs = missing.filter((x) => !isFriends(x.id));
+  return [...(theirs.length ? (await api.tracks(theirs.map(keyOf))).filter((t) => t.available !== false) : []), ...shared];
 }

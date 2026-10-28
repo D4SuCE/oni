@@ -9,7 +9,7 @@ import { useLang, useT } from '../i18n.ts';
 import { list, read, restoreLikes, restorePlaylist, toDownload } from '../backup/backup.ts';
 import { offline } from '../player/player.ts';
 import { thisDevice } from '../sync/index.ts';
-import { downloadList } from '../ui/offline.ts';
+import { downloadList, downloadShared } from '../ui/offline.ts';
 import { errorText, navigate, refreshLibrary, refreshPlaylists, toast } from '../store.ts';
 import { cx, useAsync } from '../ui/util.ts';
 
@@ -101,7 +101,12 @@ export function BackupView() {
                         run(`dl:${id}`, async () => {
                           const tracks = await toDownload(d.tracks);
                           if (!tracks.length) return void toast(s.allHere);
-                          void downloadList(`backup:${picked}:${id}`, tracks, s.downloads(date(picked)));
+                          // a friend's upload comes from their Disk, not from Yandex
+                          const yandex = tracks.filter((x) => !x.share);
+                          if (yandex.length) void downloadList(`backup:${picked}:${id}`, yandex, s.downloads(date(picked)));
+                          void (async () => {
+                            for (const x of tracks.filter((x) => x.share)) await downloadShared(x).catch((e) => toast(t.downloads.failedOne(errorText(e))));
+                          })();
                           toast(s.downloadStarted(tracks.length));
                         })
                       }
