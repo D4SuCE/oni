@@ -85,21 +85,22 @@ await draw(
 );
 
 // Section titles, as the app's own: a brush kanji, the vermilion stroke, the title in wide letters.
+// The kanji only from those src/assets/brush.woff2 has (others fall back to a plain font).
 const sections = [
-  ['features', '機能', 'Что умеет'],
-  ['iphone', '携帯', 'iPhone'],
-  ['devices', '二台', 'Два устройства'],
-  ['install', '導入', 'Установка'],
-  ['updates', '更新', 'Обновления'],
-  ['faq', '問答', 'Вопросы'],
+  ['features', '魂', 'Что умеет'],
+  ['iphone', '電', 'iPhone'],
+  ['devices', '縁', 'Два устройства'],
+  ['install', '発', 'Установка'],
+  ['updates', '新', 'Обновления'],
+  ['faq', '見', 'Вопросы'],
 ];
 for (const [name, kanji, title] of sections)
   await draw(
     `h-${name}`,
     `<div style="width:1280px;height:96px;display:flex;align-items:center;gap:26px;padding:0 8px;background:linear-gradient(90deg, #171514, #090909 70%)">
-      <span style="font-family:Brush;font-size:54px;line-height:1;color:var(--red);width:118px;text-align:center">${kanji}</span>
+      <span style="font-family:Brush;font-size:60px;line-height:1;color:var(--red);width:96px;text-align:center;text-shadow:0 0 22px rgba(217,39,46,.35)">${kanji}</span>
       <span style="width:4px;height:34px;border-radius:2px;background:linear-gradient(180deg, #ff4a50, var(--red) 70%, var(--red-deep))"></span>
-      <span style="font-family:Montserrat;font-weight:500;font-size:28px;letter-spacing:.32em;text-transform:uppercase">${title}</span>
+      <span style="font-family:Montserrat;font-weight:500;font-size:28px;letter-spacing:.32em;text-transform:${title === 'iPhone' ? 'none' : 'uppercase'}">${title}</span>
       <span style="flex:1;height:1px;margin-left:12px;background:linear-gradient(90deg, var(--line), transparent)"></span>
     </div>`,
     1280,
@@ -122,7 +123,7 @@ const trio = (a, b, c, title) =>
     <div style="margin-top:70px;z-index:1">${phone(c, 300)}</div>
   </div>`;
 await draw('iphone-main', trio('home', 'now-playing', 'lyrics', 'Главная · Сейчас играет · Текст в такт'), 1280, 900);
-await draw('iphone-more', trio('mix', 'collection', 'sound', 'Подборки · Коллекция · Звук'), 1280, 900);
+await draw('iphone-more', trio('mix', 'search', 'sound', 'Подборки · Поиск · Звук'), 1280, 900);
 
 // The PC's screens: a thin frame and rounded corners on Oni's black.
 for (const name of fs.readdirSync(pcDir).filter((f) => f.endsWith('.jpg')).map((f) => f.replace(/\.jpg$/, ''))) {
