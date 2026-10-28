@@ -107,6 +107,13 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     /// A crossfade under way: the old track's node, fading out, and the clock of the fade.
     private var tail: AVAudioPlayerNode?
     private var crossing: Timer?
+    /// The levelling asked for now (`setGain`: the mixer and `lift`, shared by both nodes), and the
+    /// old track's own while it fades: its node is let down by as much as the new track's is above it
+    /// (the user, 28.10.2026: the old one's end got louder with the next one's level).
+    private var gain: Float = 1
+    private var tailGain: Float = 1
+    /// The new track's fade in (s): the whole crossfade, or a moment when the old one has faded out already.
+    private var crossIn: Double = 0
     /// Where the current schedule starts, in frames; position = this + what the node has played.
     private var startFrame: AVAudioFramePosition = 0
     /// Bumped on every new schedule: the completion of an older one (stopped, replaced) is ignored.
@@ -538,6 +545,11 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         endCross()
         fading?.invalidate()
         fading = nil
+        // What is left of the old track while they cross: already quiet (its fade-out under way), it
+        // leaves nothing to blend with, and the new one comes in at once, not out of silence.
+        let quietEnd = self.file.map { fadedOut($0.url, from: position, seconds: seconds) } ?? false
+        crossIn = quietEnd ? quickIn : seconds
+        tailGain = gain
         let old = node
         // The old track's end is no longer the end of what plays.
         generation += 1
@@ -558,10 +570,12 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         let start = Date()
         crossing = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
             guard let self = self else { return }
-            let p = min(1, Date().timeIntervalSince(start) / max(0.1, seconds))
-            old.volume = Float(cos(p * .pi / 2))
-            self.node.volume = Float(sin(p * .pi / 2))
-            if p >= 1 { self.endCross() }
+            let passed = Date().timeIntervalSince(start)
+            let out = min(1, passed / max(0.1, seconds))
+            let into = min(1, passed / max(0.05, self.crossIn))
+            old.volume = min(1, self.tailGain / max(self.gain, 0.0001)) * Float(cos(out * .pi / 2))
+            self.node.volume = Float(sin(into * .pi / 2))
+            if out >= 1 { self.endCross() }
         }
         tick()
     }
@@ -809,6 +823,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     @objc func setGain(_ call: CAPPluginCall) {
         let value = max(0, Float(call.getDouble("value") ?? 1))
         DispatchQueue.main.async {
+            self.gain = value
             self.engine.mainMixerNode.outputVolume = min(1, value)
             self.lift.globalGain = value > 1 ? min(24, 20 * log10(value)) : 0
             call.resolve()
@@ -820,7 +835,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
             let st = self.stream?.state
             call.resolve([
                 "time": self.position, "duration": self.duration, "playing": self.playing, "eq": !self.eq.bypass, "engine": self.engine.isRunning,
-                "crossing": self.tail != nil, "lift": self.lift.globalGain, "streaming": self.stream != nil, "waiting": self.stalled,
+                "crossing": self.tail != nil, "lift": self.lift.globalGain,
+                "gain": self.gain, "tailLevel": self.tail.map { self.gain * $0.volume } ?? -1, "tailGain": self.tailGain, "crossIn": self.crossIn, "streaming": self.stream != nil, "waiting": self.stalled,
                 "received": st?.received ?? 0, "expected": st?.expected ?? 0, "trace": self.trace,
                 "musicEnd": self.musicEnd ?? -1, "endOf": self.endOf, "tracksOpened": self.tracksOpened, "endSearch": self.endSearch, "hasFile": self.file != nil,
             ])
@@ -1189,6 +1205,33 @@ private func musicEndIn(_ url: URL) -> Double? {
     let rate = file.processingFormat.sampleRate
     let from = max(0, file.length - AVAudioFramePosition(30 * rate))
     return Double(lastSound(file, from: from, to: file.length) ?? from) / rate
+}
+
+/// Quieter than this, all through what is left to cross over, the old track is fading out: -30 dBFS
+/// (src/player/silence.ts, FADED).
+private let fadedLevel: Float = 0.0316
+/// The new track's fade in then (s): a click-free start, no more.
+private let quickIn: Double = 0.3
+
+/// The old track from `from` on, for the crossfade's `seconds` (1.5 s at least looked at): quiet in
+/// every 50 ms of it, its music is over or fading out. False when it cannot be read (still arriving).
+private func fadedOut(_ url: URL, from: Double, seconds: Double) -> Bool {
+    guard let file = try? AVAudioFile(forReading: url) else { return false }
+    let rate = file.processingFormat.sampleRate
+    let start = AVAudioFramePosition(from * rate)
+    let end = min(file.length, start + AVAudioFramePosition(max(1.5, seconds) * rate))
+    guard end - start >= AVAudioFramePosition(rate), let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(rate * 0.05)) else { return false }
+    var at = start
+    while at < end {
+        guard readChunk(file, at: at, count: AVAudioFrameCount(min(AVAudioFramePosition(buffer.frameCapacity), end - at)), into: buffer), let data = buffer.floatChannelData else { return false }
+        for c in 0..<Int(buffer.format.channelCount) {
+            var rms: Float = 0
+            vDSP_rmsqv(data[c], 1, &rms, vDSP_Length(buffer.frameLength))
+            if rms > fadedLevel { return false }
+        }
+        at += AVAudioFramePosition(buffer.frameLength)
+    }
+    return true
 }
 
 /// Where to start a track in a crossfade: past its silence at the start (at least 0.25 s of it, at

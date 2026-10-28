@@ -357,11 +357,26 @@ async function crossfade() {
   if (chart.length < 2) return report('crossfade', false, 'no tracks to try');
   setCrossfade(4);
   try {
-    await wave().playTracks(chart, 0, 'smoke crossfade');
+    // A loud one turned down 4 dB, then a quiet one lifted 1 dB: the old one fades at its own level.
+    await wave().playTracks([{ ...chart[0], r128: { i: -4, tp: -1 } }, { ...chart[1], r128: { i: -9, tp: -3 } }], 0, 'smoke crossfade');
     const audio = wave().audio;
     await until(() => !audio.paused && audio.currentTime > 1 && Number.isFinite(audio.duration), 60000);
     audio.currentTime = audio.duration - 6;
-    const crossed = await until(async () => wave().usePlayer.getState().index === 1 && (await OniPlayer.state()).crossing, 30000);
+    type Crossing = { crossing?: boolean; tailLevel: number; tailGain: number; gain: number };
+    let highest = 0;
+    let own = 0;
+    const crossed = await until(async () => {
+      const st = (await OniPlayer.state()) as unknown as Crossing;
+      if (st.crossing && st.tailLevel >= 0) [highest, own] = [Math.max(highest, st.tailLevel), st.tailGain];
+      return wave().usePlayer.getState().index === 1 && Boolean(st.crossing);
+    }, 30000);
+    // Through the rest of the crossing too: the new track's level comes a moment after it starts.
+    await until(async () => {
+      const st = (await OniPlayer.state()) as unknown as Crossing;
+      if (st.crossing && st.tailLevel >= 0) [highest, own] = [Math.max(highest, st.tailLevel), st.tailGain];
+      return !st.crossing;
+    }, 8000);
+    report('crossfade-tail-level', own > 0 && Math.abs(own - 10 ** (-4 / 20)) < 0.01 && highest <= own + 0.01, `the old one's own ${own.toFixed(3)}, at most ${highest.toFixed(3)} as it faded`);
     const alone = await until(async () => {
       const st = await OniPlayer.state();
       return !st.crossing && st.playing && st.time > 4;
@@ -373,6 +388,45 @@ async function crossfade() {
     report('music-end', Boolean(found) && native.musicEnd > native.duration - 31 && native.musicEnd <= native.duration + 0.5, `music ends at ${native.musicEnd?.toFixed?.(1)} of ${native.duration?.toFixed?.(1)} s; ${JSON.stringify(await OniPlayer.state())}`);
   } finally {
     setCrossfade(0);
+  }
+}
+
+/** The crossfade after a fade-out (the user, 28.10.2026: "quieter, then sharply louder"): the old
+ * track silent in what is left of it, the next one comes in at once (0.3 s), not over the crossfade. */
+async function crossfadeQuiet() {
+  const { Directory, Filesystem } = await import('@capacitor/filesystem');
+  const rate = 22050;
+  const wav = (seconds: number, tone: boolean) => {
+    const n = rate * seconds;
+    const v = new DataView(new ArrayBuffer(44 + n * 2));
+    const text = (o: number, t: string) => [...t].forEach((ch, k) => v.setUint8(o + k, ch.charCodeAt(0)));
+    text(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); text(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); text(36, 'data'); v.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, tone ? Math.round(12000 * Math.sin((2 * Math.PI * 440 * i) / rate)) : 0, true);
+    return new Uint8Array(v.buffer);
+  };
+  const b64 = (bytes: Uint8Array) => {
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  };
+  try {
+    // The old one: two seconds of tone, then silence; it crosses over in the silence.
+    const old = wav(10, false);
+    old.set(wav(2, true).subarray(44), 44);
+    await Filesystem.writeFile({ path: 'oni-play/smoke-quiet.wav', directory: Directory.Cache, data: b64(old), recursive: true });
+    await Filesystem.writeFile({ path: 'oni-play/smoke-tone.wav', directory: Directory.Cache, data: b64(wav(10, true)), recursive: true });
+    const keep = ['smoke-quiet', 'smoke-tone'];
+    await OniPlayer.open({ id: 'smoke-quiet', file: 'smoke-quiet.wav', ext: 'wav', keep });
+    await OniPlayer.play();
+    await sleep(3500);
+    await OniPlayer.open({ id: 'smoke-tone', file: 'smoke-tone.wav', ext: 'wav', keep, fade: 4000 });
+    await sleep(800);
+    const st = (await OniPlayer.state()) as unknown as { crossing?: boolean; crossIn: number };
+    await OniPlayer.pause();
+    report('crossfade-after-quiet', Math.abs(st.crossIn - 0.3) < 0.01 && Boolean(st.crossing), JSON.stringify(st));
+  } catch (e) {
+    report('crossfade-after-quiet', false, String(e));
   }
 }
 
@@ -1255,6 +1309,7 @@ export async function runSmoke() {
     await twice(lanLink);
     await twice(iosPulse);
     await crossfade();
+    await crossfadeQuiet();
     await levelling();
     await uploadPlays();
     await twice(fastStart);
