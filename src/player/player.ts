@@ -356,7 +356,9 @@ function applyVolume(k = 1) {
 }
 
 /** The audio element can cross from one track into the next (dualAudio.ts; the iPhone's native player). */
-type Crossfading = { crossfade(url: string, ms: number, ended?: () => void, startAt?: number): Promise<void>; musicEnd?: number };
+type Crossfading = { crossfade(url: string, ms: number, ended?: () => void, startAt?: number, how?: { inMs?: number; fromLevel?: number }): Promise<void>; musicEnd?: number };
+/** The next track's fade in when the old one is fading out already (a click-free start, no more). */
+const QUICK_IN_MS = 300;
 const canCrossfade = () => typeof (audio as unknown as Partial<Crossfading>).crossfade === 'function';
 /** This track's crossfade has begun (it is set off once, near its end). */
 let crossStarted = false;
@@ -387,6 +389,9 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
   const t = get().queue[index];
   if (!t) return;
   const seq = ++loadSeq;
+  // Crossing over: what the old track sounds like now (its fade-out already under way, its level).
+  const fadedOut = fade > 0 && tail.fading(audio.currentTime);
+  const oldLevel = fade > 0 ? levelling() : 1;
   crossStarted = false;
   tail.reset();
   stale = false;
@@ -437,9 +442,13 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
       // The desktop starts it past its silence at the start (the iPhone's player does that itself).
       const lead = isIos ? 0 : await leadingSilence(url);
       if (seq !== loadSeq) return;
+      // The old one fades at its own level: the new one's (applyVolume below) would lift its end, and
+      // the lift above full volume both share (eq.ts) is the new one's, so the old one is let down by
+      // as much. Already fading out, it leaves nothing to blend with: the new one comes in at once.
+      const fromLevel = Math.min(1, audio.volume * Math.max(1, oldLevel) / Math.max(1, levelling()));
       await (audio as unknown as Crossfading).crossfade(url, fade * 1000, () => {
         if (old) URL.revokeObjectURL(old);
-      }, lead);
+      }, lead, { inMs: fadedOut ? QUICK_IN_MS : fade * 1000, fromLevel });
       // After the crossing has begun: this track's level (normalization) leads the fade, not the old one's.
       applyVolume();
     } else {

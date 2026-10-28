@@ -65,5 +65,25 @@ test("a track's end is heard after a second and a half of quiet, for the volume 
   assert(!new QuietTail(0).feed(0, 0, 0.01), 'heard with the volume at nothing');
 });
 
+test('a fade-out is told from a rest: quiet all through the last 1.5 s, at the volume it plays at', () => {
+  const ear = new QuietTail(1.5);
+  // Music (-12 dBFS at half volume), then the fade-out at -40 dBFS: not silent yet, but fading.
+  for (let t = 0; t < 3; t += 0.25) ear.feed(t, 0.25 * 0.5, 0.5);
+  assert(!ear.fading(2.75), 'music taken for a fade-out');
+  for (let t = 3; t < 4; t += 0.25) ear.feed(t, 0.01 * 0.5, 0.5);
+  assert(!ear.fading(3.75), 'a second of quiet taken for a fade-out (a rest in the music)');
+  for (let t = 4; t < 5; t += 0.25) ear.feed(t, 0.01 * 0.5, 0.5);
+  assert(ear.fading(4.75), 'the fade-out not heard');
+  // A beat in it: not fading.
+  ear.feed(5, 0.2 * 0.5, 0.5);
+  assert(!ear.fading(5), 'a loud moment ignored');
+  ear.reset();
+  assert(!ear.fading(5), 'heard before the reset');
+  // Too few ticks to tell: as before, a full crossfade.
+  const once = new QuietTail(1.5);
+  once.feed(10, 0, 0.5);
+  assert(!once.fading(10), 'one quiet tick taken for a fade-out');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

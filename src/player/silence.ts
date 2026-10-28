@@ -6,6 +6,11 @@
 
 /** Quieter than this is silence: -50 dBFS (a fade-out has gone, a rest in the music has not). */
 const SILENT = 10 ** (-50 / 20);
+/** Quieter than this, all through the last stretch heard, the music is fading out (-30 dBFS, some
+ * 20 dB under a song's own level): the next track comes in at once, not out of nothing. */
+const FADED = 10 ** (-30 / 20);
+/** The stretch `fading` looks back over (s): a beat's rest is not a fade-out. */
+const FADED_SPAN = 1.5;
 /** Silence at a track's start shorter than this is left as it is (an attack's breath, not a gap). */
 const MIN_LEAD = 0.25;
 /** A track's start is looked at this far at most. */
@@ -54,6 +59,8 @@ export async function leadingSilence(url: string, timeout = 1500): Promise<numbe
 export class QuietTail {
   private since: number | null = null;
   private hold: number;
+  /** What was heard lately: [time, level for the volume asked]. */
+  private heard: [number, number][] = [];
 
   constructor(hold = 1.5) {
     this.hold = hold;
@@ -62,6 +69,8 @@ export class QuietTail {
   /** `level`: the output's RMS now; `volume`: the volume it was played at. */
   feed(t: number, level: number, volume: number): boolean {
     if (volume < 0.02) return false; // turned down to nothing: nothing to hear
+    this.heard.push([t, level / volume]);
+    while (this.heard.length && this.heard[0][0] < t - FADED_SPAN) this.heard.shift();
     if (level / volume > SILENT) {
       this.since = null;
       return false;
@@ -70,7 +79,18 @@ export class QuietTail {
     return t - this.since >= this.hold;
   }
 
+  /**
+   * The music has been fading out (quiet, though maybe not silent yet) for the last stretch up to
+   * `t`: the next track has nothing to blend with and comes in at once (the user, 28.10.2026: the
+   * next one rose out of a quiet end over the whole crossfade — "quieter, then sharply louder").
+   */
+  fading(t: number): boolean {
+    const span = this.heard.filter(([at]) => at >= t - FADED_SPAN);
+    return span.length >= 3 && span[span.length - 1][0] - span[0][0] >= FADED_SPAN * 0.6 && span.every(([, v]) => v <= FADED);
+  }
+
   reset() {
     this.since = null;
+    this.heard = [];
   }
 }
