@@ -27,7 +27,7 @@
    через REST: `gh api 'repos/D4SuCE/oni/issues?labels=autopilot'`).
 1. **`ROADMAP.md`**: сводка — что есть, что в работе, что дальше.
 2. `CHANGELOG.md`, «Не выпущено» — что влито в `main`, но не выпущено.
-3. Подробности — `docs/` (`environment.md`, `recommendations.md`, `ios-signing.md`, `autopilot.md`), разборы и доводы
+3. Подробности — `docs/` (`environment.md`, `recommendations.md`, `ios-signing.md`, `autopilot.md`, `other-clients.md` — разбор чужих клиентов), разборы и доводы
    прошлых задач — `docs/history/roadmap-2026-10.md`, прежний полный текст этого файла — `docs/history/claude-md-2026-10.md`.
 
 ## Общение
