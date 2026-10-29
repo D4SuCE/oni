@@ -454,3 +454,24 @@ await step('liked tracks page', async () => {
   await page.waitForTimeout(1500);
   await shot('09-liked');
 });
+
+await step('AI music: an AI band\'s page says how many of its tracks are AI, its tracks have the mark; turned off, no mark (slopless.art)', async () => {
+  // The Velvet Sundown (Yandex's 24428459), an AI band, 29.10.2026: 3 of its 6 tracks found AI.
+  const up = await page.evaluate(() => window.__wave.transport?.request?.({ url: 'https://slopless.art/api/artist/3121' }).then((r) => r.ok).catch(() => false));
+  if (up === false) return console.log('       slopless.art does not answer: nothing to check');
+  await page.evaluate(() => window.__wave.navigate({ name: 'artist', id: 24428459 }));
+  const line = page.locator('[data-testid="artist-ai"]');
+  await line.waitFor({ timeout: 20000 });
+  const text = await line.innerText();
+  if (!/\d+\D+\d+/.test(text)) throw new Error(`the line says "${text}"`);
+  await page.waitForSelector('.track-row [data-testid="ai-badge"]', { timeout: 10000 });
+  const marked = await page.locator('.track-row [data-testid="ai-badge"]').count();
+  try {
+    await page.evaluate(() => window.__wave.setAiPrefs({ mark: false }));
+    await page.waitForSelector('[data-testid="ai-badge"]', { state: 'detached', timeout: 3000 });
+    if (await line.count()) throw new Error('the artist line stays with the mark off');
+  } finally {
+    await page.evaluate(() => window.__wave.setAiPrefs({ mark: true }));
+  }
+  console.log(`       "${text.replace(/\s+/g, ' ')}", ${marked} tracks marked`);
+});

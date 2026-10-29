@@ -21,6 +21,7 @@ import { audioExt, OniPlayer, type NativeAudio } from './nativeAudio.ts';
 import { leadingSilence, QuietTail } from './silence.ts';
 import { setBoost } from './eq.ts';
 import { isPrivate, usePrivacy } from './privacy.ts';
+import { isAi, isKnownAi, lookAi, useAi } from '../recs/ai.ts';
 import type { CommandName } from '../sync/playing.ts';
 import { isMyWave, isOwnWave, listKeyOf, sourceTitle, wavePicks, type ListLabel, type PlayContext, type PlayExtra, type Repeat, type Source } from './source.ts';
 import { sharedFileUrl } from '../share/shared.ts';
@@ -394,6 +395,15 @@ let crossLoading = false;
 async function loadAt(index: number, autoplay = true, fade = 0) {
   const t = get().queue[index];
   if (!t) return;
+  // AI-made tracks left out where they were offered (My Wave, a radio), if the user asked
+  // (recs/ai.ts); found out only now (the wave's filter knows only those known before): dropped
+  // from the queue, the next one plays in its place. The last one plays: nothing to take its place.
+  if (get().source?.kind === 'wave' && useAi.getState().skip && isAi(t) && index + 1 < get().queue.length) {
+    set((s) => ({ queue: s.queue.filter((_, i) => i !== index) }));
+    return loadAt(index, autoplay, fade);
+  }
+  // Their marks (and the skip above) for what plays now and next.
+  void lookAi(get().queue.slice(index, index + 6));
   const seq = ++loadSeq;
   // Crossing over: what the old track sounds like now (its fade-out already under way, its level).
   const fadedOut = fade > 0 && tail.fading(audio.currentTime);
@@ -677,11 +687,14 @@ const ownSources: OwnSources = {
   releases: () => import('../recs/index.ts').then((m) => m.ownWaveSources.releases()),
 };
 
+/** AI-made tracks left out of the waves (the user's setting, recs/ai.ts): those known by their id. */
+const leftOutAi = (id: string) => useAi.getState().skip && isKnownAi(id);
+
 /** The wave a source plays from: «Своя волна» (Oni's), or Yandex's (My Wave, a station radio). */
 function makeStation(source: Source & { kind: 'wave' }): Station {
   const station: Station = isOwnWave(source)
-    ? new OwnWave(ownSources, history, get().tuning, get().ownMode, (id) => isDisliked(id))
-    : new WaveEngine(waveApi, history, get().tuning, (id) => isDisliked(id), source.station ? [source.station.seed] : null);
+    ? new OwnWave(ownSources, history, get().tuning, get().ownMode, (id) => leftOutAi(id) || isDisliked(id))
+    : new WaveEngine(waveApi, history, get().tuning, (id) => leftOutAi(id) || isDisliked(id), source.station ? [source.station.seed] : null);
   station.isSkipped = leftOut;
   return station;
 }

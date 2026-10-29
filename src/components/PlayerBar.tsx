@@ -14,7 +14,7 @@ import { useSwipeTrack } from '../ui/swipe.ts';
 import { ArtistLinks, Cover } from './Common.tsx';
 import { openMenu } from './Menu.tsx';
 import { DevicesButton, PlayingOn } from './Devices.tsx';
-import { plainArtists, trackMenu } from './TrackList.tsx';
+import { AiBadge, plainArtists, trackMenu } from './TrackList.tsx';
 
 /** The sleep timer: a moon, with the minutes left beside it while it runs; its menu sets it. */
 /** Private listening is on (player/privacy.ts): shown while it lasts, a press turns it off. */
@@ -243,6 +243,7 @@ export function PlayerBar() {
                 <div className="pb-title" title={track.title} data-testid="now-title">
                   {track.title}
                   {track.version && <span className="tr-version"> {track.version}</span>}
+                  <AiBadge track={track} />
                 </div>
                 <div className="pb-artists">
                   <ArtistLinks artists={track.artists} plain={isIos || plainArtists(track)} />
