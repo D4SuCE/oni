@@ -11,7 +11,7 @@ import { useSwipeDown } from '../ui/swipe.ts';
 import { cx, useAsync } from '../ui/util.ts';
 import { ArtistLinks, Cover, Spinner } from './Common.tsx';
 import { DevicesButton, PlayingOn } from './Devices.tsx';
-import { LikeButton, SeekBar, SleepButton, Transport, VolumeControl } from './PlayerBar.tsx';
+import { LikeButton, PrivateBadge, SeekBar, SleepButton, Transport, VolumeControl } from './PlayerBar.tsx';
 import { usePhoneSound } from '../player/phoneSound.ts';
 import { useEq } from '../player/eq.ts';
 import { geniusSearch, lyricsKnown, lyricsOf, useLyrics, wrongLyrics } from '../player/lyrics.ts';
@@ -300,6 +300,7 @@ export function NowPlaying() {
                     </button>
                   )}
                   <LikeButton track={track} size={22} />
+                  {isIos && <PrivateBadge size={20} />}
                   <SleepButton size={20} />
                   <DevicesButton size={20} />
                   {/* The equalizer on the iPhone, where the player bar has no room for it. */}

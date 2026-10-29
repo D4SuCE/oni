@@ -1,5 +1,5 @@
 import { useCover } from '../ui/offline.ts';
-import { Ban, Heart, ListMusic, Loader2, Maximize2, Moon, MoreHorizontal, Pause, PictureInPicture2, Play, Repeat, Repeat1, Shuffle, SlidersVertical, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Waves } from 'lucide-react';
+import { Ban, EyeOff, Heart, ListMusic, Loader2, Maximize2, Moon, MoreHorizontal, Pause, PictureInPicture2, Play, Repeat, Repeat1, Shuffle, SlidersVertical, SkipBack, SkipForward, Volume1, Volume2, VolumeX, Waves } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { Track } from '../api/types.ts';
 import { useT } from '../i18n.ts';
@@ -8,6 +8,7 @@ import { useSourceTitle } from './SourceTitle.ts';
 import { dislike, toggleLike, useApp } from '../store.ts';
 import { cx, fmtTime } from '../ui/util.ts';
 import { useEq } from '../player/eq.ts';
+import { setPrivacy, usePrivacy } from '../player/privacy.ts';
 import { isIos } from '../ui/platform.ts';
 import { useSwipeTrack } from '../ui/swipe.ts';
 import { ArtistLinks, Cover } from './Common.tsx';
@@ -16,6 +17,18 @@ import { DevicesButton, PlayingOn } from './Devices.tsx';
 import { plainArtists, trackMenu } from './TrackList.tsx';
 
 /** The sleep timer: a moon, with the minutes left beside it while it runs; its menu sets it. */
+/** Private listening is on (player/privacy.ts): shown while it lasts, a press turns it off. */
+export function PrivateBadge({ size = 18 }: { size?: number }) {
+  const t = useT();
+  const on = usePrivacy((p) => p.on);
+  if (!on) return null;
+  return (
+    <button className="icon-btn on" onClick={() => setPrivacy({ on: false })} title={t.settings.privateOn} data-testid="private-badge">
+      <EyeOff size={size} />
+    </button>
+  );
+}
+
 export function SleepButton({ size = 18 }: { size?: number }) {
   const t = useT().player;
   const sleep = usePlayer((s) => s.sleep);
@@ -261,6 +274,7 @@ export function PlayerBar() {
               <span className="pb-source-text">{sourceTitle}</span>
             </span>
           )}
+          <PrivateBadge />
           <DevicesButton />
           <SleepButton />
           <button className="icon-btn" onClick={openNow} title={t.player.queue}>

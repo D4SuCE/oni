@@ -304,3 +304,40 @@ await step('speed: the music goes 1.25× (both elements, the next track too), th
   if (s.rate !== 1 || s.els.some((el) => el.rate !== 1 || !el.pitch)) throw new Error(`not back: ${JSON.stringify(s)}`);
   if (await page.$('.rate-badge')) throw new Error('the badge stayed at 1×');
 });
+
+await step('private listening: what plays reaches neither History, Recap nor the stats; History only if asked; the badge turns it off', async () => {
+  const counts = () => page.evaluate(() => ({ recent: window.__wave.recentPlays.own().length, log: window.__wave.playLog.own().plays.length, stats: window.__wave.stats.summary(30).reduce((n, r) => n + r.plays, 0) }));
+  /** Plays a chart track 6 s (past History's 5 s), then the next one: the play is done. */
+  const listen = async (n) => {
+    await page.evaluate(async (i) => window.__wave.playTracks((await window.__wave.api.chart()).filter((t) => t.available !== false).slice(i, i + 2), 0, 'e2e private'), n);
+    await waitPlaying(6.5);
+    await page.click('[data-testid="next"]');
+    await page.waitForFunction(() => window.__wave.usePlayer.getState().index === 1, null, { timeout: 15000 });
+    await page.evaluate(() => window.__wave.audio.pause());
+  };
+  try {
+    await page.evaluate(() => window.__wave.navigate({ name: 'settings' }));
+    await page.locator('label', { has: page.locator('[data-testid="private"]') }).click();
+    await page.waitForSelector('[data-testid="private-badge"]');
+    const before = await counts();
+    await listen(10);
+    const after = await counts();
+    if (JSON.stringify(after) !== JSON.stringify(before)) throw new Error(`private, yet counted: ${JSON.stringify({ before, after })}`);
+    // "Keep it in Oni's History": History takes it, Recap and the stats still do not.
+    await page.locator('label', { has: page.locator('[data-testid="private-history"]') }).click();
+    await listen(12);
+    const kept = await counts();
+    if (kept.recent !== before.recent + 1 || kept.log !== before.log || kept.stats !== before.stats) throw new Error(`kept in History: ${JSON.stringify({ before, kept })}`);
+    // The badge on the player bar turns it off.
+    await page.click('[data-testid="private-badge"]');
+    await page.waitForSelector('[data-testid="private-badge"]', { state: 'detached' });
+    await listen(14);
+    const open = await counts();
+    if (open.recent !== kept.recent + 1 || open.log < kept.log || open.stats !== kept.stats + 1) throw new Error(`not counted again: ${JSON.stringify({ kept, open })}`);
+  } finally {
+    await page.evaluate(() => {
+      window.__wave.setPrivacy({ on: false, keepHistory: false });
+      window.__wave.audio.pause();
+    });
+  }
+});

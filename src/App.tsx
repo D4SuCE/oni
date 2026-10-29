@@ -19,7 +19,8 @@ import { cx } from './ui/util.ts';
 import { deviceSync, disk, syncNow, useSync } from './sync/index.ts';
 import { disconnect, elsewhereSync, leave, listen, look, publish, useElsewhere } from './sync/elsewhere.ts';
 import { TuningPanel } from './components/Wave.tsx';
-import { audio, current, next, offline, recsFeedback, playTracks, prev, restoreSession, setRate, setSleep, setVolume, toggle, toggleShuffle, usePlayer } from './player/player.ts';
+import { audio, current, next, offline, playLog, recentPlays, recsFeedback, playTracks, prev, restoreSession, setRate, setSleep, setVolume, stats, toggle, toggleShuffle, usePlayer } from './player/player.ts';
+import { setPrivacy } from './player/privacy.ts';
 import { back, historyStep, init, navigate, toast, toggleLike, useApp } from './store.ts';
 import { findMix } from './recs/index.ts';
 import { AlbumView } from './views/Album.tsx';
@@ -249,5 +250,5 @@ export function App() {
 
 // Handy for debugging and for the automated UI test.
 Object.assign(window, {
-  __wave: { backup: { snapshot, restorePlaylist, restoreLikes, keepUploads, keepGoneDownloads, toDownload }, share: { round: shareRound, useShare, downloadShared, read: (link: string) => readShared(link, (r) => transport.request(r)), asTrack, readMark, withMark, addToMine }, offline, storage, ownToKeep, silence: { leadingSilence }, usePlayer, useApp, audio, api, navigate, recsFeedback, current, playTracks, setRate, setSleep, setVolume, toggleShuffle, toggleLike, trackMenu, findMix, eqOutputLevel, levelLift, pulseLevel, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } } },
+  __wave: { backup: { snapshot, restorePlaylist, restoreLikes, keepUploads, keepGoneDownloads, toDownload }, share: { round: shareRound, useShare, downloadShared, read: (link: string) => readShared(link, (r) => transport.request(r)), asTrack, readMark, withMark, addToMine }, offline, storage, ownToKeep, silence: { leadingSilence }, usePlayer, useApp, audio, api, navigate, recsFeedback, recentPlays, playLog, stats, setPrivacy, current, playTracks, setRate, setSleep, setVolume, toggleShuffle, toggleLike, trackMenu, findMix, eqOutputLevel, levelLift, pulseLevel, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } } },
 });

@@ -6,6 +6,7 @@ import { artistNames, trackCover } from '../api/yandex.ts';
 import { tr, useLang } from '../i18n.ts';
 import { historyStep, toggleLike, useApp } from '../store.ts';
 import { audio, current, next, prev, setVolume, toggle, usePlayer } from './player.ts';
+import { usePrivacy } from './privacy.ts';
 
 function snapshot(): ShellPlayback {
   const s = usePlayer.getState();
@@ -65,6 +66,7 @@ export function connectDesktopShell() {
   // Discord's status: the track playing, from when it would have started; nothing on a pause.
   usePlayer.subscribe((s, was) => (s.index !== was.index || s.queue[s.index] !== was.queue[was.index] || s.playing !== was.playing || s.duration !== was.duration || s.rate !== was.rate) && pushPresence());
   for (const ev of ['playing', 'pause', 'seeked']) audio.addEventListener(ev, () => pushPresence());
+  usePrivacy.subscribe(() => pushPresence());
   pushPresence();
 }
 
@@ -76,7 +78,8 @@ export function pushPresence(force = false) {
   const s = usePlayer.getState();
   const t = s.queue[s.index];
   let p: Presence | null = null;
-  if (t && !audio.paused) {
+  // Private listening: friends on Discord see nothing either.
+  if (t && !audio.paused && !usePrivacy.getState().on) {
     const duration = (Number.isFinite(audio.duration) && audio.duration) || s.duration || (t.durationMs || 0) / 1000;
     // Faster or slower: the track's minutes go by at its speed.
     const rate = s.rate || 1;
