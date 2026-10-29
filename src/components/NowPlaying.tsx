@@ -15,6 +15,7 @@ import { LikeButton, PrivateBadge, SeekBar, SleepButton, Transport, VolumeContro
 import { usePhoneSound } from '../player/phoneSound.ts';
 import { useEq } from '../player/eq.ts';
 import { geniusSearch, lyricsKnown, lyricsOf, useLyrics, wrongLyrics } from '../player/lyrics.ts';
+import { parseLrc, sungLetters, type LrcLine } from '../player/lrc.ts';
 import { useElsewhere } from '../sync/elsewhere.ts';
 import { isIos } from '../ui/platform.ts';
 import { BackgroundVideo, LiveCover, useCoverVideo } from './LiveCover.tsx';
@@ -22,13 +23,50 @@ import { openMenu } from './Menu.tsx';
 import { plainArtists, TrackList, trackMenu } from './TrackList.tsx';
 import { WaveStatsLine } from './Wave.tsx';
 
-function parseLrc(text: string) {
-  const lines: { t: number; text: string }[] = [];
-  for (const raw of text.split(/\r?\n/)) {
-    const m = /^\[(\d+):(\d+(?:\.\d+)?)\](.*)$/.exec(raw.trim());
-    if (m) lines.push({ t: Number(m[1]) * 60 + Number(m[2]), text: m[3].trim() });
-  }
-  return lines;
+/** The place in the track now, between the player's updates (a few a second): on from the last at its speed. */
+function usePlace() {
+  const last = useRef({ position: 0, at: 0 });
+  useEffect(() => {
+    return usePlayer.subscribe((s, was) => {
+      if (s.position !== was.position || s.playing !== was.playing) last.current = { position: s.position, at: performance.now() };
+    });
+  }, []);
+  return useCallback(() => {
+    const s = usePlayer.getState();
+    if (!s.playing) return s.position;
+    if (!last.current.at) last.current = { position: s.position, at: performance.now() };
+    return last.current.position + ((performance.now() - last.current.at) / 1000) * (s.rate || 1);
+  }, []);
+}
+
+/** The line sung now, filling as it is sung (lrc.ts): the sung letters bright, a soft edge on the next one. */
+function SungLine({ lines, i, duration }: { lines: LrcLine[]; i: number; duration: number }) {
+  const place = usePlace();
+  const [sung, setSung] = useState(0);
+  useEffect(() => {
+    let frame = 0;
+    const step = () => {
+      // Tenths of a letter: smooth enough, and React is not woken up 60 times a second for nothing.
+      setSung(Math.round(sungLetters(lines, i, place(), duration) * 10) / 10);
+      frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [lines, i, duration, place]);
+  const text = lines[i].text;
+  const whole = Math.min(text.length, Math.floor(sung));
+  const part = sung - whole;
+  return (
+    <>
+      <span className="sung">{text.slice(0, whole)}</span>
+      {whole < text.length && (
+        <span className="sung-edge" style={{ '--part': part } as React.CSSProperties}>
+          {text[whole]}
+        </span>
+      )}
+      {text.slice(whole + 1)}
+    </>
+  );
 }
 
 function Lyrics({ track }: { track: Track }) {
@@ -37,6 +75,7 @@ function Lyrics({ track }: { track: Track }) {
   const { data, loading, error } = useAsync(() => lyricsOf(track), [track.id, known]);
   const position = usePlayer((s) => s.position);
   const lines = useMemo(() => (data?.synced ? parseLrc(data.text) : []), [data]);
+  const duration = usePlayer((s) => s.duration);
   const active = lines.findLastIndex((l) => l.t <= position + 0.3);
   const box = useRef<HTMLDivElement>(null);
   const t = useT();
@@ -77,7 +116,7 @@ function Lyrics({ track }: { track: Track }) {
     <div className="lyrics" ref={box}>
       {lines.map((l, i) => (
         <p key={i} className={cx('lyric', i === active && 'active', i < active && 'past')} onClick={() => seek(l.t)}>
-          {l.text || '♪'}
+          {i === active && l.text ? <SungLine lines={lines} i={i} duration={duration || Infinity} /> : l.text || '♪'}
         </p>
       ))}
       {source}
