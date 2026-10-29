@@ -2335,8 +2335,16 @@ html.ios .wave-blobs i {
   color: rgba(235, 235, 245, 0.55);
 }
 .lyric.active {
-  color: var(--text);
+  /* Still to sing: dim; the sung part lights up (NowPlaying's SungLine), the letter being sung half way. */
+  color: rgba(242, 238, 232, 0.42);
   transform: scale(1.03);
+}
+.lyric.active .sung {
+  color: var(--text);
+  text-shadow: 0 0 18px rgba(242, 238, 232, 0.18);
+}
+.lyric.active .sung-edge {
+  color: color-mix(in srgb, var(--text) calc(var(--part, 0) * 100%), rgba(242, 238, 232, 0.42));
 }
 /* No lyrics found: the lyrics tab and button stay, dim (they open "none" with Genius's search). */
 .tab.dim,

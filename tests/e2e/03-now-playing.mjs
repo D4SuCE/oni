@@ -31,6 +31,16 @@ await step('a track Yandex has no lyrics for gets them from LRCLIB, saying so; "
     await source.waitFor({ timeout: 20000 });
     const lines = await page.locator('.np-side .lyric').count();
     if (!/LRCLIB/.test(await source.innerText()) || lines < 5) throw new Error(`source "${await source.innerText()}", ${lines} synced lines`);
+    // The line sung now fills as it is sung: its bright part grows (clicked on, a line plays from its start).
+    await page.locator('.np-side .lyric').nth(3).click();
+    await page.evaluate(() => window.__wave.audio.play());
+    const sung = () => page.evaluate(() => document.querySelector('.np-side .lyric.active .sung')?.textContent?.length ?? -1);
+    await page.waitForFunction(() => (document.querySelector('.np-side .lyric.active .sung')?.textContent?.length ?? 0) > 0, null, { timeout: 15000 });
+    const early = await sung();
+    await page.waitForTimeout(500);
+    const later = await sung();
+    await page.evaluate(() => window.__wave.audio.pause());
+    if (!(later > early)) throw new Error(`the line does not fill: ${early} → ${later} letters`);
     await page.click('[data-testid="lyrics-wrong"]');
     await page.waitForSelector('[data-testid="lyrics-genius"]', { timeout: 5000 });
     if (await page.locator('.np-side .lyric').count()) throw new Error('the wrong lyrics still show');
