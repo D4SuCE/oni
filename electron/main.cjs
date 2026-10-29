@@ -320,10 +320,14 @@ ipcMain.handle('wave:link:take', () => {
   return link;
 });
 /** The scheme belongs to this Oni: the installer registers it too ("protocols" in package.json), the
- * portable one has only this; the last Oni started gets the links. Not from a dev or test run. */
-function registerLinks() {
+ * portable one has only this; the last Oni started gets the links. Not from a dev or test run.
+ * The portable one unpacks itself whole on every start (13-16 s before a link got to the running Oni,
+ * the user): while it runs, links go to its unpacked copy, which only hands them over; when it quits
+ * (the copy is deleted then), back to the portable file. */
+const portable = process.env.PORTABLE_EXECUTABLE_FILE;
+function registerLinks(running) {
   if (!app.isPackaged || TEST_MODE) return;
-  app.setAsDefaultProtocolClient('oni', process.env.PORTABLE_EXECUTABLE_FILE || process.execPath, []);
+  app.setAsDefaultProtocolClient('oni', portable && !running ? portable : process.execPath, []);
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -335,7 +339,7 @@ if (!app.requestSingleInstanceLock()) {
     if (link && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('wave:link', link);
   });
   app.whenReady().then(() => {
-    registerLinks();
+    registerLinks(true);
     allowAudioAnalysis();
     loadToken();
     loadDiskToken();
@@ -346,4 +350,5 @@ if (!app.requestSingleInstanceLock()) {
     );
   });
   app.on('window-all-closed', () => app.quit());
+  if (portable) app.on('will-quit', () => registerLinks(false));
 }

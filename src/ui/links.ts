@@ -4,7 +4,7 @@
 // - oni://track/<id> plays the track; oni://album/<id>, oni://artist/<id>, oni://playlist/<owner>/<kind>
 //   open the page. "Share" gives the same thing as a web link, https://oni-music.github.io/#track/<id>:
 //   that page (site/, the oni-music organization) opens Oni, or Yandex Music on a device without it.
-// - A music.yandex.ru link pasted into Search opens the same way.
+// - A link pasted into Search (Oni's or music.yandex.ru) is found there as what it points to (views/Search.tsx).
 // The scheme: ios/App/App/Info.plist on the iPhone, electron/main.cjs and "protocols" in package.json on Windows.
 
 /** The web page "Share" links to (site/index.html, published by scripts/publish-site.mjs). */
@@ -76,13 +76,6 @@ async function openLink(link: OniLink) {
   const [track] = await api.tracks([link.id]).catch(() => []);
   if (!track) return toast(tr().toast.linkBroken);
   playTracks([track], 0, track.title);
-}
-
-/** Opens an Oni or Yandex link pasted into Search; false if the text is not one (then it is searched). */
-export function openPasted(text: string) {
-  const link = linkFrom(text);
-  if (link) void openLink(link);
-  return Boolean(link);
 }
 
 /** Listens for links while running and takes the one the app was launched with: on the iPhone from

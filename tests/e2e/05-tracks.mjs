@@ -383,13 +383,19 @@ await step('links: Share, an oni:// link from a browser, a Yandex link pasted in
     await page.waitForSelector('.page-title, h1', { timeout: 15000 });
   }
 
+  // Pasted into Search, a link is found as a search finds things (the user: not a track starting
+  // out of nowhere): the album on top, its tracks below, nothing new playing.
+  const playing = await page.evaluate(() => window.__wave.usePlayer.getState().queue.length);
   await page.click('[data-testid="nav-search"]');
   await page.fill('[data-testid="search-input"]', `https://music.yandex.ru/album/${album}?utm_source=share`);
-  await page.waitForFunction((id) => {
-    const s = window.__wave.useApp.getState();
-    return s.route.name === 'album' && String(s.route.id) === String(id) && s.searchQuery === '';
-  }, album, { timeout: 5000 });
-  await page.waitForSelector('.track-row', { timeout: 15000 });
+  await page.waitForSelector('.best', { timeout: 15000 });
+  const found = await page.evaluate(() => ({ best: document.querySelector('.best .best-title')?.textContent, rows: document.querySelectorAll('.track-row').length, route: window.__wave.useApp.getState().route.name }));
+  if (found.best !== t.albums[0].title || !found.rows || found.route !== 'search') throw new Error(`pasted album: ${JSON.stringify(found)}`);
+  await page.fill('[data-testid="search-input"]', `https://oni-music.github.io/#track/${t.id}`);
+  await page.waitForFunction((title) => document.querySelector('.best .best-title')?.textContent === title && document.querySelectorAll('.track-row').length === 1, t.title, { timeout: 15000 });
+  await shot('05-pasted-link');
+  if ((await page.evaluate(() => window.__wave.usePlayer.getState().queue.length)) !== playing) throw new Error('a pasted link started playing');
+  await page.fill('[data-testid="search-input"]', '');
 });
 
 await step('liked tracks page', async () => {
