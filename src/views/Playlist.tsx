@@ -5,14 +5,14 @@ import { api, transport } from '../api/client.ts';
 import type { Playlist, Track } from '../api/types.ts';
 import { playlistCover } from '../api/yandex.ts';
 import { ErrorBox, ListPlayButton, PageHeader, Spinner } from '../components/Common.tsx';
-import { askText, confirmDialog } from '../components/Dialog.tsx';
+import { deletePlaylist, renamePlaylist } from '../components/PlaylistMenu.tsx';
 import { openMenu, type MenuItem } from '../components/Menu.tsx';
 import { useTrackEdits } from '../components/TrackSheet.tsx';
 import { SmartShuffleButton } from '../components/SmartShuffle.tsx';
 import { TrackList } from '../components/TrackList.tsx';
 import { useT } from '../i18n.ts';
 import { extendList, playRadio, playShuffled, playTracks } from '../player/player.ts';
-import { back, errorText, isOwn, navigate, refreshPlaylists, samePlaylist, toast, togglePlaylistLike, useApp } from '../store.ts';
+import { errorText, isOwn, navigate, refreshPlaylists, samePlaylist, toast, togglePlaylistLike, useApp } from '../store.ts';
 import { visible } from '../share/mark.ts';
 import { shareLinkOf } from '../share/shared.ts';
 import { shareUploads } from '../share/owner.ts';
@@ -95,19 +95,10 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
   };
 
   const rename = async () => {
-    const title = await askText(t.playlist.renameTitle, pl.title, t.common.save);
-    if (!title || title === pl.title) return;
-    const updated = await api.renamePlaylist(pl.kind, title);
-    setData({ ...pl, title: updated.title });
-    refreshPlaylists();
+    const title = await renamePlaylist(pl);
+    if (title) setData({ ...pl, title });
   };
-
-  const destroy = async () => {
-    if (!(await confirmDialog(t.playlist.deleteTitle, t.playlist.deleteMessage(pl.title)))) return;
-    await api.deletePlaylist(pl.kind);
-    await refreshPlaylists();
-    back();
-  };
+  const destroy = () => deletePlaylist(pl);
 
   const upload = async (files: FileList | null) => {
     if (!files?.length) return;

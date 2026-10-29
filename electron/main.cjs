@@ -314,6 +314,11 @@ ipcMain.handle('wave:logs:open', () => {
 // runs, hands it over and quits (single instance).
 const linkIn = (argv) => argv.find((a) => /^oni:/i.test(a)) || null;
 let launchLink = linkIn(process.argv);
+// The text fields' own menu (src/ui/editMenu.ts): Electron has none, and without a keyboard nothing
+// could be pasted. The page's own commands, as Ctrl+X/C/V/A do them.
+ipcMain.on('wave:edit', (e, action) => {
+  if (['cut', 'copy', 'paste', 'selectAll'].includes(action)) e.sender[action]();
+});
 ipcMain.handle('wave:link:take', () => {
   const link = launchLink;
   launchLink = null;

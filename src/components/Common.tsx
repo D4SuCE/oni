@@ -1,10 +1,12 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { Disc3, Loader2, Music2, Pause, Play, User } from 'lucide-react';
 import type { Album, Artist, Playlist } from '../api/types.ts';
 import { artistCover, coverUrl, playlistCover } from '../api/yandex.ts';
 import { useT } from '../i18n.ts';
 import { listKeyOf, toggle, usePlayer } from '../player/player.ts';
 import { isOwn, navigate } from '../store.ts';
+import { openMenu } from './Menu.tsx';
+import { playlistMenu } from './PlaylistMenu.tsx';
 import { cx } from '../ui/util.ts';
 
 export function Cover({ src, size, round, icon = 'music', className, onClick }: { src?: string; size?: number; round?: boolean; icon?: 'music' | 'user' | 'disc'; className?: string; onClick?: () => void }) {
@@ -59,10 +61,10 @@ export function Shelf({ children }: { children: ReactNode }) {
   return <div className="shelf">{children}</div>;
 }
 
-function Card({ cover, title, subtitle, round, icon, onOpen, onPlay }: { cover?: string; title: string; subtitle?: string; round?: boolean; icon?: 'music' | 'user' | 'disc'; onOpen: () => void; onPlay?: () => void }) {
+function Card({ cover, title, subtitle, round, icon, onOpen, onPlay, onMenu }: { cover?: string; title: string; subtitle?: string; round?: boolean; icon?: 'music' | 'user' | 'disc'; onOpen: () => void; onPlay?: () => void; onMenu?: (e: ReactMouseEvent) => void }) {
   const t = useT();
   return (
-    <div className="card" onClick={onOpen} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onOpen()}>
+    <div className="card" onClick={onOpen} onContextMenu={onMenu} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onOpen()}>
       <div className="card-cover">
         <Cover src={cover} round={round} icon={icon} />
         {onPlay && (
@@ -100,6 +102,7 @@ export function PlaylistCard({ playlist, onPlay }: { playlist: Playlist; onPlay?
       subtitle={isOwn(playlist) ? t.count.tracksShort(playlist.trackCount) : `${playlist.owner?.name || playlist.owner?.login || ''} · ${t.count.tracksShort(playlist.trackCount)}`}
       onOpen={() => navigate({ name: 'playlist', uid: playlist.uid, kind: playlist.kind })}
       onPlay={onPlay}
+      onMenu={(e) => openMenu(e, playlistMenu(playlist))}
     />
   );
 }

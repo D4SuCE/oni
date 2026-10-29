@@ -8,6 +8,8 @@ import { isIos } from '../ui/platform.ts';
 import { useUpdate } from '../ui/update.ts';
 import { cx } from '../ui/util.ts';
 import { askText } from './Dialog.tsx';
+import { openMenu } from './Menu.tsx';
+import { playlistMenu } from './PlaylistMenu.tsx';
 
 const NAV: { route: Route & { name: 'home' | 'search' | 'library' }; icon: typeof Home }[] = [
   { route: { name: 'home' }, icon: Home },
@@ -155,6 +157,7 @@ export function Sidebar() {
               drop?.key === playlistKey(p) && (drop.after ? 'drop-after' : 'drop-before'),
             )}
             onClick={() => navigate({ name: 'playlist', uid: p.uid, kind: p.kind })}
+            onContextMenu={(e) => openMenu(e, playlistMenu(p))}
             draggable={!isIos}
             onDragStart={(e) => {
               setDragged(playlistKey(p));
