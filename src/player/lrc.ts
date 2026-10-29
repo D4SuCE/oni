@@ -73,40 +73,113 @@ export const activeLine = (lines: LrcLine[], position: number) => lines.findLast
  */
 export const litLetters = (lines: LrcLine[], i: number, position: number, duration = Infinity) => sungLetters(lines, i, position + LEAD, duration + LEAD);
 
-/** How long a letter is sung, at most and at least (s), and when the song does not say. */
-const SLOWEST = 0.13;
-const FASTEST = 0.05;
+/** How long a syllable is sung, at most and at least (s): Rap God's quick lines ~0.13, a ballad's ~0.45. */
+const SLOWEST = 0.45;
+const FASTEST = 0.08;
 const SHORTEST = 0.6;
 /** A line is done a little before the next one begins (a breath). */
 const BREATH = 0.9;
+/** The lines on each side whose pace counts for a line's (a song can slow down and speed up). */
+const AROUND = 6;
 
-const paces = new WeakMap<LrcLine[], number>();
+const VOWEL = /[aeiouyаеёиоуыэюяàáâãäåæèéêëìíîïòóôõöøùúûüýÿœ]/i;
+const LETTER = /[\p{L}\p{N}]/u;
 
 /**
- * The song's own pace (s a letter), for lines with no word times. A line's time to the next one is
- * its singing and then a pause or a held note: filled over all of it, the words lagged behind the
- * voice (the user, 29.10.2026, Night Club's "The Creepshow": "Just fill us up with medication" sung
- * in about 3 s of its 5.5). The quicker quarter of the song's lines — those sung one right after
- * another — tells how fast it is sung; a little quicker than that, as early is less wrong than late.
+ * Each letter's share of the line's singing: a syllable each (a vowel group with the consonants up to
+ * the next one), spread over its letters; spaces and signs none, nor words in brackets (a second voice,
+ * "(six minutes, Slim Shady)": it is not what the line's own voice spends its time on).
  */
-export function songPace(lines: LrcLine[]): number {
-  let pace = paces.get(lines);
-  if (pace === undefined) {
-    const each = lines
-      .map((l, i) => (l.text.length >= 8 && lines[i + 1] ? (lines[i + 1].t - l.t) / l.text.length : NaN))
-      .filter((x) => Number.isFinite(x) && x > 0)
-      .sort((a, b) => a - b);
-    const quick = each.length >= 4 ? each[Math.floor(each.length / 4)] * 0.8 : SLOWEST;
-    pace = Math.min(SLOWEST, Math.max(FASTEST, quick));
-    paces.set(lines, pace);
+export function syllableWeights(text: string): { weights: number[]; syllables: number } {
+  const weights: number[] = Array.from({ length: text.length }, () => 0);
+  const all: number[][] = [];
+  let syllable: number[] = [];
+  let depth = 0;
+  let vowelSeen = false;
+  let lastVowel = false;
+  const endWord = () => {
+    if (syllable.length) all.push(syllable);
+    syllable = [];
+    vowelSeen = lastVowel = false;
+  };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '(' || c === '[') depth++;
+    if (depth > 0) {
+      if (c === ')' || c === ']') depth--;
+      endWord();
+      continue;
+    }
+    // "I'm", "don't": one word.
+    if (c === "'" || c === '’') continue;
+    if (!LETTER.test(c)) {
+      endWord();
+      continue;
+    }
+    const vowel = VOWEL.test(c);
+    if (vowel && !lastVowel && vowelSeen) {
+      all.push(syllable);
+      syllable = [];
+    }
+    syllable.push(i);
+    vowelSeen ||= vowel;
+    lastVowel = vowel;
   }
-  return pace;
+  endWord();
+  for (const s of all) for (const i of s) weights[i] = 1 / s.length;
+  return { weights, syllables: all.length };
+}
+
+const shapes = new WeakMap<LrcLine, { weights: number[]; syllables: number }>();
+const shapeOf = (l: LrcLine) => {
+  let shape = shapes.get(l);
+  if (!shape) shapes.set(l, (shape = syllableWeights(l.text)));
+  return shape;
+};
+
+const paces = new WeakMap<LrcLine[], number[]>();
+
+/**
+ * How fast the line at `i` is likely sung (s a syllable), for lines with no word times. A line's time
+ * to the next one is its singing and then a pause or a held note: filled over all of it, the words
+ * lagged behind the voice (the user, 29.10.2026, Night Club's "The Creepshow": "Just fill us up with
+ * medication" sung in about 3 s of its 5.5). The quicker quarter of the lines around it — those sung
+ * one right after another — tells the pace there (a song slows down and speeds up: Rap God); a little
+ * quicker than that, as early is less wrong than late.
+ */
+export function linePace(lines: LrcLine[], i: number): number {
+  let all = paces.get(lines);
+  if (!all) {
+    const each = lines.map((l, k) => {
+      const n = shapeOf(l).syllables;
+      return n >= 3 && lines[k + 1] ? (lines[k + 1].t - l.t) / n : NaN;
+    });
+    all = lines.map((_, k) => {
+      const near = each.slice(Math.max(0, k - AROUND), k + AROUND + 1).filter((x) => Number.isFinite(x) && x > 0).sort((a, b) => a - b);
+      const quick = near.length >= 3 ? near[Math.floor(near.length / 4)] * 0.85 : SLOWEST;
+      return Math.min(SLOWEST, Math.max(FASTEST, quick));
+    });
+    paces.set(lines, all);
+  }
+  return all[i] ?? SLOWEST;
+}
+
+/** The letter reached when `share` (0–1) of the syllables is sung: a fraction inside it. */
+function letterAt(weights: number[], total: number, share: number): number {
+  const target = share * total;
+  let done = 0;
+  for (let i = 0; i < weights.length; i++) {
+    const w = weights[i];
+    if (w > 0 && done + w >= target) return i + (target - done) / w;
+    done += w;
+  }
+  return weights.length;
 }
 
 /**
  * How many letters of the line at `i` are sung at `position` (a fraction, for a soft edge). By word
- * times when there are; otherwise evenly at the song's pace (songPace) — not over a pause, a held
- * note or a solo before the next line.
+ * times when there are; otherwise syllable by syllable at the pace around it (linePace) — not over a
+ * pause, a held note or a solo before the next line.
  */
 export function sungLetters(lines: LrcLine[], i: number, position: number, duration = Infinity): number {
   const line = lines[i];
@@ -125,6 +198,9 @@ export function sungLetters(lines: LrcLine[], i: number, position: number, durat
     }
     return length;
   }
-  const sung = Math.min(Math.max(0.1, (end - line.t) * BREATH), Math.max(SHORTEST, length * songPace(lines)));
-  return Math.min(length, (length * (position - line.t)) / sung);
+  const { weights, syllables } = shapeOf(line);
+  if (!syllables) return length;
+  const sung = Math.min(Math.max(0.1, (end - line.t) * BREATH), Math.max(SHORTEST, syllables * linePace(lines, i)));
+  const share = (position - line.t) / sung;
+  return share >= 1 ? length : letterAt(weights, syllables, share);
 }
