@@ -155,6 +155,31 @@ async function longPressMenu() {
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
 }
 
+/** Holding a playlist's card opens its menu (components/PlaylistMenu.tsx), and lifting the finger
+ * neither closes it nor opens the playlist. One's own playlist, in the Collection. */
+async function playlistHold() {
+  const w = wave() as unknown as { navigate(r: unknown): void; useApp: { getState(): { route: { name: string }; playlists: { title: string; kind: number }[] } } };
+  const pl = w.useApp.getState().playlists.find((p) => p.kind !== 3);
+  if (!pl) return report('playlist-hold', true, 'no playlist of its own');
+  w.navigate({ name: 'library', tab: 'playlists' });
+  await until(() => [...document.querySelectorAll('.card')].some((c) => c.textContent?.includes(pl.title)), 15000);
+  const card = [...document.querySelectorAll('.card')].find((c) => c.textContent?.includes(pl.title));
+  if (!card) return report('playlist-hold', false, 'no card');
+  const box = card.getBoundingClientRect();
+  const at = { pointerId: 11, pointerType: 'touch', isPrimary: true, clientX: box.left + box.width / 2, clientY: box.top + box.height / 3, bubbles: true };
+  card.dispatchEvent(new PointerEvent('pointerdown', at));
+  const opened = await until(() => document.querySelector('.menu'), 1500);
+  card.dispatchEvent(new PointerEvent('pointerup', at));
+  card.dispatchEvent(new MouseEvent('click', { ...at, bubbles: true }));
+  await sleep(300);
+  const items = [...document.querySelectorAll('.menu-item')].map((i) => i.textContent?.trim());
+  const stays = Boolean(document.querySelector('.menu')) && w.useApp.getState().route.name === 'library';
+  const want = ['Вперемешку', 'Поделиться', 'Переименовать'].every((x) => items.some((i) => i?.includes(x)));
+  report('playlist-hold', Boolean(opened) && stays && want, `${items.length} items: ${items.join(', ')}${stays ? '' : ', closed or left'}`);
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  await sleep(300);
+}
+
 /** Holding an icon-only button shows what it does above it, and lifting the finger does not press
  * it ("Next" stays on the same track). */
 /** A round button whose words the iPhone hides (Shuffle on a page's row, as in Liked) names itself
@@ -1332,6 +1357,7 @@ export async function runSmoke() {
 
     // Next to the shortcut's link: Capacitor hands a link to iOS only while the scene is active
     // (WebViewDelegationHandler), and by the end of the run it was not (the links went nowhere).
+    await playlistHold().catch((e) => report('playlist-hold', false, String(e)));
     await shareLinks().catch((e) => report('share-links', false, String(e)));
 
     // A shortcut's link. The page asks iOS to open it (Capacitor hands non-web addresses to the

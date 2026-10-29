@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('wave', {
   openLogs: () => ipcRenderer.invoke('wave:logs:open'),
   onCommand: (cb) => ipcRenderer.on('wave:command', (_e, cmd) => cb(cmd)),
   takeLink: () => ipcRenderer.invoke('wave:link:take'),
+  edit: (action) => ipcRenderer.send('wave:edit', action),
   onLink: (cb) => ipcRenderer.on('wave:link', (_e, link) => cb(link)),
   setPlayback: (state) => ipcRenderer.send('wave:playback', state),
   shellPrefs: () => ipcRenderer.sendSync('wave:shell:prefs'),

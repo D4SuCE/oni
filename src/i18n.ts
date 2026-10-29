@@ -259,6 +259,10 @@ const ru = {
     move: 'Переместить',
     reorder: 'Изменить порядок',
     moveHint: 'Удерживайте трек и перетащите',
+    cut: 'Вырезать',
+    copy: 'Копировать',
+    paste: 'Вставить',
+    selectAll: 'Выделить всё',
   },
   downloads: {
     kicker: 'Играет без интернета',
@@ -989,6 +993,10 @@ const en: Dict = {
     move: 'Move',
     reorder: 'Reorder',
     moveHint: 'Hold a track and drag it',
+    cut: 'Cut',
+    copy: 'Copy',
+    paste: 'Paste',
+    selectAll: 'Select all',
   },
   downloads: {
     kicker: 'Plays without internet',

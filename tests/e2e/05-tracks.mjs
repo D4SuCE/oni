@@ -398,6 +398,50 @@ await step('links: Share, an oni:// link from a browser, a Yandex link pasted in
   await page.fill('[data-testid="search-input"]', '');
 });
 
+await step('right click: Paste in a text field, a playlist menu on its card and in the side panel', async () => {
+  // The user, 29.10.2026: without a keyboard nothing could be pasted into Search; a playlist's
+  // actions without opening it (on the iPhone a held finger sends the same right click).
+  const clip = await app.evaluate(({ clipboard }) => clipboard.readText());
+  try {
+    await app.evaluate(({ clipboard }) => clipboard.writeText('Кино'));
+    await page.click('[data-testid="nav-search"]');
+    await page.fill('[data-testid="search-input"]', '');
+    await page.click('[data-testid="search-input"]', { button: 'right' });
+    await page.locator('.menu-item', { hasText: 'Вставить' }).click();
+    await page.waitForFunction(() => document.querySelector('[data-testid="search-input"]').value === 'Кино', null, { timeout: 3000 });
+    await page.fill('[data-testid="search-input"]', '');
+
+    const pl = await page.evaluate(() => window.__wave.useApp.getState().playlists.find((p) => p.kind !== 3));
+    if (pl) {
+      await page.evaluate(() => window.__wave.navigate({ name: 'library', tab: 'playlists' }));
+      const card = page.locator('.card', { hasText: pl.title }).first();
+      await card.waitFor({ timeout: 15000 });
+      await card.click({ button: 'right' });
+      await page.waitForSelector('.menu');
+      const items = await page.locator('.menu .menu-item').allTextContents();
+      for (const want of ['Слушать', 'Вперемешку', 'Радио', 'Поделиться', 'Переименовать', 'Удалить плейлист'])
+        if (!items.some((x) => x.includes(want))) throw new Error(`the card's menu: ${items.join(' | ')}`);
+      await shot('05-playlist-menu');
+      await app.evaluate(({ clipboard }) => clipboard.writeText(''));
+      await page.locator('.menu-item', { hasText: 'Поделиться' }).click();
+      const login = await page.evaluate(() => window.__wave.useApp.getState().account.login);
+      const want = `https://oni-music.github.io/#playlist/${encodeURIComponent(login)}/${pl.kind}`;
+      let shared = '';
+      for (let i = 0; i < 20 && shared !== want; i++) {
+        await page.waitForTimeout(250);
+        shared = await app.evaluate(({ clipboard }) => clipboard.readText());
+      }
+      if (shared !== want) throw new Error(`Share from the menu: ${shared}`);
+      await page.locator('[data-testid="nav-playlist"]', { hasText: pl.title }).first().click({ button: 'right' });
+      await page.waitForSelector('.menu .menu-item');
+      if (!(await page.locator('.menu .menu-item', { hasText: 'Вперемешку' }).count())) throw new Error('no menu in the side panel');
+      await page.keyboard.press('Escape');
+    }
+  } finally {
+    await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), clip);
+  }
+});
+
 await step('liked tracks page', async () => {
   await page.click('[data-testid="nav-liked"]');
   await page.waitForSelector('.track-row, .empty-hint', { timeout: 20000 });
