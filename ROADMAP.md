@@ -251,7 +251,7 @@ oni-releases — витрина и обновления); README `oni` для р
   уловить — пульс редкий. Проверка на песнях: `task/beat/` (Demucs, разметка ударов; вне репозитория).
 
 - Облачная проверка iPhone сбоит на шагах, зависящих от скорости облака (`ios-pulse` «плоский» звук, `revived`,
-  `lan-link` ~12 с на открытие связи, `fast-start`, `background-life`, `recap-stories` «not full screen»): на том же
+  `lan-link` ~12 с на открытие связи, `fast-start`, `background-life`, `recap-stories` «not full screen», `swipe-track` «on after letting go: true, false» — 29.10.2026, и на `feat/open-in-oni` до этого): на том же
   коде то проходят, то нет; на `main` тоже. Входит в оптимизацию, п. 3.
 - e2e: шаги пульта через Яндекс Диск («another device in the player», «who controls whom») в полном прогоне иногда
   не дожидаются ответа Диска (30 с); по отдельности проходят (`E2E_ONLY=…`). Возможно, та же причина, что ниже.
