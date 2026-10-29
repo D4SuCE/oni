@@ -1330,6 +1330,10 @@ export async function runSmoke() {
     await backgroundDownload();
     await ownWave();
 
+    // Next to the shortcut's link: Capacitor hands a link to iOS only while the scene is active
+    // (WebViewDelegationHandler), and by the end of the run it was not (the links went nowhere).
+    await shareLinks().catch((e) => report('share-links', false, String(e)));
+
     // A shortcut's link. The page asks iOS to open it (Capacitor hands non-web addresses to the
     // system), so it comes back through the scene as from a shortcut, without the "Open in Oni?"
     // prompt that `simctl openurl` raises and nobody can tap in CI.
@@ -1365,9 +1369,6 @@ export async function runSmoke() {
     await eqButton().catch((e) => report('eq-button', false, String(e)));
     await voiceShortcuts();
     await animLight().catch((e) => report('anim-light', false, String(e)));
-    // Before the update check: it asks iOS to open SideStore, which the simulator has not got, and
-    // the links after that went nowhere.
-    await shareLinks().catch((e) => report('share-links', false, String(e)));
     await updateCheck();
   } catch (e) {
     report('crash', false, String(e));
