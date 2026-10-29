@@ -15,6 +15,7 @@ import { isIos } from '../ui/platform.ts';
 import { setPhoneSound, usePhoneSound } from '../player/phoneSound.ts';
 import { pushPresence } from '../player/shell.ts';
 import { setPrivacy, usePrivacy } from '../player/privacy.ts';
+import { setAiPrefs, useAi } from '../recs/ai.ts';
 import { MAX_SEE_THROUGH, setSeeThrough, useSeeThrough } from '../ui/seeThrough.ts';
 import { checkIosUpdate, installIosUpdate, installUpdateShortcut, setAutoUpdate, setUpdateViaShortcut, UPDATE_SHORTCUT, useAutoUpdate } from '../ui/iosUpdate.ts';
 import { useUpdate } from '../ui/update.ts';
@@ -164,6 +165,8 @@ export function SettingsView() {
       </div>
 
       <PrivateListening />
+
+      <AiMusic />
 
       {window.wave?.setCloseToTray && (
         <div className="panel glass">
@@ -797,6 +800,31 @@ function PrivateListening() {
           <input type="checkbox" className="switch" checked={keepHistory} onChange={(e) => setPrivacy({ keepHistory: e.target.checked })} data-testid="private-history" />
         </label>
       )}
+    </div>
+  );
+}
+
+/** AI-made music (recs/ai.ts): the mark, and leaving it out of My Wave and radios. */
+function AiMusic() {
+  const s = useT().settings;
+  const { mark, skip } = useAi();
+  return (
+    <div className="panel glass">
+      <h3>{s.aiTitle}</h3>
+      <label className="toggle-row">
+        <div>
+          <div>{s.aiMark}</div>
+          <div className="hint">{s.aiMarkHint}</div>
+        </div>
+        <input type="checkbox" className="switch" checked={mark} onChange={(e) => setAiPrefs({ mark: e.target.checked })} data-testid="ai-mark" />
+      </label>
+      <label className="toggle-row">
+        <div>
+          <div>{s.aiSkip}</div>
+          <div className="hint">{s.aiSkipHint}</div>
+        </div>
+        <input type="checkbox" className="switch" checked={skip} onChange={(e) => setAiPrefs({ skip: e.target.checked })} data-testid="ai-skip" />
+      </label>
     </div>
   );
 }

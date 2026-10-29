@@ -17,6 +17,7 @@ import { askText } from './Dialog.tsx';
 import { openMenu, type MenuItem } from './Menu.tsx';
 import { editUpload, showTrackInfo } from './TrackSheet.tsx';
 import { addToMine } from '../share/mine.ts';
+import { isAi, lookAi, useAi } from '../recs/ai.ts';
 
 /** A file the user uploaded: marked in lists, with a short menu (its link opens for nobody else). */
 const isUpload = (t: Track) => t.trackSource === 'UGC';
@@ -133,6 +134,18 @@ interface RowProps {
   handle?: boolean;
 }
 
+/** "AI": slopless.art says the track is AI-made (recs/ai.ts), while the mark is on in Settings. */
+export function AiBadge({ track }: { track: Track }) {
+  const tx = useT();
+  const shown = useAi((s) => s.mark && s.v >= 0 && isAi(track));
+  if (!shown) return null;
+  return (
+    <span className="badge ai" title={tx.settings.aiBadgeHint} data-testid="ai-badge">
+      {tx.settings.aiBadge}
+    </span>
+  );
+}
+
 const TrackRow = memo(function TrackRow({ track: t, index, active, playing, liked, showAlbum, onPlay, onRemove, rowMenu, saved, off, sortable, handle }: RowProps) {
   // taken away by Yandex, but downloaded: it plays from the copy (player.ts, `playable`)
   const unavailable = (t.available === false && saved !== 'done') || Boolean(off);
@@ -183,6 +196,7 @@ const TrackRow = memo(function TrackRow({ track: t, index, active, playing, like
           {t.title}
           {t.version && <span className="tr-version"> {t.version}</span>}
           {t.contentWarning === 'explicit' && <span className="badge">E</span>}
+          <AiBadge track={t} />
         </div>
         <div className="tr-artists">
           <ArtistLinks artists={t.artists} plain={isIos || plainArtists(t)} />
@@ -285,6 +299,10 @@ export function TrackList({
   onReorderDone?: () => void;
 }) {
   const currentId = usePlayer((s) => s.queue[s.index]?.id);
+  // AI marks for the top of the list (the rest show what is known already): one ask per artist, kept a week.
+  useEffect(() => {
+    void lookAi(tracks.slice(0, 40));
+  }, [tracks]);
   const playing = usePlayer((s) => s.playing);
   const liked = useApp((s) => s.liked);
   const offlineNow = useApp((s) => s.offline);

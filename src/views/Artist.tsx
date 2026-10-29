@@ -1,5 +1,6 @@
 import { Play, Radio, Share, Shuffle } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { aiArtist, lookAiArtists, useAi } from '../recs/ai.ts';
 import { api } from '../api/client.ts';
 import { artistCover } from '../api/yandex.ts';
 import { AlbumCard, ArtistCard, ErrorBox, PageHeader, Section, Shelf, Spinner } from '../components/Common.tsx';
@@ -8,6 +9,21 @@ import { useLang, useT } from '../i18n.ts';
 import { playRadio, playShuffled, playTracks } from '../player/player.ts';
 import { share } from '../ui/share.ts';
 import { useAsync } from '../ui/util.ts';
+
+/** slopless.art's word on the artist (recs/ai.ts): how many of the tracks are AI-made, if any. */
+function ArtistAi({ id }: { id: number | string }) {
+  const t = useT();
+  const info = useAi((s) => (s.mark && s.v >= 0 ? aiArtist(id) : undefined));
+  useEffect(() => {
+    void lookAiArtists([id]);
+  }, [id]);
+  if (!info?.ai) return null;
+  return (
+    <div className="artist-ai" data-testid="artist-ai">
+      <span className="badge ai">{t.settings.aiBadge}</span> {t.settings.aiArtist(info.ai, info.total)}
+    </div>
+  );
+}
 
 export function ArtistView({ id }: { id: number | string }) {
   const { data, loading, error, reload } = useAsync(() => api.artist(id), [id]);
@@ -31,7 +47,12 @@ export function ArtistView({ id }: { id: number | string }) {
         icon="user"
         kicker={t.common.artist}
         title={artist.name}
-        meta={artist.genres?.length ? artist.genres.map((g) => genres.data?.[g] || g).join(', ') : undefined}
+        meta={
+          <>
+            {artist.genres?.length ? artist.genres.map((g) => genres.data?.[g] || g).join(', ') : null}
+            <ArtistAi id={artist.id} />
+          </>
+        }
         actions={
           <>
             <button className="btn primary" onClick={() => playAll(false)}>

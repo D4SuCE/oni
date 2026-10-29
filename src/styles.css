@@ -597,6 +597,19 @@ html.acrylic .backdrop {
 }
 
 /* Uploaded by the user: the gold of the palette, so it reads apart from the grey "E". */
+.badge.ai {
+  width: auto;
+  padding: 0 4px;
+  background: rgba(199, 154, 84, 0.28);
+  color: var(--gold);
+  letter-spacing: 0.04em;
+}
+.artist-ai {
+  margin-top: 4px;
+}
+.artist-ai .badge {
+  margin: 0 4px 0 0;
+}
 .badge.upload {
   margin: 0 7px 0 0;
   background: var(--gold-soft);
