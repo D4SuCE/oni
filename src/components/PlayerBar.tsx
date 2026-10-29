@@ -208,6 +208,7 @@ export function PlayerBar() {
   const sourceTitle = useSourceTitle(source);
   const openNow = () => useApp.setState({ nowPlayingOpen: true });
   const eqOn = useEq((s) => s.enabled);
+  const rate = usePlayer((s) => s.rate);
   // On the iPhone a sideways swipe along the bar turns the track (as in Yandex Music's app).
   const bar = useRef<HTMLElement>(null);
   useSwipeTrack(bar, barPeers, turnTrack, isIos && Boolean(track));
@@ -265,8 +266,9 @@ export function PlayerBar() {
           <button className="icon-btn" onClick={openNow} title={t.player.queue}>
             <ListMusic size={18} />
           </button>
-          <button className={cx('icon-btn', eqOn && 'on')} onClick={() => useApp.setState((s) => ({ soundOpen: !s.soundOpen }))} title={t.sound.title} data-testid="sound-button">
+          <button className={cx('icon-btn', (eqOn || rate !== 1) && 'on')} onClick={() => useApp.setState((s) => ({ soundOpen: !s.soundOpen }))} title={t.sound.title} data-testid="sound-button">
             <SlidersVertical size={18} />
+            {rate !== 1 && <span className="rate-badge">{t.sound.rate(rate)}</span>}
           </button>
           <VolumeControl />
           {window.wave?.openMini && (

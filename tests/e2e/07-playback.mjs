@@ -265,3 +265,42 @@ await step('keyboard: space toggles playback', async () => {
   await page.keyboard.press('Space');
   await page.waitForFunction((b) => window.__wave.audio.paused === b, before);
 });
+
+await step('speed: the music goes 1.25× (both elements, the next track too), the pitch kept or not, back to 1× (reverted)', async () => {
+  const state = () => page.evaluate(() => ({ rate: window.__wave.usePlayer.getState().rate, els: window.__wave.audio.elements.map((el) => ({ rate: el.playbackRate, pitch: el.preservesPitch })) }));
+  try {
+    await page.evaluate(async () => window.__wave.playTracks((await window.__wave.api.chart()).filter((t) => t.available !== false).slice(0, 3), 0, 'e2e speed'));
+    await waitPlaying(1);
+    await page.click('[data-testid="sound-button"]');
+    await page.click('[data-testid="speed-1.25"]');
+    let s = await state();
+    if (s.rate !== 1.25 || s.els.some((el) => el.rate !== 1.25 || !el.pitch)) throw new Error(`1.25×: ${JSON.stringify(s)}`);
+    // The clock of the track runs as fast: 2 s of the wall clock, about 2.5 s of the track.
+    const t0 = await page.evaluate(() => [performance.now(), window.__wave.audio.currentTime]);
+    await page.waitForTimeout(2000);
+    const t1 = await page.evaluate(() => [performance.now(), window.__wave.audio.currentTime]);
+    const pace = (t1[1] - t0[1]) / ((t1[0] - t0[0]) / 1000);
+    if (pace < 1.1 || pace > 1.4) throw new Error(`the track goes ${pace.toFixed(2)}× the clock`);
+    await page.locator('label', { has: page.locator('[data-testid="keep-pitch"]') }).click();
+    s = await state();
+    if (s.els.some((el) => el.pitch)) throw new Error(`pitch still kept: ${JSON.stringify(s)}`);
+    // A new track (a new src resets an element's speed to its default one): still 1.25×.
+    const index = await page.evaluate(() => window.__wave.usePlayer.getState().index);
+    await page.keyboard.press('Escape');
+    await page.click('[data-testid="next"]');
+    await page.waitForFunction((i) => window.__wave.usePlayer.getState().index !== i, index, { timeout: 15000 });
+    await waitPlaying(0.5);
+    const el = await page.evaluate(() => window.__wave.audio.el.playbackRate);
+    if (el !== 1.25) throw new Error(`the next track at ${el}×`);
+    // The badge on the sound button, while it is not 1×.
+    if ((await page.textContent('[data-testid="sound-button"]')) !== '1,25×') throw new Error(`badge "${await page.textContent('[data-testid="sound-button"]')}"`);
+  } finally {
+    await page.evaluate(() => {
+      window.__wave.setRate(1, true);
+      window.__wave.audio.pause();
+    });
+  }
+  const s = await state();
+  if (s.rate !== 1 || s.els.some((el) => el.rate !== 1 || !el.pitch)) throw new Error(`not back: ${JSON.stringify(s)}`);
+  if (await page.$('.rate-badge')) throw new Error('the badge stayed at 1×');
+});

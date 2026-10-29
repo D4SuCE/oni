@@ -28,6 +28,8 @@ interface PlayerPlugin {
   seek(options: { time: number }): Promise<void>;
   setEq(options: { enabled: boolean; preamp: number; gains: number[] }): Promise<void>;
   setGain(options: { value: number }): Promise<void>;
+  /** Playback speed; `keepPitch`: the voice stays as recorded (otherwise it goes up with the speed). */
+  setRate(options: { rate: number; keepPitch: boolean }): Promise<void>;
   state(): Promise<{ time: number; duration: number; playing: boolean; eq: boolean; engine?: boolean; crossing?: boolean; lift?: number; streaming?: boolean; waiting?: boolean; received?: number; expected?: number }>;
   /** For the simulator run: downloads held to a slow network's pace (0: off). */
   testThrottle(options: { bytesPerSecond: number }): Promise<void>;
@@ -69,6 +71,7 @@ export class NativeAudio extends EventTarget {
   /** iOS's volume is the phone's (volume.ts); levelling goes through OniPlayer.setGain. */
   volume = 1;
   error: { message: string } | null = null;
+  defaultPlaybackRate = 1;
   /** What the next `src` is: the track's id, its file ending, the ids whose files to keep, and
    * for a downloaded track (src `oni-sealed:<id>`) the key its file opens with. */
   next: { id: string; ext: string; keep: string[]; key?: string; duration?: number } = { id: '', ext: 'mp3', keep: [] };
@@ -130,6 +133,26 @@ export class NativeAudio extends EventTarget {
 
   get src() {
     return this.source;
+  }
+
+  // Speed, on the player itself (it keeps it from track to track); the clock runs as fast.
+  private rate = 1;
+  private keepPitch = true;
+  get playbackRate() {
+    return this.rate;
+  }
+  set playbackRate(value: number) {
+    this.time = this.currentTime;
+    this.at = performance.now();
+    this.rate = value;
+    OniPlayer.setRate({ rate: value, keepPitch: this.keepPitch }).catch(() => {});
+  }
+  get preservesPitch() {
+    return this.keepPitch;
+  }
+  set preservesPitch(value: boolean) {
+    this.keepPitch = value;
+    OniPlayer.setRate({ rate: this.rate, keepPitch: value }).catch(() => {});
   }
 
   set src(value: string) {
@@ -202,7 +225,7 @@ export class NativeAudio extends EventTarget {
 
   get currentTime() {
     if (this.stopped || this.short) return this.time;
-    return Math.min(this.time + (performance.now() - this.at) / 1000, Number.isFinite(this.length) ? this.length : Infinity);
+    return Math.min(this.time + ((performance.now() - this.at) / 1000) * this.rate, Number.isFinite(this.length) ? this.length : Infinity);
   }
 
   set currentTime(value: number) {

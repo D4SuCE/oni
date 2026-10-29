@@ -63,7 +63,7 @@ export function connectDesktopShell() {
   for (const ev of ['play', 'pause', 'seeked', 'loadedmetadata']) audio.addEventListener(ev, progress);
 
   // Discord's status: the track playing, from when it would have started; nothing on a pause.
-  usePlayer.subscribe((s, was) => (s.index !== was.index || s.queue[s.index] !== was.queue[was.index] || s.playing !== was.playing || s.duration !== was.duration) && pushPresence());
+  usePlayer.subscribe((s, was) => (s.index !== was.index || s.queue[s.index] !== was.queue[was.index] || s.playing !== was.playing || s.duration !== was.duration || s.rate !== was.rate) && pushPresence());
   for (const ev of ['playing', 'pause', 'seeked']) audio.addEventListener(ev, () => pushPresence());
   pushPresence();
 }
@@ -78,7 +78,9 @@ export function pushPresence(force = false) {
   let p: Presence | null = null;
   if (t && !audio.paused) {
     const duration = (Number.isFinite(audio.duration) && audio.duration) || s.duration || (t.durationMs || 0) / 1000;
-    const start = Date.now() - (audio.currentTime || 0) * 1000;
+    // Faster or slower: the track's minutes go by at its speed.
+    const rate = s.rate || 1;
+    const start = Date.now() - ((audio.currentTime || 0) * 1000) / rate;
     const album = t.albums?.[0];
     p = {
       title: t.title + (t.version ? ` (${t.version})` : ''),
@@ -87,7 +89,7 @@ export function pushPresence(force = false) {
       cover: trackCover(t, 400) || undefined,
       url: album ? `https://music.yandex.ru/album/${album.id}/track/${t.id}` : undefined,
       start,
-      end: start + duration * 1000,
+      end: start + (duration * 1000) / rate,
     };
   }
   // The same track at the same place (start within 2 s): nothing new to say.

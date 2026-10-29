@@ -32,6 +32,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         CAPPluginMethod(name: "seek", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setEq", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setGain", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setRate", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "state", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "testThrottle", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pulse", returnType: CAPPluginReturnPromise),
@@ -97,6 +98,9 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     private var node: AVAudioPlayerNode { nodes[active] }
     /// Both nodes meet here (each on a bus of its own), before the equalizer.
     private let mix = AVAudioMixerNode()
+    /// Playback speed, after both nodes (a crossfade's two tracks go as fast). The nodes' clocks count
+    /// the file's frames, so the position stays the track's own. Bypassed at 1×, pitch as recorded.
+    private let speed = AVAudioUnitTimePitch()
     private let eq = AVAudioUnitEQ(numberOfBands: 10)
     /// The loudness levelling's lift above full volume (a mixer's volume stops at 1): a plain gain, no bands.
     private let lift = AVAudioUnitEQ(numberOfBands: 0)
@@ -194,9 +198,12 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         eq.bypass = true
         for n in nodes { engine.attach(n) }
         engine.attach(mix)
+        engine.attach(speed)
+        speed.bypass = true
         engine.attach(eq)
         engine.attach(lift)
-        engine.connect(mix, to: eq, format: nil)
+        engine.connect(mix, to: speed, format: nil)
+        engine.connect(speed, to: eq, format: nil)
         engine.connect(eq, to: lift, format: nil)
         engine.connect(lift, to: engine.mainMixerNode, format: nil)
         let center = NotificationCenter.default
@@ -841,6 +848,19 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         }
     }
 
+    /// { rate, keepPitch } — playback speed; without keepPitch the voice goes up with it (as a record
+    /// played faster: the pitch moves by the speed's own interval, 1200 cents an octave).
+    @objc func setRate(_ call: CAPPluginCall) {
+        let rate = Float(max(0.5, min(2, call.getDouble("rate") ?? 1)))
+        let keepPitch = call.getBool("keepPitch") ?? true
+        DispatchQueue.main.async {
+            self.speed.rate = rate
+            self.speed.pitch = keepPitch ? 0 : 1200 * log2(rate)
+            self.speed.bypass = rate == 1
+            call.resolve()
+        }
+    }
+
     @objc func state(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
             let st = self.stream?.state
@@ -890,10 +910,10 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         guard on != pulseOn else { return }
         pulseOn = on
         if !on {
-            mix.removeTap(onBus: 0)
+            speed.removeTap(onBus: 0)
             return
         }
-        let format = mix.outputFormat(forBus: 0)
+        let format = speed.outputFormat(forBus: 0)
         let rate = Float(format.sampleRate > 0 ? format.sampleRate : 44100)
         // Band-pass biquads (RBJ's cookbook, 0 dB at the centre), Q 3, at the analyser's bins
         // (48 kHz / 1024 apart).
@@ -910,7 +930,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         windowAt = 0
         hopFill = 0
         let hop = Int(rate / 60)
-        mix.installTap(onBus: 0, bufferSize: 2048, format: nil) { [weak self] buffer, when in
+        // After the speed: what is heard, at the pace it is heard.
+        speed.installTap(onBus: 0, bufferSize: 2048, format: nil) { [weak self] buffer, when in
             self?.listen(buffer, when: when, hop: hop, rate: Double(rate))
         }
     }

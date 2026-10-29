@@ -549,6 +549,7 @@ function nowPlaying(): NowPlaying | null {
     shuffle: s.shuffle,
     repeat: s.repeat,
     volume: s.volume,
+    ...(s.rate !== 1 && { rate: s.rate }),
   };
 }
 
@@ -585,7 +586,7 @@ usePlayer.subscribe((s, p) => {
     }
     tell();
     publishSoon(s.playing !== p.playing || sought ? 300 : 600);
-  } else if (s.queue.length !== p.queue.length || s.shuffle !== p.shuffle || s.repeat !== p.repeat || s.volume !== p.volume) {
+  } else if (s.queue.length !== p.queue.length || s.shuffle !== p.shuffle || s.repeat !== p.repeat || s.volume !== p.volume || s.rate !== p.rate) {
     tell();
     publishSoon(2000);
   }

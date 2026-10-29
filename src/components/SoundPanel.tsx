@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { StreamQuality } from '../api/yandex.ts';
 import { useT } from '../i18n.ts';
 import { EQ_BANDS, EQ_PRESETS, EQ_RANGE, applyPreset, canProcessAudio, setBand, setEqEnabled, setPreamp, useEq, type EqPreset } from '../player/eq.ts';
-import { setQuality, usePlayer } from '../player/player.ts';
+import { RATES, setQuality, setRate, usePlayer } from '../player/player.ts';
 import { useApp } from '../store.ts';
 import { cx } from '../ui/util.ts';
 import { useSwipeDown } from '../ui/swipe.ts';
@@ -78,6 +78,32 @@ function PresetPicker({ open, setOpen }: { open: boolean; setOpen: (v: boolean) 
   );
 }
 
+/** Playback speed: a row of speeds, and whether the voice keeps its pitch. */
+function Speed() {
+  const s = useT().sound;
+  const rate = usePlayer((p) => p.rate);
+  const keepPitch = usePlayer((p) => p.keepPitch);
+  return (
+    <div className="sound-speed">
+      <div className="sound-speed-head sound-eq-title">{s.speed}</div>
+      <div className="segmented" data-testid="speed">
+        {RATES.map((r) => (
+          <button key={r} className={cx(r === rate && 'active')} onClick={() => setRate(r)} data-testid={`speed-${r}`}>
+            {s.rate(r)}
+          </button>
+        ))}
+      </div>
+      <label className="toggle-row">
+        <div>
+          <div>{s.keepPitch}</div>
+          <div className="hint">{s.keepPitchHint}</div>
+        </div>
+        <input type="checkbox" className="switch" checked={keepPitch} onChange={(e) => setRate(rate, e.target.checked)} data-testid="keep-pitch" />
+      </label>
+    </div>
+  );
+}
+
 /** Sound settings (as in the official app): stream quality and a 10-band equalizer. */
 export function SoundPanel() {
   const t = useT();
@@ -125,6 +151,8 @@ export function SoundPanel() {
           </button>
         ))}
         {stream && <div className="hint sound-now">{s.now(stream.codec, stream.bitrate)}</div>}
+
+        <Speed />
 
         {canProcessAudio() && (
           <>
