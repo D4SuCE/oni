@@ -1,4 +1,4 @@
-import { ArrowUpDown, Heart, MoreHorizontal, Pencil, Radio, Shuffle, Trash2, Upload } from 'lucide-react';
+import { ArrowUpDown, Heart, MoreHorizontal, Pencil, Radio, Share, Shuffle, Trash2, Upload } from 'lucide-react';
 import { DownloadButton } from '../components/DownloadButton.tsx';
 import { useEffect, useRef, useState } from 'react';
 import { api, transport } from '../api/client.ts';
@@ -17,6 +17,7 @@ import { visible } from '../share/mark.ts';
 import { shareLinkOf } from '../share/shared.ts';
 import { shareUploads } from '../share/owner.ts';
 import { isIos } from '../ui/platform.ts';
+import { share } from '../ui/share.ts';
 import { cx, fmtTotal, useAsync } from '../ui/util.ts';
 import { useListSearch } from '../components/ListSearch.tsx';
 import { savedPlaylist } from '../player/offlineLists.ts';
@@ -142,8 +143,11 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
 
   // "…" on the iPhone: what does not fit its one row of buttons. "Move" puts the list in order
   // (handles on its rows), once it is all in and not narrowed by a search.
+  // Shared by the owner's login: Yandex's own web link has it (the page falls back to it, site/).
+  const sharePlaylist = () => share({ kind: 'playlist', owner: pl.owner?.login || String(pl.uid), id: String(pl.kind) }, pl.title);
   const more: MenuItem[] = [
     { label: t.common.radio, icon: <Radio size={15} />, onClick: () => playRadio(`playlist:${pl.uid}:${pl.kind}`, pl.title) },
+    { label: t.menu.share, icon: <Share size={15} />, onClick: sharePlaylist },
     ...(own
       ? [
           ...(complete && tracks.length > 1 && !search.query ? [{ label: t.menu.reorder, icon: <ArrowUpDown size={15} />, onClick: () => setReordering(true) }] : []),
@@ -185,6 +189,9 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
               <>
                 <button className="btn glass-btn" onClick={() => playRadio(`playlist:${pl.uid}:${pl.kind}`, pl.title)} disabled={!tracks.length} data-testid="radio">
                   <Radio size={16} /> {t.common.radio}
+                </button>
+                <button className="btn glass-btn" onClick={sharePlaylist} title={t.menu.share} data-testid="share">
+                  <Share size={16} /> {t.menu.share}
                 </button>
                 {!own && (
                   <button className={cx('icon-btn', saved && 'on like')} onClick={() => togglePlaylistLike(pl)} title={saved ? t.playlist.unsave : t.playlist.save} data-testid="playlist-like">

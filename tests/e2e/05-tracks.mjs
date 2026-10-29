@@ -353,3 +353,46 @@ await step('liked tracks page', async () => {
   await page.waitForTimeout(1500);
   await shot('09-liked');
 });
+
+await step('links: Share, an oni:// link from a browser, a Yandex link pasted into Search', async () => {
+  // "Share" gives Oni's page (site/); the oni:// link it opens comes from a browser as a second start
+  // of Oni (electron/main.cjs). A track link plays the track, the others open their page.
+  const t = (await page.evaluate(() => window.__wave.api.search('Кино Группа крови', 'track'))).tracks.results[0];
+  const album = t.albums[0].id;
+  const clip = await app.evaluate(({ clipboard }) => clipboard.readText());
+  try {
+    await page.evaluate((id) => window.__wave.navigate({ name: 'album', id }), album);
+    await page.click('[data-testid="share"]');
+    await page.waitForFunction(() => document.querySelector('.toast')?.textContent?.includes('Ссылка скопирована'), null, { timeout: 5000 });
+    const shared = await app.evaluate(({ clipboard }) => clipboard.readText());
+    if (shared !== `https://oni-music.github.io/#album/${album}`) throw new Error(`Share copied ${shared}`);
+  } finally {
+    await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), clip);
+  }
+
+  const browser = (link) => app.evaluate(({ app }, link) => app.emit('second-instance', {}, ['Oni.exe', link], ''), link);
+  await browser(`oni://track/${t.id}/`); // Windows' way: a slash at the end
+  await page.waitForFunction((id) => {
+    const s = window.__wave.usePlayer.getState();
+    return String(s.queue[s.index]?.id) === String(id);
+  }, t.id, { timeout: 15000 });
+  await waitPlaying(0.5);
+
+  const { login, kind } = await page.evaluate(() => ({ login: window.__wave.useApp.getState().account.login, kind: window.__wave.useApp.getState().playlists[0]?.kind }));
+  if (kind !== undefined) {
+    await browser(`oni://playlist/${encodeURIComponent(login)}/${kind}`);
+    await page.waitForFunction((kind) => {
+      const r = window.__wave.useApp.getState().route;
+      return r.name === 'playlist' && String(r.kind) === String(kind);
+    }, kind, { timeout: 10000 });
+    await page.waitForSelector('.page-title, h1', { timeout: 15000 });
+  }
+
+  await page.click('[data-testid="nav-search"]');
+  await page.fill('[data-testid="search-input"]', `https://music.yandex.ru/album/${album}?utm_source=share`);
+  await page.waitForFunction((id) => {
+    const s = window.__wave.useApp.getState();
+    return s.route.name === 'album' && String(s.route.id) === String(id) && s.searchQuery === '';
+  }, album, { timeout: 5000 });
+  await page.waitForSelector('.track-row', { timeout: 15000 });
+});

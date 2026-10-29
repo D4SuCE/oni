@@ -23,6 +23,19 @@ type Wave = {
 const wave = () => (window as unknown as { __wave: Wave }).__wave;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** "Share" links: Oni's page (site/) opens oni://album/<id> and oni://track/<id> in the app; through
+ * the scene, as a shortcut's link comes (src/ui/links.ts). The album opens, the track plays. */
+async function shareLinks() {
+  const w = (window as unknown as { __wave: { api: { search(q: string, type: string): Promise<any> }; useApp: { getState(): { route: { name: string; id?: unknown } } } } }).__wave;
+  const t = (await w.api.search('Кино Группа крови', 'track')).tracks.results[0];
+  location.href = `oni://album/${t.albums[0].id}`;
+  const album = await until(() => w.useApp.getState().route.name === 'album' && String(w.useApp.getState().route.id) === String(t.albums[0].id), 20000);
+  location.href = `oni://track/${t.id}`;
+  const st = wave().usePlayer.getState;
+  const played = await until(() => String(st().queue[st().index]?.id) === String(t.id) && !wave().audio.paused, 30000);
+  report('share-links', album && played, `album ${album ? 'opened' : 'not opened'}, track ${played ? 'plays' : 'does not play'}`);
+}
+
 async function until(what: () => unknown, timeout: number) {
   const end = Date.now() + timeout;
   while (Date.now() < end) {
@@ -1353,6 +1366,7 @@ export async function runSmoke() {
     await voiceShortcuts();
     await animLight().catch((e) => report('anim-light', false, String(e)));
     await updateCheck();
+    await shareLinks().catch((e) => report('share-links', false, String(e)));
   } catch (e) {
     report('crash', false, String(e));
   }

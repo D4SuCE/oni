@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld('wave', {
   log: (level, source, message) => ipcRenderer.send('wave:log', { level, source, message }),
   openLogs: () => ipcRenderer.invoke('wave:logs:open'),
   onCommand: (cb) => ipcRenderer.on('wave:command', (_e, cmd) => cb(cmd)),
+  takeLink: () => ipcRenderer.invoke('wave:link:take'),
+  onLink: (cb) => ipcRenderer.on('wave:link', (_e, link) => cb(link)),
   setPlayback: (state) => ipcRenderer.send('wave:playback', state),
   shellPrefs: () => ipcRenderer.sendSync('wave:shell:prefs'),
   setCloseToTray: (enabled) => ipcRenderer.send('wave:shell:close-to-tray', enabled),

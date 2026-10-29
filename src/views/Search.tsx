@@ -8,6 +8,7 @@ import { TrackList } from '../components/TrackList.tsx';
 import { useT } from '../i18n.ts';
 import { playTracks } from '../player/player.ts';
 import { back, navigate, useApp } from '../store.ts';
+import { openPasted } from '../ui/links.ts';
 import { isIos } from '../ui/platform.ts';
 import { useSwipeDown } from '../ui/swipe.ts';
 import { cx, useEscape } from '../ui/util.ts';
@@ -87,6 +88,8 @@ export function Search() {
 
   useEffect(() => {
     if (!q) return;
+    // A link pasted in (Oni's or Yandex Music's): open what it points to, as the link itself would.
+    if (openPasted(q)) return useApp.setState({ searchQuery: '' });
     let alive = true;
     const timer = setTimeout(async () => {
       try {
