@@ -62,7 +62,9 @@ oni-releases — витрина и обновления); README `oni` для р
    `package.json`, `setAsDefaultProtocolClient` и `second-instance` в `electron/main.cjs`. Отступление от плана:
    страница **не уводит в Яндекс Музыку сама** (в Safari и Chrome при запросе `oni://` есть окно «Открыть в Oni?» — таймер
    увёл бы, пока его читают; у кого нет Oni — ошибка «адрес недействителен»); Oni открывается сам, только если на
-   устройстве уже нажимали «Открыть в Oni». Проверки: `tests/links.test.ts`, e2e «links: …». Ждёт отзыва пользователя.
+   устройстве уже нажимали «Открыть в Oni». Проверки: `tests/links.test.ts`, e2e «links: …» (на машине GitHub 92/92), облачная iPhone `share-links` (шаг стоит рядом
+   с `search-link`: Capacitor отдаёт ссылку iOS, только пока окно активно). **Пробная сборка `trial-14`** (черновик в
+   D4SuCE/oni: Windows portable 2.1.0-trial.1 + IPA) — ждёт отзыва пользователя, потом PR и выпуск 2.1.0.
    Исходный план: «Поделиться» копирует `https://`-ссылку на нашу страницу (GitHub Pages
    в `oni-releases`); страница открывает `oni://track/…` (iPhone — схема уже есть; Windows — зарегистрировать
    `oni://`, `app.setAsDefaultProtocolClient`, второй запуск передаёт ссылку), без Oni через секунду — Яндекс Музыка.
