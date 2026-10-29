@@ -69,6 +69,11 @@ export interface Transport {
   /** Discord's status (electron/discord.cjs): on or off, and what plays (null: nothing). */
   setDiscord?(enabled: boolean): void;
   setPresence?(track: Presence | null): void;
+  /** Global hotkeys (electron/hotkeys.cjs): work while Oni is in the background. */
+  hotkeys?(): HotkeyState;
+  setHotkeys?(next: { enabled?: boolean; keys?: Partial<Record<HotkeyAction, string>> }): Promise<HotkeyState>;
+  /** Off while Settings waits for a new key. */
+  pauseHotkeys?(on: boolean): void;
   setProgress?(p: ShellProgress): void;
   openMini?(): void;
   // auto-update (installed desktop app)
@@ -115,7 +120,17 @@ export interface ShellProgress {
   playing: boolean;
 }
 
-export type ShellCommand = 'toggle' | 'next' | 'prev' | 'like' | 'back' | 'forward';
+export type ShellCommand = 'toggle' | 'next' | 'prev' | 'like' | 'back' | 'forward' | 'volumeUp' | 'volumeDown';
+
+export type HotkeyAction = 'toggle' | 'next' | 'prev' | 'volumeUp' | 'volumeDown' | 'like';
+
+/** Keys are Electron accelerators ('Control+Alt+Space'; '' — none); `busy`: held by another program. */
+export interface HotkeyState {
+  enabled: boolean;
+  keys: Record<HotkeyAction, string>;
+  defaults: Record<HotkeyAction, string>;
+  busy: HotkeyAction[];
+}
 
 export interface ShellPlayback {
   hasTrack: boolean;

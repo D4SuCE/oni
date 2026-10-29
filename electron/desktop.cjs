@@ -329,4 +329,4 @@ ipcMain.on('wave:shell:close-to-tray', (_e, enabled) => {
 /** For tests: whether the tray icon is there. */
 const hasTray = () => Boolean(tray);
 
-module.exports = { windowBounds, keepHome, attachWindow, showWindow, openMini, asset, setLogger, hasTray, startedHidden };
+module.exports = { windowBounds, keepHome, attachWindow, showWindow, openMini, asset, setLogger, hasTray, startedHidden, command };

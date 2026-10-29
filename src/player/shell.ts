@@ -5,7 +5,7 @@ import type { Presence, ShellPlayback } from '../api/transport.ts';
 import { artistNames, trackCover } from '../api/yandex.ts';
 import { tr, useLang } from '../i18n.ts';
 import { historyStep, toggleLike, useApp } from '../store.ts';
-import { audio, current, next, prev, toggle, usePlayer } from './player.ts';
+import { audio, current, next, prev, setVolume, toggle, usePlayer } from './player.ts';
 
 function snapshot(): ShellPlayback {
   const s = usePlayer.getState();
@@ -40,7 +40,8 @@ export function connectDesktopShell() {
     else if (cmd === 'like') {
       const t = current();
       if (t) toggleLike(t);
-    } else if (cmd === 'back' || cmd === 'forward') historyStep(cmd);
+    } else if (cmd === 'volumeUp' || cmd === 'volumeDown') setVolume(usePlayer.getState().volume + (cmd === 'volumeUp' ? 0.05 : -0.05));
+    else if (cmd === 'back' || cmd === 'forward') historyStep(cmd);
   });
   // The player store changes several times a second (position); send only real changes.
   let last = '';

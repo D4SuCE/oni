@@ -6,8 +6,12 @@ import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
 
 const root = path.resolve(import.meta.dirname, '..');
+/** The Electron binary (the `electron` package exports its path). */
+const electronExe = createRequire(import.meta.url)('electron');
 const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'wave-desktop-'));
 let passed = 0;
 let failed = 0;
@@ -339,6 +343,74 @@ await step('a link the page opens goes to the browser only when it is a web addr
   if (page.url() !== before) throw new Error(`the window went to ${page.url()}`);
   const after = await app.evaluate(() => globalThis.__opened);
   if (after.at(-1) !== 'https://example.com/away') throw new Error(`not opened in the browser: ${JSON.stringify(after)}`);
+});
+
+// Global hotkeys (electron/hotkeys.cjs): the real keys only here (ONI_HOTKEYS), for a moment; the
+// file they live in is this run's own profile.
+await app.close().catch(() => {});
+({ app, page } = await launch({ ONI_HOTKEYS: '1' }));
+const hotkeysModule = path.join(root, 'electron', 'hotkeys.cjs');
+const registered = (key) => app.evaluate(({ globalShortcut }, k) => globalShortcut.isRegistered(k), key);
+
+await step('global hotkeys: on from the start, and a key runs its action in the page', async () => {
+  for (const key of ['Control+Alt+P', 'Control+Alt+Right', 'Control+Alt+Left', 'Control+Alt+L']) if (!(await registered(key))) throw new Error(`${key} not registered`);
+  const volume = () => page.evaluate(() => window.__wave.usePlayer.getState().volume);
+  await page.evaluate(() => window.__wave.setVolume(0.5));
+  await app.evaluate((_e, file) => process.mainModule.require(file).press('volumeDown'), hotkeysModule);
+  await page.waitForFunction(() => Math.abs(window.__wave.usePlayer.getState().volume - 0.45) < 0.001, null, { timeout: 3000 });
+  await app.evaluate((_e, file) => process.mainModule.require(file).press('volumeUp'), hotkeysModule);
+  await page.waitForFunction(() => Math.abs(window.__wave.usePlayer.getState().volume - 0.5) < 0.001, null, { timeout: 3000 });
+  if (Math.abs((await volume()) - 0.5) > 0.001) throw new Error(`volume ${await volume()}`);
+});
+
+await step('global hotkeys: Settings takes a new key, gives it up while waiting, turns them off and back', async () => {
+  await page.evaluate(() => window.__wave.navigate({ name: 'settings' }));
+  await page.click('[data-testid="hotkey-next"]');
+  // Waiting for the key: ours are off, or pressing one would run it.
+  await page.waitForFunction(() => document.querySelector('[data-testid="hotkey-next"]')?.classList.contains('recording'));
+  if (await registered('Control+Alt+P')) throw new Error('hotkeys still on while a new key is awaited');
+  await page.keyboard.press('Control+Alt+KeyN');
+  await page.waitForFunction(() => document.querySelector('[data-testid="hotkey-next"]')?.textContent === 'Ctrl + Alt + N', null, { timeout: 3000 });
+  if (!(await registered('Control+Alt+N'))) throw new Error('the new key is not registered');
+  if (await registered('Control+Alt+Right')) throw new Error('the old key is still registered');
+  if (!(await registered('Control+Alt+P'))) throw new Error('the other keys did not come back');
+  // Escape leaves the key as it was; Backspace removes it.
+  await page.click('[data-testid="hotkey-like"]');
+  await page.keyboard.press('Escape');
+  if (!(await registered('Control+Alt+L'))) throw new Error('Escape removed the key');
+  await page.click('[data-testid="hotkey-like"]');
+  await page.keyboard.press('Backspace');
+  await page.waitForFunction(() => !document.querySelector('[data-testid="hotkey-like"]')?.textContent?.includes('+'), null, { timeout: 3000 });
+  if (await registered('Control+Alt+L')) throw new Error('Backspace left the key');
+  await page.click('[data-testid="hotkeys-reset"]');
+  await page.waitForFunction(() => document.querySelector('[data-testid="hotkey-next"]')?.textContent === 'Ctrl + Alt + →', null, { timeout: 3000 });
+  if (!(await registered('Control+Alt+Right')) || !(await registered('Control+Alt+L'))) throw new Error('the defaults did not come back');
+  await page.click('[data-testid="global-hotkeys-on"]');
+  await page.waitForTimeout(300);
+  if (await registered('Control+Alt+P')) throw new Error('turned off, still registered');
+  await page.click('[data-testid="global-hotkeys-on"]');
+  await page.waitForTimeout(300);
+  if (!(await registered('Control+Alt+P'))) throw new Error('turned on again, not registered');
+});
+
+await step('global hotkeys: a key another program holds shows as taken', async () => {
+  const holder = spawn(electronExe, [path.join(root, 'tests', 'hotkey-holder.cjs'), 'Control+Alt+K'], { stdio: ['ignore', 'pipe', 'ignore'] });
+  try {
+    let out = '';
+    const said = await new Promise((done) => {
+      holder.stdout.on('data', (d) => (out += d) && /held|taken/.test(out) && done(out.match(/held|taken/)[0]));
+      setTimeout(() => done(`nothing in 15 s: ${out}`), 15000);
+    });
+    if (said !== 'held') throw new Error(`the holder could not take the key: ${said}`);
+    await page.click('[data-testid="hotkey-like"]');
+    await page.keyboard.press('Control+Alt+KeyK');
+    await page.waitForSelector('[data-testid="hotkey-like"].busy', { timeout: 3000 });
+    if (!/другой программой|another program/.test(await page.textContent('[data-testid="global-hotkeys"]'))) throw new Error('no word that the key is taken');
+  } finally {
+    holder.kill();
+  }
+  await page.click('[data-testid="hotkeys-reset"]');
+  await page.waitForSelector('[data-testid="hotkey-like"]:not(.busy)', { timeout: 3000 });
 });
 
 await app.close().catch(() => {});
