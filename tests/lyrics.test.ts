@@ -2,7 +2,10 @@
 // synced first; covers, live takes and instrumentals left out.
 // Run: npm run test:lyrics
 import { pickLrclib } from '../src/player/lrclib.ts';
-import { parseLrc, songPace, sungLetters } from '../src/player/lrc.ts';
+import { activeLine, LEAD, linePace, litLetters, parseLrc, sungLetters, syllableWeights, type LrcLine } from '../src/player/lrc.ts';
+
+/** A made-up song: at each time a line of so many syllables ("la la …"). */
+const song = (at: [number, number][]): LrcLine[] => parseLrc(at.map(([t, n]) => `[${String(Math.floor(t / 60)).padStart(2, '0')}:${(t % 60).toFixed(2).padStart(5, '0')}]${Array(n).fill('la').join(' ')}`).join('\n'));
 
 let passed = 0;
 let failed = 0;
@@ -59,24 +62,57 @@ test('LRC: lines by time, a chorus written once with two times, tags skipped', (
   assert(lines.map((l) => `${l.t}:${l.text}`).join('|') === '12:Du|14.5:Du hast|20:Du hast mich|30:|70.5:Du hast mich', JSON.stringify(lines));
 });
 
-test("a line with no word times fills at the song's pace, not over a pause after it (the user: words lagged behind the voice)", () => {
-  // The times and line lengths of Night Club's "The Creepshow" (its opening), the words made up.
-  const opening: [number, number][] = [[23.27, 17], [25.89, 18], [28.69, 31], [34.19, 21], [36.72, 22], [39.43, 34], [44.18, 20], [46.55, 29], [49.44, 24], [51.9, 22], [54.99, 20]];
-  const lines = parseLrc(opening.map(([t, n]) => `[00:${t.toFixed(2).padStart(5, '0')}]${'x'.repeat(n)}`).join('\n'));
-  // A 31-letter line with 5.5 s to the next one is sung in about 3 s: lit whole by then, not half.
-  assert(sungLetters(lines, 2, 28.69 + 3.2) === 31, `${sungLetters(lines, 2, 28.69 + 3.2)} of 31 at 3.2 s`);
+test("a line with no word times fills at the pace around it, not over a pause after it (the user: words lagged behind the voice)", () => {
+  // The times of Night Club's "The Creepshow" (its opening) and about its lines' syllables, the words made up.
+  const opening: [number, number][] = [[23.27, 5], [25.89, 6], [28.69, 9], [34.19, 6], [36.72, 6], [39.43, 10], [44.18, 4], [46.55, 7], [49.44, 7], [51.9, 6], [54.99, 4]];
+  const lines = song(opening);
+  // 9 syllables with 5.5 s to the next line are sung in about 3 s: lit whole by 3.4 s (it was 18 of 31 letters at 3.2 s).
+  assert(sungLetters(lines, 2, 28.69 + 3.4) === lines[2].text.length, `${sungLetters(lines, 2, 28.69 + 3.4)} of ${lines[2].text.length} at 3.4 s`);
   // Back to back, each line is done before the next begins.
   for (const i of [0, 1, 3, 6]) assert(sungLetters(lines, i, lines[i + 1].t - 0.05) === lines[i].text.length, `line ${i} not done`);
   assert(sungLetters(lines, 2, 28.6) === 0, 'before the line');
 });
 
-test('the pace: a fast song fills fast, a slow one no slower than 0.13 s a letter; a long solo is not crawled through', () => {
-  const song = (perLetter: number) => parseLrc(Array.from({ length: 8 }, (_, i) => `[00:${String(10 + i * 2).padStart(2, '0')}.00]${'x'.repeat(Math.round(2 / perLetter))}`).join('\n'));
-  assert(Math.abs(songPace(song(0.06)) - 0.048) < 0.01, `fast: ${songPace(song(0.06))}`);
-  assert(songPace(song(0.5)) === 0.13, `slow: ${songPace(song(0.5))}`);
+test('a line is lit whole by the moment the next one takes over (the user: the last words of a line were eaten)', () => {
+  // Times of Eminem's "Rap God" (its quick part) and about its lines' syllables, the words made up: back to back.
+  const lines = song([[40.06, 9], [41.6, 10], [43.33, 9], [44.94, 10], [46.36, 13], [47.99, 13], [49.58, 18], [52.8, 13], [54.39, 11], [56.06, 13], [57.34, 17], [59.59, 12], [60.79, 26], [64.53, 14]]);
+  for (let i = 0; i + 1 < lines.length; i++) {
+    // The last moment line i is the one lit: just before activeLine moves on.
+    const last = lines[i + 1].t - LEAD - 0.01;
+    assert(activeLine(lines, last) === i, `line ${i} not lit at ${last}`);
+    assert(litLetters(lines, i, last) === lines[i].text.length, `line ${i}: ${litLetters(lines, i, last).toFixed(1)} of ${lines[i].text.length} lit as it is given up`);
+  }
+});
+
+test('the pace follows the song: slow where it is slow, quick in the quick part (Rap God), and no crawling through a solo', () => {
+  // Ten slow lines (0.45 s a syllable), then fourteen quick ones (0.12 s), back to back.
+  const slow = Array.from({ length: 10 }, (_, i) => [10 + i * 4.5, 10] as [number, number]);
+  const quick = Array.from({ length: 14 }, (_, i) => [55 + i * 1.8, 15] as [number, number]);
+  const lines = song([...slow, ...quick]);
+  assert(linePace(lines, 2) > 0.3, `slow part: ${linePace(lines, 2)}`);
+  assert(linePace(lines, 18) < 0.13, `quick part: ${linePace(lines, 18)}`);
+  // The quick part does not race through the slow one: half way through a slow line, about half of it.
+  const half = sungLetters(lines, 3, lines[3].t + 2);
+  assert(half > lines[3].text.length * 0.3 && half < lines[3].text.length * 0.7, `${half} of ${lines[3].text.length}`);
   const solo = parseLrc('[00:10.00]Hello world\n[00:12.00]Next\n[00:13.00]Before a solo\n[01:00.00]After');
-  assert(sungLetters(solo, 2, 13 + 13 * 0.13 + 0.01) === 13, `${sungLetters(solo, 2, 15)}`);
+  // "Be-fo-re a so-lo": 6 syllables at the slowest pace, then lit (47 s to the next line).
+  assert(sungLetters(solo, 2, 13 + 6 * 0.45 + 0.01) === 13, `${sungLetters(solo, 2, 15.7)}`);
   assert(sungLetters(solo, 0, 9) === 0 && sungLetters(solo, 0, 13) === 11, 'before / after');
+});
+
+test(`syllables, not letters: "medication" is four, "I'm" one; a second voice in brackets takes no time and lights with the line`, () => {
+  assert(syllableWeights('medication').syllables === 4, 'medication');
+  assert(syllableWeights("I'm don't").syllables === 2, "I'm don't");
+  assert(syllableWeights('Группа крови').syllables === 4, 'Группа крови');
+  const line = 'Something is wrong (six minutes, Slim Shady)';
+  const { weights, syllables } = syllableWeights(line);
+  // "Some-thing is wrong": a silent e counts (a guess, not a dictionary).
+  assert(syllables === 5, `${syllables}`);
+  assert(weights.slice(line.indexOf('(')).every((w) => w === 0), 'the brackets take time');
+  // The line's own words sung, the brackets lit with its end.
+  const lines = parseLrc(`[00:10.00]${line}\n[00:12.00]Next`);
+  assert(sungLetters(lines, 0, 11.79) < line.indexOf('('), `${sungLetters(lines, 0, 11.79)}`);
+  assert(sungLetters(lines, 0, 11.9) === line.length, `${sungLetters(lines, 0, 11.9)}`);
 });
 
 test("enhanced LRC: word by word, at each word's own time", () => {
