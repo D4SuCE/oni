@@ -34,6 +34,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         CAPPluginMethod(name: "setGain", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setRate", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "state", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "latency", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "testThrottle", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pulse", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "eqResponse", returnType: CAPPluginReturnPromise),
@@ -861,14 +862,20 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         }
     }
 
+    /// { seconds } — how long after the player the sound is heard: Bluetooth headphones ~0.2 (src/together/).
+    @objc func latency(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            let session = AVAudioSession.sharedInstance()
+            call.resolve(["seconds": session.outputLatency + session.ioBufferDuration])
+        }
+    }
+
     @objc func state(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
             let st = self.stream?.state
             call.resolve([
                 "time": self.position, "duration": self.duration, "playing": self.playing, "eq": !self.eq.bypass, "engine": self.engine.isRunning,
                 "crossing": self.tail != nil, "lift": self.lift.globalGain,
-                // How long after the player the sound is heard (s): Bluetooth headphones ~0.2 (src/together/).
-                "latency": AVAudioSession.sharedInstance().outputLatency + AVAudioSession.sharedInstance().ioBufferDuration,
                 "gain": self.gain, "tailLevel": self.tail.map { self.gain * $0.volume } ?? -1, "tailGain": self.tailGain, "crossIn": self.crossIn, "streaming": self.stream != nil, "waiting": self.stalled,
                 "received": st?.received ?? 0, "expected": st?.expected ?? 0, "trace": self.trace,
                 "musicEnd": self.musicEnd ?? -1, "endOf": self.endOf, "tracksOpened": self.tracksOpened, "endSearch": self.endSearch, "hasFile": self.file != nil,

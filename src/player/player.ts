@@ -1370,6 +1370,11 @@ export function nudge(rate: number) {
   el.playbackRate = rate;
 }
 
+/** The room waits (a friend's own song still going up to his Disk): paused here, not told. */
+export function holdForRoom() {
+  if (!audio.paused) audio.pause();
+}
+
 /** The room's place in the track playing (the correction's seek: not told back). */
 export function followSeek(seconds: number) {
   audio.currentTime = Math.max(0, seconds);

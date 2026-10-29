@@ -30,7 +30,8 @@ interface PlayerPlugin {
   setGain(options: { value: number }): Promise<void>;
   /** Playback speed; `keepPitch`: the voice stays as recorded (otherwise it goes up with the speed). */
   setRate(options: { rate: number; keepPitch: boolean }): Promise<void>;
-  state(): Promise<{ time: number; duration: number; playing: boolean; eq: boolean; engine?: boolean; crossing?: boolean; lift?: number; streaming?: boolean; waiting?: boolean; received?: number; expected?: number; latency?: number }>;
+  state(): Promise<{ time: number; duration: number; playing: boolean; eq: boolean; engine?: boolean; crossing?: boolean; lift?: number; streaming?: boolean; waiting?: boolean; received?: number; expected?: number }>;
+  latency(): Promise<{ seconds: number }>;
   /** For the simulator run: downloads held to a slow network's pace (0: off). */
   testThrottle(options: { bytesPerSecond: number }): Promise<void>;
   /** For the simulator run: what the system equalizer set up as Oni's does at each frequency (dB). */

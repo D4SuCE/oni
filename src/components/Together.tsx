@@ -4,7 +4,7 @@
 import { Users } from 'lucide-react';
 import { useT } from '../i18n.ts';
 import { toast } from '../store.ts';
-import { inviteLink, leaveTogether, startTogether, useTogether } from '../together/index.ts';
+import { inviteLink, leaveTogether, sendBack, startTogether, useTogether } from '../together/index.ts';
 import { share } from '../ui/share.ts';
 import { cx } from '../ui/util.ts';
 import { openMenu, type MenuItem } from './Menu.tsx';
@@ -42,7 +42,7 @@ export function TogetherButton({ size = 18 }: { size?: number }) {
       { label: '', separator: true },
       { label: g.invite, onClick: () => invite(g.inviteTitle) },
       // A guest from afar is heard once the one who started opens his own link (together/disk.ts).
-      ...(!started && !heard ? [link ? { label: g.sendBack, onClick: () => (toast(g.sendBackHint), invite(g.inviteTitle)) } : { label: g.noDisk }] : []),
+      ...(!started && !heard ? [link ? { label: g.sendBack, onClick: sendBack } : { label: g.noDisk }] : []),
       { label: g.leave, danger: true, onClick: () => void leaveTogether().then(() => toast(g.left)) },
     ];
   };

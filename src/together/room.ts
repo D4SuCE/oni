@@ -23,6 +23,8 @@ export interface RoomState {
   /** Seconds into the track at `at` (the shared clock, ms). */
   position: number;
   at: number;
+  /** Tracks (ids) still going up to their owner's Disk (a member's own upload, index.ts): the others wait for them. */
+  wait?: string[];
 }
 
 export interface Member {

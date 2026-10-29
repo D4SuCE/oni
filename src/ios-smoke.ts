@@ -338,11 +338,18 @@ async function nativePlayer() {
 /** Speed (AVAudioUnitTimePitch after both nodes): at 1.5× the player's own clock, which counts
  * the file's frames, runs 1.5 times the wall clock, and so does the page's; then back to 1×. */
 async function speed() {
+  // The player's place against the middle of each question's trip: one answer of the player's took
+  // over a second in the cloud now and then, and timed from its asking it read 2.15× for 1.5×.
+  const ask = async () => {
+    const sent = performance.now();
+    const { time } = await OniPlayer.state();
+    return { at: (sent + performance.now()) / 2, time };
+  };
   const pace = async () => {
-    const [w0, p0] = [performance.now(), (await OniPlayer.state()).time];
+    const a = await ask();
     await sleep(3000);
-    const [w1, p1] = [performance.now(), (await OniPlayer.state()).time];
-    return (p1 - p0) / ((w1 - w0) / 1000);
+    const b = await ask();
+    return (b.time - a.time) / ((b.at - a.at) / 1000);
   };
   wave().setRate(1.5, false);
   await sleep(500);
@@ -1406,7 +1413,7 @@ export async function runSmoke() {
     const local = await until(() => wave().audio.src.startsWith('oni-sealed:') && !wave().audio.paused && wave().audio.currentTime > 1, 20000);
     report('offline-playback', local, wave().audio.src.slice(0, 12));
     await nativePlayer();
-    await speed();
+    await twice(speed);
     await awakeAfterPause();
     await twice(lanLink);
     await twice(togetherServe);

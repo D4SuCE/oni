@@ -131,3 +131,40 @@ await step('listening together from afar: joined by a link through a friend\'s D
     await T((f) => window.__wave.sync.disk.remove(f), folder).catch(() => {});
   }
 });
+
+await step("listening together: one's own uploaded song goes to the room through one's Disk folder; the others wait for it, then play it from there", async () => {
+  // The user, 29.10.2026: "can one queue an uploaded song?" Yandex gives it to its owner alone.
+  if (!(await hasDisk())) return console.log('       skipped: no YANDEX_DISK_TOKEN');
+  const upload = await T(async () => {
+    const { api } = window.__wave;
+    for (const p of await api.playlists()) {
+      const full = await api.playlist(p.uid, p.kind);
+      const t = (full.tracks ?? []).map((i) => i.track).find((x) => x?.trackSource === 'UGC');
+      if (t) return t;
+    }
+    return null;
+  });
+  if (!upload) return console.log('       skipped: no uploads in the account');
+  const tracks = await someTracks();
+  await T((q) => window.__wave.playTracks(q, 0, 'E2E together upload'), [upload, ...tracks.slice(0, 2)]);
+  await T(() => window.__wave.together.startTogether());
+  const folder = await T(() => window.__wave.together.useTogether.getState().link);
+  try {
+    // At first the room waits for it; then its file is there and the room's track says where.
+    const first = await T(() => window.__wave.together.state());
+    if (!first) throw new Error('no state');
+    await page.waitForFunction(() => {
+      const s = window.__wave.together.state();
+      return s && !s.wait?.length && s.queue[s.index].share;
+    }, null, { timeout: 90000 });
+    const s = await T(() => window.__wave.together.state());
+    const share = s.queue[s.index].share;
+    console.log(`       waited: ${first.wait?.length ? 'yes' : 'no (sent already)'}; from ${share.link} ${share.file}`);
+    if (!share.link.endsWith(`/d/${folder}`) || share.file !== `${upload.id}.mp3`) throw new Error(JSON.stringify(share));
+    // A friend gets it by the link, no sign-in: the Disk gives its address.
+    const url = await T(([l, f]) => window.__wave.transport.request({ url: 'https://cloud-api.yandex.net/v1/disk/public/resources/download', query: { public_key: l, path: `/${f}` } }).then((r) => r.data?.href), [share.link, share.file]);
+    if (!url) throw new Error('the Disk gives no address for it');
+  } finally {
+    await T(() => window.__wave.together.leaveTogether());
+  }
+});

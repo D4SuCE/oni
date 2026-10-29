@@ -6,7 +6,7 @@
 // clock (clock.ts), corrected every half second.
 
 import { create } from 'zustand';
-import { loadJson, storage, transport } from '../api/client.ts';
+import { api, loadJson, storage, transport } from '../api/client.ts';
 import { tr } from '../i18n.ts';
 import { outputDelay } from '../player/eq.ts';
 import { OniPlayer } from '../player/nativeAudio.ts';
@@ -15,6 +15,7 @@ import {
   exactPosition,
   follow,
   followSeek,
+  holdForRoom,
   isSettling,
   setTogether,
   nudge,
@@ -26,7 +27,8 @@ import { toast, useApp } from '../store.ts';
 import { disk, thisDevice, useSync } from '../sync/index.ts';
 import { isIos } from '../ui/platform.ts';
 import { measure, SharedClock, type Sample } from './clock.ts';
-import { Folders, openFolder, removeMine, writeMine } from './disk.ts';
+import type { Track } from '../api/types.ts';
+import { Folders, FOLDER, linkUrl, openFolder, removeMine, writeMine } from './disk.ts';
 import { RoomLan } from './lan.ts';
 import { correction, RENEW, Room, targetOf, windowOf, type Member, type MemberFile, type RoomState } from './room.ts';
 
@@ -81,6 +83,8 @@ let writeTimer: ReturnType<typeof setTimeout> | null = null;
 let writing: Promise<void> | null = null;
 let dirty = false;
 let polls = 0;
+/** A poll under way (a network link tried may take seconds): the next one waits for it. */
+let polling = false;
 let nudging = false;
 let outOfStep: number | null = null;
 /** Seconds from the player to the ear (Bluetooth), asked now and then. */
@@ -130,6 +134,20 @@ export async function joinRoom(roomId: string, folder: string) {
   if (room) await leaveTogether();
   await begin(roomId, false, [folder]);
   toast(tr().together.joined);
+  // From afar the one who started reads this one only by its own link: offered at once, one tap
+  // (the user, 29.10.2026: "is it simpler if all in the room have it?" — afar it cannot be, nobody
+  // writes into another's Disk; a friend known once is known for good, then it is not offered).
+  setTimeout(() => {
+    const g = tr().together;
+    const s = useTogether.getState();
+    if (room?.id === roomId && !s.heard && s.link && !lan?.linkedTo) toast(g.sendBackHint, { label: g.send, run: () => sendBack() });
+  }, 8000);
+}
+
+/** This device's own link (the reply): pressed by the one who started, it reads this one's folder. */
+export function sendBack() {
+  const link = inviteLink();
+  if (link) void import('../ui/share.ts').then((m) => m.share({ kind: 'listen', ...link }, tr().together.inviteTitle));
 }
 
 export async function leaveTogether() {
@@ -140,6 +158,8 @@ export async function leaveTogether() {
   left = false;
   for (const t of timers) clearInterval(t);
   timers = [];
+  const sent = [...uploads].filter(([, v]) => v !== 'failed').map(([id]) => id);
+  uploads.clear();
   if (writeTimer) clearTimeout(writeTimer);
   writeTimer = null;
   lan?.send(JSON.stringify({ t: 'file', file }));
@@ -155,7 +175,10 @@ export async function leaveTogether() {
   // The others see "left" at once; the file goes a little later (they may read it meanwhile).
   if (diskOn() && useTogether.getState().link) {
     await writeMine(disk, file).catch(() => {});
-    setTimeout(() => void removeMine(disk, id).catch(() => {}), 15_000);
+    setTimeout(() => {
+      void removeMine(disk, id).catch(() => {});
+      for (const t of sent) void disk.remove(`${FOLDER}/${t}.mp3`).catch(() => {});
+    }, 15_000);
   }
 }
 
@@ -207,7 +230,7 @@ async function syncClock() {
   // Yandex's time is the room's; a guest linked on the network learns it from the one who started (surer).
   clock.learn(samples, !lan?.linkedTo);
   if (lan?.linkedTo) askHostTime();
-  if (isIos) latency = (await OniPlayer.state().catch(() => null))?.latency ?? 0;
+  if (isIos) latency = (await OniPlayer.latency().catch(() => null))?.seconds ?? 0;
 }
 
 function askHostTime() {
@@ -225,6 +248,9 @@ function tell(how: ChangeHow, what: { playing?: boolean; position?: number } = {
   if (!room) return;
   const now = clock.now();
   const started = useTogether.getState().started;
+  // Not heard what the room plays yet (just joined): only a press of the user's makes it, not this
+  // device's own music ending or growing (it would take the room over from the others).
+  if (how !== 'user' && !room.current) return;
   if (how === 'natural' && room.leader(now, started) !== thisDevice.id) return;
   if (how === 'queue') {
     const s = room.current;
@@ -235,7 +261,7 @@ function tell(how: ChangeHow, what: { playing?: boolean; position?: number } = {
   const state: RoomState = {
     rev: now,
     by: thisDevice.id,
-    ...windowOf(p.queue, p.index),
+    ...shareOwn(windowOf(p.queue, p.index)),
     title: sourceTitle(p.source),
     playing: what.playing ?? p.playing,
     position: Math.max(0, (what.position ?? exactPosition()) - ahead()),
@@ -246,11 +272,67 @@ function tell(how: ChangeHow, what: { playing?: boolean; position?: number } = {
   writeSoon();
 }
 
+// ------------------------------------------------------------------ one's own songs
+
+/** This device's own uploads put in its open folder for the room, by id (the user, 29.10.2026: "can
+ * one queue an uploaded song?"). Yandex gives an upload to its owner alone; the owner's Disk fetches
+ * it from Yandex itself, as for shared uploads (share/owner.ts), and the others play it from there. */
+const uploads = new Map<string, 'going' | 'done' | 'failed'>();
+
+/** A part of the queue as it goes to the room: one's own uploads with where the others get them,
+ * and those still going up in `wait` (with the room's waits that are someone else's). */
+function shareOwn(w: { queue: Track[]; index: number }): { queue: Track[]; index: number; wait?: string[] } {
+  const link = useTogether.getState().link;
+  const wait = new Set((room?.current?.wait ?? []).filter((id) => !uploads.has(id)));
+  const queue = w.queue.map((t, i) => {
+    if (t.trackSource !== 'UGC' || t.share || !link || !diskOn()) return t;
+    const id = String(t.id);
+    if (!uploads.has(id) && i >= w.index && i <= w.index + NEAR) upload(id);
+    if (!uploads.has(id) || uploads.get(id) === 'failed') return t;
+    if (uploads.get(id) === 'going') wait.add(id);
+    return { ...t, share: { link: linkUrl(link), file: `${id}.mp3`, owner: me().name } };
+  });
+  const ids = new Set(queue.map((t) => String(t.id)));
+  const waiting = [...wait].filter((id) => ids.has(id));
+  return { ...w, queue, ...(waiting.length ? { wait: waiting } : {}) };
+}
+
+/** The track playing and this many after it go up (a playlist of one's uploads is not sent whole at once). */
+const NEAR = 3;
+
+/** One's own uploads coming soon in the queue, sent ahead (a track ending by itself is told by the
+ * leader, maybe not this one: its tracks must be on the Disk before they come). */
+function uploadNear() {
+  if (!useTogether.getState().link || !diskOn()) return;
+  const p = usePlayer.getState();
+  for (const t of p.queue.slice(Math.max(0, p.index), p.index + NEAR + 1)) {
+    if (t.trackSource === 'UGC' && !t.share && !uploads.has(String(t.id))) upload(String(t.id));
+  }
+}
+
+function upload(id: string) {
+  uploads.set(id, 'going');
+  disk
+    .uploadFresh(`${FOLDER}/${id}.mp3`, async () => (await api.stream(id)).url)
+    .then(
+      () => uploads.set(id, 'done'),
+      (e) => {
+        // Not this account's upload (another member's, with no Disk of his): the others cannot have it.
+        console.warn('[together] upload', id, e);
+        uploads.set(id, 'failed');
+      },
+    )
+    .finally(() => tell('queue'));
+}
+
 /** The room's state, played here. */
 function apply(s: RoomState) {
   outOfStep = null;
   nudging = false;
   nudge(1);
+  // A member's own song still going up to his Disk: here it waits (its owner plays it from Yandex).
+  const id = String(s.queue[s.index]?.id);
+  if (s.wait?.includes(id) && !uploads.has(id)) return holdForRoom();
   follow({ queue: s.queue, index: s.index, title: s.title }, targetOf(s, clock.now()) + (s.playing ? ahead() : 0), s.playing);
 }
 
@@ -258,6 +340,7 @@ function apply(s: RoomState) {
 function tick() {
   const s = room?.current;
   if (!room || !s) return;
+  uploadNear();
   const now = clock.now();
   const mine = current();
   const theirs = s.queue[s.index];
@@ -356,8 +439,17 @@ function people() {
 
 /** Every 2.5 s: the folders read, the network link to the one who started tried. */
 async function poll() {
+  if (!room || polling) return;
+  polling = true;
+  try {
+    await pollOnce(room.id);
+  } finally {
+    polling = false;
+  }
+}
+
+async function pollOnce(id: string) {
   if (!room) return;
-  const id = room.id;
   const own = useTogether.getState().link;
   const links = new Set([...extra, ...room.people().map((m) => m.link).filter((l): l is string => Boolean(l))]);
   if (useTogether.getState().started && polls % FRIENDS_EVERY === 0) for (const l of Object.keys(friends())) links.add(l);
