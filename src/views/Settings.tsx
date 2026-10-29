@@ -2,7 +2,7 @@ import { ArchiveRestore, Cloud, Download, ExternalLink, FileText, HardDriveDownl
 import { confirmDialog } from '../components/Dialog.tsx';
 import { formatSize, setAutoLikes, useAutoLikes, useOfflineVersion } from '../ui/offline.ts';
 import { setAutoOwn, useAutoOwn } from '../ui/ownOffline.ts';
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Segmented } from '../components/Wave.tsx';
 import { LANGS, setLang, useLang, useT } from '../i18n.ts';
 import { canAnalyzeAudio } from '../player/eq.ts';
@@ -19,6 +19,8 @@ import { checkIosUpdate, installIosUpdate, installUpdateShortcut, setAutoUpdate,
 import { useUpdate } from '../ui/update.ts';
 import { addVoiceShortcut, VOICE_SHORTCUTS } from '../ui/voice.ts';
 import { cx } from '../ui/util.ts';
+import { accelerator, showAccelerator } from '../ui/hotkeys.ts';
+import type { HotkeyAction } from '../api/transport.ts';
 import { ANIM_EFFECTS, setAnimEffect, setAnimEnabled, useAnim } from '../ui/anim.ts';
 import { artistNames } from '../api/yandex.ts';
 import { api } from '../api/client.ts';
@@ -284,6 +286,7 @@ export function SettingsView() {
             <kbd>Alt + ← / →</kbd> <span>{s.backForward}</span>
             <kbd>{s.mouseButtons}</kbd> <span>{s.backForward}</span>
           </div>
+          {window.wave?.hotkeys && <GlobalHotkeys />}
         </div>
       )}
 
@@ -680,6 +683,94 @@ function UpdateRow() {
 }
 
 /** The iPhone's volume slider on Now Playing (the phone's own volume, src/player/volume.ts). */
+const HOTKEY_ACTIONS: HotkeyAction[] = ['toggle', 'next', 'prev', 'volumeUp', 'volumeDown', 'like'];
+
+/** Keys that work while Oni is in the background (electron/hotkeys.cjs): on/off, and each one changed by pressing a new one. */
+function GlobalHotkeys() {
+  const s = useT().settings;
+  const [state, setState] = useState(() => window.wave!.hotkeys!());
+  /** The action waiting for its new key. */
+  const [recording, setRecording] = useState<HotkeyAction | null>(null);
+  const change = (next: { enabled?: boolean; keys?: Partial<Record<HotkeyAction, string>> }) => window.wave?.setHotkeys?.(next).then(setState);
+
+  useEffect(() => {
+    if (!recording) return;
+    window.wave?.pauseHotkeys?.(true);
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.code === 'Escape') return setRecording(null);
+      if ((e.code === 'Backspace' || e.code === 'Delete') && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        setRecording(null);
+        return void change({ keys: { [recording]: '' } });
+      }
+      const key = accelerator(e);
+      if (!key) return;
+      // One key — one action: the one that had it gives it up.
+      const keys: Partial<Record<HotkeyAction, string>> = { [recording]: key };
+      for (const a of HOTKEY_ACTIONS) if (a !== recording && state.keys[a] === key) keys[a] = '';
+      setRecording(null);
+      change({ keys });
+    };
+    // Capture: before the window's own shortcuts (Space would play or pause).
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      window.wave?.pauseHotkeys?.(false);
+    };
+  }, [recording, state.keys]);
+
+  const names: Record<HotkeyAction, string> = {
+    toggle: s.playPause,
+    next: s.nextTrack,
+    prev: s.prevTrack,
+    volumeUp: s.volumeUp,
+    volumeDown: s.volumeDown,
+    like: s.like,
+  };
+  const changed = HOTKEY_ACTIONS.some((a) => state.keys[a] !== state.defaults[a]);
+  return (
+    <div className="global-hotkeys" data-testid="global-hotkeys">
+      <label className="toggle-row">
+        <div>
+          <div>{s.globalKeys}</div>
+          <div className="hint">{s.globalKeysHint}</div>
+        </div>
+        <input type="checkbox" className="switch" checked={state.enabled} onChange={(e) => change({ enabled: e.target.checked })} data-testid="global-hotkeys-on" />
+      </label>
+      {state.enabled && (
+        <div className="keys">
+          {HOTKEY_ACTIONS.map((a) => (
+            <Fragment key={a}>
+              <button
+                className={cx('kbd-button', recording === a && 'recording', state.busy.includes(a) && 'busy')}
+                onClick={() => setRecording(recording === a ? null : a)}
+                data-testid={`hotkey-${a}`}
+              >
+                <kbd>{recording === a ? s.pressKeys : state.keys[a] ? showAccelerator(state.keys[a]) : s.noKey}</kbd>
+              </button>
+              <span>
+                {names[a]}
+                {state.busy.includes(a) && <span className="hint busy-hint"> · {s.keyBusy}</span>}
+              </span>
+            </Fragment>
+          ))}
+        </div>
+      )}
+      {state.enabled && (
+        <div className="settings-row hotkeys-foot">
+          <div className="hint">{recording ? s.pressKeysHint : s.changeKeyHint}</div>
+          {changed && (
+            <button className="btn ghost" onClick={() => change({ keys: state.defaults })} data-testid="hotkeys-reset">
+              <Undo2 size={16} /> {s.keysReset}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PhoneSound() {
   const t = useT();
   const s = t.settings;

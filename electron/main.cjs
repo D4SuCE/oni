@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const desktop = require('./desktop.cjs');
 const updater = require('./updater.cjs');
+const hotkeys = require('./hotkeys.cjs');
 const { setupLan } = require('./lan.cjs');
 
 // The app was called Wave before it became Oni; keep its data folder so the sign-in,
@@ -349,6 +350,7 @@ if (!app.requestSingleInstanceLock()) {
     loadToken();
     loadDiskToken();
     createWindow();
+    hotkeys.init(desktop.command, (level, message) => writeLog(level, 'hotkeys', message));
     updater.init(
       (level, message) => writeLog(level, 'update', message),
       (state) => mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents.send('wave:update', state),

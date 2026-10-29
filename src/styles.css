@@ -3198,6 +3198,39 @@ kbd {
   color: var(--text);
 }
 
+/* Settings → hotkeys: the keys that work in the background, each a button to press a new one. */
+.global-hotkeys {
+  margin-top: 14px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+.global-hotkeys .keys {
+  margin-top: 6px;
+}
+.kbd-button {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.kbd-button:hover kbd {
+  border-color: var(--gold);
+}
+.kbd-button.recording kbd {
+  border-color: var(--accent);
+  color: var(--gold);
+}
+.kbd-button.busy kbd {
+  border-color: var(--accent-deep);
+  text-decoration: line-through;
+}
+.busy-hint {
+  color: var(--accent-hi);
+}
+.hotkeys-foot {
+  margin-top: 12px;
+}
 .login {
   position: relative;
   z-index: 1;
