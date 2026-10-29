@@ -446,19 +446,12 @@ await step('right click: Paste in a text field, a playlist menu on its card and 
   }
 });
 
-await step('liked tracks page', async () => {
-  await page.click('[data-testid="nav-liked"]');
-  await page.waitForSelector('.track-row, .empty-hint', { timeout: 20000 });
-  // Library and Liked used to open the same page and both lit up.
-  if ((await page.locator('.sidebar .nav-item.active').count()) !== 1) throw new Error('more than one nav item is active');
-  await page.waitForTimeout(1500);
-  await shot('09-liked');
-});
-
 await step('AI music: an AI band\'s page says how many of its tracks are AI, its tracks have the mark; turned off, no mark (slopless.art)', async () => {
   // The Velvet Sundown (Yandex's 24428459), an AI band, 29.10.2026: 3 of its 6 tracks found AI.
   const up = await page.evaluate(() => window.__wave.transport?.request?.({ url: 'https://slopless.art/api/artist/3121' }).then((r) => r.ok).catch(() => false));
   if (up === false) return console.log('       slopless.art does not answer: nothing to check');
+  // The steps after this one go on from the page that was open (Liked): it is opened again at the end.
+  const was = await page.evaluate(() => window.__wave.useApp.getState().route);
   await page.evaluate(() => window.__wave.navigate({ name: 'artist', id: 24428459 }));
   const line = page.locator('[data-testid="artist-ai"]');
   await line.waitFor({ timeout: 20000 });
@@ -471,7 +464,19 @@ await step('AI music: an AI band\'s page says how many of its tracks are AI, its
     await page.waitForSelector('[data-testid="ai-badge"]', { state: 'detached', timeout: 3000 });
     if (await line.count()) throw new Error('the artist line stays with the mark off');
   } finally {
-    await page.evaluate(() => window.__wave.setAiPrefs({ mark: true }));
+    await page.evaluate((route) => {
+      window.__wave.setAiPrefs({ mark: true });
+      window.__wave.navigate(route);
+    }, was);
   }
   console.log(`       "${text.replace(/\s+/g, ' ')}", ${marked} tracks marked`);
+});
+
+await step('liked tracks page', async () => {
+  await page.click('[data-testid="nav-liked"]');
+  await page.waitForSelector('.track-row, .empty-hint', { timeout: 20000 });
+  // Library and Liked used to open the same page and both lit up.
+  if ((await page.locator('.sidebar .nav-item.active').count()) !== 1) throw new Error('more than one nav item is active');
+  await page.waitForTimeout(1500);
+  await shot('09-liked');
 });
