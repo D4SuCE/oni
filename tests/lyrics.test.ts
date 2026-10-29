@@ -2,7 +2,7 @@
 // synced first; covers, live takes and instrumentals left out.
 // Run: npm run test:lyrics
 import { pickLrclib } from '../src/player/lrclib.ts';
-import { parseLrc, sungLetters } from '../src/player/lrc.ts';
+import { parseLrc, songPace, sungLetters } from '../src/player/lrc.ts';
 
 let passed = 0;
 let failed = 0;
@@ -59,14 +59,24 @@ test('LRC: lines by time, a chorus written once with two times, tags skipped', (
   assert(lines.map((l) => `${l.t}:${l.text}`).join('|') === '12:Du|14.5:Du hast|20:Du hast mich|30:|70.5:Du hast mich', JSON.stringify(lines));
 });
 
-test('a line with no word times fills evenly over the time it is likely sung, not over a long gap', () => {
-  const lines = parseLrc('[00:10.00]Hello world\n[00:12.00]Next\n[00:13.00]Before a solo\n[01:00.00]After');
-  // 11 letters over the 2 s to the next line: half way, half the letters.
-  assert(Math.abs(sungLetters(lines, 0, 11) - 5.5) < 0.01, `${sungLetters(lines, 0, 11)}`);
-  assert(sungLetters(lines, 0, 9) === 0 && sungLetters(lines, 0, 13) === 11, 'before / after');
-  // 13 letters, 47 s to the next line: whole within about 13 × 0.13 × 1.6 ≈ 2.7 s (not crawling through the solo).
-  assert(sungLetters(lines, 2, 16) === 13, `${sungLetters(lines, 2, 16)}`);
-  assert(sungLetters(lines, 2, 13.5) > 1.5 && sungLetters(lines, 2, 13.5) < 3.5, `${sungLetters(lines, 2, 13.5)}`);
+test("a line with no word times fills at the song's pace, not over a pause after it (the user: words lagged behind the voice)", () => {
+  // The times and line lengths of Night Club's "The Creepshow" (its opening), the words made up.
+  const opening: [number, number][] = [[23.27, 17], [25.89, 18], [28.69, 31], [34.19, 21], [36.72, 22], [39.43, 34], [44.18, 20], [46.55, 29], [49.44, 24], [51.9, 22], [54.99, 20]];
+  const lines = parseLrc(opening.map(([t, n]) => `[00:${t.toFixed(2).padStart(5, '0')}]${'x'.repeat(n)}`).join('\n'));
+  // A 31-letter line with 5.5 s to the next one is sung in about 3 s: lit whole by then, not half.
+  assert(sungLetters(lines, 2, 28.69 + 3.2) === 31, `${sungLetters(lines, 2, 28.69 + 3.2)} of 31 at 3.2 s`);
+  // Back to back, each line is done before the next begins.
+  for (const i of [0, 1, 3, 6]) assert(sungLetters(lines, i, lines[i + 1].t - 0.05) === lines[i].text.length, `line ${i} not done`);
+  assert(sungLetters(lines, 2, 28.6) === 0, 'before the line');
+});
+
+test('the pace: a fast song fills fast, a slow one no slower than 0.13 s a letter; a long solo is not crawled through', () => {
+  const song = (perLetter: number) => parseLrc(Array.from({ length: 8 }, (_, i) => `[00:${String(10 + i * 2).padStart(2, '0')}.00]${'x'.repeat(Math.round(2 / perLetter))}`).join('\n'));
+  assert(Math.abs(songPace(song(0.06)) - 0.048) < 0.01, `fast: ${songPace(song(0.06))}`);
+  assert(songPace(song(0.5)) === 0.13, `slow: ${songPace(song(0.5))}`);
+  const solo = parseLrc('[00:10.00]Hello world\n[00:12.00]Next\n[00:13.00]Before a solo\n[01:00.00]After');
+  assert(sungLetters(solo, 2, 13 + 13 * 0.13 + 0.01) === 13, `${sungLetters(solo, 2, 15)}`);
+  assert(sungLetters(solo, 0, 9) === 0 && sungLetters(solo, 0, 13) === 11, 'before / after');
 });
 
 test("enhanced LRC: word by word, at each word's own time", () => {

@@ -60,16 +60,40 @@ function wordsOf(rest: string): { words: LrcWord[]; end?: number } | null {
   return words.length ? { words, end } : null;
 }
 
-/** About how long a letter is sung, for lines with no word times; a line is taken to last up to
- * LONGEST times that (or to the next line, if it comes sooner): no crawling through a solo. */
-const PER_LETTER = 0.13;
-const SHORTEST = 1.2;
-const LONGEST = 1.6;
+/** How long a letter is sung, at most and at least (s), and when the song does not say. */
+const SLOWEST = 0.13;
+const FASTEST = 0.05;
+const SHORTEST = 0.6;
+/** A line is done a little before the next one begins (a breath). */
+const BREATH = 0.9;
+
+const paces = new WeakMap<LrcLine[], number>();
+
+/**
+ * The song's own pace (s a letter), for lines with no word times. A line's time to the next one is
+ * its singing and then a pause or a held note: filled over all of it, the words lagged behind the
+ * voice (the user, 29.10.2026, Night Club's "The Creepshow": "Just fill us up with medication" sung
+ * in about 3 s of its 5.5). The quicker quarter of the song's lines — those sung one right after
+ * another — tells how fast it is sung; a little quicker than that, as early is less wrong than late.
+ */
+export function songPace(lines: LrcLine[]): number {
+  let pace = paces.get(lines);
+  if (pace === undefined) {
+    const each = lines
+      .map((l, i) => (l.text.length >= 8 && lines[i + 1] ? (lines[i + 1].t - l.t) / l.text.length : NaN))
+      .filter((x) => Number.isFinite(x) && x > 0)
+      .sort((a, b) => a - b);
+    const quick = each.length >= 4 ? each[Math.floor(each.length / 4)] * 0.8 : SLOWEST;
+    pace = Math.min(SLOWEST, Math.max(FASTEST, quick));
+    paces.set(lines, pace);
+  }
+  return pace;
+}
 
 /**
  * How many letters of the line at `i` are sung at `position` (a fraction, for a soft edge). By word
- * times when there are; otherwise evenly, over the time the line likely takes — not over a long
- * instrumental gap before the next line.
+ * times when there are; otherwise evenly at the song's pace (songPace) — not over a pause, a held
+ * note or a solo before the next line.
  */
 export function sungLetters(lines: LrcLine[], i: number, position: number, duration = Infinity): number {
   const line = lines[i];
@@ -88,6 +112,6 @@ export function sungLetters(lines: LrcLine[], i: number, position: number, durat
     }
     return length;
   }
-  const sung = Math.min(Math.max(0.1, end - line.t), Math.max(SHORTEST, length * PER_LETTER) * LONGEST);
+  const sung = Math.min(Math.max(0.1, (end - line.t) * BREATH), Math.max(SHORTEST, length * songPace(lines)));
   return Math.min(length, (length * (position - line.t)) / sung);
 }
