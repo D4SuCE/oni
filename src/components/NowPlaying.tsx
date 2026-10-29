@@ -15,7 +15,7 @@ import { LikeButton, PrivateBadge, SeekBar, SleepButton, Transport, VolumeContro
 import { usePhoneSound } from '../player/phoneSound.ts';
 import { useEq } from '../player/eq.ts';
 import { geniusSearch, lyricsKnown, lyricsOf, useLyrics, wrongLyrics } from '../player/lyrics.ts';
-import { parseLrc, sungLetters, type LrcLine } from '../player/lrc.ts';
+import { activeLine, litLetters, parseLrc, type LrcLine } from '../player/lrc.ts';
 import { useElsewhere } from '../sync/elsewhere.ts';
 import { isIos } from '../ui/platform.ts';
 import { BackgroundVideo, LiveCover, useCoverVideo } from './LiveCover.tsx';
@@ -47,7 +47,7 @@ function SungLine({ lines, i, duration }: { lines: LrcLine[]; i: number; duratio
     let frame = 0;
     const step = () => {
       // Tenths of a letter: smooth enough, and React is not woken up 60 times a second for nothing.
-      setSung(Math.round(sungLetters(lines, i, place(), duration) * 10) / 10);
+      setSung(Math.round(litLetters(lines, i, place(), duration) * 10) / 10);
       frame = requestAnimationFrame(step);
     };
     frame = requestAnimationFrame(step);
@@ -76,7 +76,7 @@ function Lyrics({ track }: { track: Track }) {
   const position = usePlayer((s) => s.position);
   const lines = useMemo(() => (data?.synced ? parseLrc(data.text) : []), [data]);
   const duration = usePlayer((s) => s.duration);
-  const active = lines.findLastIndex((l) => l.t <= position + 0.3);
+  const active = activeLine(lines, position);
   const box = useRef<HTMLDivElement>(null);
   const t = useT();
   useEffect(() => {

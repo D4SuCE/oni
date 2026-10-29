@@ -60,6 +60,19 @@ function wordsOf(rest: string): { words: LrcWord[]; end?: number } | null {
   return words.length ? { words, end } : null;
 }
 
+/** A line lights up this much before its time (s), for the eye to be there when the voice is. */
+export const LEAD = 0.3;
+
+/** The line lit at `position`: the last one begun, LEAD early. */
+export const activeLine = (lines: LrcLine[], position: number) => lines.findLastIndex((l) => l.t <= position + LEAD);
+
+/**
+ * How many letters of the line lit (activeLine) show as sung at `position`: on the same clock, LEAD
+ * early — on the plain one the line was given up 0.3 s before its fill ended, and the last words of a
+ * quick line never lit (the user, 29.10.2026: "the endings of the last words are eaten").
+ */
+export const litLetters = (lines: LrcLine[], i: number, position: number, duration = Infinity) => sungLetters(lines, i, position + LEAD, duration + LEAD);
+
 /** How long a letter is sung, at most and at least (s), and when the song does not say. */
 const SLOWEST = 0.13;
 const FASTEST = 0.05;

@@ -2,7 +2,7 @@
 // synced first; covers, live takes and instrumentals left out.
 // Run: npm run test:lyrics
 import { pickLrclib } from '../src/player/lrclib.ts';
-import { parseLrc, songPace, sungLetters } from '../src/player/lrc.ts';
+import { activeLine, LEAD, litLetters, parseLrc, songPace, sungLetters } from '../src/player/lrc.ts';
 
 let passed = 0;
 let failed = 0;
@@ -68,6 +68,18 @@ test("a line with no word times fills at the song's pace, not over a pause after
   // Back to back, each line is done before the next begins.
   for (const i of [0, 1, 3, 6]) assert(sungLetters(lines, i, lines[i + 1].t - 0.05) === lines[i].text.length, `line ${i} not done`);
   assert(sungLetters(lines, 2, 28.6) === 0, 'before the line');
+});
+
+test('a line is lit whole by the moment the next one takes over (the user: the last words of a line were eaten)', () => {
+  // Times and line lengths of Eminem's "Rap God" (its quick part), the words made up: lines back to back.
+  const quick: [number, number][] = [[40.06, 32], [41.6, 36], [43.33, 35], [44.94, 34], [46.36, 43], [47.99, 43], [49.58, 66], [52.8, 44], [54.39, 37], [56.06, 47], [57.34, 60], [59.59, 40], [60.79, 92], [64.53, 49]];
+  const lines = parseLrc(quick.map(([t, n]) => `[00:${t.toFixed(2).padStart(5, '0')}]${'x'.repeat(n)}`).join('\n'));
+  for (let i = 0; i + 1 < lines.length; i++) {
+    // The last moment line i is the one lit: just before activeLine moves on.
+    const last = lines[i + 1].t - LEAD - 0.01;
+    assert(activeLine(lines, last) === i, `line ${i} not lit at ${last}`);
+    assert(litLetters(lines, i, last) === lines[i].text.length, `line ${i}: ${litLetters(lines, i, last).toFixed(1)} of ${lines[i].text.length} lit as it is given up`);
+  }
 });
 
 test('the pace: a fast song fills fast, a slow one no slower than 0.13 s a letter; a long solo is not crawled through', () => {
