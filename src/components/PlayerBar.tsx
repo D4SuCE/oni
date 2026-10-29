@@ -14,6 +14,7 @@ import { useSwipeTrack } from '../ui/swipe.ts';
 import { ArtistLinks, Cover } from './Common.tsx';
 import { openMenu } from './Menu.tsx';
 import { DevicesButton, PlayingOn } from './Devices.tsx';
+import { TogetherBadge, TogetherButton } from './Together.tsx';
 import { AiBadge, plainArtists, trackMenu } from './TrackList.tsx';
 
 /** The sleep timer: a moon, with the minutes left beside it while it runs; its menu sets it. */
@@ -249,6 +250,7 @@ export function PlayerBar() {
                   <ArtistLinks artists={track.artists} plain={isIos || plainArtists(track)} />
                 </div>
                 <PlayingOn />
+                <TogetherBadge />
               </div>
               <LikeButton track={track} />
               {isWave && (
@@ -276,6 +278,7 @@ export function PlayerBar() {
             </span>
           )}
           <PrivateBadge />
+          <TogetherButton />
           <DevicesButton />
           <SleepButton />
           <button className="icon-btn" onClick={openNow} title={t.player.queue}>

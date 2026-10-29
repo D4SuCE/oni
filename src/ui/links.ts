@@ -10,7 +10,11 @@
 /** The web page "Share" links to (site/index.html, published by scripts/publish-site.mjs). */
 export const SITE = 'https://oni-music.github.io/';
 
-export type OniLink = { kind: 'track' | 'album' | 'artist'; id: string } | { kind: 'playlist'; owner: string; id: string };
+export type OniLink =
+  | { kind: 'track' | 'album' | 'artist'; id: string }
+  | { kind: 'playlist'; owner: string; id: string }
+  // Listening together (src/together/): the room, and the open folder on Yandex Disk it is read through.
+  | { kind: 'listen'; room: string; folder: string };
 
 /** The search query of an oni://search link (+ and %20 are spaces), or null for anything else. */
 export function searchFromLink(link: string): string | null {
@@ -39,6 +43,7 @@ function fromPath(path: string): OniLink | null {
   const [kind, a, b] = parts;
   if ((kind === 'track' || kind === 'album' || kind === 'artist') && /^\d+$/.test(a ?? '') && b === undefined) return { kind, id: a };
   if (kind === 'playlist' && /^[\w.@-]+$/.test(a ?? '') && /^\d+$/.test(b ?? '')) return { kind, owner: a, id: b };
+  if (kind === 'listen' && /^\w{8,64}$/.test(a ?? '') && /^[\w-]{4,64}$/.test(b ?? '')) return { kind, room: a, folder: b };
   return null;
 }
 
@@ -64,12 +69,14 @@ export function linkFrom(text: string): OniLink | null {
 
 /** The web link "Share" gives: opens Oni where it is installed, Yandex Music elsewhere. */
 export function shareUrl(link: OniLink) {
+  if (link.kind === 'listen') return `${SITE}#listen/${link.room}/${link.folder}`;
   return `${SITE}#${link.kind}/${link.kind === 'playlist' ? `${encodeURIComponent(link.owner)}/` : ''}${link.id}`;
 }
 
 /** Does what a link says: a track plays (the one link meant to start music), the rest open their page. */
 async function openLink(link: OniLink) {
   const [{ navigate, toast }, { api }, { playTracks }, { tr }] = await Promise.all([import('../store.ts'), import('../api/client.ts'), import('../player/player.ts'), import('../i18n.ts')]);
+  if (link.kind === 'listen') return (await import('../together/index.ts')).joinRoom(link.room, link.folder);
   if (link.kind === 'album') return navigate({ name: 'album', id: link.id });
   if (link.kind === 'artist') return navigate({ name: 'artist', id: link.id });
   if (link.kind === 'playlist') return navigate({ name: 'playlist', uid: link.owner, kind: link.id });

@@ -412,6 +412,44 @@ async function lanLink() {
   }
 }
 
+/** Listening together, the iPhone as the one who started (LanPlugin.swift's serve, together/lan.ts):
+ * it listens, a wrong key is refused, a guest (itself, through OniLan.open) is welcomed, and a
+ * message goes there and back. */
+async function togetherServe() {
+  const lan = registerPlugin<{
+    open(o: { id: string; url: string; hello: string; timeout?: number }): Promise<void>;
+    send(o: { id: string; text: string }): Promise<void>;
+    close(o: { id: string }): Promise<void>;
+    serve(o: { key: string; welcome: string }): Promise<{ hosts: string[]; port: number }>;
+    serveSend(o: { to?: string; text: string }): Promise<void>;
+    serveStop(): Promise<void>;
+    addListener(e: 'message' | 'guestMessage', cb: (m: { id: string; text: string }) => void): Promise<{ remove(): Promise<void> }>;
+  }>('OniLan');
+  const toHost: string[] = [];
+  const toGuest: string[] = [];
+  const a = await lan.addListener('guestMessage', (m) => toHost.push(`${m.id}:${m.text}`));
+  const b = await lan.addListener('message', (m) => m.id === 'tog-smokehost' && toGuest.push(m.text));
+  try {
+    const { hosts, port } = await lan.serve({ key: 'smokeroom', welcome: JSON.stringify({ t: 'welcome', device: { id: 'smokehost' } }) });
+    const url = `ws://127.0.0.1:${port}`;
+    const refused = await lan.open({ id: 'tog-wrong', url, hello: JSON.stringify({ t: 'hello', key: 'nope', device: { id: 'g' } }), timeout: 3000 }).then(() => false, () => true);
+    const hello = { id: 'tog-smokehost', url, hello: JSON.stringify({ t: 'hello', key: 'smokeroom', device: { id: 'smokeguest' } }), timeout: 20000 };
+    await lan.open(hello).catch(() => lan.open(hello));
+    await lan.send({ id: 'tog-smokehost', text: '{"t":"up"}' });
+    const up = await until(() => toHost.includes('smokeguest:{"t":"up"}'), 3000);
+    await lan.serveSend({ text: '{"t":"down"}' });
+    const down = await until(() => toGuest.includes('{"t":"down"}'), 3000);
+    report('together-serve', refused && Boolean(up) && Boolean(down), `port ${port}, addresses ${hosts.join(' ')}; wrong key ${refused ? 'refused' : 'let in'}, guest→host ${up ? 'ok' : 'none'}, host→guest ${down ? 'ok' : 'none'}`);
+    await lan.close({ id: 'tog-smokehost' });
+  } catch (e) {
+    report('together-serve', false, String(e));
+  } finally {
+    await lan.serveStop().catch(() => {});
+    await a.remove();
+    await b.remove();
+  }
+}
+
 /** Crossfade on the native player: near the end the next track starts on the other node while
  * this one fades out; then the new one plays alone. */
 async function crossfade() {
@@ -1371,6 +1409,7 @@ export async function runSmoke() {
     await speed();
     await awakeAfterPause();
     await twice(lanLink);
+    await twice(togetherServe);
     await twice(iosPulse);
     await crossfade();
     await crossfadeQuiet();

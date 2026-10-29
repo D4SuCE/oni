@@ -16,7 +16,7 @@ import { cx, useEscape } from '../ui/util.ts';
 /** A link pasted into Search, found as a search would find it: what it points to on top, its tracks
  * below (an album's, an artist's best, a playlist's), and the name to play them under. Nothing plays
  * by itself (the user: a paste should look like a search, not start music out of nowhere). */
-async function findLink(link: OniLink): Promise<{ result: SearchResult; title: string }> {
+async function findLink(link: Exclude<OniLink, { kind: 'listen' }>): Promise<{ result: SearchResult; title: string }> {
   const one = <T,>(x: T) => ({ results: [x], total: 1 });
   if (link.kind === 'playlist') {
     const p = await api.playlist(link.owner, link.id);
@@ -117,6 +117,12 @@ export function Search() {
     const timer = setTimeout(async () => {
       try {
         // A link pasted in (Oni's or Yandex Music's): what it points to, found and shown.
+        // An invitation to listen together: there is nothing to find, it joins (the link's one meaning).
+        if (link?.kind === 'listen') {
+          void import('../together/index.ts').then((m) => m.joinRoom(link.room, link.folder));
+          useApp.setState({ searchQuery: '' });
+          return;
+        }
         if (link) {
           const { result, title } = await findLink(link);
           if (alive) setAnswer({ q, result, title });

@@ -415,6 +415,7 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
   const resume = resumeAt?.id === t.id ? resumeAt.seconds : 0;
   resumeAt = null;
   set({ index, loading: true, position: 0, duration: (t.durationMs || 0) / 1000, error: null });
+  shared({ playing: autoplay, position: resume }, loadHow);
   opening = seq;
   listened = 0;
   newPlay();
@@ -638,6 +639,7 @@ function fillWave(min = WAVE_AHEAD): Promise<void> {
         // A replaced engine's track belongs to a wave that is gone.
         if (!t || engine !== mine) break;
         set((s) => ({ queue: [...s.queue, t], waveStats: { ...mine.stats } }));
+        shared({}, 'queue');
       }
       if (engine === mine) prefetchNext();
     } catch (e) {
@@ -830,6 +832,7 @@ export function extendList(list: string, tracks: Track[]) {
   const index = cur ? queue.findIndex((t) => String(t.id) === String(cur.id)) : s.index;
   if (index < 0) return;
   set({ queue, index });
+  shared({}, 'queue');
   prefetchNext();
 }
 
@@ -879,6 +882,7 @@ export function toggle() {
     pausedLoad = loadSeq;
     audio.pause();
     set({ playing: false });
+    shared({ playing: false, position: 0 });
     return;
   }
   // Paused while loading and pressed again before it is ready: it plays as soon as it is.
@@ -886,12 +890,19 @@ export function toggle() {
     pausedLoad = 0;
     if (heldLoad === loadSeq) audio.play().catch(() => {});
     else set({ playing: true });
+    shared({ playing: true, position: 0 });
     return;
   }
   if (audio.paused) {
     if (!audio.src || stale) loadAt(get().index);
-    else audio.play().catch(() => {});
-  } else audio.pause();
+    else {
+      audio.play().catch(() => {});
+      shared({ playing: true });
+    }
+  } else {
+    audio.pause();
+    shared({ playing: false });
+  }
 }
 
 /** `fade`: the crossfade's seconds, when the track playing flows into the next. */
@@ -903,19 +914,21 @@ export async function next(user = true, fade = 0) {
   // in for plays again, from this track's end on.
   if (canResume()) return resumeNow(!user);
   finishCurrent(!user);
-  if (s.index + 1 < s.queue.length) return loadAt(s.index + 1, true, fade);
+  const how = user ? 'user' : 'natural';
+  if (s.index + 1 < s.queue.length) return told(how, () => loadAt(s.index + 1, true, fade));
   if (s.source?.kind === 'wave') {
     // Skipped past what was ready: the next one is on its way, and the player says so.
     set({ loading: true });
     await fillWave(1);
-    if (get().index + 1 < get().queue.length) return loadAt(get().index + 1, true, fade);
+    if (get().index + 1 < get().queue.length) return told(how, () => loadAt(get().index + 1, true, fade));
     set({ loading: false });
     // Nothing more came: with no network the downloads play instead.
     if (offlineMode || fillLostNetwork) fallBackToDownloads();
     return;
   }
-  if (s.repeat === 'all') return loadAt(0, true, fade);
+  if (s.repeat === 'all') return told(how, () => loadAt(0, true, fade));
   audio.pause();
+  shared({ playing: false }, how);
 }
 
 export function prev() {
@@ -924,6 +937,7 @@ export function prev() {
   if (stale) return seek(0);
   if (audio.currentTime > 3 || s.index <= 0) {
     audio.currentTime = 0;
+    shared({ position: 0 });
     return;
   }
   finishCurrent(false);
@@ -943,10 +957,12 @@ export function seek(seconds: number) {
   // Taken over and not started yet: it starts there.
   if (stale && current()) {
     resumeAt = { id: current()!.id, seconds: Math.max(0, seconds) };
-    return void set({ position: Math.max(0, seconds) });
+    set({ position: Math.max(0, seconds) });
+    return shared({ position: Math.max(0, seconds) });
   }
   audio.currentTime = Math.max(0, seconds);
   set({ position: audio.currentTime });
+  shared({ position: Math.max(0, seconds) });
 }
 
 export function setVolume(volume: number) {
@@ -1029,6 +1045,7 @@ export function toggleShuffle() {
     set({ shuffle: false, queue: original, index: Math.max(0, original.indexOf(cur)) });
   }
   applyVolume(); // an album in order is levelled as one, shuffled track by track
+  shared({});
   prefetchNext();
 }
 
@@ -1040,6 +1057,7 @@ export function playNext(t: Track) {
     return { queue };
   });
   if (get().index < 0) loadAt(0);
+  else shared({});
   prefetchNext();
 }
 
@@ -1047,6 +1065,7 @@ export function enqueue(t: Track) {
   if (elsewhere) return elsewhere.send('enqueue', [t]);
   set((s) => ({ queue: [...s.queue, t] }));
   if (get().index < 0) loadAt(0);
+  else shared({});
 }
 
 /** A queued track to another place (dragged in the queue); the one playing stays playing. */
@@ -1058,6 +1077,7 @@ export function moveInQueue(from: number, to: number) {
   const [t] = queue.splice(from, 1);
   queue.splice(to, 0, t);
   set({ queue });
+  shared({});
   prefetchNext();
 }
 
@@ -1067,6 +1087,7 @@ export function removeAt(i: number) {
   if (i === s.index) return;
   const queue = s.queue.filter((_, j) => j !== i);
   set({ queue, index: i < s.index ? s.index - 1 : s.index });
+  shared({});
 }
 
 export function dropFromQueue(trackId: string) {
@@ -1082,6 +1103,7 @@ export function dropFromQueue(trackId: string) {
   }
   const queue = s.queue.filter((t) => t.id !== trackId);
   set({ queue, index: cur ? queue.indexOf(cur) : -1 });
+  shared({});
 }
 
 function shuffleArray<T>(arr: T[]) {
@@ -1294,6 +1316,96 @@ export function restoreSession() {
     placeSession(queue, index, title, label, wave);
   } catch {
     /* ignore */
+  }
+}
+
+// ------------------------------------------- listening together (together/index.ts)
+
+/** How a change came: a press (anyone's tells the room), a track ending by itself (the room's
+ * leader alone tells it: every device gets there), the queue growing (a wave filling). */
+export type ChangeHow = 'user' | 'natural' | 'queue';
+
+/** In a room: told of every change of what plays here (it tells the others). */
+export interface Together {
+  changed(what: { playing?: boolean; position?: number }, how: ChangeHow): void;
+}
+let together: Together | null = null;
+/** What the room plays is being put in place here: not a change of this device's to tell. */
+let following = false;
+/** How the load under way came (next(false): the track ended by itself). */
+let loadHow: ChangeHow = 'user';
+
+export function setTogether(t: Together | null) {
+  together = t;
+  // The speed is the room's (1×, nudged by together/); the device's own back after.
+  if (!t) applyRate();
+}
+
+function shared(what: { playing?: boolean; position?: number }, how: ChangeHow = 'user') {
+  if (together && !following && !elsewhere) together.changed(what, how);
+}
+
+/** `load` run as a change that came `how` (its loadAt tells the room so, before its first wait). */
+function told<T>(how: ChangeHow, load: () => T): T {
+  loadHow = how;
+  try {
+    return load();
+  } finally {
+    loadHow = 'user';
+  }
+}
+
+/** Where the audio is now, to the millisecond it can tell (the room's correction needs better than the state's quarter-second). */
+export const exactPosition = () => audio.currentTime;
+
+/** The track playing is opening or waiting for data: its place is not to be corrected now. */
+export const isSettling = () => opening !== 0 || get().loading || stale;
+
+/** The room's speed: 1 nudged a little (together/room.ts's correction), the pitch kept. */
+export function nudge(rate: number) {
+  const el = audio as unknown as { playbackRate: number; defaultPlaybackRate: number; preservesPitch: boolean };
+  if (el.playbackRate === rate && el.preservesPitch) return;
+  el.preservesPitch = true;
+  el.defaultPlaybackRate = rate;
+  el.playbackRate = rate;
+}
+
+/** The room's place in the track playing (the correction's seek: not told back). */
+export function followSeek(seconds: number) {
+  audio.currentTime = Math.max(0, seconds);
+  set({ position: audio.currentTime });
+}
+
+/**
+ * What the room plays, played here (a state come from another member): its queue, its track at
+ * `seconds`, playing or paused. The same track goes on where it is (a pause, a seek); another one
+ * loads. Not told back to the room. A wave started here goes on filling the queue.
+ */
+export function follow(s: { queue: Track[]; index: number; title: string }, seconds: number, play: boolean) {
+  const t = s.queue[s.index];
+  if (!t || elsewhere) return;
+  following = true;
+  try {
+    const cur = current();
+    const wave = get().source?.kind === 'wave' && engine ? get().source : null;
+    const source = wave ?? { kind: 'list' as const, title: s.title };
+    if (cur && String(cur.id) === String(t.id) && !stale && audio.src) {
+      set({ queue: s.queue, index: s.index, source });
+      if (play && audio.paused && opening === 0) audio.play().catch(() => {});
+      if (!play && !audio.paused) audio.pause();
+      if (Math.abs(audio.currentTime - seconds) > 0.4) followSeek(seconds);
+      return;
+    }
+    finishCurrent(false);
+    forgetResume();
+    if (!wave) engine = null;
+    unshuffled = null;
+    set({ queue: s.queue, index: s.index, source, shuffle: false, error: null });
+    stale = false;
+    resumeAt = { id: t.id, seconds };
+    void loadAt(s.index, play);
+  } finally {
+    following = false;
   }
 }
 

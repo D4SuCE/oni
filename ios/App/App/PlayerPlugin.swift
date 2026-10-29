@@ -867,6 +867,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
             call.resolve([
                 "time": self.position, "duration": self.duration, "playing": self.playing, "eq": !self.eq.bypass, "engine": self.engine.isRunning,
                 "crossing": self.tail != nil, "lift": self.lift.globalGain,
+                // How long after the player the sound is heard (s): Bluetooth headphones ~0.2 (src/together/).
+                "latency": AVAudioSession.sharedInstance().outputLatency + AVAudioSession.sharedInstance().ioBufferDuration,
                 "gain": self.gain, "tailLevel": self.tail.map { self.gain * $0.volume } ?? -1, "tailGain": self.tailGain, "crossIn": self.crossIn, "streaming": self.stream != nil, "waiting": self.stalled,
                 "received": st?.received ?? 0, "expected": st?.expected ?? 0, "trace": self.trace,
                 "musicEnd": self.musicEnd ?? -1, "endOf": self.endOf, "tracksOpened": self.tracksOpened, "endSearch": self.endSearch, "hasFile": self.file != nil,

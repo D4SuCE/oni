@@ -143,7 +143,8 @@ export async function init() {
     setOfflineMode(false);
     refreshLibrary();
     warmWave();
-    startSync();
+    // A room listened in a little while ago (the iPhone's Oni put to sleep) is joined again, once Disk is known.
+    void startSync().then(() => import('./together/index.ts')).then((m) => m.resumeTogether());
     lookAgain();
   } catch (e) {
     // No network (not a refused token): start from what was saved last time, with the downloads.
