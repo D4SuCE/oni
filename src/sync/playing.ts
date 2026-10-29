@@ -27,6 +27,8 @@ export interface NowPlaying {
   repeat: string;
   /** 0–1 (the iPhone's: the phone's own); a remote moves it (older files have none). */
   volume?: number;
+  /** Playback speed when not 1 (the place runs on that much faster). */
+  rate?: number;
   /** This device is the remote of that one: nothing plays here (it is not to be taken up or controlled). */
   remoteOf?: string;
 }
@@ -101,7 +103,7 @@ const AHEAD = 40;
 
 /** The track's place a device's file says now: on from `position` while it plays. */
 export function positionOf(f: NowPlaying & { at: number }, now: number) {
-  const on = f.playing ? Math.max(0, now - f.at) / 1000 : 0;
+  const on = f.playing ? (Math.max(0, now - f.at) / 1000) * (f.rate || 1) : 0;
   return f.duration > 0 ? Math.min(f.position + on, f.duration) : f.position + on;
 }
 

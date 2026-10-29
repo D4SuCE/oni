@@ -106,6 +106,12 @@ oni-releases — витрина и обновления); README `oni` для р
      (Ctrl+Alt+Space на ПК пользователя занято). Занятые — `busy`, «занято другой программой». Проверки:
      `tests/hotkeys.test.ts`, `tests/desktop.mjs` «global hotkeys: …» (настоящие клавиши — только с `ONI_HOTKEYS=1`;
      занятое — `tests/hotkey-holder.cjs`).
+   - [x] **Скорость** (ветка `feat/playback-speed`): `setRate` / `RATES` в `player.ts` (настройка устройства, как
+     эквалайзер; пульт не передаёт, только показывает место с учётом `rate`), ПК — `playbackRate` /
+     `defaultPlaybackRate` / `preservesPitch` у обоих элементов `dualAudio.ts`; iPhone — `AVAudioUnitTimePitch`
+     после микшера (`setRate`, высота без сохранения — `pitch = 1200·log2(rate)`), пульс обложки слушает после него.
+     Переход начинается за `crossfade × rate` секунд трека; Discord и экран блокировки — с учётом скорости.
+     Проверки: e2e «speed: …», облачная iPhone `speed`.
 
 
 ## Оптимизация (25.10.2026, выбор пользователя: все пункты)

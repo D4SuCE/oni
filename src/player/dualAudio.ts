@@ -125,6 +125,26 @@ export class DualAudio extends EventTarget {
   set preload(value: string) {
     for (const el of this.elements) el.preload = value as HTMLMediaElement['preload'];
   }
+  // Speed: both elements, so the next track of a crossfade comes in as fast. A new src resets
+  // playbackRate to the default one, so that is set too.
+  get playbackRate() {
+    return this.el.playbackRate;
+  }
+  set playbackRate(value: number) {
+    for (const el of this.elements) el.playbackRate = value;
+  }
+  get defaultPlaybackRate() {
+    return this.el.defaultPlaybackRate;
+  }
+  set defaultPlaybackRate(value: number) {
+    for (const el of this.elements) el.defaultPlaybackRate = value;
+  }
+  get preservesPitch() {
+    return this.el.preservesPitch;
+  }
+  set preservesPitch(value: boolean) {
+    for (const el of this.elements) el.preservesPitch = value;
+  }
   get crossOrigin() {
     return this.el.crossOrigin;
   }

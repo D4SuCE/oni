@@ -18,6 +18,7 @@ type Wave = {
   usePlayer: { getState(): { queue: { id: string; title: string }[]; index: number } };
   offline: { download(t: unknown): Promise<void>; has(id: string): boolean } | null;
   playTracks(tracks: unknown[], index: number, title: string): Promise<void>;
+  setRate(rate: number, keepPitch?: boolean): void;
 };
 
 const wave = () => (window as unknown as { __wave: Wave }).__wave;
@@ -332,6 +333,30 @@ async function nativePlayer() {
   await sleep(1200);
   report('lock-screen-play', pressed.playing && followed && !stopped.playing && wave().audio.paused, JSON.stringify({ pressed, page: followed, toggled: stopped }));
   await wave().audio.play();
+}
+
+/** Speed (AVAudioUnitTimePitch after both nodes): at 1.5× the player's own clock, which counts
+ * the file's frames, runs 1.5 times the wall clock, and so does the page's; then back to 1×. */
+async function speed() {
+  const pace = async () => {
+    const [w0, p0] = [performance.now(), (await OniPlayer.state()).time];
+    await sleep(3000);
+    const [w1, p1] = [performance.now(), (await OniPlayer.state()).time];
+    return (p1 - p0) / ((w1 - w0) / 1000);
+  };
+  wave().setRate(1.5, false);
+  await sleep(500);
+  const fast = await pace();
+  // The page's place lies between the player's asked just before and just after: an answer of the
+  // player's took about a second in the cloud (the page then looked 1.6 s behind at 1.5×).
+  const before = (await OniPlayer.state()).time;
+  const page = wave().audio.currentTime;
+  const after = (await OniPlayer.state()).time;
+  const along = page > before - 0.5 && page < after + 0.5;
+  wave().setRate(1, true);
+  await sleep(500);
+  const plain = await pace();
+  report('speed', fast > 1.35 && fast < 1.65 && plain > 0.9 && plain < 1.1 && along, `1.5×: ${fast.toFixed(2)}, 1×: ${plain.toFixed(2)}, player ${before.toFixed(1)} … ${after.toFixed(1)}, page ${page.toFixed(1)}`);
 }
 
 /** Kept awake after a pause (another device may play this one as a remote, sync/elsewhere.ts): the
@@ -1343,6 +1368,7 @@ export async function runSmoke() {
     const local = await until(() => wave().audio.src.startsWith('oni-sealed:') && !wave().audio.paused && wave().audio.currentTime > 1, 20000);
     report('offline-playback', local, wave().audio.src.slice(0, 12));
     await nativePlayer();
+    await speed();
     await awakeAfterPause();
     await twice(lanLink);
     await twice(iosPulse);

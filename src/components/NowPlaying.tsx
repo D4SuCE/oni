@@ -235,6 +235,7 @@ export function NowPlaying() {
   const isWave = usePlayer((s) => s.source?.kind === 'wave');
   // The equalizer's button is red while it is on, as in the desktop's player bar (the user).
   const eqOn = useEq((s) => s.enabled);
+  const rate = usePlayer((s) => s.rate);
   const [picked, setTab] = useState<'queue' | 'lyrics' | 'similar'>('queue');
   // The iPhone has no room for the queue beside the cover: it opens as a sheet.
   const [sheetOpen, setSheet] = useState<'queue' | null>(null);
@@ -303,8 +304,9 @@ export function NowPlaying() {
                   <DevicesButton size={20} />
                   {/* The equalizer on the iPhone, where the player bar has no room for it. */}
                   {isIos && (
-                    <button className={cx('icon-btn', eqOn && 'on')} onClick={() => useApp.setState({ soundOpen: true })} title={t.sound.title} data-testid="np-sound">
+                    <button className={cx('icon-btn', (eqOn || rate !== 1) && 'on')} onClick={() => useApp.setState({ soundOpen: true })} title={t.sound.title} data-testid="np-sound">
                       <SlidersVertical size={21} />
+                      {rate !== 1 && <span className="rate-badge">{t.sound.rate(rate)}</span>}
                     </button>
                   )}
                   {/* The lyrics on the iPhone too (the user, 25.10.2026: "is there a page with the lyrics?"). */}

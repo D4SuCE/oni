@@ -44,6 +44,9 @@ interface Prefs {
   crossfade: number;
   /** «Своя волна»: how much of it is familiar and how much new. */
   ownMode: OwnMode;
+  /** Playback speed (1: as recorded); `keepPitch`: faster without the voice going higher. */
+  rate: number;
+  keepPitch: boolean;
 }
 
 export interface PlayerState extends Prefs {
@@ -71,6 +74,8 @@ prefs.repeat ??= 'off';
 prefs.normalize ??= true;
 prefs.quality ??= 'lossless';
 prefs.crossfade ??= 0;
+prefs.rate ??= 1;
+prefs.keepPitch ??= true;
 
 export const usePlayer = create<PlayerState>(() => ({
   ...prefs,
@@ -956,6 +961,26 @@ export function setQuality(quality: StreamQuality) {
   loadAt(get().index, wasPlaying).then(() => at > 1 && seek(at));
 }
 
+/** The speeds offered (Sound settings). */
+export const RATES = [0.75, 0.9, 1, 1.1, 1.25, 1.5];
+
+/** The speed and pitch onto the audio (the desktop's elements; the iPhone's player, nativeAudio.ts). */
+function applyRate() {
+  const { rate, keepPitch } = get();
+  const el = audio as unknown as { playbackRate: number; defaultPlaybackRate: number; preservesPitch: boolean };
+  el.preservesPitch = keepPitch;
+  el.defaultPlaybackRate = rate;
+  el.playbackRate = rate;
+}
+applyRate();
+
+/** Playback speed (0.5–2) and whether the pitch stays as recorded. A device's own, like the equalizer. */
+export function setRate(rate: number, keepPitch = get().keepPitch) {
+  set({ rate: Math.max(0.5, Math.min(2, Math.round(rate * 100) / 100)), keepPitch });
+  applyRate();
+  savePrefs();
+}
+
 /** The crossfade's length in seconds (0: off). */
 export function setCrossfade(seconds: number) {
   set({ crossfade: Math.max(0, Math.min(12, Math.round(seconds))) });
@@ -1110,15 +1135,17 @@ audio.addEventListener('timeupdate', () => {
   // file; the desktop hears it, quiet in the last stretch.
   const found = (audio as unknown as Crossfading).musicEnd;
   const end = Number.isFinite(found) && found! > fade * 2 && found! < d ? found! : d;
+  // Faster or slower, the fade still takes `fade` seconds of the clock: that many more (or fewer) of the track.
+  const span = fade * get().rate;
   const heard = fade > 0 && !isIos && !crossStarted && Number.isFinite(d) && d - t <= fade + 30 && quietTail(t);
-  if (fade > 0 && !crossStarted && !audio.paused && canCrossfade() && Number.isFinite(d) && d > fade * 3 && (end - t <= fade || heard) && get().repeat !== 'one' && !get().sleep.afterTrack) {
+  if (fade > 0 && !crossStarted && !audio.paused && canCrossfade() && Number.isFinite(d) && d > fade * 3 && (end - t <= span || heard) && get().repeat !== 'one' && !get().sleep.afterTrack) {
     crossStarted = true;
     crossLoading = true;
     void next(false, fade).finally(() => (crossLoading = false));
   }
   if ('setPositionState' in navigator.mediaSession && Number.isFinite(audio.duration)) {
     try {
-      navigator.mediaSession.setPositionState({ duration: audio.duration, position: Math.min(t, audio.duration), playbackRate: 1 });
+      navigator.mediaSession.setPositionState({ duration: audio.duration, position: Math.min(t, audio.duration), playbackRate: get().rate });
     } catch {
       /* ignore */
     }
@@ -1196,8 +1223,8 @@ if (isIos) import('./volume.ts').then((m) => m.followSystemVolume((volume) => !e
 // -------------------------------------------------------------- persistence
 
 function savePrefs() {
-  const { volume, repeat, normalize, quality, crossfade, ownMode } = get();
-  storage.setItem('player.prefs', JSON.stringify({ volume, repeat, normalize, quality, crossfade, ownMode }));
+  const { volume, repeat, normalize, quality, crossfade, ownMode, rate, keepPitch } = get();
+  storage.setItem('player.prefs', JSON.stringify({ volume, repeat, normalize, quality, crossfade, ownMode, rate, keepPitch }));
 }
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
