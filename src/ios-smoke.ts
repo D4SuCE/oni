@@ -1365,8 +1365,10 @@ export async function runSmoke() {
     await eqButton().catch((e) => report('eq-button', false, String(e)));
     await voiceShortcuts();
     await animLight().catch((e) => report('anim-light', false, String(e)));
-    await updateCheck();
+    // Before the update check: it asks iOS to open SideStore, which the simulator has not got, and
+    // the links after that went nowhere.
     await shareLinks().catch((e) => report('share-links', false, String(e)));
+    await updateCheck();
   } catch (e) {
     report('crash', false, String(e));
   }

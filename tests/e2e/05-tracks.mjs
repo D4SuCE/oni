@@ -109,7 +109,7 @@ await step('share a track: its link goes to the clipboard', async () => {
     await page.locator('.menu-item', { hasText: 'Скопировать ссылку' }).click();
     await page.waitForTimeout(300);
     const link = await app.evaluate(({ clipboard }) => clipboard.readText());
-    if (!/^https:\/\/music\.yandex\.ru\/(album\/\d+\/)?track\/\d+$/.test(link)) throw new Error(`clipboard: "${link}"`);
+    if (!/^https:\/\/oni-music\.github\.io\/#track\/\d+$/.test(link)) throw new Error(`clipboard: "${link}"`);
   } finally {
     await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), saved);
   }
@@ -345,15 +345,6 @@ await step('like then unlike (reverted)', async () => {
   await page.waitForTimeout(800);
 });
 
-await step('liked tracks page', async () => {
-  await page.click('[data-testid="nav-liked"]');
-  await page.waitForSelector('.track-row, .empty-hint', { timeout: 20000 });
-  // Library and Liked used to open the same page and both lit up.
-  if ((await page.locator('.sidebar .nav-item.active').count()) !== 1) throw new Error('more than one nav item is active');
-  await page.waitForTimeout(1500);
-  await shot('09-liked');
-});
-
 await step('links: Share, an oni:// link from a browser, a Yandex link pasted into Search', async () => {
   // "Share" gives Oni's page (site/); the oni:// link it opens comes from a browser as a second start
   // of Oni (electron/main.cjs). A track link plays the track, the others open their page.
@@ -362,9 +353,13 @@ await step('links: Share, an oni:// link from a browser, a Yandex link pasted in
   const clip = await app.evaluate(({ clipboard }) => clipboard.readText());
   try {
     await page.evaluate((id) => window.__wave.navigate({ name: 'album', id }), album);
+    await app.evaluate(({ clipboard }) => clipboard.writeText(''));
     await page.click('[data-testid="share"]');
-    await page.waitForFunction(() => document.querySelector('.toast')?.textContent?.includes('Ссылка скопирована'), null, { timeout: 5000 });
-    const shared = await app.evaluate(({ clipboard }) => clipboard.readText());
+    let shared = '';
+    for (let i = 0; i < 20 && !shared; i++) {
+      await page.waitForTimeout(250);
+      shared = await app.evaluate(({ clipboard }) => clipboard.readText());
+    }
     if (shared !== `https://oni-music.github.io/#album/${album}`) throw new Error(`Share copied ${shared}`);
   } finally {
     await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), clip);
@@ -395,4 +390,13 @@ await step('links: Share, an oni:// link from a browser, a Yandex link pasted in
     return s.route.name === 'album' && String(s.route.id) === String(id) && s.searchQuery === '';
   }, album, { timeout: 5000 });
   await page.waitForSelector('.track-row', { timeout: 15000 });
+});
+
+await step('liked tracks page', async () => {
+  await page.click('[data-testid="nav-liked"]');
+  await page.waitForSelector('.track-row, .empty-hint', { timeout: 20000 });
+  // Library and Liked used to open the same page and both lit up.
+  if ((await page.locator('.sidebar .nav-item.active').count()) !== 1) throw new Error('more than one nav item is active');
+  await page.waitForTimeout(1500);
+  await shot('09-liked');
 });
