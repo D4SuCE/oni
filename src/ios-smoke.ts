@@ -347,12 +347,16 @@ async function speed() {
   wave().setRate(1.5, false);
   await sleep(500);
   const fast = await pace();
+  // The page's place lies between the player's asked just before and just after: an answer of the
+  // player's took about a second in the cloud (the page then looked 1.6 s behind at 1.5×).
+  const before = (await OniPlayer.state()).time;
   const page = wave().audio.currentTime;
-  const native = (await OniPlayer.state()).time;
+  const after = (await OniPlayer.state()).time;
+  const along = page > before - 0.5 && page < after + 0.5;
   wave().setRate(1, true);
   await sleep(500);
   const plain = await pace();
-  report('speed', fast > 1.35 && fast < 1.65 && plain > 0.9 && plain < 1.1 && Math.abs(page - native) < 1, `1.5×: ${fast.toFixed(2)}, 1×: ${plain.toFixed(2)}, page ${page.toFixed(1)} / player ${native.toFixed(1)}`);
+  report('speed', fast > 1.35 && fast < 1.65 && plain > 0.9 && plain < 1.1 && along, `1.5×: ${fast.toFixed(2)}, 1×: ${plain.toFixed(2)}, player ${before.toFixed(1)} … ${after.toFixed(1)}, page ${page.toFixed(1)}`);
 }
 
 /** Kept awake after a pause (another device may play this one as a remote, sync/elsewhere.ts): the
