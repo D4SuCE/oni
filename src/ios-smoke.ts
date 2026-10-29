@@ -1385,6 +1385,9 @@ export async function runSmoke() {
     // (WebViewDelegationHandler), and by the end of the run it was not (the links went nowhere).
     await playlistHold().catch((e) => report('playlist-hold', false, String(e)));
     await shareLinks().catch((e) => report('share-links', false, String(e)));
+    // "Save as CSV" (ui/exportCsv.ts) hands the file to the share sheet: WebKit must take a CSV file.
+    const csv = new File(['Track Name\r\n'], 'Oni.csv', { type: 'text/csv' });
+    report('csv-share', Boolean(navigator.canShare?.({ files: [csv] })), `canShare: ${typeof navigator.canShare}`);
 
     // A shortcut's link. The page asks iOS to open it (Capacitor hands non-web addresses to the
     // system), so it comes back through the scene as from a shortcut, without the "Open in Oni?"

@@ -112,6 +112,10 @@ oni-releases — витрина и обновления); README `oni` для р
      после микшера (`setRate`, высота без сохранения — `pitch = 1200·log2(rate)`), пульс обложки слушает после него.
      Переход начинается за `crossfade × rate` секунд трека; Discord и экран блокировки — с учётом скорости.
      Проверки: e2e «speed: …», облачная iPhone `speed`.
+   - [x] **Выгрузка в CSV** (ветка `feat/export-csv`): текст — `ui/csv.ts` (столбцы Exportify + «Length», «Playlist»,
+     «Yandex Music URL»; запятая и метка BOM для Excel), файл — `ui/exportCsv.ts` (ПК — сохранение, iPhone —
+     «Поделиться»); импорт Oni снимает BOM. Проверки: `tests/import.test.ts` (туда и обратно), e2e «Liked saved as
+     CSV», облачная iPhone `csv-share`.
 
 
 ## Оптимизация (25.10.2026, выбор пользователя: все пункты)

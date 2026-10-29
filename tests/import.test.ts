@@ -3,6 +3,7 @@
 // Run: npm run test:import
 import type { Track } from '../src/api/types.ts';
 import { baseTitle, pick, queryOf, score } from '../src/import/match.ts';
+import { fileName, tracksCsv } from '../src/ui/csv.ts';
 import { fetchSource, ImportError, parseApple, parseSpotify, parseText, parseYoutubePage, sourceOf, type SourceTrack } from '../src/import/sources.ts';
 
 let passed = 0;
@@ -47,6 +48,23 @@ test("Exportify's CSV: quoted fields, several artists, the length", () => {
   assert(l.tracks.length === 2, `${l.tracks.length}`);
   assert(l.tracks[0].artists.join('|') === 'Queen|David Bowie' && l.tracks[0].durationMs === 248440, JSON.stringify(l.tracks[0]));
   assert(l.tracks[1].title === 'Say "Hi"', l.tracks[1].title);
+});
+
+test("Oni's own CSV (ui/csv.ts): Excel's mark, quotes, commas in a title, a version; read back by the import", () => {
+  const tracks = [
+    { id: 1, title: 'Группа крови', durationMs: 285000, artists: [{ id: 1, name: 'Кино' }], albums: [{ id: 10, title: 'Группа крови' }] },
+    { id: 2, title: 'Say "Hi", Bye', version: 'Remix', durationMs: 61500, artists: [{ id: 2, name: 'A' }, { id: 3, name: 'B' }], albums: [] },
+  ] as unknown as Track[];
+  const csv = tracksCsv(tracks, 'Мой, лучший');
+  assert(csv.startsWith('\ufeffTrack Name,Artist Name(s),'), csv.slice(0, 40));
+  const lines = csv.trim().split('\r\n');
+  assert(lines[1] === 'Группа крови,Кино,Группа крови,285000,4:45,"Мой, лучший",https://music.yandex.ru/album/10/track/1', lines[1]);
+  assert(lines[2] === '"Say ""Hi"", Bye (Remix)","A, B",,61500,1:02,"Мой, лучший",https://music.yandex.ru/track/2', lines[2]);
+  const back = parseText(csv);
+  assert(back.tracks.length === 2, `${back.tracks.length}`);
+  assert(back.tracks[0].title === 'Группа крови' && back.tracks[0].artists.join('|') === 'Кино' && back.tracks[0].durationMs === 285000, JSON.stringify(back.tracks[0]));
+  assert(back.tracks[1].title === 'Say "Hi", Bye (Remix)' && back.tracks[1].artists.join('|') === 'A|B', JSON.stringify(back.tracks[1]));
+  assert(fileName('AC/DC: лучшее?') === 'AC DC лучшее.csv' && fileName('///') === 'Oni.csv', fileName('AC/DC: лучшее?'));
 });
 
 test("Spotify's embed page", () => {

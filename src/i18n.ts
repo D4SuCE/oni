@@ -235,6 +235,8 @@ const ru = {
     similarTo: (title: string) => `Похожие на «${title}»`,
   },
   menu: {
+    csv: 'Сохранить в CSV',
+    csvFailed: 'Не получилось отдать файл',
     newPlaylist: 'Новый плейлист…',
     playNext: 'Играть следующим',
     radio: 'Радио по треку',
@@ -983,6 +985,8 @@ const en: Dict = {
     similarTo: (title) => `Similar to “${title}”`,
   },
   menu: {
+    csv: 'Save as CSV',
+    csvFailed: 'Could not hand over the file',
     newPlaylist: 'New playlist…',
     playNext: 'Play next',
     radio: 'Track radio',

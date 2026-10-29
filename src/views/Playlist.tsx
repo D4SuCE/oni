@@ -1,4 +1,4 @@
-import { ArrowUpDown, Heart, MoreHorizontal, Pencil, Radio, Share, Shuffle, Trash2, Upload } from 'lucide-react';
+import { ArrowUpDown, FileDown, Heart, MoreHorizontal, Pencil, Radio, Share, Shuffle, Trash2, Upload } from 'lucide-react';
 import { DownloadButton } from '../components/DownloadButton.tsx';
 import { useEffect, useRef, useState } from 'react';
 import { api, transport } from '../api/client.ts';
@@ -18,6 +18,7 @@ import { shareLinkOf } from '../share/shared.ts';
 import { shareUploads } from '../share/owner.ts';
 import { isIos } from '../ui/platform.ts';
 import { share } from '../ui/share.ts';
+import { exportCsv } from '../ui/exportCsv.ts';
 import { cx, fmtTotal, useAsync } from '../ui/util.ts';
 import { useListSearch } from '../components/ListSearch.tsx';
 import { savedPlaylist } from '../player/offlineLists.ts';
@@ -139,6 +140,7 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
   const more: MenuItem[] = [
     { label: t.common.radio, icon: <Radio size={15} />, onClick: () => playRadio(`playlist:${pl.uid}:${pl.kind}`, pl.title) },
     { label: t.menu.share, icon: <Share size={15} />, onClick: sharePlaylist },
+    ...(complete && tracks.length ? [{ label: t.menu.csv, icon: <FileDown size={15} />, onClick: () => exportCsv(tracks, pl.title) }] : []),
     ...(own
       ? [
           ...(complete && tracks.length > 1 && !search.query ? [{ label: t.menu.reorder, icon: <ArrowUpDown size={15} />, onClick: () => setReordering(true) }] : []),
@@ -184,6 +186,11 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
                 <button className="btn glass-btn" onClick={sharePlaylist} title={t.menu.share} data-testid="share">
                   <Share size={16} /> {t.menu.share}
                 </button>
+                {complete && tracks.length > 0 && (
+                  <button className="icon-btn" onClick={() => exportCsv(tracks, pl.title)} title={t.menu.csv} data-testid="export-csv">
+                    <FileDown size={18} />
+                  </button>
+                )}
                 {!own && (
                   <button className={cx('icon-btn', saved && 'on like')} onClick={() => togglePlaylistLike(pl)} title={saved ? t.playlist.unsave : t.playlist.save} data-testid="playlist-like">
                     <Heart size={19} fill={saved ? 'currentColor' : 'none'} />
