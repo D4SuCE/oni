@@ -2,7 +2,7 @@
 // merged, the correction, and the invitation links. Run: npm run test:together
 import type { Track } from '../src/api/types.ts';
 import { offsetOf, SharedClock, type Sample } from '../src/together/clock.ts';
-import { linkId } from '../src/together/disk.ts';
+import { Folders, linkId, writeMine } from '../src/together/disk.ts';
 import { correction, GONE, newer, Room, SEEK, targetOf, windowOf, type MemberFile, type RoomState } from '../src/together/room.ts';
 import { linkFrom, shareUrl } from '../src/ui/links.ts';
 // @ts-expect-error the site's plain script has no types
@@ -170,6 +170,55 @@ await test('everyone known: through the others\' files, with their folders', () 
   const people = room.people().map((m) => `${m.device.id}:${m.link}`).sort();
   assert(people.join() === 'far:link-far,host:link-host', `people: ${people}`);
   assert(room.lan()?.device === 'host' && room.lan()?.port === 4000, 'where the one who started listens');
+});
+
+console.log('\nfolders on Disk');
+
+/** Public Disk folders in memory, read as Folders reads them (listing, a download link, the file). */
+function fakePublic(folders: Record<string, Record<string, string>>) {
+  const fetch = async (req: any): Promise<any> => {
+    const id = String(req.query?.public_key ?? '').split('/d/')[1];
+    if (req.url.endsWith('/public/resources')) {
+      const items = Object.entries(folders[id] ?? {}).map(([name, text]) => ({ name, md5: text, modified: 'x' }));
+      return { ok: true, status: 200, data: { _embedded: { items } } };
+    }
+    if (req.url.endsWith('/public/resources/download')) return { ok: true, status: 200, data: { href: `mem://${id}${req.query.path}` } };
+    const [fid, name] = req.url.slice('mem://'.length).split('/');
+    return { ok: true, status: 200, data: folders[fid][name] };
+  };
+  return fetch as any;
+}
+
+await test("two devices of one account share a folder: each its own file there, each reads the other's (the user, 29.10.2026: PC + iPhone stayed «Together · 1»)", async () => {
+  // One account, one Disk app folder: the iPhone started, the PC joined by a link to that same folder.
+  const shared: Record<string, string> = {};
+  const disk = {
+    async write(path: string, text: string) {
+      shared[path.split('/')[1]] = text;
+    },
+  } as any;
+  const phone = file('phone', { host: true, state: state() });
+  const pc = file('pc');
+  await writeMine(disk, phone);
+  await writeMine(disk, pc);
+  assert(Object.keys(shared).length === 2, `files: ${Object.keys(shared)}`);
+  const fetch = fakePublic({ same: shared });
+  const pcSees = await new Folders(fetch).poll('room1', ['same'], 'pc');
+  assert(pcSees.length === 1 && pcSees[0].me.device.id === 'phone', `the PC read ${pcSees.map((f) => f.me.device.id)}`);
+  const phoneSees = await new Folders(fetch).poll('room1', ['same'], 'phone');
+  assert(phoneSees.length === 1 && phoneSees[0].me.device.id === 'pc', `the iPhone read ${phoneSees.map((f) => f.me.device.id)}`);
+});
+
+await test('a file not changed since it was read is not read again; another room\'s files are left alone', async () => {
+  const folder: Record<string, string> = {};
+  const disk = { async write(path: string, text: string) { folder[path.split('/')[1]] = text; } } as any;
+  await writeMine(disk, file('a'));
+  await writeMine(disk, file('b', { room: 'room2' }));
+  const folders = new Folders(fakePublic({ f: folder }));
+  assert((await folders.poll('room1', ['f'], 'me')).length === 1, 'first: read');
+  assert((await folders.poll('room1', ['f'], 'me')).length === 0, 'unchanged: not again');
+  await writeMine(disk, file('a', { at: 9999 }));
+  assert((await folders.poll('room1', ['f'], 'me')).length === 1, 'changed: again');
 });
 
 console.log('\nlinks');

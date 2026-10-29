@@ -100,7 +100,7 @@ await step('listening together from afar: joined by a link through a friend\'s D
   const tracks = await someTracks();
   const folder = `together-e2e-${Date.now()}`;
   const room = `e2e${Date.now()}`;
-  const put = (file) => T(([f, text]) => window.__wave.sync.disk.write(f, text), [`${folder}/room-${room}.json`, JSON.stringify(file)]);
+  const put = (file) => T(([f, text]) => window.__wave.sync.disk.write(f, text), [`${folder}/room-${room}-e2e-far.json`, JSON.stringify(file)]);
   await T((f) => window.__wave.sync.disk.mkdir(f), folder);
   try {
     const link = await T((f) => window.__wave.sync.disk.publish(f), folder);
@@ -166,5 +166,38 @@ await step("listening together: one's own uploaded song goes to the room through
     if (!url) throw new Error('the Disk gives no address for it');
   } finally {
     await T(() => window.__wave.together.leaveTogether());
+  }
+});
+
+await step("listening together on two devices of one account (one Disk folder): this one joins the other's room by a link to its own folder, and is seen there", async () => {
+  // The user, 29.10.2026: started on the iPhone, opened the link on the PC — both stayed «Together · 1».
+  if (!(await hasDisk())) return console.log('       skipped: no YANDEX_DISK_TOKEN');
+  const tracks = await someTracks();
+  const room = `e2esame${Date.now()}`;
+  const phone = 'e2ephone';
+  const name = `together/room-${room}-${phone}.json`;
+  const link = await T(async () => {
+    await window.__wave.sync.disk.mkdir('together');
+    return /\/d\/([\w-]+)/.exec(await window.__wave.sync.disk.publish('together'))[1];
+  });
+  const put = (file) => T(([n, text]) => window.__wave.sync.disk.write(n, text), [name, JSON.stringify(file)]);
+  try {
+    let now = await roomNow();
+    const state = { rev: now, by: phone, queue: tracks, index: 1, title: 'E2E same account', playing: true, position: 15, at: now };
+    const me = { device: { id: phone, platform: 'ios' }, name: 'E2E phone', link };
+    await put(guestFile(room, phone, state, { host: true, me }));
+    await T(([r, f]) => window.__wave.together.joinRoom(r, f), [room, link]);
+    await page.waitForFunction((tid) => String(window.__wave.current()?.id) === tid && !window.__wave.audio.paused, String(tracks[1].id), { timeout: 30000 });
+    await page.waitForFunction(() => window.__wave.together.useTogether.getState().people.length === 1, null, { timeout: 10000 });
+    // The phone's Oni reads this one's file in the same folder: it is there, its own, beside the phone's.
+    const own = await T(() => window.__wave.sync.deviceSync.device.id);
+    const mine = await T(([r, d]) => window.__wave.sync.disk.read(`together/room-${r}-${d}.json`).then((t) => JSON.parse(t)), [room, own]);
+    if (mine.me.device.id !== own || mine.room !== room) throw new Error(`this one's file: ${JSON.stringify(mine.me)}`);
+    const phones = await T((n) => window.__wave.sync.disk.read(n).then((t) => JSON.parse(t)), name);
+    if (phones.me.device.id !== phone) throw new Error('the phone\'s file was overwritten');
+    if (await T(() => window.__wave.sync.elsewhere.useElsewhere.getState().controlling)) throw new Error('made a remote while in the room');
+  } finally {
+    await T(() => window.__wave.together.leaveTogether());
+    await T((n) => window.__wave.sync.disk.remove(n), name).catch(() => {});
   }
 });

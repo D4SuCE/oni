@@ -1,6 +1,8 @@
-// A room from afar (docs/together.md): each member with Yandex Disk keeps his file in the open folder
-// "together" of Oni's folder on it; the others read it by the folder's link, with no sign-in. One
-// writer per file, as with the remote (sync/playing.ts): nothing is overwritten by another. Nobody
+// A room from afar (docs/together.md): each member's device with Yandex Disk keeps its file in the
+// open folder "together" of Oni's folder on it; the others read it by the folder's link, with no
+// sign-in. One writer per file, as with the remote (sync/playing.ts): a file per device, since two
+// devices of one account share one folder (the user, 29.10.2026: his PC and iPhone in one room
+// stayed «Together · 1», each overwriting the other's file and not reading its "own" folder). Nobody
 // can write into another's Disk, so the one who started learns of a guest by the guest's own link
 // (pressed once: the friend is then known for good, together/index.ts).
 
@@ -11,7 +13,8 @@ import type { MemberFile } from './room.ts';
 export const FOLDER = 'together';
 const PUBLIC = 'https://cloud-api.yandex.net/v1/disk/public/resources';
 
-export const fileOf = (room: string) => `room-${room}.json`;
+const prefixOf = (room: string) => `room-${room}-`;
+export const fileOf = (room: string, device: string) => `${prefixOf(room)}${device}.json`;
 /** A folder's link from its id (the part after /d/), and back. */
 export const linkUrl = (id: string) => `https://disk.yandex.ru/d/${id}`;
 export function linkId(url: string): string | null {
@@ -34,14 +37,15 @@ export async function openFolder(disk: OwnDisk): Promise<string> {
 }
 
 export async function writeMine(disk: OwnDisk, file: MemberFile) {
-  await disk.write(`${FOLDER}/${fileOf(file.room)}`, JSON.stringify(file));
+  await disk.write(`${FOLDER}/${fileOf(file.room, file.me.device.id)}`, JSON.stringify(file));
 }
 
-export async function removeMine(disk: OwnDisk, room: string) {
-  await disk.remove(`${FOLDER}/${fileOf(room)}`);
+export async function removeMine(disk: OwnDisk, room: string, device: string) {
+  await disk.remove(`${FOLDER}/${fileOf(room, device)}`);
 }
 
-/** The others' folders, read by their links: a file is read again only when it changed. */
+/** The members' folders (this one's own too: another device of the account writes there), read by
+ * their links: a file is read again only when it changed. */
 export class Folders {
   private fetch: Fetch;
   private stamps = new Map<string, string>();
@@ -50,23 +54,25 @@ export class Folders {
     this.fetch = fetch;
   }
 
-  /** The room's file in each folder that has a new one (none there, or not changed: nothing). */
-  async poll(room: string, links: string[]): Promise<MemberFile[]> {
-    const name = fileOf(room);
-    const out = await Promise.all(links.map((id) => this.one(id, name).catch(() => null)));
-    return out.filter((f): f is MemberFile => Boolean(f));
+  /** The room's files in the folders that are new or changed, but this device's own (`me`: its id). */
+  async poll(room: string, links: string[], me: string): Promise<MemberFile[]> {
+    const out = await Promise.all(links.map((id) => this.folder(id, room, fileOf(room, me)).catch(() => [])));
+    return out.flat();
   }
 
-  /** Any of the folders has a file of this room (a friend's Oni looking whether he is in it). */
-  private async one(id: string, name: string): Promise<MemberFile | null> {
+  private async folder(id: string, room: string, own: string): Promise<MemberFile[]> {
     const r = await this.fetch<any>({ url: PUBLIC, query: { public_key: linkUrl(id), path: '/', limit: 200, fields: '_embedded.items.name,_embedded.items.md5,_embedded.items.modified' } });
-    if (!r.ok) return null;
-    const item = (r.data?._embedded?.items ?? []).find((x: any) => x.name === name);
-    if (!item) return null;
+    if (!r.ok) return [];
+    const items = (r.data?._embedded?.items ?? []).filter((x: any) => typeof x.name === 'string' && x.name.startsWith(prefixOf(room)) && x.name.endsWith('.json') && x.name !== own);
+    const files = await Promise.all(items.map((item: any) => this.read(id, item).catch(() => null)));
+    return files.filter((f): f is MemberFile => Boolean(f));
+  }
+
+  private async read(id: string, item: { name: string; modified?: string; md5?: string }): Promise<MemberFile | null> {
     const stamp = `${item.modified}|${item.md5 ?? ''}`;
-    const key = `${id}/${name}`;
+    const key = `${id}/${item.name}`;
     if (this.stamps.get(key) === stamp) return null;
-    const link = await this.fetch<{ href?: string }>({ url: `${PUBLIC}/download`, query: { public_key: linkUrl(id), path: `/${name}` } });
+    const link = await this.fetch<{ href?: string }>({ url: `${PUBLIC}/download`, query: { public_key: linkUrl(id), path: `/${item.name}` } });
     if (!link.ok || !link.data?.href) return null;
     const text = await this.fetch<string>({ url: link.data.href, responseType: 'text' });
     if (!text.ok) return null;

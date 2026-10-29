@@ -25,6 +25,7 @@ import {
 import { sourceTitle } from '../player/source.ts';
 import { toast, useApp } from '../store.ts';
 import { disk, thisDevice, useSync } from '../sync/index.ts';
+import { disconnect } from '../sync/elsewhere.ts';
 import { isIos } from '../ui/platform.ts';
 import { measure, SharedClock, type Sample } from './clock.ts';
 import type { Track } from '../api/types.ts';
@@ -176,7 +177,7 @@ export async function leaveTogether() {
   if (diskOn() && useTogether.getState().link) {
     await writeMine(disk, file).catch(() => {});
     setTimeout(() => {
-      void removeMine(disk, id).catch(() => {});
+      void removeMine(disk, id, thisDevice.id).catch(() => {});
       for (const t of sent) void disk.remove(`${FOLDER}/${t}.mp3`).catch(() => {});
     }, 15_000);
   }
@@ -201,6 +202,8 @@ async function begin(id: string, started: boolean, folders_: string[]) {
   set({ room: id, started, people: [], heard: started });
   save();
   lan ??= new RoomLan({ text: onText, guests: onGuests, closed: onClosed });
+  // A remote of the account's other device plays nothing here: let go, the room's music plays here.
+  disconnect();
   setTogether({ changed: (what, how) => tell(how, what) });
   void syncClock();
   if (diskOn()) {
@@ -454,8 +457,9 @@ async function pollOnce(id: string) {
   const links = new Set([...extra, ...room.people().map((m) => m.link).filter((l): l is string => Boolean(l))]);
   if (useTogether.getState().started && polls % FRIENDS_EVERY === 0) for (const l of Object.keys(friends())) links.add(l);
   polls++;
-  if (own) links.delete(own);
-  const files = links.size ? await folders.poll(id, [...links]).catch(() => []) : [];
+  // Its own folder too: another device of the account (the PC and the iPhone in one room) writes there.
+  if (own && diskOn()) links.add(own);
+  const files = links.size ? await folders.poll(id, [...links], thisDevice.id).catch(() => []) : [];
   if (room?.id !== id) return;
   for (const f of files) receive(f, 'disk');
   const host = room.lan();

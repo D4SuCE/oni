@@ -22,6 +22,7 @@ import {
   retuneWave,
   setOwnMode,
   isElsewhere,
+  inRoom,
   mirror,
   moveInQueue,
   next,
@@ -238,7 +239,9 @@ function showRemotes() {
 /** Opened, or back in view, with nothing playing here: the other device's track, or its remote. */
 function takeUp() {
   const p = usePlayer.getState();
-  if (p.playing || p.loading || isElsewhere()) return;
+  // In a room (together/) it plays the room's music: the account's other device (in the room too,
+  // the user's PC and iPhone, 29.10.2026) would make it a remote that plays nothing.
+  if (p.playing || p.loading || isElsewhere() || inRoom()) return;
   // A device that is itself a remote plays nothing: neither taken up nor controlled (two devices, each
   // the other's remote, waited for each other and no press did anything: the user, 25.10.2026).
   const top = sync!.others().find((f) => !f.remoteOf);

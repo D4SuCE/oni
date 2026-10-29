@@ -1335,6 +1335,9 @@ let following = false;
 /** How the load under way came (next(false): the track ended by itself). */
 let loadHow: ChangeHow = 'user';
 
+/** In a room: this device plays the room's music itself (not taken up, nor made a remote, by sync/elsewhere.ts). */
+export const inRoom = () => together !== null;
+
 export function setTogether(t: Together | null) {
   together = t;
   // The speed is the room's (1×, nudged by together/); the device's own back after.
