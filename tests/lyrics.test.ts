@@ -2,7 +2,9 @@
 // synced first; covers, live takes and instrumentals left out.
 // Run: npm run test:lyrics
 import { pickLrclib } from '../src/player/lrclib.ts';
-import { activeLine, LEAD, linePace, litLetters, parseLrc, sungLetters, syllableWeights, type LrcLine } from '../src/player/lrc.ts';
+import { activeLine, LEAD, litLetters, parseLrc, sungLetters, syllableWeights, type LrcLine } from '../src/player/lrc.ts';
+
+const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
 
 /** A made-up song: at each time a line of so many syllables ("la la …"). */
 const song = (at: [number, number][]): LrcLine[] => parseLrc(at.map(([t, n]) => `[${String(Math.floor(t / 60)).padStart(2, '0')}:${(t % 60).toFixed(2).padStart(5, '0')}]${Array(n).fill('la').join(' ')}`).join('\n'));
@@ -62,17 +64,6 @@ test('LRC: lines by time, a chorus written once with two times, tags skipped', (
   assert(lines.map((l) => `${l.t}:${l.text}`).join('|') === '12:Du|14.5:Du hast|20:Du hast mich|30:|70.5:Du hast mich', JSON.stringify(lines));
 });
 
-test("a line with no word times fills at the pace around it, not over a pause after it (the user: words lagged behind the voice)", () => {
-  // The times of Night Club's "The Creepshow" (its opening) and about its lines' syllables, the words made up.
-  const opening: [number, number][] = [[23.27, 5], [25.89, 6], [28.69, 9], [34.19, 6], [36.72, 6], [39.43, 10], [44.18, 4], [46.55, 7], [49.44, 7], [51.9, 6], [54.99, 4]];
-  const lines = song(opening);
-  // 9 syllables with 5.5 s to the next line are sung in about 3 s: lit whole by 3.4 s (it was 18 of 31 letters at 3.2 s).
-  assert(sungLetters(lines, 2, 28.69 + 3.4) === lines[2].text.length, `${sungLetters(lines, 2, 28.69 + 3.4)} of ${lines[2].text.length} at 3.4 s`);
-  // Back to back, each line is done before the next begins.
-  for (const i of [0, 1, 3, 6]) assert(sungLetters(lines, i, lines[i + 1].t - 0.05) === lines[i].text.length, `line ${i} not done`);
-  assert(sungLetters(lines, 2, 28.6) === 0, 'before the line');
-});
-
 test('a line is lit whole by the moment the next one takes over (the user: the last words of a line were eaten)', () => {
   // Times of Eminem's "Rap God" (its quick part) and about its lines' syllables, the words made up: back to back.
   const lines = song([[40.06, 9], [41.6, 10], [43.33, 9], [44.94, 10], [46.36, 13], [47.99, 13], [49.58, 18], [52.8, 13], [54.39, 11], [56.06, 13], [57.34, 17], [59.59, 12], [60.79, 26], [64.53, 14]]);
@@ -84,18 +75,38 @@ test('a line is lit whole by the moment the next one takes over (the user: the l
   }
 });
 
-test('the pace follows the song: slow where it is slow, quick in the quick part (Rap God), and no crawling through a solo', () => {
-  // Ten slow lines (0.45 s a syllable), then fourteen quick ones (0.12 s), back to back.
-  const slow = Array.from({ length: 10 }, (_, i) => [10 + i * 4.5, 10] as [number, number]);
-  const quick = Array.from({ length: 14 }, (_, i) => [55 + i * 1.8, 15] as [number, number]);
-  const lines = song([...slow, ...quick]);
-  assert(linePace(lines, 2) > 0.3, `slow part: ${linePace(lines, 2)}`);
-  assert(linePace(lines, 18) < 0.13, `quick part: ${linePace(lines, 18)}`);
-  // The quick part does not race through the slow one: half way through a slow line, about half of it.
-  const half = sungLetters(lines, 3, lines[3].t + 2);
-  assert(half > lines[3].text.length * 0.3 && half < lines[3].text.length * 0.7, `${half} of ${lines[3].text.length}`);
+test('the fill keeps up with the voice: measured on the voice alone (Demucs) in three songs, 0.35 s off at most on the whole', () => {
+  // Per line: its time, the time to the next, its syllables, and when a quarter, half, three quarters and
+  // the last of its syllables were heard (s after its time; the voice alone, 29.10.2026). No words kept.
+  const songs: Record<string, number[][]> = {
+    'The Creepshow (Night Club)': [[23.27, 2.62, 7, 0.15, 0.32, 1.38, 1.73], [25.89, 2.8, 7, 0.27, 0.84, 1.56, 1.81], [28.69, 5.5, 9, 0.79, 1.45, 2.5, 3.71], [34.19, 2.53, 7, 0.42, 1.07, 1.52, 2.32], [36.72, 2.71, 9, 0.39, 1.03, 1.03, 2.04], [39.43, 4.75, 9, 1.24, 2.09, 3.28, 4.17], [44.18, 2.37, 4, 0.74, 0.85, 1.43, 2.2], [46.55, 2.89, 6, 0.19, 0.5, 2.3, 2.55]],
+    'Rap God': [[1.05, 3.68, 16, 1.49, 1.97, 2.62, 3.0], [4.73, 4.4, 12, 1.18, 2.43, 2.87, 3.89], [9.13, 2.51, 8, 0.31, 0.66, 1.55, 1.55], [11.64, 5.76, 22, 2.92, 3.39, 4.28, 5.39], [17.4, 3.3, 16, 0.55, 1.06, 2.02, 3.09], [20.7, 3.51, 19, 0.55, 1.14, 1.49, 2.88], [54.39, 1.67, 12, 0.4, 0.73, 1.11, 1.4], [56.06, 1.28, 13, 0.16, 0.57, 0.64, 0.95], [57.34, 2.25, 16, 0.33, 0.72, 1.54, 2.02], [59.59, 1.2, 10, -0.11, 0.29, 0.5, 0.91], [60.79, 3.74, 28, 0.91, 1.73, 2.49, 3.54], [64.53, 1.17, 14, -0.09, 0.33, 0.68, 0.88], [65.7, 1.77, 16, 0.16, 0.69, 1.04, 1.58], [67.47, 3.82, 22, 0.23, 1.33, 2.55, 3.61]],
+    'Summertime (Beck)': [[7.32, 3.56, 13, 0.63, 1.65, 1.87, 3.28], [10.88, 2.79, 12, 1.11, 1.51, 1.51, 2.07], [13.67, 3.27, 12, 0.32, 1.89, 2.41, 2.91], [16.94, 5.52, 13, 0.5, 0.82, 1.62, 2.25], [22.46, 3.19, 5, 0.1, 0.32, 1.14, 1.14], [25.65, 3.09, 5, 0.09, 1.15, 2.31, 2.31]],
+  };
+  const all: number[] = [];
+  for (const [name, rows] of Object.entries(songs)) {
+    const off: number[] = [];
+    for (const [t, gap, n, ...heard] of rows) {
+      const lines = song([[t, n], [t + gap, 3]]);
+      const length = lines[0].text.length;
+      // When the fill shows each share of the line, on the screen's clock (litLetters), against the voice.
+      [0.25, 0.5, 0.75, 1].forEach((share, k) => {
+        let at = t - 1;
+        while (at < t + gap && litLetters(lines, 0, at) < share * length - 0.5) at += 0.01;
+        off.push(at - t - heard[k]);
+      });
+    }
+    const late = median(off);
+    const by = median(off.map(Math.abs));
+    assert(by < 0.45 && Math.abs(late) < 0.3, `${name}: ${by.toFixed(2)} s off, ${late > 0 ? 'late' : 'early'} by ${Math.abs(late).toFixed(2)} s`);
+    all.push(...off);
+  }
+  assert(median(all.map(Math.abs)) < 0.35 && Math.abs(median(all)) < 0.15, `on the whole ${median(all.map(Math.abs)).toFixed(2)} s off, ${median(all).toFixed(2)} s`);
+});
+
+test('a long gap after a line (a solo) is not crawled through: no slower than 0.45 s a syllable', () => {
   const solo = parseLrc('[00:10.00]Hello world\n[00:12.00]Next\n[00:13.00]Before a solo\n[01:00.00]After');
-  // "Be-fo-re a so-lo": 6 syllables at the slowest pace, then lit (47 s to the next line).
+  // "Be-fo-re a so-lo": 6 syllables, 47 s to the next line.
   assert(sungLetters(solo, 2, 13 + 6 * 0.45 + 0.01) === 13, `${sungLetters(solo, 2, 15.7)}`);
   assert(sungLetters(solo, 0, 9) === 0 && sungLetters(solo, 0, 13) === 11, 'before / after');
 });
