@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Oni</title>
+<meta name="description" content="Открыть в Oni или в Яндекс Музыке">
+<meta property="og:title" content="Oni">
+<meta property="og:description" content="Открыть в Oni или в Яндекс Музыке">
+<meta property="og:image" content="https://oni-music.github.io/icon.png">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#090909">
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  /* Oni's palette (CLAUDE.md): dark only, as the app. */
+  :root {
+    --bg: #090909;
+    --panel: #171514;
+    --glass: #211816;
+    --red: #d9272e;
+    --red-dark: #8e171b;
+    --gold: #c79a54;
+    --text: #f2eee8;
+    --muted: #a7a3a0;
+    --line: #49403d;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: radial-gradient(ellipse at 50% 0%, #1d1110 0%, var(--bg) 60%) var(--bg);
+    color: var(--text);
+    font: 16px/1.5 'Zen Kaku Gothic New', system-ui, sans-serif;
+    display: grid;
+    place-items: center;
+    padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
+  }
+  main {
+    width: 100%;
+    max-width: 380px;
+    text-align: center;
+  }
+  .mark {
+    width: 96px;
+    height: 96px;
+    border-radius: 22px;
+    box-shadow: 0 10px 40px rgba(217, 39, 46, 0.25);
+  }
+  .kanji {
+    font-family: 'Yu Mincho', 'Hiragino Mincho ProN', serif;
+    color: var(--gold);
+    letter-spacing: 0.3em;
+    font-size: 14px;
+    margin: 18px 0 2px;
+  }
+  h1 {
+    font-size: 26px;
+    letter-spacing: 0.12em;
+    margin: 0 0 6px;
+  }
+  p { color: var(--muted); margin: 0 0 26px; }
+  .buttons { display: grid; gap: 12px; }
+  a.btn {
+    display: block;
+    padding: 15px 18px;
+    border-radius: 14px;
+    text-decoration: none;
+    font-weight: 700;
+    color: var(--text);
+    border: 1px solid var(--line);
+    background: var(--glass);
+    transition: filter 0.15s;
+  }
+  a.btn:hover { filter: brightness(1.15); }
+  a.btn.primary {
+    background: linear-gradient(180deg, var(--red), var(--red-dark));
+    border-color: transparent;
+  }
+  .small { margin-top: 22px; font-size: 13.5px; color: var(--muted); }
+  .small a { color: var(--gold); }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <img class="mark" src="icon.png" alt="">
+  <div class="kanji">鬼</div>
+  <h1>Oni</h1>
+  <p id="what"></p>
+  <div class="buttons" id="buttons">
+    <a class="btn primary" id="oni" href="#"></a>
+    <a class="btn" id="yandex" href="#"></a>
+  </div>
+  <div class="small" id="get"></div>
+</main>
+<script type="module">
+  import { route } from './open.js';
+
+  const ru = !/^en/i.test(navigator.language || '');
+  const words = ru
+    ? {
+        track: 'Трек', album: 'Альбом', artist: 'Исполнитель', playlist: 'Плейлист',
+        shared: (k) => `${k} — с вами поделились`,
+        home: 'Свой клиент Яндекс Музыки для Windows и iPhone',
+        oni: 'Открыть в Oni', yandex: 'Открыть в Яндекс Музыке',
+        get: 'Нет Oni? <a href="https://github.com/D4SuCE/oni-releases">Скачать</a>',
+      }
+    : {
+        track: 'A track', album: 'An album', artist: 'An artist', playlist: 'A playlist',
+        shared: (k) => `${k} shared with you`,
+        home: 'A Yandex Music client for Windows and iPhone',
+        oni: 'Open in Oni', yandex: 'Open in Yandex Music',
+        get: 'No Oni? <a href="https://github.com/D4SuCE/oni-releases">Get it</a>',
+      };
+  const $ = (id) => document.getElementById(id);
+  $('get').innerHTML = words.get;
+
+  // Oni opens by itself only on a device where "Open in Oni" was tapped before: a friend without
+  // it gets no "address is invalid" alert, just the buttons. Tapping Yandex Music forgets it. The
+  // page stays as it is underneath (Telegram's own browser lets a page into an app only on a tap).
+  const CHOICE = 'oni.open';
+  const remember = (v) => { try { v ? localStorage.setItem(CHOICE, '1') : localStorage.removeItem(CHOICE); } catch {} };
+  const hasOni = () => { try { return localStorage.getItem(CHOICE) === '1'; } catch { return false; } };
+
+  function show() {
+    const r = route(location.hash);
+    $('buttons').classList.toggle('hidden', !r);
+    if (!r) {
+      $('what').textContent = words.home;
+      return;
+    }
+    $('what').textContent = words.shared(words[r.kind]);
+    $('oni').textContent = words.oni;
+    $('oni').href = r.oni;
+    $('oni').onclick = () => remember(true);
+    $('yandex').textContent = words.yandex;
+    $('yandex').href = r.yandex;
+    $('yandex').onclick = () => remember(false);
+    if (hasOni()) location.href = r.oni;
+  }
+  show();
+  addEventListener('hashchange', show);
+</script>
+</body>
+</html>

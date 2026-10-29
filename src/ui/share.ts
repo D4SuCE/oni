@@ -1,20 +1,17 @@
-// "Share": a music.yandex.ru link, which opens the track in any Yandex Music app or the browser.
+// "Share": a link to Oni's page (src/ui/links.ts, site/), which opens the track, album, artist or
+// playlist in Oni, or in Yandex Music on a device without Oni.
 // On the desktop it goes to the clipboard; on iOS the system share sheet takes it.
 
 import type { Track } from '../api/types.ts';
 import { transport } from '../api/client.ts';
 import { tr } from '../i18n.ts';
 import { toast } from '../store.ts';
+import { type OniLink, shareUrl } from './links.ts';
 
-function trackUrl(t: Track) {
-  const album = t.albums?.[0]?.id;
-  return album ? `https://music.yandex.ru/album/${album}/track/${t.id}` : `https://music.yandex.ru/track/${t.id}`;
-}
-
-export async function shareTrack(t: Track) {
-  const url = trackUrl(t);
+export async function share(link: OniLink, title: string) {
+  const url = shareUrl(link);
   if (transport.platform === 'ios' && navigator.share) {
-    await navigator.share({ url, title: t.title }).catch(() => {});
+    await navigator.share({ url, title }).catch(() => {});
     return;
   }
   try {
@@ -23,4 +20,8 @@ export async function shareTrack(t: Track) {
   } catch {
     toast(url);
   }
+}
+
+export function shareTrack(t: Track) {
+  return share({ kind: 'track', id: String(t.id) }, t.title);
 }

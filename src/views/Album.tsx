@@ -1,4 +1,4 @@
-import { Radio, Shuffle } from 'lucide-react';
+import { Radio, Share, Shuffle } from 'lucide-react';
 import { DownloadButton } from '../components/DownloadButton.tsx';
 import { api } from '../api/client.ts';
 import { coverUrl } from '../api/yandex.ts';
@@ -6,6 +6,7 @@ import { ArtistLinks, ErrorBox, ListPlayButton, PageHeader, Spinner } from '../c
 import { TrackList } from '../components/TrackList.tsx';
 import { useT } from '../i18n.ts';
 import { playRadio, playShuffled, playTracks } from '../player/player.ts';
+import { share } from '../ui/share.ts';
 import { fmtTotal, useAsync } from '../ui/util.ts';
 import { useMemo } from 'react';
 import { useApp } from '../store.ts';
@@ -50,6 +51,9 @@ export function AlbumView({ id }: { id: number | string }) {
               <Radio size={16} /> {t.common.radio}
             </button>
             <DownloadButton listKey={`album:${album.id}`} tracks={tracks} title={album.title} />
+            <button className="btn glass-btn" onClick={() => share({ kind: 'album', id: String(album.id) }, album.title)} title={t.menu.share} data-testid="share">
+              <Share size={16} /> {t.menu.share}
+            </button>
           </>
         }
       />

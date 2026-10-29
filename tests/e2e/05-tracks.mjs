@@ -109,7 +109,7 @@ await step('share a track: its link goes to the clipboard', async () => {
     await page.locator('.menu-item', { hasText: 'Скопировать ссылку' }).click();
     await page.waitForTimeout(300);
     const link = await app.evaluate(({ clipboard }) => clipboard.readText());
-    if (!/^https:\/\/music\.yandex\.ru\/(album\/\d+\/)?track\/\d+$/.test(link)) throw new Error(`clipboard: "${link}"`);
+    if (!/^https:\/\/oni-music\.github\.io\/#track\/\d+$/.test(link)) throw new Error(`clipboard: "${link}"`);
   } finally {
     await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), saved);
   }
@@ -343,6 +343,59 @@ await step('like then unlike (reverted)', async () => {
   await row.locator('.tr-like').click();
   await page.waitForFunction(([id, was]) => window.__wave.useApp.getState().liked.has(id) === was, [id, was]);
   await page.waitForTimeout(800);
+});
+
+await step('links: Share, an oni:// link from a browser, a Yandex link pasted into Search', async () => {
+  // "Share" gives Oni's page (site/); the oni:// link it opens comes from a browser as a second start
+  // of Oni (electron/main.cjs). A track link plays the track, the others open their page.
+  const t = (await page.evaluate(() => window.__wave.api.search('Кино Группа крови', 'track'))).tracks.results[0];
+  const album = t.albums[0].id;
+  const clip = await app.evaluate(({ clipboard }) => clipboard.readText());
+  try {
+    await page.evaluate((id) => window.__wave.navigate({ name: 'album', id }), album);
+    await app.evaluate(({ clipboard }) => clipboard.writeText(''));
+    await page.click('[data-testid="share"]');
+    let shared = '';
+    for (let i = 0; i < 20 && !shared; i++) {
+      await page.waitForTimeout(250);
+      shared = await app.evaluate(({ clipboard }) => clipboard.readText());
+    }
+    if (shared !== `https://oni-music.github.io/#album/${album}`) throw new Error(`Share copied ${shared}`);
+  } finally {
+    await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), clip);
+  }
+
+  const browser = (link) => app.evaluate(({ app }, link) => app.emit('second-instance', {}, ['Oni.exe', link], ''), link);
+  await browser(`oni://track/${t.id}/`); // Windows' way: a slash at the end
+  await page.waitForFunction((id) => {
+    const s = window.__wave.usePlayer.getState();
+    return String(s.queue[s.index]?.id) === String(id);
+  }, t.id, { timeout: 15000 });
+  await waitPlaying(0.5);
+
+  const { login, kind } = await page.evaluate(() => ({ login: window.__wave.useApp.getState().account.login, kind: window.__wave.useApp.getState().playlists[0]?.kind }));
+  if (kind !== undefined) {
+    await browser(`oni://playlist/${encodeURIComponent(login)}/${kind}`);
+    await page.waitForFunction((kind) => {
+      const r = window.__wave.useApp.getState().route;
+      return r.name === 'playlist' && String(r.kind) === String(kind);
+    }, kind, { timeout: 10000 });
+    await page.waitForSelector('.page-title, h1', { timeout: 15000 });
+  }
+
+  // Pasted into Search, a link is found as a search finds things (the user: not a track starting
+  // out of nowhere): the album on top, its tracks below, nothing new playing.
+  const playing = await page.evaluate(() => window.__wave.usePlayer.getState().queue.length);
+  await page.click('[data-testid="nav-search"]');
+  await page.fill('[data-testid="search-input"]', `https://music.yandex.ru/album/${album}?utm_source=share`);
+  await page.waitForSelector('.best', { timeout: 15000 });
+  const found = await page.evaluate(() => ({ best: document.querySelector('.best .best-title')?.textContent, rows: document.querySelectorAll('.track-row').length, route: window.__wave.useApp.getState().route.name }));
+  if (found.best !== t.albums[0].title || !found.rows || found.route !== 'search') throw new Error(`pasted album: ${JSON.stringify(found)}`);
+  await page.fill('[data-testid="search-input"]', `https://oni-music.github.io/#track/${t.id}`);
+  await page.waitForFunction((title) => document.querySelector('.best .best-title')?.textContent === title && document.querySelectorAll('.track-row').length === 1, t.title, { timeout: 15000 });
+  await shot('05-pasted-link');
+  if ((await page.evaluate(() => window.__wave.usePlayer.getState().queue.length)) !== playing) throw new Error('a pasted link started playing');
+  await page.fill('[data-testid="search-input"]', '');
 });
 
 await step('liked tracks page', async () => {

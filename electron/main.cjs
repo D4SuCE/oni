@@ -309,11 +309,37 @@ ipcMain.handle('wave:logs:open', () => {
   return shell.openPath(logFile());
 });
 
+// oni:// links ("Share" gives a web page that opens them, src/ui/links.ts): a browser starts Oni with
+// the link as an argument. The first start keeps it until the page asks; a second start, while Oni
+// runs, hands it over and quits (single instance).
+const linkIn = (argv) => argv.find((a) => /^oni:/i.test(a)) || null;
+let launchLink = linkIn(process.argv);
+ipcMain.handle('wave:link:take', () => {
+  const link = launchLink;
+  launchLink = null;
+  return link;
+});
+/** The scheme belongs to this Oni: the installer registers it too ("protocols" in package.json), the
+ * portable one has only this; the last Oni started gets the links. Not from a dev or test run.
+ * The portable one unpacks itself whole on every start (13-16 s before a link got to the running Oni,
+ * the user): while it runs, links go to its unpacked copy, which only hands them over; when it quits
+ * (the copy is deleted then), back to the portable file. */
+const portable = process.env.PORTABLE_EXECUTABLE_FILE;
+function registerLinks(running) {
+  if (!app.isPackaged || TEST_MODE) return;
+  app.setAsDefaultProtocolClient('oni', portable && !running ? portable : process.execPath, []);
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => desktop.showWindow());
+  app.on('second-instance', (_e, argv) => {
+    desktop.showWindow();
+    const link = linkIn(argv);
+    if (link && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('wave:link', link);
+  });
   app.whenReady().then(() => {
+    registerLinks(true);
     allowAudioAnalysis();
     loadToken();
     loadDiskToken();
@@ -324,4 +350,5 @@ if (!app.requestSingleInstanceLock()) {
     );
   });
   app.on('window-all-closed', () => app.quit());
+  if (portable) app.on('will-quit', () => registerLinks(false));
 }

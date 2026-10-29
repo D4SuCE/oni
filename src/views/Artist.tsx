@@ -1,4 +1,4 @@
-import { Play, Radio, Shuffle } from 'lucide-react';
+import { Play, Radio, Share, Shuffle } from 'lucide-react';
 import { useState } from 'react';
 import { api } from '../api/client.ts';
 import { artistCover } from '../api/yandex.ts';
@@ -6,6 +6,7 @@ import { AlbumCard, ArtistCard, ErrorBox, PageHeader, Section, Shelf, Spinner } 
 import { TrackList } from '../components/TrackList.tsx';
 import { useLang, useT } from '../i18n.ts';
 import { playRadio, playShuffled, playTracks } from '../player/player.ts';
+import { share } from '../ui/share.ts';
 import { useAsync } from '../ui/util.ts';
 
 export function ArtistView({ id }: { id: number | string }) {
@@ -41,6 +42,9 @@ export function ArtistView({ id }: { id: number | string }) {
             </button>
             <button className="btn glass-btn" onClick={() => playRadio(`artist:${artist.id}`, artist.name)} data-testid="radio">
               <Radio size={16} /> {t.common.radio}
+            </button>
+            <button className="btn glass-btn" onClick={() => share({ kind: 'artist', id: String(artist.id) }, artist.name)} title={t.menu.share} data-testid="share">
+              <Share size={16} /> {t.menu.share}
             </button>
           </>
         }

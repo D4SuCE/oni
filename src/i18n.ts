@@ -358,6 +358,7 @@ const ru = {
   toast: {
     hiddenFromMixes: 'Больше не появится в подборках',
     linkCopied: 'Ссылка скопирована',
+    linkBroken: 'Трек по ссылке не нашёлся',
     loginFailed: (msg: string) => `Не удалось войти: ${msg}`,
     disliked: 'Больше не будет звучать',
     undo: 'Отменить',
@@ -1087,6 +1088,7 @@ const en: Dict = {
   toast: {
     hiddenFromMixes: "Won't show up in your mixes again",
     linkCopied: 'Link copied',
+    linkBroken: "Couldn't find the linked track",
     loginFailed: (msg) => `Couldn't sign in: ${msg}`,
     disliked: "You won't hear this again",
     undo: 'Undo',
