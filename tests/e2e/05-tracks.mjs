@@ -148,7 +148,11 @@ await step('a dislike pressed by mistake: undone from its toast, or from the men
     await page.evaluate((r) => window.__wave.navigate(r), was);
     await page.locator('.track-row').nth(1).waitFor({ timeout: 15000 });
   } finally {
-    const extra = (await marks()).filter((id) => !before.includes(id));
+    // By Yandex's own list, not the app's: marks set and taken back quickly can reach Yandex out of
+    // order, and one was left in the account although the app showed none (29.10.2026).
+    await page.waitForTimeout(1500);
+    const yandex = await page.evaluate(() => window.__wave.api.dislikedTrackIds());
+    const extra = [...new Set([...(await marks()), ...yandex.map(String)])].filter((id) => !before.includes(id));
     if (extra.length) await page.evaluate((ids) => window.__wave.api.setDisliked(ids, false), extra);
   }
 });
