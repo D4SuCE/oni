@@ -1,5 +1,8 @@
 // e2e: lists (part of tests/e2e.mjs; run the whole with npm run test:e2e).
-import { page, SLOW, step, shot, waitPlaying } from './harness.mjs';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { app, page, SLOW, step, shot, waitPlaying } from './harness.mjs';
 
 await step('search inside Liked: the list narrows, and a found track plays the whole list from it', async () => {
   // Its button at the right edge of the row of buttons (the user's wish, as on the iPhone).
@@ -156,6 +159,39 @@ await step('Liked has a radio, as playlists do', async () => {
     return /^playlist:\d+:3$/.test(s.source?.station?.seed ?? '') && !s.waveBusy && !window.__wave.audio.paused;
   }, null, { timeout: 30000 });
   if (await page.locator('[data-testid="list-play"][data-playing]').count()) throw new Error('Liked still shows as playing during its radio');
+});
+
+await step("Liked saved as CSV: a line per track, Excel's mark, links to Yandex Music", async () => {
+  // The save dialog is not shown here: the file goes to a folder of the test's own.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oni-csv-'));
+  await page.click('[data-testid="nav-liked"]');
+  await app.evaluate(({ session }, folder) => {
+    session.defaultSession.removeAllListeners('will-download');
+    session.defaultSession.on('will-download', (_e, item) => item.setSavePath(folder + item.getFilename()));
+  }, dir + path.sep);
+  try {
+    await page.waitForSelector('[data-testid="export-csv"]', { timeout: 20000 });
+    await page.click('[data-testid="export-csv"]');
+    const file = await (async () => {
+      for (let i = 0; i < 50; i++) {
+        const found = fs.readdirSync(dir).find((f) => f.endsWith('.csv'));
+        if (found && fs.statSync(path.join(dir, found)).size > 0) return path.join(dir, found);
+        await page.waitForTimeout(200);
+      }
+      throw new Error('no file saved');
+    })();
+    await page.waitForTimeout(300);
+    const text = fs.readFileSync(file, 'utf8');
+    const count = await page.evaluate(() => window.__wave.useApp.getState().likedKeys.length);
+    const lines = text.trim().split('\r\n');
+    if (!text.startsWith('\ufeffTrack Name,Artist Name(s),')) throw new Error(`header: ${text.slice(0, 60)}`);
+    if (lines.length - 1 !== count) throw new Error(`${lines.length - 1} lines for ${count} liked`);
+    if (!lines.slice(1).every((l) => l.includes('https://music.yandex.ru/'))) throw new Error(`a line with no link: ${lines.find((l) => !l.includes('https://music.yandex.ru/'))}`);
+    console.log(`       ${path.basename(file)}: ${count} tracks`);
+  } finally {
+    await app.evaluate(({ session }) => session.defaultSession.removeAllListeners('will-download'));
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 await step('sidebar playlists are dragged into an order of one\'s own, which stays after a reload', async () => {

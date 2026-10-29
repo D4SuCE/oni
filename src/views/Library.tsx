@@ -1,4 +1,5 @@
-import { ArrowUpDown, Heart, Import, Library as LibraryIcon, MoreHorizontal, Plus, Radio, Shuffle } from 'lucide-react';
+import { ArrowUpDown, FileDown, Heart, Import, Library as LibraryIcon, MoreHorizontal, Plus, Radio, Shuffle } from 'lucide-react';
+import { exportCsv } from '../ui/exportCsv.ts';
 import { openMenu } from '../components/Menu.tsx';
 import { isIos } from '../ui/platform.ts';
 import { DownloadButton } from '../components/DownloadButton.tsx';
@@ -117,6 +118,7 @@ function LikedTracks() {
                   { label: t.common.radio, icon: <Radio size={15} />, onClick: radio },
                   // Putting Liked in order: once it is all in, as dragging on the desktop.
                   ...(tracks.length >= keys.length && tracks.length > 1 && !search.query ? [{ label: t.menu.reorder, icon: <ArrowUpDown size={15} />, onClick: () => setReordering(true) }] : []),
+                  ...(tracks.length >= keys.length ? [{ label: t.menu.csv, icon: <FileDown size={15} />, onClick: () => exportCsv(tracks, t.common.liked) }] : []),
                 ])
               }
               title={t.common.more}
@@ -125,9 +127,17 @@ function LikedTracks() {
               <MoreHorizontal size={18} />
             </button>
           ) : (
-            <button className="btn glass-btn" onClick={radio} data-testid="radio">
-              <Radio size={16} /> {t.common.radio}
-            </button>
+            <>
+              <button className="btn glass-btn" onClick={radio} data-testid="radio">
+                <Radio size={16} /> {t.common.radio}
+              </button>
+              {/* The whole list only: the first page alone would be the newest hundred. */}
+              {tracks.length >= keys.length && (
+                <button className="icon-btn" onClick={() => exportCsv(tracks, t.common.liked)} title={t.menu.csv} data-testid="export-csv">
+                  <FileDown size={18} />
+                </button>
+              )}
+            </>
           ))}
         <span className="muted">{t.count.tracks(keys.length)}</span>
       </div>

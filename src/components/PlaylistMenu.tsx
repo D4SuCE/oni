@@ -3,7 +3,7 @@
 // do (the user, 29.10.2026: "to do something with it without going in"). The tracks are loaded
 // when an item needs them.
 
-import { Download, Heart, Pencil, Play, Radio, Share, Shuffle, Trash2 } from 'lucide-react';
+import { Download, FileDown, Heart, Pencil, Play, Radio, Share, Shuffle, Trash2 } from 'lucide-react';
 import { api } from '../api/client.ts';
 import type { Playlist, Track } from '../api/types.ts';
 import { tr } from '../i18n.ts';
@@ -11,6 +11,7 @@ import { offline, playRadio, playShuffled, playTracks } from '../player/player.t
 import { back, errorText, isOwn, refreshPlaylists, samePlaylist, toast, togglePlaylistLike, useApp } from '../store.ts';
 import { downloadList } from '../ui/offline.ts';
 import { share } from '../ui/share.ts';
+import { exportCsv } from '../ui/exportCsv.ts';
 import { askText, confirmDialog } from './Dialog.tsx';
 import type { MenuItem } from './Menu.tsx';
 
@@ -60,6 +61,7 @@ export function playlistMenu(pl: Playlist): MenuItem[] {
       ? [{ label: t.menu.download, icon: <Download size={15} />, onClick: run((tracks) => downloadList(`playlist:${pl.uid}:${pl.kind}`, tracks.filter((x) => x.available !== false), pl.title)) }]
       : []),
     { label: t.menu.share, icon: <Share size={15} />, onClick: () => share({ kind: 'playlist', owner: pl.owner?.login || String(pl.uid), id: String(pl.kind) }, pl.title) },
+    { label: t.menu.csv, icon: <FileDown size={15} />, onClick: run((tracks) => exportCsv(tracks, pl.title)) },
     ...(ownLiked ? [] : [{ label: '', separator: true }]),
     ...(ownLiked
       ? []

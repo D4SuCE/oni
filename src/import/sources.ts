@@ -152,7 +152,8 @@ function clock(s: string) {
  * A leading number ("1.", "01)") and a trailing length ("3:45") are dropped.
  */
 export function parseText(text: string, title = ''): SourceList {
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  // A byte-order mark (Oni's own export, ui/csv.ts; Excel's) would hide the header's first column.
+  const lines = text.replace(/^\ufeff/, '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   if (lines.length && /track name/i.test(lines[0]) && /artist name/i.test(lines[0])) return parseCsv(lines, title);
   const tracks: SourceTrack[] = [];
   for (const raw of lines) {
