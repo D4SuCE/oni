@@ -11,6 +11,7 @@ import { useSwipeDown } from '../ui/swipe.ts';
 import { cx, useAsync } from '../ui/util.ts';
 import { ArtistLinks, Cover, Spinner } from './Common.tsx';
 import { DevicesButton, PlayingOn } from './Devices.tsx';
+import { TogetherBadge, TogetherButton } from './Together.tsx';
 import { LikeButton, PrivateBadge, SeekBar, SleepButton, Transport, VolumeControl } from './PlayerBar.tsx';
 import { usePhoneSound } from '../player/phoneSound.ts';
 import { useEq } from '../player/eq.ts';
@@ -331,6 +332,7 @@ export function NowPlaying() {
                     <ArtistLinks artists={track.artists} plain={plainArtists(track)} />
                   </div>
                   <PlayingOn />
+                  <TogetherBadge />
                 </div>
                 <div className="np-actions">
                   {isWave && (
@@ -341,6 +343,7 @@ export function NowPlaying() {
                   <LikeButton track={track} size={22} />
                   {isIos && <PrivateBadge size={20} />}
                   <SleepButton size={20} />
+                  <TogetherButton size={20} />
                   <DevicesButton size={20} />
                   {/* The equalizer on the iPhone, where the player bar has no room for it. */}
                   {isIos && (

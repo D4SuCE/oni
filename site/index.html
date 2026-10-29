@@ -105,6 +105,7 @@
     ? {
         track: 'Трек', album: 'Альбом', artist: 'Исполнитель', playlist: 'Плейлист',
         shared: (k) => `${k} — с вами поделились`,
+        listen: 'Вас зовут слушать музыку вместе',
         home: 'Свой клиент Яндекс Музыки для Windows и iPhone',
         oni: 'Открыть в Oni', yandex: 'Открыть в Яндекс Музыке',
         get: 'Нет Oni? <a href="https://github.com/D4SuCE/oni-releases">Скачать</a>',
@@ -112,6 +113,7 @@
     : {
         track: 'A track', album: 'An album', artist: 'An artist', playlist: 'A playlist',
         shared: (k) => `${k} shared with you`,
+        listen: "You're invited to listen to music together",
         home: 'A Yandex Music client for Windows and iPhone',
         oni: 'Open in Oni', yandex: 'Open in Yandex Music',
         get: 'No Oni? <a href="https://github.com/D4SuCE/oni-releases">Get it</a>',
@@ -133,10 +135,11 @@
       $('what').textContent = words.home;
       return;
     }
-    $('what').textContent = words.shared(words[r.kind]);
+    $('what').textContent = r.kind === 'listen' ? words.listen : words.shared(words[r.kind]);
     $('oni').textContent = words.oni;
     $('oni').href = r.oni;
     $('oni').onclick = () => remember(true);
+    $('yandex').classList.toggle('hidden', !r.yandex);
     $('yandex').textContent = words.yandex;
     $('yandex').href = r.yandex;
     $('yandex').onclick = () => remember(false);

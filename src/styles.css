@@ -786,8 +786,8 @@ html.acrylic .backdrop {
   text-overflow: ellipsis;
   min-width: 0;
 }
-/* The buttons take ~330px: with less than ~50px left for it, the label goes (a narrow window). */
-@container (max-width: 380px) {
+/* The buttons take ~370px (with «Together»): with less than ~50px left for it, the label goes (a narrow window). */
+@container (max-width: 420px) {
   .pb-source {
     display: none;
   }

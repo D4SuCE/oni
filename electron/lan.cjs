@@ -120,4 +120,4 @@ function setupLan(window, { testMode, writeLog }) {
   });
 }
 
-module.exports = { setupLan };
+module.exports = { setupLan, addresses, sameKey };

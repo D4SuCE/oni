@@ -1,5 +1,6 @@
 // What a shared link points to: https://oni-music.github.io/#track/<id> (also #album/<id>,
-// #artist/<id>, #playlist/<owner login>/<kind>; made by shareUrl in src/ui/links.ts). The part after #
+// #artist/<id>, #playlist/<owner login>/<kind>, #listen/<room>/<folder> to listen together; made by
+// shareUrl in src/ui/links.ts). The part after #
 // never reaches the server. Gives the oni:// link that opens Oni and Yandex Music's own web link
 // for a device without Oni; null for anything else. Checked by tests/links.test.ts.
 
@@ -16,5 +17,8 @@ export function route(hash) {
   }
   if (kind === 'playlist' && /^[\w.@-]+$/.test(owner) && num(b))
     return { kind, oni: `oni://playlist/${encodeURIComponent(owner)}/${b}`, yandex: `https://music.yandex.ru/users/${encodeURIComponent(owner)}/playlists/${b}` };
+  // An invitation to listen together: Oni only (Yandex Music has nothing to open for it).
+  if (kind === 'listen' && /^\w{8,64}$/.test(a ?? '') && /^[\w-]{4,64}$/.test(b ?? ''))
+    return { kind, oni: `oni://listen/${a}/${b}`, yandex: null };
   return null;
 }

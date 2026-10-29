@@ -34,6 +34,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         CAPPluginMethod(name: "setGain", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setRate", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "state", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "latency", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "testThrottle", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pulse", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "eqResponse", returnType: CAPPluginReturnPromise),
@@ -858,6 +859,14 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
             self.speed.pitch = keepPitch ? 0 : 1200 * log2(rate)
             self.speed.bypass = rate == 1
             call.resolve()
+        }
+    }
+
+    /// { seconds } — how long after the player the sound is heard: Bluetooth headphones ~0.2 (src/together/).
+    @objc func latency(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            let session = AVAudioSession.sharedInstance()
+            call.resolve(["seconds": session.outputLatency + session.ioBufferDuration])
         }
     }
 

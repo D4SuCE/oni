@@ -53,9 +53,10 @@ export class Lan {
       this.open = new Set(ids);
       this.onChange();
     });
-    void OniLan?.addListener('message', ({ id, text }) => this.onText(id, text));
+    // A room's link (together/lan.ts, its ids begin with 'tog-') is not the remote's.
+    void OniLan?.addListener('message', ({ id, text }) => !id.startsWith('tog-') && this.onText(id, text));
     void OniLan?.addListener('closed', ({ id }) => {
-      if (this.open.delete(id)) this.onChange();
+      if (!id.startsWith('tog-') && this.open.delete(id)) this.onChange();
     });
   }
 

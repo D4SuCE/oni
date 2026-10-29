@@ -338,11 +338,18 @@ async function nativePlayer() {
 /** Speed (AVAudioUnitTimePitch after both nodes): at 1.5× the player's own clock, which counts
  * the file's frames, runs 1.5 times the wall clock, and so does the page's; then back to 1×. */
 async function speed() {
+  // The player's place against the middle of each question's trip: one answer of the player's took
+  // over a second in the cloud now and then, and timed from its asking it read 2.15× for 1.5×.
+  const ask = async () => {
+    const sent = performance.now();
+    const { time } = await OniPlayer.state();
+    return { at: (sent + performance.now()) / 2, time };
+  };
   const pace = async () => {
-    const [w0, p0] = [performance.now(), (await OniPlayer.state()).time];
+    const a = await ask();
     await sleep(3000);
-    const [w1, p1] = [performance.now(), (await OniPlayer.state()).time];
-    return (p1 - p0) / ((w1 - w0) / 1000);
+    const b = await ask();
+    return (b.time - a.time) / ((b.at - a.at) / 1000);
   };
   wave().setRate(1.5, false);
   await sleep(500);
@@ -409,6 +416,44 @@ async function lanLink() {
     report('lan-link', false, String(e));
   } finally {
     await listener.remove();
+  }
+}
+
+/** Listening together, the iPhone as the one who started (LanPlugin.swift's serve, together/lan.ts):
+ * it listens, a wrong key is refused, a guest (itself, through OniLan.open) is welcomed, and a
+ * message goes there and back. */
+async function togetherServe() {
+  const lan = registerPlugin<{
+    open(o: { id: string; url: string; hello: string; timeout?: number }): Promise<void>;
+    send(o: { id: string; text: string }): Promise<void>;
+    close(o: { id: string }): Promise<void>;
+    serve(o: { key: string; welcome: string }): Promise<{ hosts: string[]; port: number }>;
+    serveSend(o: { to?: string; text: string }): Promise<void>;
+    serveStop(): Promise<void>;
+    addListener(e: 'message' | 'guestMessage', cb: (m: { id: string; text: string }) => void): Promise<{ remove(): Promise<void> }>;
+  }>('OniLan');
+  const toHost: string[] = [];
+  const toGuest: string[] = [];
+  const a = await lan.addListener('guestMessage', (m) => toHost.push(`${m.id}:${m.text}`));
+  const b = await lan.addListener('message', (m) => m.id === 'tog-smokehost' && toGuest.push(m.text));
+  try {
+    const { hosts, port } = await lan.serve({ key: 'smokeroom', welcome: JSON.stringify({ t: 'welcome', device: { id: 'smokehost' } }) });
+    const url = `ws://127.0.0.1:${port}`;
+    const refused = await lan.open({ id: 'tog-wrong', url, hello: JSON.stringify({ t: 'hello', key: 'nope', device: { id: 'g' } }), timeout: 3000 }).then(() => false, () => true);
+    const hello = { id: 'tog-smokehost', url, hello: JSON.stringify({ t: 'hello', key: 'smokeroom', device: { id: 'smokeguest' } }), timeout: 20000 };
+    await lan.open(hello).catch(() => lan.open(hello));
+    await lan.send({ id: 'tog-smokehost', text: '{"t":"up"}' });
+    const up = await until(() => toHost.includes('smokeguest:{"t":"up"}'), 3000);
+    await lan.serveSend({ text: '{"t":"down"}' });
+    const down = await until(() => toGuest.includes('{"t":"down"}'), 3000);
+    report('together-serve', refused && Boolean(up) && Boolean(down), `port ${port}, addresses ${hosts.join(' ')}; wrong key ${refused ? 'refused' : 'let in'}, guest→host ${up ? 'ok' : 'none'}, host→guest ${down ? 'ok' : 'none'}`);
+    await lan.close({ id: 'tog-smokehost' });
+  } catch (e) {
+    report('together-serve', false, String(e));
+  } finally {
+    await lan.serveStop().catch(() => {});
+    await a.remove();
+    await b.remove();
   }
 }
 
@@ -1368,9 +1413,10 @@ export async function runSmoke() {
     const local = await until(() => wave().audio.src.startsWith('oni-sealed:') && !wave().audio.paused && wave().audio.currentTime > 1, 20000);
     report('offline-playback', local, wave().audio.src.slice(0, 12));
     await nativePlayer();
-    await speed();
+    await twice(speed);
     await awakeAfterPause();
     await twice(lanLink);
+    await twice(togetherServe);
     await twice(iosPulse);
     await crossfade();
     await crossfadeQuiet();
