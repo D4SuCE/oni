@@ -116,6 +116,11 @@ oni-releases — витрина и обновления); README `oni` для р
      «Yandex Music URL»; запятая и метка BOM для Excel), файл — `ui/exportCsv.ts` (ПК — сохранение, iPhone —
      «Поделиться»); импорт Oni снимает BOM. Проверки: `tests/import.test.ts` (туда и обратно), e2e «Liked saved as
      CSV», облачная iPhone `csv-share`.
+   - [x] **Приватный режим** (ветка `feat/private-mode`): `player/privacy.ts` (`usePrivacy`: `on`, `keepHistory`),
+     в `player.ts` не шлются `reportPlay` и обратная связь волны о прослушивании (`trackStarted` / `trackFinished` /
+     `skip`), не пишутся `playLog`, `stats`, `recsFeedback`; «История» Oni (`recentPlays`) — только с `keepHistory`;
+     фильтр повторов (`history`) слышит всё — волна не повторит. Discord пуст. Значок — `PrivateBadge`. Проверка —
+     e2e «private listening: …».
 
 
 ## Оптимизация (25.10.2026, выбор пользователя: все пункты)

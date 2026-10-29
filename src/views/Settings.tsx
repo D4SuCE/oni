@@ -14,6 +14,7 @@ import { setMotion, setPulse, useMotion, usePulse } from '../ui/motion.ts';
 import { isIos } from '../ui/platform.ts';
 import { setPhoneSound, usePhoneSound } from '../player/phoneSound.ts';
 import { pushPresence } from '../player/shell.ts';
+import { setPrivacy, usePrivacy } from '../player/privacy.ts';
 import { MAX_SEE_THROUGH, setSeeThrough, useSeeThrough } from '../ui/seeThrough.ts';
 import { checkIosUpdate, installIosUpdate, installUpdateShortcut, setAutoUpdate, setUpdateViaShortcut, UPDATE_SHORTCUT, useAutoUpdate } from '../ui/iosUpdate.ts';
 import { useUpdate } from '../ui/update.ts';
@@ -161,6 +162,8 @@ export function SettingsView() {
         </div>
         {isIos && <PhoneSound />}
       </div>
+
+      <PrivateListening />
 
       {window.wave?.setCloseToTray && (
         <div className="panel glass">
@@ -766,6 +769,33 @@ function GlobalHotkeys() {
             </button>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+/** Private listening (player/privacy.ts): on, and whether Oni's History still takes what plays. */
+function PrivateListening() {
+  const s = useT().settings;
+  const { on, keepHistory } = usePrivacy();
+  return (
+    <div className="panel glass">
+      <h3>{s.privacy}</h3>
+      <label className="toggle-row">
+        <div>
+          <div>{s.private}</div>
+          <div className="hint">{s.privateHint}</div>
+        </div>
+        <input type="checkbox" className="switch" checked={on} onChange={(e) => setPrivacy({ on: e.target.checked })} data-testid="private" />
+      </label>
+      {on && (
+        <label className="toggle-row">
+          <div>
+            <div>{s.privateHistory}</div>
+            <div className="hint">{s.privateHistoryHint}</div>
+          </div>
+          <input type="checkbox" className="switch" checked={keepHistory} onChange={(e) => setPrivacy({ keepHistory: e.target.checked })} data-testid="private-history" />
+        </label>
       )}
     </div>
   );

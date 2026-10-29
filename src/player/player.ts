@@ -20,6 +20,7 @@ import { audio } from './audio.ts';
 import { audioExt, OniPlayer, type NativeAudio } from './nativeAudio.ts';
 import { leadingSilence, QuietTail } from './silence.ts';
 import { setBoost } from './eq.ts';
+import { isPrivate, usePrivacy } from './privacy.ts';
 import type { CommandName } from '../sync/playing.ts';
 import { isMyWave, isOwnWave, listKeyOf, sourceTitle, wavePicks, type ListLabel, type PlayContext, type PlayExtra, type Repeat, type Source } from './source.ts';
 import { sharedFileUrl } from '../share/shared.ts';
@@ -469,7 +470,7 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
       if (autoplay) await audio.play();
     }
     if (opening === seq) opening = 0;
-    if (get().source?.kind === 'wave') engine?.feedback('trackStarted', t);
+    if (get().source?.kind === 'wave' && !isPrivate()) engine?.feedback('trackStarted', t);
     prefetchNext();
     if (get().source?.kind === 'wave') fillWave();
   } catch (e: any) {
@@ -516,11 +517,15 @@ function addRecent(t: Track) {
   useRecent.setState((s) => ({ version: s.version + 1 }));
 }
 
-/** In History after 5 s, counted as heard (repeat filter, Recap) after 30 s, its length kept up. */
+/** Private listening (privacy.ts): Oni's History takes it only if asked. */
+const inHistory = () => !isPrivate() || usePrivacy.getState().keepHistory;
+
+/** In History after 5 s, counted as heard (repeat filter, Recap) after 30 s, its length kept up.
+ * Private: the repeat filter still hears it (the wave is not to serve it again); Recap does not. */
 function writeAsItPlays() {
   const t = current();
   if (!t) return;
-  if (!written.recent && listened >= 5) {
+  if (!written.recent && listened >= 5 && inHistory()) {
     written.recent = true;
     addRecent(t);
   }
@@ -529,7 +534,7 @@ function writeAsItPlays() {
     history.record(t, listened, false);
   } else if (!written.heard || listened - written.length < RELOG) return;
   written.length = listened;
-  playLog.record(t, play.startedAt.getTime(), listened);
+  if (!isPrivate()) playLog.record(t, play.startedAt.getTime(), listened);
 }
 
 /** A play starts: its own report to Yandex and its own entries in History and the log. */
@@ -543,15 +548,17 @@ function finishCurrent(ended: boolean) {
   const t = current();
   if (!t || (listened < 1 && !ended)) return;
   if (!written.heard) history.record(t, listened, ended);
-  if (ended || listened >= HEARD_SECONDS) playLog.record(t, play.startedAt.getTime(), listened);
-  stats.record(originOf(t), listened, (t.durationMs || 0) / 1000, ended);
+  // Private listening (privacy.ts): nothing for Recap, the stats, "Skipped", Yandex or the wave's learning.
+  const counted = !isPrivate();
+  if (counted && (ended || listened >= HEARD_SECONDS)) playLog.record(t, play.startedAt.getTime(), listened);
+  if (counted) stats.record(originOf(t), listened, (t.durationMs || 0) / 1000, ended);
   // A skip says something against a track only where it was offered (the wave, radios, mixes):
   // not in a list of one's own choosing, nor for a liked track.
-  recsFeedback.recordPlay(t, playOutcome(listened, (t.durationMs || 0) / 1000, ended), Date.now(), originOf(t) === 'list' || isLiked(String(t.id)));
-  reportPlay(t, ended);
-  if (!written.recent && (ended || listened >= 5)) addRecent(t);
+  if (counted) recsFeedback.recordPlay(t, playOutcome(listened, (t.durationMs || 0) / 1000, ended), Date.now(), originOf(t) === 'list' || isLiked(String(t.id)));
+  if (counted) reportPlay(t, ended);
+  if (!written.recent && (ended || listened >= 5) && inHistory()) addRecent(t);
   if (get().source?.kind === 'wave') {
-    engine?.feedback(ended ? 'trackFinished' : 'skip', t, listened);
+    if (counted) engine?.feedback(ended ? 'trackFinished' : 'skip', t, listened);
     set({ waveStats: engine ? { ...engine.stats } : null });
   }
   listened = 0;
