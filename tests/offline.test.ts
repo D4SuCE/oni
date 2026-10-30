@@ -3,6 +3,7 @@
 // Run: npm run test:offline
 import type { Track } from '../src/api/types.ts';
 import { audioType, OfflineLibrary, type OfflineDeps } from '../src/player/offline.ts';
+import { RemovedDownloads } from '../src/player/removedDownloads.ts';
 
 let passed = 0;
 let failed = 0;
@@ -276,6 +277,19 @@ await test('room: a downloaded track Yandex took away is never forgotten (its co
 
 await test('audio type by codec', () => {
   assert(audioType('mp3') === 'audio/mpeg' && audioType('aac-mp4') === 'audio/mp4' && audioType('flac-mp4') === 'audio/mp4' && audioType('he-aac') === 'audio/aac', 'types');
+});
+
+await test('a track removed by hand stays out of Oni’s own downloads, across a restart, until downloaded by hand again', () => {
+  // The user, 30.10.2026: removed tracks came back by themselves.
+  const kv = new Map<string, string>();
+  const store = { getItem: (k: string) => kv.get(k) ?? null, setItem: (k: string, v: string) => void kv.set(k, v) };
+  const removed = new RemovedDownloads(store);
+  removed.add(214878);
+  removed.add('16221980');
+  const again = new RemovedDownloads(store);
+  if (!again.has('214878') || !again.has(16221980) || again.has('1')) throw new Error('not kept');
+  again.wantedAgain(['214878']);
+  if (new RemovedDownloads(store).has('214878') || !new RemovedDownloads(store).has('16221980')) throw new Error('not taken back');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

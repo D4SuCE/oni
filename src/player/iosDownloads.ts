@@ -11,7 +11,7 @@ import { api, storage } from '../api/client.ts';
 import { tr } from '../i18n.ts';
 import { fromBase64 } from '../api/bytes.ts';
 import { BackgroundDownloads } from './backgroundDownloads.ts';
-import { offline, usePlayer } from './player.ts';
+import { downloadLog, offline, usePlayer } from './player.ts';
 
 interface DownloadsPlugin {
   enqueue(options: { items: { id: string; url: string }[] }): Promise<void>;
@@ -77,6 +77,7 @@ export function iosBackgroundDownloads() {
     keep: (track, audio, codec, bitrate) => lib.keep(track, audio, codec, bitrate),
     has: (id) => lib.has(id),
     store: storage,
+    log: downloadLog,
   });
   lib.protect = (id) => bg.isPending(id);
   // The library's folder must be there for the first move into it.

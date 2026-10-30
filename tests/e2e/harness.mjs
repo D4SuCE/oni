@@ -80,9 +80,34 @@ export async function waitPlaying(minTime = 1.5, timeout = 30000) {
   await page.waitForFunction((t) => !window.__wave.audio.paused && window.__wave.audio.currentTime > t, minTime, { timeout });
 }
 
+const startedAt = Date.now();
+
+/** What the run's Oni (a new device each run) left in Oni's folder on the test Disk: its own files
+ * ("what plays", commands, its device file) and the rooms of "Together" made during the run. The user,
+ * 30.10.2026: the Disk filled with "e2e phone" players and test rooms. */
+async function sweepDisk() {
+  const id = await page.evaluate(async () => {
+    const { sync } = window.__wave;
+    if (!sync.useSync.getState().connected) return null;
+    const own = sync.deviceSync.device.id;
+    for (const f of await sync.disk.list()) if (f.name.includes(own)) await sync.disk.remove(f.name).catch(() => {});
+    return own;
+  }).catch(() => null);
+  const token = process.env.YANDEX_DISK_TOKEN;
+  if (!id || !token) return;
+  const api = 'https://cloud-api.yandex.net/v1/disk/resources';
+  const headers = { Authorization: `OAuth ${token}` };
+  const r = await fetch(`${api}?path=${encodeURIComponent('app:/together')}&limit=1000`, { headers }).catch(() => null);
+  const items = r?.ok ? ((await r.json())._embedded?.items ?? []) : [];
+  for (const i of items)
+    if (i.type === 'file' && Date.parse(i.created ?? i.modified) >= startedAt - 60_000)
+      await fetch(`${api}?path=${encodeURIComponent(`app:/together/${i.name}`)}&permanently=true`, { method: 'DELETE', headers }).catch(() => {});
+}
+
 /** The end of the run: the app closed, its data dir removed, the count; a failure fails the run. */
 export async function finish() {
   await page.evaluate(() => window.__wave.audio.pause()).catch(() => {});
+  await sweepDisk();
   await app.close();
   fs.rmSync(userData, { recursive: true, force: true });
   console.log(`\n${passed} passed, ${failed} failed. Screenshots: ${shots}`);

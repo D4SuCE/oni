@@ -214,9 +214,16 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         center.addObserver(self, selector: #selector(leaving), name: UIApplication.didEnterBackgroundNotification, object: nil)
         center.addObserver(self, selector: #selector(returning), name: UIApplication.willEnterForegroundNotification, object: nil)
         center.addObserver(self, selector: #selector(returning), name: UIApplication.didBecomeActiveNotification, object: nil)
+        // The screen locked (with a passcode): the lock screen's player is Oni's again (claimLockScreen).
+        center.addObserver(self, selector: #selector(locking), name: UIApplication.protectedDataWillBecomeUnavailableNotification, object: nil)
+    }
+
+    @objc private func locking() {
+        claimLockScreen()
     }
 
     @objc private func leaving() {
+        claimLockScreen()
         away = true
         if timer != nil { startTimer() }
         setPulse(false)
@@ -1130,6 +1137,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     private func watchOthers() {
         let others = AVAudioSession.sharedInstance().isOtherAudioPlaying
         defer { othersPlaying = others }
+        // Another app's sound over the music has ended: it may have taken the lock screen's player.
+        if !others, othersPlaying { claimLockScreen() }
         guard others, !othersPlaying else { return }
         let from = node.volume
         var step = 0

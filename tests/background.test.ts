@@ -3,6 +3,7 @@
 // Run: npm run test:background
 import type { Track } from '../src/api/types.ts';
 import { BackgroundDownloads, type BackgroundDeps } from '../src/player/backgroundDownloads.ts';
+import { DownloadLog } from '../src/player/downloadLog.ts';
 
 let passed = 0;
 let failed = 0;
@@ -202,6 +203,29 @@ await test('the count survives a restart', async () => {
   const again = new BackgroundDownloads(deps);
   const p = again.progress();
   assert(p.total === 2 && p.done === 0 && p.title === 'Liked', JSON.stringify(p));
+});
+
+await test('the log says what asked for which tracks and when each landed (the user, 30.10.2026: tracks came by themselves)', async () => {
+  const { deps, kept, finish, finishSealed } = setup();
+  const log = new DownloadLog(deps.store, '3.0.1', () => 1000);
+  const logged = new BackgroundDownloads({ ...deps, log });
+  kept.set('2', new ArrayBuffer(1));
+  await logged.add('own-offline', [track('1'), track('2'), track('3')], '', 'own-offline');
+  // Asked again while on their way: nothing new, nothing written.
+  await logged.add('own-offline', [track('1')], '', 'own-offline');
+  finish('1');
+  finishSealed('3');
+  await logged.collect();
+  const e = log.own();
+  assert(e.length === 3, `entries ${JSON.stringify(e)}`);
+  assert(e[0].kind === 'ask' && e[0].list === 'own-offline' && e[0].why === 'own-offline' && e[0].ids.join() === '1,3' && e[0].v === '3.0.1', JSON.stringify(e[0]));
+  assert(Array.isArray(e[0].from) && e[0].from.length > 0, `where it was asked from: ${JSON.stringify(e[0].from)}`);
+  assert(e.slice(1).every((x) => x.kind === 'in' && x.list === 'own-offline') && e.slice(1).map((x) => x.ids[0]).sort().join() === '1,3', JSON.stringify(e.slice(1)));
+  // Kept across a restart, the latest 200 only.
+  const again = new DownloadLog(deps.store);
+  assert(again.own().length === 3, 'kept');
+  for (let i = 0; i < 250; i++) again.arrived('x', String(i));
+  assert(again.own().length === 200 && again.own()[199].ids[0] === '249', 'the latest 200');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -8,6 +8,7 @@ import type { HistoryEntry } from '../wave/history.ts';
 import type { DeviceLog } from '../player/playLog.ts';
 import type { RecentPlay } from '../player/recent.ts';
 import type { SharedFeedback } from '../recs/feedback.ts';
+import type { DownloadLogEntry } from '../player/downloadLog.ts';
 import type { DiskLike } from './disk.ts';
 
 export interface Device {
@@ -26,6 +27,8 @@ export interface DeviceFile {
   recent: RecentPlay[];
   /** "Skipped", hidden from the mixes, demoted artists, brought back (recs/feedback.ts); not in older files. */
   feedback?: SharedFeedback;
+  /** What this device downloaded, asked by what (player/downloadLog.ts): read by the developer, not by Oni. */
+  downloads?: DownloadLogEntry[];
 }
 
 /** The parts of this device's memory that are shared. */
@@ -35,6 +38,7 @@ export interface Shared {
   recent: { own(): RecentPlay[]; setRemote(plays: RecentPlay[]): void; restore(plays: RecentPlay[]): void };
   /** Decisions, the latest winning: the other devices' and this one's own file are read alike. */
   feedback?: { own(): SharedFeedback; setRemote(devices: SharedFeedback[]): void };
+  downloads?: { own(): DownloadLogEntry[] };
 }
 
 const PREFIX = 'device-';
@@ -74,7 +78,7 @@ export class DeviceSync {
   /** Sends this device's file if anything changed since the last time; true when sent. */
   async push(): Promise<boolean> {
     if (!this.restored) return false;
-    const body = { history: this.shared.history.own(), log: this.shared.playLog.own(), recent: this.shared.recent.own(), feedback: this.shared.feedback?.own() };
+    const body = { history: this.shared.history.own(), log: this.shared.playLog.own(), recent: this.shared.recent.own(), feedback: this.shared.feedback?.own(), downloads: this.shared.downloads?.own() };
     const key = JSON.stringify(body);
     if (key === this.sent) return false;
     const file: DeviceFile = { v: 1, device: this.device, at: this.now(), ...body };
