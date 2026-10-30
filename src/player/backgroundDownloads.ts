@@ -33,6 +33,8 @@ export interface BackgroundDeps {
   keep(track: Track, audio: ArrayBuffer, codec: string, bitrate: number): Promise<void>;
   has(id: string): boolean;
   store: KeyValueStore;
+  /** Each ask and each arrival written down (downloadLog.ts). */
+  log?: { ask(list: string, ids: string[], why?: string, title?: string): void; arrived(list: string, id: string): void };
 }
 
 interface Pending {
@@ -124,17 +126,21 @@ export class BackgroundDownloads {
     return Object.values(this.pending).filter((p) => p.list === list).length;
   }
 
-  /** Writes the list down (in the caller's order: iOS takes them in it) and starts handing it to iOS. */
-  async add(list: string, tracks: Track[], title = '') {
+  /** Writes the list down (in the caller's order: iOS takes them in it) and starts handing it to iOS.
+   * `why`: what asked (the user or which of Oni's own), for the log. */
+  async add(list: string, tracks: Track[], title = '', why?: string) {
     delete this.failed[list];
     // A new count: lists that are through leave it.
     for (const l of Object.keys(this.lists)) if (!this.pendingFor(l)) delete this.lists[l];
     this.lists[list] = { total: tracks.filter((t) => t.available !== false).length, title };
+    const asked: string[] = [];
     for (const t of tracks) {
       const id = String(t.id);
       if (t.available === false || this.deps.has(id) || this.pending[id]) continue;
       this.pending[id] = { track: trimTrack(t), list, codec: '', bitrate: 0, sent: false, tries: 0, seq: this.seq++ };
+      asked.push(id);
     }
+    this.deps.log?.ask(list, asked, why, title);
     this.changed();
     await this.send();
   }
@@ -169,6 +175,7 @@ export class BackgroundDownloads {
         continue;
       }
       if (p) {
+        this.deps.log?.arrived(p.list, id);
         delete this.pending[id];
         this.changed();
       }
@@ -183,6 +190,7 @@ export class BackgroundDownloads {
       }
       await this.deps.incoming.remove(id).catch(() => {});
       if (p) {
+        this.deps.log?.arrived(p.list, id);
         delete this.pending[id];
         this.changed();
       }

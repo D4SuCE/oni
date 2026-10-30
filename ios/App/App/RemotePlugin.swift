@@ -195,3 +195,22 @@ func showOnLockScreen(playing: Bool, at time: Double) {
         if NowPlayingShare.write(shared) { WidgetCenter.shared.reloadTimelines(ofKind: "OniRemote") }
     }
 }
+
+/// Another app opened over the music can take the lock screen's player and keep it once closed,
+/// Oni playing on with no player there (the user, 30.10.2026: VK opened from the lock screen to read
+/// messages, closed, the phone locked again; the music played, the player was gone). iOS does not
+/// give it back by itself; Oni says again what it plays (main thread) whenever the screen locks,
+/// Oni leaves the screen, or another app's sound ends while Oni plays. The info is cleared first:
+/// the same dictionary set again may be taken for no change.
+func claimLockScreen() {
+    guard let player = PlayerPlugin.shared, player.isPlaying else { return }
+    let center = MPNowPlayingInfoCenter.default()
+    guard var info = center.nowPlayingInfo, !info.isEmpty else { return }
+    // Not the session's setActive: playing, it is active already, and on the main thread it may block.
+    UIApplication.shared.beginReceivingRemoteControlEvents()
+    info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = player.currentTime
+    info[MPNowPlayingInfoPropertyPlaybackRate] = 1.0
+    center.nowPlayingInfo = nil
+    center.nowPlayingInfo = info
+    center.playbackState = .playing
+}

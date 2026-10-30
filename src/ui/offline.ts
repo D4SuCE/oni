@@ -10,7 +10,8 @@ import { api, storage, transport } from '../api/client.ts';
 import { sharedFileUrl } from '../share/shared.ts';
 import { tr } from '../i18n.ts';
 import { iosBackgroundDownloads, showProgressInShade, useTrackProgress } from '../player/iosDownloads.ts';
-import { offline } from '../player/player.ts';
+import { downloadLog, offline } from '../player/player.ts';
+import { RemovedDownloads } from '../player/removedDownloads.ts';
 import { errorText, toast, useApp } from '../store.ts';
 import { isIos } from './platform.ts';
 
@@ -70,14 +71,27 @@ export async function downloadShared(t: Track) {
   await offline.keep(t, await transport.fetchBytes(url), 'mp3', 320);
 }
 
-export async function downloadTrack(t: Track) {
+const removed = new RemovedDownloads(storage);
+/** Taken out of the downloads by the user: Oni's own downloads leave it alone (player/removedDownloads.ts). */
+export const removedByHand = (id: string | number) => removed.has(id);
+
+/** The track's menu "Remove download". */
+export async function removeDownload(id: string | number) {
+  removed.add(id);
+  await offline?.remove(id);
+}
+
+/** `why`: the user's menu, or which of Oni's own downloads (for the log, downloadLog.ts). */
+export async function downloadTrack(t: Track, why = 'menu') {
+  if (why === 'menu') removed.wantedAgain([t.id]);
   if (t.share) return void downloadShared(t).catch((e) => toast(tr().downloads.failedOne(errorText(e))));
   // The iPhone: through iOS too, sealed natively (no audio through the page) and with its ring.
   if (background) {
     showProgressInShade();
-    await background.add(`track:${t.id}`, [t], t.title);
+    await background.add(`track:${t.id}`, [t], t.title, why);
     return;
   }
+  downloadLog.ask(`track:${t.id}`, [String(t.id)], why, t.title);
   try {
     await offline?.download(t);
     if (offline?.full) fullToast();
@@ -97,6 +111,7 @@ const cancelled = new Set<string>();
 export async function downloadList(key: string, tracks: Track[], title = '') {
   if (!offline) return;
   const ordered = tracks;
+  removed.wantedAgain(tracks.map((t) => t.id));
   if (background) {
     if (background.pendingFor(key)) {
       watched.delete(key);
@@ -105,7 +120,7 @@ export async function downloadList(key: string, tracks: Track[], title = '') {
     } else {
       watched.set(key, tracks.length);
       showProgressInShade();
-      await background.add(key, ordered, title);
+      await background.add(key, ordered, title, 'button');
     }
     return;
   }
@@ -114,6 +129,7 @@ export async function downloadList(key: string, tracks: Track[], title = '') {
     return;
   }
   const have = tracks.filter((t) => offline!.has(t.id)).length;
+  downloadLog.ask(key, tracks.filter((t) => !offline!.has(t.id)).map((t) => String(t.id)), 'button', title);
   useBatches.setState({ [key]: { done: have, total: tracks.length } });
   const failed = await offline.downloadAll(ordered, (done, total) => useBatches.setState({ [key]: { done, total } }), 2, () => cancelled.has(key));
   const stopped = cancelled.delete(key);
@@ -224,10 +240,10 @@ if (offline)
     const seen = new Set(readJson<string[]>(SEEN_KEY, []));
     const fresh = s.likedKeys.filter((k) => !seen.has(k.split(':')[0]));
     markSeen(likedIds());
-    const todo = fresh.filter((k) => !offline!.has(k.split(':')[0]));
+    const todo = fresh.filter((k) => !offline!.has(k.split(':')[0]) && !removedByHand(k.split(':')[0]));
     if (!todo.length) return;
     api
       .tracks(todo)
-      .then((tracks) => tracks.forEach((t) => void downloadTrack(t)))
+      .then((tracks) => tracks.forEach((t) => void downloadTrack(t, 'new-like')))
       .catch((e) => console.warn('new likes: not downloaded', e));
   });

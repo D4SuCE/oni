@@ -7,7 +7,7 @@ import { tr, useT } from '../i18n.ts';
 import { enqueue, offline, playNext, playRadio, toggle, usePlayer } from '../player/player.ts';
 import { addToPlaylist, createPlaylist, dislike, errorText, isOwn, navigate, toast, toggleLike, undislike, useApp } from '../store.ts';
 import { transport } from '../api/client.ts';
-import { downloadTrack, offlineState, useCover, useDownloadProgress, useOfflineVersion, type OfflineState } from '../ui/offline.ts';
+import { downloadTrack, offlineState, removeDownload, useCover, useDownloadProgress, useOfflineVersion, type OfflineState } from '../ui/offline.ts';
 import { isIos } from '../ui/platform.ts';
 import { shareTrack } from '../ui/share.ts';
 import { cx, fmtTime } from '../ui/util.ts';
@@ -32,7 +32,7 @@ export function trackMenu(t: Track, extra: MenuItem[] = []): MenuItem[] {
     return [
       ...(transport.canUpload ? [{ label: tr().shared.toMine, icon: <Plus size={15} />, submenu: own.map((p) => ({ label: p.title, onClick: () => void addToMine(t, p).then(() => toast(tr().shared.added(1, p.title)), (e) => toast(tr().shared.addFailed(t.title, errorText(e)))) })) }] : []),
       // downloaded: removed from the device here too (the user, 27.10.2026: it could not be)
-      ...(!offline ? [] : offline.has(t.id) ? [{ label: tr().menu.removeDownload, icon: <CircleCheck size={15} />, onClick: () => offline?.remove(t.id) }] : [{ label: tr().menu.download, icon: <Download size={15} />, onClick: () => void downloadTrack(t) }]),
+      ...(!offline ? [] : offline.has(t.id) ? [{ label: tr().menu.removeDownload, icon: <CircleCheck size={15} />, onClick: () => void removeDownload(t.id) }] : [{ label: tr().menu.download, icon: <Download size={15} />, onClick: () => void downloadTrack(t) }]),
       ...extra,
     ];
   const liked = app.liked.has(String(t.id));
@@ -62,7 +62,7 @@ export function trackMenu(t: Track, extra: MenuItem[] = []): MenuItem[] {
   const download: MenuItem[] = !offline
     ? []
     : state === 'done'
-      ? [{ label: tx.menu.removeDownload, icon: <CircleCheck size={15} />, onClick: () => offline?.remove(t.id) }]
+      ? [{ label: tx.menu.removeDownload, icon: <CircleCheck size={15} />, onClick: () => void removeDownload(t.id) }]
       : state === 'busy' || state === 'queued'
         ? [{ label: tx.menu.downloading, icon: <Loader2 size={15} className="spin" /> }]
         : [{ label: tx.menu.download, icon: <Download size={15} />, onClick: () => downloadTrack(t) }];

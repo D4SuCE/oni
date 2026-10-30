@@ -7,10 +7,10 @@
 import { create } from 'zustand';
 import { api, storage, transport } from '../api/client.ts';
 import type { Track } from '../api/types.ts';
-import { offline } from '../player/player.ts';
+import { downloadLog, offline } from '../player/player.ts';
 import { useRecs } from '../recs/index.ts';
 import { useApp } from '../store.ts';
-import { background, useAutoLikes } from './offline.ts';
+import { background, removedByHand, useAutoLikes } from './offline.ts';
 import { isIos } from './platform.ts';
 
 const KEY = 'downloads.autoOwn';
@@ -57,10 +57,10 @@ let running = false;
 export async function ownToKeep(): Promise<Track[]> {
   if (!offline) return [];
   const repeat = useRecs.getState().mixes.find((m) => m.kind === 'repeat')?.tracks ?? [];
-  const latest = useApp.getState().likedKeys.slice(0, LATEST_LIKES).map((k) => k.split(':')[0]).filter((id) => !offline!.has(id));
+  const latest = useApp.getState().likedKeys.slice(0, LATEST_LIKES).map((k) => k.split(':')[0]).filter((id) => !offline!.has(id) && !removedByHand(id));
   const liked = latest.length ? await api.tracks(latest) : [];
   const want = new Map<string, Track>();
-  for (const t of [...repeat, ...liked]) if (t.available !== false && !offline.has(String(t.id))) want.set(String(t.id), t);
+  for (const t of [...repeat, ...liked]) if (t.available !== false && !offline.has(String(t.id)) && !removedByHand(t.id)) want.set(String(t.id), t);
   return [...want.values()];
 }
 
@@ -78,8 +78,9 @@ async function keepOwnOffline(now = false) {
     const tracks = await ownToKeep();
     if (!tracks.length) return;
     // The iPhone: through iOS, as a list (its ring in the shade); the desktop: one after another, quietly.
-    if (background) await background.add('own-offline', tracks, '');
-    else for (const t of tracks) await offline.download(t).catch((e) => console.warn('[own offline]', t.id, e));
+    if (background) await background.add('own-offline', tracks, '', 'own-offline');
+    else downloadLog.ask('own-offline', tracks.map((t) => String(t.id)), 'own-offline');
+    if (!background) for (const t of tracks) await offline.download(t).catch((e) => console.warn('[own offline]', t.id, e));
   } catch (e) {
     console.warn('[own offline]', e); // no network and the like: the next time
   } finally {
