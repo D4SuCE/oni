@@ -2,7 +2,7 @@
 // merged, the correction, and the invitation links. Run: npm run test:together
 import type { Track } from '../src/api/types.ts';
 import { offsetOf, SharedClock, type Sample } from '../src/together/clock.ts';
-import { Folders, linkId, writeMine } from '../src/together/disk.ts';
+import { Folders, leftovers, linkId, writeMine } from '../src/together/disk.ts';
 import { correction, GONE, newer, Room, SEEK, targetOf, windowOf, type MemberFile, type RoomState } from '../src/together/room.ts';
 import { linkFrom, shareUrl } from '../src/ui/links.ts';
 // @ts-expect-error the site's plain script has no types
@@ -244,6 +244,21 @@ await test('a Disk folder\'s link to its id', () => {
   assert(linkId('https://disk.yandex.ru/d/AbC-12_x') === 'AbC-12_x', 'disk.yandex.ru');
   assert(linkId('https://yadi.sk/d/AbC') === 'AbC', 'yadi.sk');
   assert(linkId('https://example.com') === null, 'other');
+});
+
+await test("leftovers: a room closed without \"Leave\" — this device's stale files and day-old tracks, nothing in use", () => {
+  // The user, 30.10.2026: files of the day before's rooms were still on Disk.
+  const now = Date.parse('2026-10-30T12:00:00Z');
+  const ago = (h: number) => new Date(now - h * 3_600_000).toISOString();
+  const files = [
+    { name: 'room-r1-me.json', modified: ago(20) }, // closed yesterday: away
+    { name: 'room-r2-me.json', modified: ago(0.01) }, // in use right now
+    { name: 'room-r1-pc.json', modified: ago(20) }, // the account's other device: its own to take
+    { name: 'old.mp3', modified: ago(25) },
+    { name: 'new.mp3', modified: ago(5) }, // perhaps a room of the other device's
+  ];
+  const got = leftovers(files, 'me', now, 3 * 3_600_000);
+  assert(JSON.stringify(got) === '["room-r1-me.json","old.mp3"]', JSON.stringify(got));
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
