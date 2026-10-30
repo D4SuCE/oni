@@ -206,7 +206,7 @@ func claimLockScreen() {
     guard let player = PlayerPlugin.shared, player.isPlaying else { return }
     let center = MPNowPlayingInfoCenter.default()
     guard var info = center.nowPlayingInfo, !info.isEmpty else { return }
-    try? AVAudioSession.sharedInstance().setActive(true)
+    // Not the session's setActive: playing, it is active already, and on the main thread it may block.
     UIApplication.shared.beginReceivingRemoteControlEvents()
     info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = player.currentTime
     info[MPNowPlayingInfoPropertyPlaybackRate] = 1.0
