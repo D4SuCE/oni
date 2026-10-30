@@ -106,6 +106,10 @@ export interface Account {
   login: string;
   displayName: string;
   hasPlus: boolean;
+  /** When Plus ends (ms), if Yandex says. */
+  plusUntil?: number;
+  /** Plus is paid again by itself when it ends. */
+  plusRenews?: boolean;
 }
 
 export interface SearchResult {

@@ -100,6 +100,15 @@ function normalizeIds(value: unknown): void {
 const chunk = <T,>(arr: T[], size: number) =>
   Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
 
+/** When Plus ends and whether it renews, from /account/status's `subscription`: the latest end of
+ * its paid terms (one's own, the family's, paid once), a finished one not renewing. */
+export function plusTerm(sub: any): { plusUntil?: number; plusRenews?: boolean } {
+  const auto = [...(sub?.autoRenewable ?? []), ...(sub?.familyAutoRenewable ?? [])];
+  const ends = [...auto.map((x: any) => x?.expires), sub?.nonAutoRenewable?.end, sub?.end].map((x) => Date.parse(x)).filter((x) => x > 0);
+  if (!ends.length) return {};
+  return { plusUntil: Math.max(...ends), plusRenews: auto.some((x: any) => x && !x.finished) };
+}
+
 function historyContext(ctx: any): HistoryContext {
   const id = ctx?.data?.itemId || {};
   const full = ctx?.data?.fullModel || {};
@@ -171,6 +180,7 @@ export class YandexMusic {
       login: r.account.login,
       displayName: r.account.displayName || r.account.fullName || r.account.login,
       hasPlus: Boolean(r.plus?.hasPlus),
+      ...plusTerm(r.subscription),
     };
     return this.me;
   }

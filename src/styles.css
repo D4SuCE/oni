@@ -98,6 +98,11 @@ img {
   font-size: 12.5px;
   line-height: 1.45;
 }
+
+/* Settings → Account: no Plus, not to be missed (ui/plus.ts) */
+.hint.plus-none {
+  color: var(--gold);
+}
 .center {
   text-align: center;
 }

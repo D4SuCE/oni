@@ -9,6 +9,8 @@ import { readMark, visible, withMark } from '../src/share/mark.ts';
 import { fileName } from '../src/share/shared.ts';
 import { YandexDisk } from '../src/sync/disk.ts';
 import { fmtTime } from '../src/ui/util.ts';
+import { plusNotice } from '../src/ui/plus.ts';
+import { plusTerm } from '../src/api/yandex.ts';
 
 let passed = 0;
 let failed = 0;
@@ -138,6 +140,34 @@ await test('the hidden mark: a description with lines and emoji kept as it was, 
   const once = withMark(text, link);
   assert(readMark(once) === link && visible(once) === text, JSON.stringify(visible(once)));
   assert(withMark(once, link) === once, 'the same mark again changes nothing');
+});
+
+await test("Plus: its end and renewal read from Yandex's subscription, nothing made up without one", () => {
+  const t = plusTerm({ autoRenewable: [{ expires: '2026-11-15T10:00:00+03:00', finished: false }], nonAutoRenewable: { end: '2026-11-01T00:00:00+03:00' } });
+  assert(t.plusUntil === Date.parse('2026-11-15T10:00:00+03:00') && t.plusRenews === true, JSON.stringify(t));
+  const once = plusTerm({ autoRenewable: [{ expires: '2026-11-15T10:00:00+03:00', finished: true }] });
+  assert(once.plusRenews === false, JSON.stringify(once));
+  // The account on 30.10.2026: Plus over, no terms left.
+  assert(JSON.stringify(plusTerm({ hadAnySubscription: true, canStartTrial: false, mcdonalds: false })) === '{}', 'no end without terms');
+  assert(JSON.stringify(plusTerm(undefined)) === '{}', 'no subscription field');
+});
+
+await test('Plus: "gone" told once while it is gone, "ending" once per end, told again after it came back', () => {
+  const now = Date.parse('2026-10-30T12:00:00Z');
+  const day = 86_400_000;
+  const acc = (x: object) => ({ uid: 1, login: 'u', displayName: 'u', hasPlus: true, ...x });
+  let r = plusNotice(acc({ hasPlus: false }), '', now);
+  assert(r.tell === 'gone', JSON.stringify(r));
+  r = plusNotice(acc({ hasPlus: false }), r.told, now);
+  assert(r.tell === null, 'told twice');
+  r = plusNotice(acc({ plusUntil: now + 40 * day, plusRenews: true }), r.told, now);
+  assert(r.tell === null && r.told === '', JSON.stringify(r));
+  assert(plusNotice(acc({ hasPlus: false }), r.told, now).tell === 'gone', 'a new loss not told');
+  assert(plusNotice(acc({ plusUntil: now + 2 * day, plusRenews: true }), '', now).tell === null, 'a renewing one told');
+  r = plusNotice(acc({ plusUntil: now + 2 * day, plusRenews: false }), '', now);
+  assert(r.tell === 'ending', JSON.stringify(r));
+  assert(plusNotice(acc({ plusUntil: now + 2 * day, plusRenews: false }), r.told, now).tell === null, 'ending told twice');
+  assert(plusNotice(acc({ plusUntil: now + 10 * day, plusRenews: false }), '', now).tell === null, 'told too early');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

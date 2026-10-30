@@ -1,7 +1,8 @@
-import { ArchiveRestore, Cloud, Download, ExternalLink, FileText, HardDriveDownload, LogOut, Mic, RefreshCw, Trash2, Undo2 } from 'lucide-react';
+import { ArchiveRestore, Cloud, Crown, Download, ExternalLink, FileText, HardDriveDownload, LogOut, Mic, RefreshCw, Trash2, Undo2 } from 'lucide-react';
 import { confirmDialog } from '../components/Dialog.tsx';
 import { formatSize, setAutoLikes, useAutoLikes, useOfflineVersion } from '../ui/offline.ts';
 import { setAutoOwn, useAutoOwn } from '../ui/ownOffline.ts';
+import { openPlus } from '../ui/plus.ts';
 import { Fragment, useEffect, useState } from 'react';
 import { Segmented } from '../components/Wave.tsx';
 import { LANGS, setLang, useLang, useT } from '../i18n.ts';
@@ -54,12 +55,21 @@ export function SettingsView() {
         <div className="settings-row">
           <div>
             <div>{account?.displayName}</div>
-            <div className="hint">
-              {account?.login} · {account?.hasPlus ? s.plusActive : s.noPlus}
-            </div>
+            <div className="hint">{account?.login}</div>
           </div>
           <button className="btn ghost" onClick={logout}>
             <LogOut size={16} /> {s.logout}
+          </button>
+        </div>
+        <div className="settings-row">
+          <div>
+            <div>{s.plus}</div>
+            <div className={account?.hasPlus ? 'hint' : 'hint plus-none'}>
+              {!account?.hasPlus ? s.noPlus : account.plusUntil ? s.plusUntil(new Date(account.plusUntil), Boolean(account.plusRenews)) : s.plusActive}
+            </div>
+          </div>
+          <button className={account?.hasPlus ? 'btn ghost' : 'btn primary'} onClick={openPlus}>
+            <Crown size={16} /> {account?.hasPlus ? s.plusManage : s.plusRenew}
           </button>
         </div>
       </div>
