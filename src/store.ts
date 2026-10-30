@@ -8,6 +8,7 @@ import { tr, useLang } from './i18n.ts';
 import { dropFromQueue, offline, onNetworkLost, setDislikedCheck, setLikedCheck, setOfflineMode, usePlayer, warmWave, waveFeedback } from './player/player.ts';
 import { connectDisk, startSync } from './sync/index.ts';
 import { checkWaiting } from './import/run.ts';
+import { openPlus, plusNotice } from './ui/plus.ts';
 
 export type Route =
   | { name: 'home' }
@@ -140,6 +141,7 @@ export async function init() {
     const account = await api.account(true);
     storage.setItem(ACCOUNT_CACHE, JSON.stringify(account));
     set({ account, auth: 'ready', offline: false });
+    tellPlus(account);
     setOfflineMode(false);
     refreshLibrary();
     warmWave();
@@ -179,6 +181,16 @@ function lookAgain() {
 }
 
 const ACCOUNT_CACHE = 'app.account.v1';
+const PLUS_TOLD = 'app.plus.told';
+
+/** Plus gone or about to end: told once, with Yandex's page a press away (ui/plus.ts). */
+function tellPlus(account: Account) {
+  if (transport.testMode) return;
+  const { tell, told } = plusNotice(account, storage.getItem(PLUS_TOLD) ?? '', Date.now());
+  storage.setItem(PLUS_TOLD, told);
+  const s = tr().settings;
+  if (tell) toast(tell === 'gone' ? s.plusGone : s.plusEnding(new Date(account.plusUntil!)), { label: s.plusRenew, run: openPlus });
+}
 const LIBRARY_CACHE = 'app.library.v1';
 const RECONNECT = 20_000;
 
