@@ -21,6 +21,16 @@ export function onRepeat(heard: Heard[], disliked: Set<string>, now: number, siz
 }
 
 /**
+ * On Repeat's tracks heard again and again (`times`: the play log's month), the ones "keep mine
+ * offline" downloads. Twice is not enough: the wave alone serves a track twice in a month (the user,
+ * 30.10.2026: twelve tracks of the wave downloaded by themselves, the download log said
+ * "own-offline"; of ~1100 tracks heard that month 46 were heard twice, 17 three times or more).
+ */
+export function playedOften(tracks: Track[], times: Map<string, number>, min = 3): Track[] {
+  return tracks.filter((t) => (times.get(String(t.id)) ?? 0) >= min);
+}
+
+/**
  * Loved once, quiet for at least `quietDays`: liked tracks (older likes count more) and
  * tracks that used to be played a lot. A different draw every week.
  */

@@ -29,7 +29,7 @@ import { disconnect } from '../sync/elsewhere.ts';
 import { isIos } from '../ui/platform.ts';
 import { measure, SharedClock, type Sample } from './clock.ts';
 import type { Track } from '../api/types.ts';
-import { Folders, FOLDER, linkUrl, openFolder, removeMine, writeMine } from './disk.ts';
+import { Folders, FOLDER, leftovers, linkUrl, openFolder, removeMine, writeMine } from './disk.ts';
 import { RoomLan } from './lan.ts';
 import { correction, RENEW, Room, targetOf, windowOf, type Member, type MemberFile, type RoomState } from './room.ts';
 
@@ -186,8 +186,18 @@ export async function leaveTogether() {
 /** At start: the room this device was in a little while ago, joined again. */
 export async function resumeTogether() {
   const saved = loadJson<{ id: string; started: boolean; extra: string[]; at: number } | null>(SAVED, null);
-  if (!saved || room || Date.now() - saved.at > RESUME_WITHIN) return;
+  if (!saved || room || Date.now() - saved.at > RESUME_WITHIN) return void sweep();
   await begin(saved.id, saved.started, saved.extra);
+}
+
+/** Not in a room at start: what rooms left on Disk without "Leave" taken away (disk.ts, leftovers). */
+async function sweep() {
+  if (!diskOn() || !useTogether.getState().link) return;
+  try {
+    for (const name of leftovers(await disk.list(FOLDER), thisDevice.id, Date.now(), RESUME_WITHIN)) await disk.remove(`${FOLDER}/${name}`).catch(() => {});
+  } catch {
+    // no network, no folder yet: the next start
+  }
 }
 
 function save() {

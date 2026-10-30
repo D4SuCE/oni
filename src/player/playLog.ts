@@ -169,6 +169,12 @@ export class PlayLog {
     return tracks.length >= YEAR_AGO_MIN ? tracks.slice(0, 20).map((x) => x.track) : [];
   }
 
+  /** How many times each track was heard in the last `days`, here and on the other devices. */
+  timesHeard(days: number): Map<string, number> {
+    const now = this.now();
+    return new Map(this.recap({ from: now - days * DAY, to: now + 1 }).tracks.map((x) => [String(x.track.id), x.plays]));
+  }
+
   /** Sums up the plays in [from, to). */
   recap({ from, to }: { from: number; to: number }): Recap {
     // Another Oni's own plays stand in for what Yandex's history told of the same track that day

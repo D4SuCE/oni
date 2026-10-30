@@ -30,7 +30,7 @@ export interface DiskFile {
 
 /** What DeviceSync needs of Disk; tests give it a fake. */
 export interface DiskLike {
-  list(): Promise<DiskFile[]>;
+  list(folder?: string): Promise<DiskFile[]>;
   read(name: string): Promise<string>;
   write(name: string, text: string): Promise<void>;
   remove(name: string): Promise<void>;
@@ -56,8 +56,9 @@ export class YandexDisk implements DiskLike {
     throw new Error(`Yandex Disk ${what}: HTTP ${r.status} ${r.data?.message ?? r.data?.error ?? ''}`.trim());
   }
 
-  async list(): Promise<DiskFile[]> {
-    const r = await this.call('GET', API, { path: 'app:/', limit: 1000, fields: '_embedded.items.name,_embedded.items.modified,_embedded.items.md5,_embedded.items.type' });
+  /** The files in Oni's folder, or in `folder` inside it. */
+  async list(folder = ''): Promise<DiskFile[]> {
+    const r = await this.call('GET', API, { path: `app:/${folder}`, limit: 1000, fields: '_embedded.items.name,_embedded.items.modified,_embedded.items.md5,_embedded.items.type' });
     if (r.status === 404) return []; // the folder comes with the first file
     if (r.status !== 200) this.fail('list', r);
     return ((r.data as any)?._embedded?.items ?? []).filter((x: any) => x.type === 'file').map((x: any) => ({ name: x.name, modified: x.modified, md5: x.md5 }));

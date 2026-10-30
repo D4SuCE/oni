@@ -3,6 +3,7 @@
 // Run: npm run test:playlog
 import type { Track } from '../src/api/types.ts';
 import { PlayLog } from '../src/player/playLog.ts';
+import { playedOften } from '../src/recs/personal.ts';
 
 let passed = 0;
 let failed = 0;
@@ -121,6 +122,23 @@ await test('"a year ago": the most played of the same days last year, none with 
   const few = new PlayLog(memory(), () => now);
   for (const t of old.slice(0, 4)) few.record(t, at(2026, 10, 25), 180);
   assert(few.yearAgo().length === 0, 'a card with four tracks');
+});
+
+await test("keep mine offline: On Repeat downloads only what was heard three times in a month, not a wave's twice", () => {
+  // The user, 30.10.2026: twelve tracks of «Моя волна», each heard twice (here and on the PC), were
+  // downloaded by "keep mine offline" as On Repeat; the ones played over and over are to stay.
+  const log = new PlayLog(memory(), () => at(2026, 10, 30));
+  const wave = track('wave', [kino]);
+  const loved = track('loved', [aria]);
+  const old = track('old', [both]);
+  log.record(wave, at(2026, 10, 23), 200);
+  log.setRemote([{ plays: [{ id: 'wave', at: at(2026, 10, 24), s: 200 }], tracks: { wave } }]);
+  for (let i = 0; i < 3; i++) log.record(loved, at(2026, 10, 20 + i), 180);
+  for (let i = 0; i < 3; i++) log.record(old, at(2026, 9, 1 + i), 180);
+  const times = log.timesHeard(30);
+  assert(times.get('wave') === 2 && times.get('loved') === 3 && !times.has('old'), JSON.stringify([...times]));
+  const kept = playedOften([wave, loved, old], times).map((t) => t.id);
+  assert(JSON.stringify(kept) === '["loved"]', JSON.stringify(kept));
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

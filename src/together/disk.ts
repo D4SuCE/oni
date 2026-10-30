@@ -6,7 +6,7 @@
 // can write into another's Disk, so the one who started learns of a guest by the guest's own link
 // (pressed once: the friend is then known for good, together/index.ts).
 
-import type { DiskLike } from '../sync/disk.ts';
+import type { DiskFile, DiskLike } from '../sync/disk.ts';
 import type { Fetch } from '../share/shared.ts';
 import type { MemberFile } from './room.ts';
 
@@ -42,6 +42,23 @@ export async function writeMine(disk: OwnDisk, file: MemberFile) {
 
 export async function removeMine(disk: OwnDisk, room: string, device: string) {
   await disk.remove(`${FOLDER}/${fileOf(room, device)}`);
+}
+
+/** A track sent to the room is taken away a day after it was sent at the latest. */
+const TRACK_KEPT = 24 * 60 * 60_000;
+
+/**
+ * What a room left in the folder when Oni was closed (or the iPhone put it away) without "Leave" —
+ * only "Leave" takes its files away (the user, 30.10.2026: five such files from the day before;
+ * nobody reads them again). This device's room files not written for `stale` (a room not resumed:
+ * one in use is written every few seconds), and tracks sent more than a day ago (the account's
+ * other device may be in a room with a newer one). Names inside the folder.
+ */
+export function leftovers(files: DiskFile[], device: string, now: number, stale: number): string[] {
+  const age = (f: DiskFile) => now - Date.parse(f.modified);
+  return files
+    .filter((f) => (f.name.startsWith('room-') && f.name.endsWith(`-${device}.json`) && age(f) > stale) || (f.name.endsWith('.mp3') && age(f) > TRACK_KEPT))
+    .map((f) => f.name);
 }
 
 /** The members' folders (this one's own too: another device of the account writes there), read by

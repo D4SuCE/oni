@@ -7,8 +7,9 @@
 import { create } from 'zustand';
 import { api, storage, transport } from '../api/client.ts';
 import type { Track } from '../api/types.ts';
-import { downloadLog, offline } from '../player/player.ts';
+import { downloadLog, offline, playLog } from '../player/player.ts';
 import { useRecs } from '../recs/index.ts';
+import { playedOften } from '../recs/personal.ts';
 import { useApp } from '../store.ts';
 import { background, removedByHand, useAutoLikes } from './offline.ts';
 import { isIos } from './platform.ts';
@@ -53,10 +54,11 @@ async function cheapNetwork() {
 
 let running = false;
 
-/** What is to be kept and is not downloaded yet: On Repeat, then the latest likes (each once). */
+/** What is to be kept and is not downloaded yet: On Repeat (heard three times this month, not the
+ * wave's twice: recs/personal.ts, playedOften), then the latest likes (each once). */
 export async function ownToKeep(): Promise<Track[]> {
   if (!offline) return [];
-  const repeat = useRecs.getState().mixes.find((m) => m.kind === 'repeat')?.tracks ?? [];
+  const repeat = playedOften(useRecs.getState().mixes.find((m) => m.kind === 'repeat')?.tracks ?? [], playLog.timesHeard(30));
   const latest = useApp.getState().likedKeys.slice(0, LATEST_LIKES).map((k) => k.split(':')[0]).filter((id) => !offline!.has(id) && !removedByHand(id));
   const liked = latest.length ? await api.tracks(latest) : [];
   const want = new Map<string, Track>();
