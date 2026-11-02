@@ -335,6 +335,25 @@ async function nativePlayer() {
   await wave().audio.play();
 }
 
+/** Another app's video without sound (VK's feed: iOS only says "another app plays") leaves the music
+ * alone; the app taking the sound for itself (the sound turned on) pauses it, as the only sign iOS gives. */
+async function othersSound() {
+  // Long enough for a fade on the cloud Mac: there the old pause came only after 2.5 s (the first run).
+  await OniPlayer.testOthers({ playing: true, taking: false });
+  await sleep(6000);
+  const muted = await OniPlayer.state();
+  const pageOn = !wave().audio.paused;
+  await OniPlayer.testOthers({ playing: true, taking: true });
+  await sleep(6000);
+  const taken = await OniPlayer.state();
+  await OniPlayer.testOthers({});
+  await wave().audio.play();
+  await sleep(1000);
+  const back = await OniPlayer.state();
+  report('muted-video-keeps-music', muted.playing && pageOn, JSON.stringify({ muted, pageOn }));
+  report('sound-taken-pauses', !taken.playing && back.playing, JSON.stringify({ taken, back }));
+}
+
 /** Speed (AVAudioUnitTimePitch after both nodes): at 1.5× the player's own clock, which counts
  * the file's frames, runs 1.5 times the wall clock, and so does the page's; then back to 1×. */
 async function speed() {
@@ -1413,6 +1432,7 @@ export async function runSmoke() {
     const local = await until(() => wave().audio.src.startsWith('oni-sealed:') && !wave().audio.paused && wave().audio.currentTime > 1, 20000);
     report('offline-playback', local, wave().audio.src.slice(0, 12));
     await nativePlayer();
+    await othersSound();
     await twice(speed);
     await awakeAfterPause();
     await twice(lanLink);
