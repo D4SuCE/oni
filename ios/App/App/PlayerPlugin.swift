@@ -754,7 +754,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         fading = nil
         if tail == nil { node.volume = 1 }
         // What plays elsewhere already (a sound kept on by some app) is not a reason to stop.
-        othersPlaying = othersNow.playing
+        (othersPlaying, othersTaking) = othersNow
         // Waiting for more of the track: it plays once that comes (extend).
         if !stalled { node.play() }
         playing = true
@@ -1135,8 +1135,9 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         }
     }
 
-    /// Whether another app played the last time the clock looked.
+    /// Whether another app played, and took the sound for itself, the last time the clock looked.
     private var othersPlaying = false
+    private var othersTaking = false
     private var fading: Timer?
     private var othersForTest: (playing: Bool, taking: Bool)?
     /// What iOS says of other apps' sound right now.
@@ -1146,16 +1147,22 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         return (session.isOtherAudioPlaying, session.secondaryAudioShouldBeSilencedHint)
     }
 
-    /// Another app's sound started over the music without taking it (Instagram's videos mix with
-    /// others, so iOS says nothing and both played): the music fades out over a second and
-    /// pauses, as the user expects when a video starts. Apps that take the sound (YouTube) are an
-    /// interruption instead: iOS silences the music at once, before telling us, so no fade there.
+    /// Another app's sound over the music. A video without sound counts as sound for iOS too
+    /// (isOtherAudioPlaying, the likely cause in VK's feed), and iOS tells nobody how loud another app is,
+    /// so that alone pauses nothing (the user, 2.11.2026: only a sound turned on may pause; it
+    /// did since 22.10, for Instagram). What pauses: the app taking the sound for itself. Most
+    /// do that by interrupting (iOS silences the music at once, before telling us: interrupted);
+    /// one that changes over while playing shows only in the hint, so the music fades over a second.
+    /// An app whose sound stays mixed (Instagram's feed) plays over the music: nothing tells it apart.
     private func watchOthers() {
-        let others = othersNow.playing
-        defer { othersPlaying = others }
+        let others = othersNow
+        defer {
+            othersPlaying = others.playing
+            othersTaking = others.taking
+        }
         // Another app's sound over the music has ended: it may have taken the lock screen's player.
-        if !others, othersPlaying { claimLockScreen() }
-        guard others, !othersPlaying else { return }
+        if !others.playing, othersPlaying { claimLockScreen() }
+        guard others.taking, !othersTaking else { return }
         let from = node.volume
         var step = 0
         let steps = 12
