@@ -211,6 +211,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         let center = NotificationCenter.default
         center.addObserver(self, selector: #selector(interrupted(_:)), name: AVAudioSession.interruptionNotification, object: nil)
         center.addObserver(self, selector: #selector(routeChanged(_:)), name: AVAudioSession.routeChangeNotification, object: nil)
+        center.addObserver(self, selector: #selector(hintChanged(_:)), name: AVAudioSession.silenceSecondaryAudioHintNotification, object: nil)
         center.addObserver(self, selector: #selector(configurationChanged(_:)), name: .AVAudioEngineConfigurationChange, object: engine)
         center.addObserver(self, selector: #selector(leaving), name: UIApplication.didEnterBackgroundNotification, object: nil)
         center.addObserver(self, selector: #selector(returning), name: UIApplication.willEnterForegroundNotification, object: nil)
@@ -532,10 +533,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     }
 
     private func begin(_ file: AVAudioFile) {
-        // A new track: a fade of the old one (another app's sound) is over, and so is a crossfade.
+        // A new track: a crossfade is over.
         endCross()
-        fading?.invalidate()
-        fading = nil
         node.volume = 1
         generation += 1
         node.stop()
@@ -562,8 +561,6 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     /// falls (equal power: as loud through the middle), then the old node stops.
     private func cross(into file: AVAudioFile, seconds: Double) {
         endCross()
-        fading?.invalidate()
-        fading = nil
         // What is left of the old track while they cross: already quiet (its fade-out under way), it
         // leaves nothing to blend with, and the new one comes in at once, not out of silence.
         let quietEnd = self.file.map { fadedOut($0.url, from: position, seconds: seconds) } ?? false
@@ -749,12 +746,9 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         sleepTimer = nil
         try AVAudioSession.sharedInstance().setActive(true)
         if !engine.isRunning { try engine.start() }
-        // A fade under way (another app's sound) gives way to the user's play; a crossfade goes on.
-        fading?.invalidate()
-        fading = nil
         if tail == nil { node.volume = 1 }
-        // What plays elsewhere already (a sound kept on by some app) is not a reason to stop.
         (othersPlaying, othersTaking) = othersNow
+        note("play")
         // Waiting for more of the track: it plays once that comes (extend).
         if !stalled { node.play() }
         playing = true
@@ -775,19 +769,20 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
 
     /// The lock screen's pause (main thread).
     func pauseNow() -> Bool {
-        halt()
+        halt("lock-screen")
         return true
     }
 
     @objc func pause(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
-            self.halt()
+            self.halt("page")
             call.resolve()
         }
     }
 
-    private func halt() {
+    private func halt(_ why: String) {
         guard playing else { return }
+        note("halt", why)
         // A pause mid-crossfade ends it: what comes back is the new track alone.
         endCross()
         pausedAt = position
@@ -1088,10 +1083,14 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         call.resolve()
     }
 
-    /// { playing, taking } — for the simulator run: what iOS would say of other apps' sound (none: iOS is asked).
+    /// { playing, taking, interrupt } — for the simulator run: what iOS would say of other apps' sound
+    /// (none: iOS is asked); `interrupt`: iOS tells that another app took the sound.
     @objc func testOthers(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
             self.othersForTest = call.getBool("playing").map { ($0, call.getBool("taking") ?? false) }
+            if call.getBool("interrupt") == true {
+                NotificationCenter.default.post(name: AVAudioSession.interruptionNotification, object: nil, userInfo: [AVAudioSessionInterruptionTypeKey: AVAudioSession.InterruptionType.began.rawValue])
+            }
             call.resolve()
         }
     }
@@ -1113,7 +1112,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         if let end = musicEnd { data["musicEnd"] = end }
         notifyListeners("time", data: data)
         findMusicEnd()
-        if playing && fading == nil && tail == nil { watchOthers() }
+        if playing { watchOthers() }
     }
 
     /// The track's music end, looked for in the background once its file is whole (a track still
@@ -1135,10 +1134,9 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         }
     }
 
-    /// Whether another app played, and took the sound for itself, the last time the clock looked.
+    /// What iOS said of other apps' sound the last time the clock looked.
     private var othersPlaying = false
     private var othersTaking = false
-    private var fading: Timer?
     private var othersForTest: (playing: Bool, taking: Bool)?
     /// What iOS says of other apps' sound right now.
     private var othersNow: (playing: Bool, taking: Bool) {
@@ -1147,49 +1145,50 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         return (session.isOtherAudioPlaying, session.secondaryAudioShouldBeSilencedHint)
     }
 
-    /// Another app's sound over the music. A video without sound counts as sound for iOS too
-    /// (isOtherAudioPlaying, the likely cause in VK's feed), and iOS tells nobody how loud another app is,
-    /// so that alone pauses nothing (the user, 2.11.2026: only a sound turned on may pause; it
-    /// did since 22.10, for Instagram). What pauses: the app taking the sound for itself. Most
-    /// do that by interrupting (iOS silences the music at once, before telling us: interrupted);
-    /// one that changes over while playing shows only in the hint, so the music fades over a second.
-    /// An app whose sound stays mixed (Instagram's feed) plays over the music: nothing tells it apart.
+    /// One line of what happened to the sound and what iOS said then, for the page's log
+    /// (player/soundLog.ts): what a real app does cannot be seen on the simulator.
+    private func note(_ kind: String, _ detail: String = "") {
+        let others = othersNow
+        notifyListeners("sound", data: ["at": Date().timeIntervalSince1970 * 1000, "kind": kind, "detail": detail, "others": others.playing, "taking": others.taking, "playing": playing])
+    }
+
+    /// Another app's sound over the music pauses nothing by itself. A video without sound in VK's
+    /// feed faded the music out and paused it on the user's iPhone both when that followed
+    /// isOtherAudioPlaying (since 22.10) and when it followed secondaryAudioShouldBeSilencedHint
+    /// (3.0.3; a screen recording, 2.11.2026: the music fades, the video is silent). Only iOS's own
+    /// interruption pauses (interrupted): that the sound was truly taken.
     private func watchOthers() {
         let others = othersNow
-        defer {
-            othersPlaying = others.playing
-            othersTaking = others.taking
-        }
+        if others.playing != othersPlaying || others.taking != othersTaking { note("others") }
         // Another app's sound over the music has ended: it may have taken the lock screen's player.
         if !others.playing, othersPlaying { claimLockScreen() }
-        guard others.taking, !othersTaking else { return }
-        let from = node.volume
-        var step = 0
-        let steps = 12
-        fading = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] timer in
-            guard let self = self else { return timer.invalidate() }
-            step += 1
-            self.node.volume = from * Float(max(0, steps - step)) / Float(steps)
-            guard step >= steps else { return }
-            timer.invalidate()
-            self.fading = nil
-            self.halt()
-            self.node.volume = 1
-        }
+        (othersPlaying, othersTaking) = others
     }
 
     /// A call or another app took the sound: paused, and the page told (it shows paused).
     @objc private func interrupted(_ note: Notification) {
-        guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
-              AVAudioSession.InterruptionType(rawValue: raw) == .began else { return }
-        DispatchQueue.main.async { self.halt() }
+        guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt else { return }
+        let began = AVAudioSession.InterruptionType(rawValue: raw) == .began
+        let options = note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+        DispatchQueue.main.async {
+            self.note(began ? "interrupted" : "interruption-ended", "options \(options)")
+            if began { self.halt("interruption") }
+        }
+    }
+
+    /// The hint's own notice (only written down: it comes for a video without sound too).
+    @objc private func hintChanged(_ note: Notification) {
+        let raw = note.userInfo?[AVAudioSessionSilenceSecondaryAudioHintTypeKey] as? UInt ?? 99
+        DispatchQueue.main.async { self.note("hint", "\(raw)") }
     }
 
     /// Headphones pulled out: pause, as every music app does.
     @objc private func routeChanged(_ note: Notification) {
-        guard let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
-              AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable else { return }
-        DispatchQueue.main.async { self.halt() }
+        guard let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt else { return }
+        DispatchQueue.main.async {
+            self.note("route", "\(raw)")
+            if AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable { self.halt("headphones") }
+        }
     }
 
     /// The output changed under the engine (a route, a sample rate): restart it where it was.

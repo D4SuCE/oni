@@ -9,6 +9,7 @@ import type { DeviceLog } from '../player/playLog.ts';
 import type { RecentPlay } from '../player/recent.ts';
 import type { SharedFeedback } from '../recs/feedback.ts';
 import type { DownloadLogEntry } from '../player/downloadLog.ts';
+import type { SoundLogEntry } from '../player/soundLog.ts';
 import type { DiskLike } from './disk.ts';
 
 export interface Device {
@@ -29,6 +30,8 @@ export interface DeviceFile {
   feedback?: SharedFeedback;
   /** What this device downloaded, asked by what (player/downloadLog.ts): read by the developer, not by Oni. */
   downloads?: DownloadLogEntry[];
+  /** The iPhone's plays, pauses and what iOS said of other apps' sound (player/soundLog.ts): read by the developer, not by Oni. */
+  sounds?: SoundLogEntry[];
 }
 
 /** The parts of this device's memory that are shared. */
@@ -39,6 +42,7 @@ export interface Shared {
   /** Decisions, the latest winning: the other devices' and this one's own file are read alike. */
   feedback?: { own(): SharedFeedback; setRemote(devices: SharedFeedback[]): void };
   downloads?: { own(): DownloadLogEntry[] };
+  sounds?: { own(): SoundLogEntry[] };
 }
 
 const PREFIX = 'device-';
@@ -78,7 +82,7 @@ export class DeviceSync {
   /** Sends this device's file if anything changed since the last time; true when sent. */
   async push(): Promise<boolean> {
     if (!this.restored) return false;
-    const body = { history: this.shared.history.own(), log: this.shared.playLog.own(), recent: this.shared.recent.own(), feedback: this.shared.feedback?.own(), downloads: this.shared.downloads?.own() };
+    const body = { history: this.shared.history.own(), log: this.shared.playLog.own(), recent: this.shared.recent.own(), feedback: this.shared.feedback?.own(), downloads: this.shared.downloads?.own(), sounds: this.shared.sounds?.own() };
     const key = JSON.stringify(body);
     if (key === this.sent) return false;
     const file: DeviceFile = { v: 1, device: this.device, at: this.now(), ...body };

@@ -7,6 +7,7 @@
 import { registerPlugin } from '@capacitor/core';
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { toBase64 } from '../api/bytes.ts';
+import type { SoundLogEntry } from './soundLog.ts';
 
 /** How the system equalizer's bands are set up (the defaults are how Oni plays). */
 export interface EqShape {
@@ -34,8 +35,8 @@ interface PlayerPlugin {
   latency(): Promise<{ seconds: number }>;
   /** For the simulator run: downloads held to a slow network's pace (0: off). */
   testThrottle(options: { bytesPerSecond: number }): Promise<void>;
-  /** For the simulator run: what iOS would say of other apps' sound (nothing given: iOS is asked). */
-  testOthers(options: { playing?: boolean; taking?: boolean }): Promise<void>;
+  /** For the simulator run: what iOS would say of other apps' sound (nothing given: iOS is asked); `interrupt`: iOS tells the sound was taken. */
+  testOthers(options: { playing?: boolean; taking?: boolean; interrupt?: boolean }): Promise<void>;
   /** For the simulator run: what the system equalizer set up as Oni's does at each frequency (dB). */
   eqResponse(options: { gains: number[]; preamp: number; frequencies: number[] } & EqShape): Promise<{ db: number[] }>;
   /** The simulator run: a picture of Oni's window, kept as Documents/shot-<name>.png (ios.yml copies them). */
@@ -50,6 +51,8 @@ interface PlayerPlugin {
   /** `waiting`: playing, but the track (still arriving) ran short: it goes on when more comes. */
   addListener(event: 'time', cb: (e: { time: number; duration: number; playing: boolean; waiting?: boolean; musicEnd?: number }) => void): Promise<unknown>;
   addListener(event: 'ended', cb: () => void): Promise<unknown>;
+  /** What happened to the sound and what iOS said then (soundLog.ts). */
+  addListener(event: 'sound', cb: (e: SoundLogEntry) => void): Promise<unknown>;
   /** A track playing while it arrived could not be fetched to its end. */
   addListener(event: 'error', cb: (e: { message: string }) => void): Promise<unknown>;
 }
