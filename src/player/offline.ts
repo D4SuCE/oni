@@ -21,7 +21,7 @@ export interface OfflineDeps {
   /** The bytes behind a URL, fetched by the shell (the audio CDN sends no CORS headers). */
   fetchBytes(url: string): Promise<ArrayBuffer>;
   /** Where the track's audio is right now. */
-  stream(trackId: string): Promise<{ url: string; codec: string; bitrate: number }>;
+  stream(trackId: string, track: Track): Promise<{ url: string; codec: string; bitrate: number }>;
   store: KeyValueStore;
   crypto: Crypto;
   /** The track's cover (one size, ~30 KB), kept beside it so it shows with no network too. */
@@ -179,7 +179,7 @@ export class OfflineLibrary {
     const running = this.busy.get(id);
     if (running) return running;
     const job = (async () => {
-      const { url, codec, bitrate } = await this.deps.stream(id);
+      const { url, codec, bitrate } = await this.deps.stream(id, track);
       await this.seal(track, await this.deps.fetchBytes(url), codec, bitrate);
       await this.saveCover(track);
       this.deps.fetchLyrics?.(track).catch(() => {}); // none, or no network: the track is kept all the same

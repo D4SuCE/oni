@@ -5,7 +5,7 @@ import { readMark, visible, withMark } from '../src/share/mark.ts';
 import { YandexMusic } from '../src/api/yandex.ts';
 import { trimTrack } from '../src/player/recent.ts';
 import { withTitle } from '../src/share/id3.ts';
-import { asTrack, fileName, shareLinkOf } from '../src/share/shared.ts';
+import { asTrack, fileName, shareLinkOf, sharedTracks, withUploads } from '../src/share/shared.ts';
 
 let passed = 0;
 let failed = 0;
@@ -55,6 +55,31 @@ test("a shared track kept (History, downloads, the queue, the remote) is still a
   // met" — kept without its share it had Yandex's menu, and Yandex knows no "share-…" track.
   const t = trimTrack(asTrack({ id: 'abc-1', file: 'abc-1.mp3', title: 'Песня', artists: ['Автор'], durationMs: 200000 }, LINK, 'Друг'));
   assert(t.share?.file === 'abc-1.mp3' && t.share.link === LINK && t.share.owner === 'Друг' && t.trackSource === 'SHARE', JSON.stringify(t));
+});
+
+test("a friend's playlist: the uploads in the owner's places, between Yandex's tracks", () => {
+  // The user, 2.11.2026: "the same order, with the uploaded tracks". Uploads first, between, last.
+  const up = (id: string) => ({ id, title: id, artists: [], trackSource: 'UGC', coverUri: `c/${id}` }) as any;
+  const cat = (id: string) => ({ id, title: id, artists: [] }) as any;
+  const owner = [up('u1'), up('u2'), cat('1'), up('u3'), cat('2'), cat('3'), up('u4')];
+  const index = { kind: 3, title: 'x', tracks: sharedTracks(owner) };
+  assert(index.tracks.map((x) => x.after).join() === ',,1,3', JSON.stringify(index.tracks.map((x) => x.after)));
+  assert(index.tracks[0].file === 'u1.mp3' && index.tracks[0].cover === 'c/u1', 'file, cover');
+  const ids = (l: any[]) => l.map((t) => String(t.id).replace('share-', '')).join();
+  const friend = [cat('1'), cat('2'), cat('3')];
+  const whole = withUploads(friend, index, LINK, 'Друг');
+  assert(ids(whole) === ids(owner), ids(whole));
+  assert(whole[0].share?.link === LINK && whole[0].coverUri === 'c/u1' && !whole[2].share, 'an upload is a shared one, a catalog track stays Yandex\'s');
+  // a track added since the owner's last round keeps Yandex's place; one gone: its upload stays beside the one before
+  assert(ids(withUploads([cat('9'), cat('1'), cat('3')], index, LINK, '')) === 'u1,u2,9,1,u3,3,u4', ids(withUploads([cat('9'), cat('1'), cat('3')], index, LINK, '')));
+  assert(ids(withUploads([cat('2'), cat('3')], index, LINK, '')) === 'u1,u2,u3,2,3,u4', ids(withUploads([cat('2'), cat('3')], index, LINK, '')));
+  // kept for the offline mode with them in: not twice; a track twice in the list: its uploads once
+  assert(ids(withUploads(whole, index, LINK, '')) === ids(owner), 'not twice');
+  assert(ids(withUploads([cat('3'), cat('3')], index, LINK, '')) === 'u1,u2,u3,3,u4,3', ids(withUploads([cat('3'), cat('3')], index, LINK, '')));
+  // an index from before places were kept: after the list; no such playlist in it: Yandex's list
+  const old = { kind: 3, title: 'x', tracks: index.tracks.map((x) => ({ ...x, after: undefined })) };
+  assert(ids(withUploads(friend, old, LINK, '')) === '1,2,3,u1,u2,u3,u4', ids(withUploads(friend, old, LINK, '')));
+  assert(ids(withUploads(friend, undefined, LINK, '')) === '1,2,3', 'none');
 });
 
 test('"+ Mine" names the file "Artist - Title.mp3", with nothing a file name cannot have', () => {

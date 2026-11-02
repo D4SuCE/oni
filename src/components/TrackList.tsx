@@ -21,8 +21,8 @@ import { isAi, lookAi, useAi } from '../recs/ai.ts';
 
 /** A file the user uploaded: marked in lists, with a short menu (its link opens for nobody else). */
 const isUpload = (t: Track) => t.trackSource === 'UGC';
-/** An upload whose artist is no link: one Yandex has not found in the catalog. */
-export const plainArtists = (t: Track) => isUpload(t) && !catalogTrack(t);
+/** An upload whose artist is no link: one Yandex has not found in the catalog, or a friend's. */
+export const plainArtists = (t: Track) => Boolean(t.share) || (isUpload(t) && !catalogTrack(t));
 
 export function trackMenu(t: Track, extra: MenuItem[] = []): MenuItem[] {
   const app = useApp.getState();
@@ -188,7 +188,7 @@ const TrackRow = memo(function TrackRow({ track: t, index, active, playing, like
       <div className="tr-main">
         <div className="tr-title">
           {/* In front of the title: a long one cuts off its end, and the mark must stay visible. */}
-          {isUpload(t) && (
+          {(isUpload(t) || t.share) && (
             <span className="badge upload" title={tx.menu.uploaded} data-testid="upload-badge">
               <ArrowUp size={12} strokeWidth={2.75} />
             </span>

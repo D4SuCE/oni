@@ -1,6 +1,6 @@
 import { ArrowUpDown, FileDown, Heart, MoreHorizontal, Pencil, Radio, Share, Shuffle, Trash2, Upload } from 'lucide-react';
 import { DownloadButton } from '../components/DownloadButton.tsx';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, transport } from '../api/client.ts';
 import type { Playlist, Track } from '../api/types.ts';
 import { playlistCover } from '../api/yandex.ts';
@@ -15,7 +15,8 @@ import { extendList, playRadio, playShuffled, playTracks } from '../player/playe
 import { errorText, isOwn, navigate, refreshPlaylists, samePlaylist, toast, togglePlaylistLike, useApp } from '../store.ts';
 import { visible } from '../share/mark.ts';
 import { shareLinkOf } from '../share/shared.ts';
-import { shareUploads } from '../share/owner.ts';
+import { useFriendUploads } from '../share/friend.ts';
+import { shareSoon, shareUploads } from '../share/owner.ts';
 import { isIos } from '../ui/platform.ts';
 import { share } from '../ui/share.ts';
 import { exportCsv } from '../ui/exportCsv.ts';
@@ -50,7 +51,11 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
   const search = useListSearch();
   /** The iPhone's "Move" mode (from "…"). */
   const [reordering, setReordering] = useState(false);
-  const { tracks: loadedTracks, total: listTotal, complete } = useListTracks(pl);
+  const { tracks: yandexTracks, total: listTotal, complete: listComplete } = useListTracks(pl);
+  // A friend's playlist: Yandex gives it without their uploads, these come from their Disk (src/share).
+  const { place: withFriendUploads, waiting: friendWaiting } = useFriendUploads(pl, Boolean(pl && isOwn(pl)) || offlineNow);
+  const loadedTracks = useMemo(() => withFriendUploads(yandexTracks), [withFriendUploads, yandexTracks]);
+  const complete = listComplete && !friendWaiting;
   // Tracks moved by the user show in their new order at once, while Yandex is told (reset with
   // every load of the playlist, which then has that order itself).
   const [movedTracks, setMovedTracks] = useState<{ pl: typeof pl; tracks: Track[] } | null>(null);
@@ -77,6 +82,7 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
       if (String(fresh.tracks?.[from]?.id) !== String(tracks[from]?.id)) throw new Error('the playlist changed meanwhile');
       await api.moveInPlaylist(fresh, from, to);
       refreshPlaylists();
+      shareSoon();
     } catch (e) {
       toast(t.playlist.moveFailed(errorText(e)));
       setMovedTracks(null);
@@ -90,6 +96,7 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
       await api.removeFromPlaylist(fresh, index);
       reload();
       refreshPlaylists();
+      shareSoon();
     } catch (e) {
       toast(t.playlist.removeFailed(errorText(e)));
     }
@@ -158,7 +165,8 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
         title={pl.title}
         meta={
           <>
-            {t.count.tracks(pl.trackCount)}
+            {/* Yandex counts a friend's playlist without their uploads */}
+            {t.count.tracks(!own && complete ? tracks.length : pl.trackCount)}
             {complete && total > 0 && `, ${fmtTotal(total)}`}
             {visible(pl.description) && <div className="muted desc">{visible(pl.description)}</div>}
           </>
@@ -240,14 +248,14 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
       ) : null}
       {!complete && (
         <div className="list-loading" data-testid="list-loading">
-          <Loader2 size={16} className="spin" /> {t.playlist.loadingMore(tracks.length, listTotal)}
+          <Loader2 size={16} className="spin" /> {listComplete ? t.shared.looking : t.playlist.loadingMore(yandexTracks.length, listTotal)}
         </div>
       )}
     </div>
   );
 }
 
-/** A friend's playlist (their Liked too): the button to their own uploads, shared through their
+/** A friend's playlist (their Liked too): the button to all their uploads, shared through their
  * Disk (src/share), when any of their playlists has the mark. */
 function SharedBanner({ pl }: { pl: Playlist }) {
   const t = useT();

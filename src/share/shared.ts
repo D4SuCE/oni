@@ -22,6 +22,11 @@ export interface SharedTrack {
   durationMs?: number;
   /** The owner's upload, in Yandex: the same track in two playlists is one file. */
   id: string;
+  /** Its place in the playlist: the nearest of Yandex's tracks above it, null when none is. Yandex
+   * shows a friend the playlist without the uploads, so this is what puts them back (`withUploads`). */
+  after?: string | null;
+  /** Its cover (`coverUri`): opens for anyone. */
+  cover?: string;
 }
 
 export interface SharedPlaylist {
@@ -71,8 +76,52 @@ export function asTrack(t: SharedTrack, link: string, owner: string): Track {
     albums: [],
     durationMs: t.durationMs,
     trackSource: 'SHARE',
+    coverUri: t.cover,
     share: { link, file: t.file, owner },
   } as Track;
+}
+
+export const fileOf = (t: Track) => `${t.id}.mp3`;
+
+/** A playlist's uploads as its index lists them, each with its place among the other tracks. */
+export function sharedTracks(all: Track[]): SharedTrack[] {
+  let after: string | null = null;
+  const out: SharedTrack[] = [];
+  for (const t of all) {
+    if (t.trackSource !== 'UGC') {
+      after = String(t.id);
+      continue;
+    }
+    out.push({ id: String(t.id), file: fileOf(t), title: t.title, artists: (t.artists ?? []).map((a) => a.name), durationMs: t.durationMs, after, ...(t.coverUri ? { cover: t.coverUri } : {}) });
+  }
+  return out;
+}
+
+/** A friend's playlist as its owner has it (the user, 2.11.2026: "the same order, with the uploaded
+ * tracks"): Yandex's list with the uploads back in their places. Yandex's list is the truth for its
+ * own tracks: one added since the owner's last round is simply there, and an upload whose track above
+ * has left (or is hidden from others: rights gone) stays beside the upload before it. An index from
+ * before places were kept: the uploads after the list. */
+export function withUploads(list: Track[], pl: SharedPlaylist | undefined, link: string, owner: string): Track[] {
+  // a list kept for the offline mode has them in already
+  const theirs = list.filter((t) => !t.share);
+  const here = new Set(theirs.map((t) => String(t.id)));
+  const END = Symbol('end');
+  const places = new Map<string | symbol | null, Track[]>();
+  let place: string | symbol | null = null;
+  for (const x of pl?.tracks ?? []) {
+    if (x.after === undefined) place = END;
+    else if (x.after === null || here.has(x.after)) place = x.after;
+    if (!places.has(place)) places.set(place, []);
+    places.get(place)!.push(asTrack(x, link, owner));
+  }
+  // taken once: a track twice in the list has the uploads after it once
+  const take = (at: string | symbol | null) => {
+    const found = places.get(at) ?? [];
+    places.delete(at);
+    return found;
+  };
+  return [...take(null), ...theirs.flatMap((t) => [t, ...take(String(t.id))]), ...take(END)];
 }
 
 export const isShared = (t: Track | undefined) => Boolean(t?.share);

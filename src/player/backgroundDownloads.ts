@@ -29,7 +29,7 @@ export interface BackgroundDeps {
     read(id: string): Promise<ArrayBuffer>;
     remove(id: string): Promise<void>;
   };
-  stream(id: string): Promise<{ url: string; codec: string; bitrate: number }>;
+  stream(id: string, track: Track): Promise<{ url: string; codec: string; bitrate: number }>;
   keep(track: Track, audio: ArrayBuffer, codec: string, bitrate: number): Promise<void>;
   has(id: string): boolean;
   store: KeyValueStore;
@@ -231,7 +231,7 @@ export class BackgroundDownloads {
               return null;
             }
             try {
-              const s = await this.deps.stream(id);
+              const s = await this.deps.stream(id, p.track);
               Object.assign(p, { codec: s.codec, bitrate: s.bitrate, sent: true });
               return { id, url: s.url };
             } catch {
