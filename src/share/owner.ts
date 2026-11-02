@@ -12,12 +12,15 @@ import type { Playlist, Track } from '../api/types.ts';
 import { disk, useSync } from '../sync/index.ts';
 import { readMark, withMark } from './mark.ts';
 import { tr } from '../i18n.ts';
-import { fileOf, INDEX, SHARED, sharedTracks, type SharedIndex, type SharedPlaylist } from './shared.ts';
+import { linkId } from '../together/disk.ts';
+import { fileOf, INDEX, LINK_FILE, LINK_INFO, LINKS, SHARED, sharedTracks, type SharedIndex, type SharedPlaylist } from './shared.ts';
 
 export { fileOf };
 
 const ON = 'share.uploads';
 const LINK = 'share.link';
+/** The links made to single tracks (ui/share.ts). */
+export const MADE_LINKS = 'share.trackLinks';
 /** Liked's kind, as a playlist. */
 const LIKED = 3;
 
@@ -76,6 +79,21 @@ export function shareUploads(): Promise<void> {
   if (!useShare.getState().on || !useSync.getState().connected) return Promise.resolve();
   running ??= round().then(() => {}).finally(() => (running = null));
   return running;
+}
+
+/** An upload's own open folder (shared.ts, `trackByLink`), made once; its key for the link. The file
+ * is kept apart from the shared folder: the link goes on working when the track leaves its playlist. */
+export async function uploadLink(t: Track, root = LINKS): Promise<string> {
+  const folder = `${root}/${t.id}`;
+  await disk.mkdir(root);
+  await disk.mkdir(folder);
+  if (!(await disk.folder(folder)).some((f) => f.name === LINK_FILE)) await sendUpload(`${folder}/${LINK_FILE}`, String(t.id));
+  const account = await api.account();
+  const { after: _, file: __, ...track } = sharedTracks([t])[0];
+  await disk.write(`${folder}/${LINK_INFO}`, JSON.stringify({ v: 1, owner: account.displayName || account.login || '', track }));
+  const key = linkId(await disk.publish(folder));
+  if (!key) throw new Error('the Disk gave no link');
+  return key;
 }
 
 let soon: ReturnType<typeof setTimeout> | null = null;
@@ -179,7 +197,10 @@ async function unshare() {
     for (const pl of await api.playlists()) if (readMark(pl.description)) await api.setPlaylistDescription(pl.kind, withMark(pl.description, null));
     await disk.unpublish(SHARED);
     await disk.remove(`${SHARED}/${INDEX}`);
+    // the links to single tracks go too: sharing off means nothing is open
+    await disk.remove(LINKS);
     storage.setItem(LINK, '');
+    storage.setItem(MADE_LINKS, '');
     useShare.setState({ at: null, tracks: 0, playlists: 0, error: null });
   } catch (e) {
     useShare.setState({ error: e instanceof Error ? e.message : String(e) });

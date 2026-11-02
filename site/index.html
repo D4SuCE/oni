@@ -103,7 +103,7 @@
   const ru = !/^en/i.test(navigator.language || '');
   const words = ru
     ? {
-        track: 'Трек', album: 'Альбом', artist: 'Исполнитель', playlist: 'Плейлист',
+        track: 'Трек', upload: 'Трек', album: 'Альбом', artist: 'Исполнитель', playlist: 'Плейлист',
         shared: (k) => `${k} — с вами поделились`,
         listen: 'Вас зовут слушать музыку вместе',
         home: 'Свой клиент Яндекс Музыки для Windows и iPhone',
@@ -111,7 +111,7 @@
         get: 'Нет Oni? <a href="https://github.com/D4SuCE/oni-releases">Скачать</a>',
       }
     : {
-        track: 'A track', album: 'An album', artist: 'An artist', playlist: 'A playlist',
+        track: 'A track', upload: 'A track', album: 'An album', artist: 'An artist', playlist: 'A playlist',
         shared: (k) => `${k} shared with you`,
         listen: "You're invited to listen to music together",
         home: 'A Yandex Music client for Windows and iPhone',

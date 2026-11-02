@@ -1,3 +1,4 @@
+import { shareUpload } from './ui/share.ts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { WifiOff } from 'lucide-react';
 import { useT } from './i18n.ts';
@@ -252,5 +253,5 @@ export function App() {
 
 // Handy for debugging and for the automated UI test.
 Object.assign(window, {
-  __wave: { backup: { snapshot, restorePlaylist, restoreLikes, keepUploads, keepGoneDownloads, toDownload }, share: { round: shareRound, useShare, downloadShared, read: (link: string) => readShared(link, (r) => transport.request(r)), asTrack, readMark, withMark, addToMine }, offline, storage, ownToKeep, silence: { leadingSilence }, usePlayer, useApp, audio, api, navigate, recsFeedback, recentPlays, playLog, stats, setPrivacy, setAiPrefs, transport, current, playTracks, setRate, setSleep, setVolume, toggleShuffle, toggleLike, trackMenu, findMix, eqOutputLevel, levelLift, pulseLevel, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } }, together: { startTogether, joinRoom, leaveTogether, inviteLink, useTogether, ...togetherProbe } },
+  __wave: { backup: { snapshot, restorePlaylist, restoreLikes, keepUploads, keepGoneDownloads, toDownload }, share: { round: shareRound, shareUpload, useShare, downloadShared, read: (link: string) => readShared(link, (r) => transport.request(r)), asTrack, readMark, withMark, addToMine }, offline, storage, ownToKeep, silence: { leadingSilence }, usePlayer, useApp, audio, api, navigate, recsFeedback, recentPlays, playLog, stats, setPrivacy, setAiPrefs, transport, current, playTracks, setRate, setSleep, setVolume, toggleShuffle, toggleLike, trackMenu, findMix, eqOutputLevel, levelLift, pulseLevel, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } }, together: { startTogether, joinRoom, leaveTogether, inviteLink, useTogether, ...togetherProbe } },
 });

@@ -5,7 +5,7 @@ import { readMark, visible, withMark } from '../src/share/mark.ts';
 import { YandexMusic } from '../src/api/yandex.ts';
 import { trimTrack } from '../src/player/recent.ts';
 import { withTitle } from '../src/share/id3.ts';
-import { asTrack, fileName, shareLinkOf, sharedTracks, withUploads } from '../src/share/shared.ts';
+import { asTrack, fileName, shareLinkOf, sharedTracks, trackByLink, withUploads } from '../src/share/shared.ts';
 
 let passed = 0;
 let failed = 0;
@@ -59,17 +59,17 @@ test("a shared track kept (History, downloads, the queue, the remote) is still a
 
 test("a friend's playlist: the uploads in the owner's places, between Yandex's tracks", () => {
   // The user, 2.11.2026: "the same order, with the uploaded tracks". Uploads first, between, last.
-  const up = (id: string) => ({ id, title: id, artists: [], trackSource: 'UGC', coverUri: `c/${id}` }) as any;
+  const up = (id: string) => ({ id, title: id, artists: [], trackSource: 'UGC', coverUri: `avatars.yandex.net/c/${id}` }) as any;
   const cat = (id: string) => ({ id, title: id, artists: [] }) as any;
   const owner = [up('u1'), up('u2'), cat('1'), up('u3'), cat('2'), cat('3'), up('u4')];
   const index = { kind: 3, title: 'x', tracks: sharedTracks(owner) };
   assert(index.tracks.map((x) => x.after).join() === ',,1,3', JSON.stringify(index.tracks.map((x) => x.after)));
-  assert(index.tracks[0].file === 'u1.mp3' && index.tracks[0].cover === 'c/u1', 'file, cover');
+  assert(index.tracks[0].file === 'u1.mp3' && index.tracks[0].cover === 'avatars.yandex.net/c/u1', 'file, cover');
   const ids = (l: any[]) => l.map((t) => String(t.id).replace('share-', '')).join();
   const friend = [cat('1'), cat('2'), cat('3')];
   const whole = withUploads(friend, index, LINK, 'Друг');
   assert(ids(whole) === ids(owner), ids(whole));
-  assert(whole[0].share?.link === LINK && whole[0].coverUri === 'c/u1' && !whole[2].share, 'an upload is a shared one, a catalog track stays Yandex\'s');
+  assert(whole[0].share?.link === LINK && whole[0].coverUri === 'avatars.yandex.net/c/u1' && !whole[2].share, 'an upload is a shared one, a catalog track stays Yandex\'s');
   // a track added since the owner's last round keeps Yandex's place; one gone: its upload stays beside the one before
   assert(ids(withUploads([cat('9'), cat('1'), cat('3')], index, LINK, '')) === 'u1,u2,9,1,u3,3,u4', ids(withUploads([cat('9'), cat('1'), cat('3')], index, LINK, '')));
   assert(ids(withUploads([cat('2'), cat('3')], index, LINK, '')) === 'u1,u2,u3,2,3,u4', ids(withUploads([cat('2'), cat('3')], index, LINK, '')));
@@ -80,6 +80,25 @@ test("a friend's playlist: the uploads in the owner's places, between Yandex's t
   const old = { kind: 3, title: 'x', tracks: index.tracks.map((x) => ({ ...x, after: undefined })) };
   assert(ids(withUploads(friend, old, LINK, '')) === '1,2,3,u1,u2,u3,u4', ids(withUploads(friend, old, LINK, '')));
   assert(ids(withUploads(friend, undefined, LINK, '')) === '1,2,3', 'none');
+});
+
+test('a shared track: a cover only from Yandex\'s own host', () => {
+  const at = (cover: string) => asTrack({ id: 'x', file: 'x.mp3', title: 't', artists: [], cover }, LINK, '').coverUri;
+  assert(at('avatars.yandex.net/get-music-content/1/%%') === 'avatars.yandex.net/get-music-content/1/%%', 'Yandex\'s');
+  assert(at('evil.example/x.png') === undefined, 'any other');
+});
+
+await test("a link to one upload: its folder's info is the track, playing from that folder; anything else is refused", async () => {
+  // The user, 2.11.2026: "send him a link to the song, and it opens in Oni".
+  const read = (info: unknown, ok = true) =>
+    trackByLink(LINK, (async (req: any) => (req.query ? { ok: true, status: 200, data: { href: 'https://file/' } } : { ok, status: ok ? 200 : 404, data: JSON.stringify(info) })) as any);
+  const t = await read({ v: 1, owner: 'Друг', track: { id: 'abc-1', title: 'Песня', artists: ['Автор', 5], durationMs: 200000, cover: 'avatars.yandex.net/c/%%' } });
+  assert(t.id === 'share-abc-1' && t.share?.file === 'track.mp3' && t.share.link === LINK && t.share.owner === 'Друг', JSON.stringify(t));
+  assert(t.artists.map((a) => a.name).join() === 'Автор' && t.durationMs === 200000 && t.coverUri === 'avatars.yandex.net/c/%%', JSON.stringify(t));
+  for (const bad of [{ v: 2, track: { id: 'a', title: 't' } }, { v: 1 }, { v: 1, track: { id: '../x', title: 't' } }, { v: 1, track: { id: 'a' } }]) {
+    const refused = await read(bad).then(() => false, () => true);
+    assert(refused, `took ${JSON.stringify(bad)}`);
+  }
 });
 
 test('"+ Mine" names the file "Artist - Title.mp3", with nothing a file name cannot have', () => {

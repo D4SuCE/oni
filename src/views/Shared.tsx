@@ -7,7 +7,8 @@ import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { transport } from '../api/client.ts';
 import type { Playlist, Track } from '../api/types.ts';
-import { ErrorBox, ListPlayButton, Spinner } from '../components/Common.tsx';
+import { trackCover } from '../api/yandex.ts';
+import { Cover, ErrorBox, ListPlayButton, Spinner } from '../components/Common.tsx';
 import { askText } from '../components/Dialog.tsx';
 import { openMenu } from '../components/Menu.tsx';
 import { useT } from '../i18n.ts';
@@ -200,6 +201,7 @@ export function SharedView({ link, owner }: { link: string; owner?: string }) {
                       <Play size={16} />
                     )}
                   </button>
+                  <Cover src={trackCover(x, 100)} size={40} />
                   <div className="import-src">
                     <div className="import-title">{x.title}</div>
                     <div className="import-sub">

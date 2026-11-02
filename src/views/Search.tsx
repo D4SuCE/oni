@@ -1,3 +1,6 @@
+import { transport } from '../api/client.ts';
+import { trackByLink } from '../share/shared.ts';
+import { linkUrl } from '../together/disk.ts';
 import { Search as SearchIcon, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api/client.ts';
@@ -18,6 +21,10 @@ import { cx, useEscape } from '../ui/util.ts';
  * by itself (the user: a paste should look like a search, not start music out of nowhere). */
 async function findLink(link: Exclude<OniLink, { kind: 'listen' }>): Promise<{ result: SearchResult; title: string }> {
   const one = <T,>(x: T) => ({ results: [x], total: 1 });
+  if (link.kind === 'upload') {
+    const t = await trackByLink(linkUrl(link.key), (r) => transport.request(r));
+    return { result: { tracks: one(t) }, title: t.title };
+  }
   if (link.kind === 'playlist') {
     const p = await api.playlist(link.owner, link.id);
     const tracks = (p.tracks || []).map((i) => i.track).filter((t): t is Track => Boolean(t));
