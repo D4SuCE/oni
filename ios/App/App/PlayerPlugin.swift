@@ -36,6 +36,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         CAPPluginMethod(name: "state", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "latency", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "testThrottle", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "testOthers", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pulse", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "eqResponse", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "snapshot", returnType: CAPPluginReturnPromise),
@@ -753,7 +754,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         fading = nil
         if tail == nil { node.volume = 1 }
         // What plays elsewhere already (a sound kept on by some app) is not a reason to stop.
-        othersPlaying = AVAudioSession.sharedInstance().isOtherAudioPlaying
+        othersPlaying = othersNow.playing
         // Waiting for more of the track: it plays once that comes (extend).
         if !stalled { node.play() }
         playing = true
@@ -1087,6 +1088,14 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         call.resolve()
     }
 
+    /// { playing, taking } — for the simulator run: what iOS would say of other apps' sound (none: iOS is asked).
+    @objc func testOthers(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            self.othersForTest = call.getBool("playing").map { ($0, call.getBool("taking") ?? false) }
+            call.resolve()
+        }
+    }
+
     // MARK: clock and the system
 
     private func startTimer() {
@@ -1129,13 +1138,20 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     /// Whether another app played the last time the clock looked.
     private var othersPlaying = false
     private var fading: Timer?
+    private var othersForTest: (playing: Bool, taking: Bool)?
+    /// What iOS says of other apps' sound right now.
+    private var othersNow: (playing: Bool, taking: Bool) {
+        if let test = othersForTest { return test }
+        let session = AVAudioSession.sharedInstance()
+        return (session.isOtherAudioPlaying, session.secondaryAudioShouldBeSilencedHint)
+    }
 
     /// Another app's sound started over the music without taking it (Instagram's videos mix with
     /// others, so iOS says nothing and both played): the music fades out over a second and
     /// pauses, as the user expects when a video starts. Apps that take the sound (YouTube) are an
     /// interruption instead: iOS silences the music at once, before telling us, so no fade there.
     private func watchOthers() {
-        let others = AVAudioSession.sharedInstance().isOtherAudioPlaying
+        let others = othersNow.playing
         defer { othersPlaying = others }
         // Another app's sound over the music has ended: it may have taken the lock screen's player.
         if !others, othersPlaying { claimLockScreen() }
