@@ -198,12 +198,18 @@ await step("shared uploads: Liked goes too, each upload with the place it has in
   try {
     const seen = await page.evaluate(async (f) => {
       const { api, share } = window.__wave;
-      const link = await share.round({ folder: f, maxTracks: 2, mark: false });
+      // one of them taken for private: it stays out, its uploads too
+      const real = await api.playlists();
+      const hidden = String(real[0].kind);
+      api.playlists = async () => real.map((p) => (String(p.kind) === hidden ? { ...p, visibility: 'private' } : p));
+      const link = await share.round({ folder: f, maxTracks: 2, mark: false }).finally(() => delete api.playlists);
       if (!link) return { error: share.useShare.getState().error };
-      const liked = (await share.read(link)).playlists.find((p) => String(p.kind) === '3');
-      return { liked, ids: (await api.likedTrackKeys()).map((k) => k.split(':')[0]) };
+      const index = await share.read(link);
+      const liked = index.playlists.find((p) => String(p.kind) === '3');
+      return { liked, hidden: index.playlists.some((p) => String(p.kind) === hidden), ids: (await api.likedTrackKeys()).map((k) => k.split(':')[0]) };
     }, folder);
     if (seen.error) throw new Error(`the round failed: ${seen.error}`);
+    if (seen.hidden) throw new Error('a private playlist is in the index');
     if (!seen.ids.some((id) => !/^\d+$/.test(id))) return console.log('       skipped: no uploads in Liked');
     if (!seen.liked?.tracks.length) throw new Error('Liked is not in the index');
     for (const x of seen.liked.tracks) {
@@ -213,6 +219,26 @@ await step("shared uploads: Liked goes too, each upload with the place it has in
     console.log(`       ${seen.liked.title}: ${seen.liked.tracks.length} uploads, each with its place`);
   } finally {
     await page.evaluate((f) => window.__wave.sync.disk.remove(f), folder);
+  }
+});
+
+await step("a playlist's access: the switch on its page opens and closes it, as Yandex sees it (a playlist of its own, removed again)", async () => {
+  // The user, 2.11.2026: as in Yandex's own app.
+  const pl = await page.evaluate(() => window.__wave.api.createPlaylist('oni-e2e-access'));
+  const seen = () => page.evaluate((k) => window.__wave.api.playlist(window.__wave.useApp.getState().account.uid, k, false).then((p) => p.visibility), pl.kind);
+  try {
+    if ((await seen()) !== 'private') throw new Error(`a new one is ${await seen()}`);
+    await page.evaluate(([u, k]) => window.__wave.navigate({ name: 'playlist', uid: u, kind: k }), [pl.uid, pl.kind]);
+    await page.waitForSelector('[data-testid="playlist-private"][data-closed]', { timeout: 15000 });
+    await page.click('[data-testid="playlist-private"]');
+    await page.waitForSelector('[data-testid="playlist-private"]:not([data-closed])', { timeout: 15000 });
+    if ((await seen()) !== 'public') throw new Error(`opened: ${await seen()}`);
+    await page.click('[data-testid="playlist-private"]');
+    await page.waitForSelector('[data-testid="playlist-private"][data-closed]', { timeout: 15000 });
+    if ((await seen()) !== 'private') throw new Error(`closed: ${await seen()}`);
+  } finally {
+    await page.evaluate(() => window.__wave.navigate({ name: 'home' }));
+    await page.evaluate((k) => window.__wave.api.deletePlaylist(k), pl.kind);
   }
 });
 

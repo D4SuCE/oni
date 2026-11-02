@@ -112,7 +112,8 @@ export async function round(opts: RoundOptions = {}): Promise<string | null> {
       shared.push({ kind, title, tracks: sharedTracks(all).slice(0, uploads.length) });
       for (const t of uploads) wanted.set(fileOf(t), t);
     };
-    for (const pl of mine) add(pl.kind, pl.title, await tracksOf(pl));
+    // private: closed to a friend, its uploads too (the user, 2.11.2026: the switch takes access away)
+    for (const pl of mine) if (opts.only || pl.visibility !== 'private') add(pl.kind, pl.title, await tracksOf(pl));
     // a friend's "main playlist" may well be one's Liked (the user, 2.11.2026)
     if (!opts.only) add(LIKED, tr().common.liked, await likedList());
     await disk.mkdir(folder);

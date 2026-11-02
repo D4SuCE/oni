@@ -1,11 +1,11 @@
-import { ArrowUpDown, FileDown, Heart, MoreHorizontal, Pencil, Radio, Share, Shuffle, Trash2, Upload } from 'lucide-react';
+import { ArrowUpDown, FileDown, Heart, Lock, LockOpen, MoreHorizontal, Pencil, Radio, Share, Shuffle, Trash2, Upload } from 'lucide-react';
 import { DownloadButton } from '../components/DownloadButton.tsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, transport } from '../api/client.ts';
 import type { Playlist, Track } from '../api/types.ts';
 import { playlistCover } from '../api/yandex.ts';
 import { ErrorBox, ListPlayButton, PageHeader, Spinner } from '../components/Common.tsx';
-import { deletePlaylist, renamePlaylist } from '../components/PlaylistMenu.tsx';
+import { deletePlaylist, renamePlaylist, setPlaylistPrivate } from '../components/PlaylistMenu.tsx';
 import { openMenu, type MenuItem } from '../components/Menu.tsx';
 import { useTrackEdits } from '../components/TrackSheet.tsx';
 import { SmartShuffleButton } from '../components/SmartShuffle.tsx';
@@ -60,6 +60,8 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
   // every load of the playlist, which then has that order itself).
   const [movedTracks, setMovedTracks] = useState<{ pl: typeof pl; tracks: Track[] } | null>(null);
   const listTracks = movedTracks && movedTracks.pl === pl ? movedTracks.tracks : loadedTracks;
+  // Switched here: shows at once, without a new load of the list (a big one would come again in parts).
+  const [access, setAccess] = useState<{ pl: typeof pl; visibility: string } | null>(null);
   useKeepForOffline(key, pl?.title ?? '', pl && complete ? listTracks : null, pl);
   // Playing while the rest comes: it joins the queue.
   useEffect(() => {
@@ -73,6 +75,13 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
   const from = { playlist: `${pl.uid}:${pl.kind}` };
   const saved = likedPlaylists.some((p) => samePlaylist(p, pl));
   const total = tracks.reduce((s, t) => s + (t.durationMs || 0), 0);
+  const closed = (access?.pl === pl ? access.visibility : pl.visibility) === 'private';
+  // One's Liked has its own page, and Yandex keeps it open.
+  const canClose = own && Number(pl.kind) !== 3;
+  const togglePrivate = async () => {
+    const visibility = await setPlaylistPrivate(pl, !closed);
+    if (visibility) setAccess({ pl, visibility });
+  };
 
   // Own playlists, whole: a track dragged to another place (held mouse button; "Move" on the iPhone).
   const move = async (from: number, to: number) => {
@@ -150,6 +159,7 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
     ...(complete && tracks.length ? [{ label: t.menu.csv, icon: <FileDown size={15} />, onClick: () => exportCsv(tracks, pl.title) }] : []),
     ...(own
       ? [
+          ...(canClose ? [{ label: t.playlist.private, icon: <Lock size={15} />, on: closed, onClick: togglePrivate }] : []),
           ...(complete && tracks.length > 1 && !search.query ? [{ label: t.menu.reorder, icon: <ArrowUpDown size={15} />, onClick: () => setReordering(true) }] : []),
           ...(transport.canUpload ? [{ label: t.playlist.upload, icon: <Upload size={15} />, onClick: () => fileInput.current?.click() }] : []),
           { label: t.playlist.rename, icon: <Pencil size={15} />, onClick: rename },
@@ -161,7 +171,7 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
     <div className="page">
       <PageHeader
         cover={playlistCover(pl, 600)}
-        kicker={own ? t.playlist.yours : t.playlist.byOwner(pl.owner?.name || pl.owner?.login || '')}
+        kicker={own ? (closed ? t.playlist.yoursPrivate : t.playlist.yours) : t.playlist.byOwner(pl.owner?.name || pl.owner?.login || '')}
         title={pl.title}
         meta={
           <>
@@ -209,6 +219,11 @@ export function PlaylistView({ uid, kind }: { uid: number | string; kind: number
                     {transport.canUpload && (
                       <button className="btn glass-btn" onClick={() => fileInput.current?.click()} disabled={!!uploading} title={t.playlist.uploadHint}>
                         <Upload size={16} /> {t.playlist.upload}
+                      </button>
+                    )}
+                    {canClose && (
+                      <button className={cx('icon-btn', closed && 'on')} onClick={togglePrivate} title={closed ? t.playlist.privateOn : t.playlist.privateOff} data-testid="playlist-private" data-closed={closed || undefined}>
+                        {closed ? <Lock size={17} /> : <LockOpen size={17} />}
                       </button>
                     )}
                     <button className="icon-btn" onClick={rename} title={t.playlist.rename}>

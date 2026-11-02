@@ -412,6 +412,11 @@ export class YandexMusic {
     return this.call(`/users/${await this.uid()}/playlists/${kind}/description`, { method: 'POST', query: { value } });
   }
 
+  /** Open to anyone, or private (found in the official app: changePlaylistVisibility). */
+  async setPlaylistVisibility(kind: number | string, value: 'public' | 'private'): Promise<Playlist> {
+    return this.call(`/users/${await this.uid()}/playlists/${kind}/visibility`, { method: 'POST', query: { value } });
+  }
+
   async deletePlaylist(kind: number) {
     await this.call(`/users/${await this.uid()}/playlists/${kind}/delete`, { method: 'POST' });
   }
