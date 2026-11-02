@@ -1,5 +1,5 @@
 // e2e: shared uploads (part of tests/e2e.mjs; run the whole with npm run test:e2e).
-import { page, shot, step, waitPlaying } from './harness.mjs';
+import { app, page, shot, step, waitPlaying } from './harness.mjs';
 
 await step("shared uploads: a playlist's own uploads go to a folder on Disk opened by a link; read by its link, a track plays from it (a folder of its own, removed again; no marks)", async () => {
   // The user, 26.10.2026: a friend sees one's own uploads. Needs the Disk (YANDEX_DISK_TOKEN) and an uploaded track.
@@ -102,6 +102,10 @@ await step("shared uploads: a playlist's own uploads go to a folder on Disk open
       const meta = await page.locator('.page-meta').first().innerText();
       if (!meta.includes(String(want.length))) throw new Error(`the count says "${meta}", ${want.length} tracks`);
       if ((await page.locator('.track-row [data-testid="upload-badge"]').count()) !== pl.tracks.length) throw new Error('the uploads are not marked');
+      // with their covers, as the owner has them
+      const covered = pl.tracks.filter((x) => x.cover).length;
+      const shown = await page.evaluate(() => [...document.querySelectorAll('.track-row')].filter((r) => r.dataset.trackId.startsWith('share-') && r.querySelector('.cover img')).length);
+      if (shown !== covered) throw new Error(`${covered} uploads have a cover, ${shown} show one`);
       await shot('12-friend-playlist');
       await page.locator(`.track-row[data-track-id="${pl.tracks[1] ? `share-${pl.tracks[1].id}` : ''}"]`).dblclick();
       await page.waitForFunction((f) => window.__wave.usePlayer.getState().queue[window.__wave.usePlayer.getState().index]?.share?.file === f, pl.tracks[1].file, { timeout: 10000 });
@@ -219,6 +223,96 @@ await step("shared uploads: Liked goes too, each upload with the place it has in
     console.log(`       ${seen.liked.title}: ${seen.liked.tracks.length} uploads, each with its place`);
   } finally {
     await page.evaluate((f) => window.__wave.sync.disk.remove(f), folder);
+  }
+});
+
+await step("a link to one's own upload: made from the track's menu, it opens in Oni and plays, a friend's track with \"+ Mine\"; a dead link says so (a folder of its own, removed again)", async () => {
+  // The user, 2.11.2026: "send him a link to the song, and it opens in Oni".
+  if (!(await page.evaluate(() => window.__wave.sync.useSync.getState().connected))) return console.log('       skipped: no YANDEX_DISK_TOKEN');
+  const t = await page.evaluate(async () => {
+    const { api } = window.__wave;
+    for (const p of await api.playlists()) {
+      const got = ((await api.playlist(p.uid, p.kind)).tracks ?? []).map((i) => i.track).find((x) => x?.trackSource === 'UGC');
+      if (got) return got;
+    }
+    return null;
+  });
+  if (!t) return console.log('       skipped: no uploads in the account');
+  const root = `links-e2e-${Date.now()}`;
+  const clip = await app.evaluate(({ clipboard }) => clipboard.readText());
+  try {
+    const labels = await page.evaluate((x) => window.__wave.trackMenu(x).map((i) => i.label), t);
+    if (!labels.includes('Поделиться')) throw new Error(`an upload's menu: ${labels.join(', ')}`);
+    await app.evaluate(({ clipboard }) => clipboard.writeText(''));
+    await page.evaluate(async ([x, r]) => {
+      const before = window.__wave.share.useShare.getState().on;
+      window.__wave.share.useShare.setState({ on: true });
+      await window.__wave.share.shareUpload(x, r).finally(() => window.__wave.share.useShare.setState({ on: before }));
+    }, [t, root]);
+    const url = await app.evaluate(({ clipboard }) => clipboard.readText());
+    const key = /^https:\/\/oni-music\.github\.io\/#upload\/([\w-]+)$/.exec(url)?.[1];
+    if (!key) throw new Error(`copied "${url}"; ${await page.locator('[data-testid="toast"]').innerText().catch(() => '')}`);
+    // the folder holds this one track, and nothing else is open by it
+    const files = await page.evaluate(async ([r, id]) => (await window.__wave.sync.disk.folder(`${r}/${id}`)).map((f) => f.name).sort(), [root, t.id]);
+    if (files.join() !== 'info.json,track.mp3') throw new Error(`the folder has ${files.join()}`);
+    // as a friend's Oni takes it: from the browser (a second start), a slash at the end, as Windows does
+    await page.evaluate(() => window.__wave.audio.pause());
+    await app.evaluate(({ app }, link) => app.emit('second-instance', {}, ['Oni.exe', link], ''), `oni://upload/${key}/`);
+    await page.waitForFunction((id) => {
+      const s = window.__wave.usePlayer.getState();
+      return s.queue[s.index]?.id === id && s.queue[s.index].share?.file === 'track.mp3';
+    }, `share-${t.id}`, { timeout: 30000 });
+    await waitPlaying(0.5, 60000);
+    const playing = await page.evaluate(() => {
+      const s = window.__wave.usePlayer.getState();
+      const x = s.queue[s.index];
+      return { title: x.title, cover: x.coverUri, menu: window.__wave.trackMenu(x).map((i) => i.label) };
+    });
+    if (playing.title !== t.title || (t.coverUri && playing.cover !== t.coverUri)) throw new Error(`plays ${JSON.stringify(playing)}`);
+    if (!playing.menu.includes('Добавить себе')) throw new Error(`its menu: ${playing.menu.join(', ')}`);
+    await page.evaluate(() => window.__wave.audio.pause());
+    // asked again: the same link, nothing sent anew
+    const firstUntil = await page.evaluate(([r, id]) => JSON.parse(window.__wave.storage.getItem('share.trackLinks') || '{}')[`${r}/${id}`]?.until, [root, t.id]);
+    await app.evaluate(({ clipboard }) => clipboard.writeText(''));
+    await page.evaluate(async ([x, r]) => {
+      const before = window.__wave.share.useShare.getState().on;
+      window.__wave.share.useShare.setState({ on: true });
+      await window.__wave.share.shareUpload(x, r).finally(() => window.__wave.share.useShare.setState({ on: before }));
+    }, [t, root]);
+    if ((await app.evaluate(({ clipboard }) => clipboard.readText())) !== url) throw new Error('another link the second time');
+    // sent again, it lasts from now, written while the link is already on its way: over before going on
+    await page.waitForFunction(([r, id, before]) => JSON.parse(window.__wave.storage.getItem('share.trackLinks') || '{}')[`${r}/${id}`]?.until > before, [root, t.id, firstUntil], { timeout: 30000 });
+    // past its time: refused at once, whatever the Disk still holds; the owner's next look removes its
+    // copy, and only its; a link still in its time stays
+    const expired = await page.evaluate(async ([r, id, k]) => {
+      const { sync, share } = window.__wave;
+      const at = `${r}/${id}/info.json`;
+      const info = JSON.parse(await sync.disk.read(at));
+      if (!(info.until > Date.now() + 6 * 24 * 3600 * 1000)) return { error: `until ${info.until}` };
+      await sync.disk.mkdir(`${r}/fresh`);
+      await sync.disk.write(`${r}/fresh/info.json`, JSON.stringify(info));
+      await sync.disk.write(at, JSON.stringify({ ...info, until: Date.now() - 1000 }));
+      const refused = await share.byLink(k).then(() => false, () => true);
+      await share.sweepLinks(r);
+      // the Disk removes a folder in its own time: a look for a while, and what the folder's info says if it stays
+      let left = await sync.disk.folders(r);
+      for (let i = 0; i < 20 && left.length > 1; i++) {
+        await new Promise((ok) => setTimeout(ok, 1000));
+        left = await sync.disk.folders(r);
+      }
+      const stayed = left.includes(id) ? await sync.disk.read(at).catch((e) => String(e)) : null;
+      return { refused, left, stayed };
+    }, [root, t.id, key]);
+    if (expired.error || !expired.refused) throw new Error(`past its time: ${JSON.stringify(expired)}`);
+    if (expired.left.join() !== 'fresh') throw new Error(`left after the sweep: ${expired.left.join()}; its info: ${String(expired.stayed).slice(0, 120)}`);
+    // a link that leads nowhere
+    await app.evaluate(({ app }) => app.emit('second-instance', {}, ['Oni.exe', 'oni://upload/no-such-link-at-all'], ''));
+    await page.waitForFunction(() => /Срок этой ссылки/.test(document.querySelector('[data-testid="toast"]')?.textContent ?? ''), null, { timeout: 15000 });
+    console.log(`       "${t.title}": ${url}`);
+  } finally {
+    await page.evaluate(() => window.__wave.audio.pause());
+    await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), clip);
+    await page.evaluate((r) => window.__wave.sync.disk.remove(r), root);
   }
 });
 

@@ -127,10 +127,13 @@ await step('downloaded tracks of Liked and of a playlist: both lists are kept wh
     window.__wave.navigate({ name: 'playlist', uid: own.uid, kind: own.kind });
     return { uid: own.uid, kind: own.kind, id: String(t.id), title: pl.title };
   });
-  await page.waitForSelector('[data-testid="saved-mark"]', { timeout: 30000 });
-  await page.waitForTimeout(500);
-  const kept = await page.evaluate((key) => JSON.parse(window.__wave.storage.getItem('offline.lists.v1') || '{}')[key]?.tracks.length, `playlist:${playlist.uid}:${playlist.kind}`);
-  if (!kept) throw new Error('the playlist was not kept');
+  // Kept once the whole list is in, and a big one comes in parts: half a second was not always enough
+  // (and the mark looked for could still be the Liked page's).
+  await page
+    .waitForFunction((key) => JSON.parse(window.__wave.storage.getItem('offline.lists.v1') || '{}')[key]?.tracks.length > 0, `playlist:${playlist.uid}:${playlist.kind}`, { timeout: 30000 })
+    .catch(() => {
+      throw new Error('the playlist was not kept');
+    });
 });
 
 await step('the network lost during My Wave: the downloads play, and the wave comes back with the network', async () => {

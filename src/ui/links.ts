@@ -13,6 +13,8 @@ export const SITE = 'https://oni-music.github.io/';
 export type OniLink =
   | { kind: 'track' | 'album' | 'artist'; id: string }
   | { kind: 'playlist'; owner: string; id: string }
+  // One's own upload (src/share, `trackByLink`): the open folder on Yandex Disk it lies in.
+  | { kind: 'upload'; key: string }
   // Listening together (src/together/): the room, and the open folder on Yandex Disk it is read through.
   | { kind: 'listen'; room: string; folder: string };
 
@@ -43,6 +45,7 @@ function fromPath(path: string): OniLink | null {
   const [kind, a, b] = parts;
   if ((kind === 'track' || kind === 'album' || kind === 'artist') && /^\d+$/.test(a ?? '') && b === undefined) return { kind, id: a };
   if (kind === 'playlist' && /^[\w.@-]+$/.test(a ?? '') && /^\d+$/.test(b ?? '')) return { kind, owner: a, id: b };
+  if (kind === 'upload' && /^[\w-]{4,64}$/.test(a ?? '') && b === undefined) return { kind, key: a };
   if (kind === 'listen' && /^\w{8,64}$/.test(a ?? '') && /^[\w-]{4,64}$/.test(b ?? '')) return { kind, room: a, folder: b };
   return null;
 }
@@ -70,6 +73,7 @@ export function linkFrom(text: string): OniLink | null {
 /** The web link "Share" gives: opens Oni where it is installed, Yandex Music elsewhere. */
 export function shareUrl(link: OniLink) {
   if (link.kind === 'listen') return `${SITE}#listen/${link.room}/${link.folder}`;
+  if (link.kind === 'upload') return `${SITE}#upload/${link.key}`;
   return `${SITE}#${link.kind}/${link.kind === 'playlist' ? `${encodeURIComponent(link.owner)}/` : ''}${link.id}`;
 }
 
@@ -77,6 +81,14 @@ export function shareUrl(link: OniLink) {
 async function openLink(link: OniLink) {
   const [{ navigate, toast }, { api }, { playTracks }, { tr }] = await Promise.all([import('../store.ts'), import('../api/client.ts'), import('../player/player.ts'), import('../i18n.ts')]);
   if (link.kind === 'listen') return (await import('../together/index.ts')).joinRoom(link.room, link.folder);
+  // a friend's own upload: plays from their Disk, as a track's link does; "+ Mine" is in its menu
+  if (link.kind === 'upload') {
+    const [{ transport }, { trackByLink }, { linkUrl }] = await Promise.all([import('../api/client.ts'), import('../share/shared.ts'), import('../together/disk.ts')]);
+    const shared = await trackByLink(linkUrl(link.key), (r) => transport.request(r)).catch(() => null);
+    if (!shared) return toast(tr().shared.linkGone);
+    toast(tr().shared.linkFrom(shared.share?.owner ?? ''));
+    return playTracks([shared], 0, shared.title);
+  }
   if (link.kind === 'album') return navigate({ name: 'album', id: link.id });
   if (link.kind === 'artist') return navigate({ name: 'artist', id: link.id });
   if (link.kind === 'playlist') return navigate({ name: 'playlist', uid: link.owner, kind: link.id });

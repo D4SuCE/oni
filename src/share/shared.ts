@@ -66,6 +66,54 @@ export async function readShared(link: string, fetch: Fetch): Promise<SharedInde
   return index;
 }
 
+/** A link to one upload (the user, 2.11.2026: "send him a link to the song"): an open folder of its
+ * own, with only that track, so a link passed on opens nothing else, and a track of a private playlist
+ * can go too. The owner's side: `uploadLink` (owner.ts). */
+export const LINKS = 'links';
+export const LINK_FILE = 'track.mp3';
+export const LINK_INFO = 'info.json';
+/** How long a link lasts from its last sending (the user, 2.11.2026: the copy must not stay for good). */
+export const LINK_LIFE = 7 * 24 * 3600 * 1000;
+
+export interface LinkDisk {
+  folders(path: string): Promise<string[]>;
+  folder(path: string): Promise<{ name: string }[]>;
+  read(path: string): Promise<string>;
+  remove(path: string): Promise<void>;
+}
+
+/** The links past their time go, the copy of the track with them. A folder whose info cannot be read
+ * now stays until a later look; only the owner's Oni can do this, so `trackByLink` also goes by the time. */
+export async function sweepLinks(disk: LinkDisk, root: string, now = Date.now()) {
+  for (const name of await disk.folders(root)) {
+    const folder = `${root}/${name}`;
+    try {
+      // the info goes up first (uploadLink): with none, the link was never made whole
+      if ((await disk.folder(folder)).some((f) => f.name === LINK_INFO)) {
+        const until = Number(JSON.parse(await disk.read(`${folder}/${LINK_INFO}`))?.until);
+        if (until > now) continue;
+      }
+      await disk.remove(folder);
+    } catch {
+      // no answer, or not read: not a reason to remove it
+    }
+  }
+}
+
+/** The track a link's folder holds. */
+export async function trackByLink(link: string, fetch: Fetch): Promise<Track> {
+  const url = await sharedFileUrl(link, LINK_INFO, fetch);
+  const r = await fetch<string>({ url, responseType: 'text' });
+  if (!r.ok) throw new Error(`the link's info did not come (${r.status})`);
+  const info = JSON.parse(r.data);
+  const x = info?.track;
+  if (!(Number(info?.until) > Date.now())) throw new Error('the link is past its time');
+  // the id names a downloaded file (asTrack): [\w-] only
+  if (info?.v !== 1 || typeof x?.title !== 'string' || !/^[\w-]{1,64}$/.test(String(x?.id))) throw new Error('not a link of Oni');
+  const artists = Array.isArray(x.artists) ? x.artists.filter((a: unknown) => typeof a === 'string') : [];
+  return asTrack({ ...x, artists, file: LINK_FILE, durationMs: Number(x.durationMs) || undefined }, link, String(info.owner ?? ''));
+}
+
 /** A shared track as the player and the lists take it. */
 export function asTrack(t: SharedTrack, link: string, owner: string): Track {
   return {
@@ -76,7 +124,8 @@ export function asTrack(t: SharedTrack, link: string, owner: string): Track {
     albums: [],
     durationMs: t.durationMs,
     trackSource: 'SHARE',
-    coverUri: t.cover,
+    // what a friend's file says goes no further than Yandex's own covers
+    coverUri: t.cover?.startsWith('avatars.yandex.net/') ? t.cover : undefined,
     share: { link, file: t.file, owner },
   } as Track;
 }

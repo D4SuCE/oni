@@ -1,3 +1,4 @@
+import { shareUpload } from './ui/share.ts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { WifiOff } from 'lucide-react';
 import { useT } from './i18n.ts';
@@ -46,7 +47,8 @@ import { downloadShared, keepGoneDownloads, useCover } from './ui/offline.ts';
 import { readMark, withMark } from './share/mark.ts';
 import { keepUploads, restoreLikes, restorePlaylist, snapshot, toDownload } from './backup/backup.ts';
 import { round as shareRound, useShare } from './share/owner.ts';
-import { asTrack, readShared } from './share/shared.ts';
+import { asTrack, readShared, sweepLinks, trackByLink } from './share/shared.ts';
+import { linkUrl } from './together/disk.ts';
 
 /** Blurred cover of the current track behind everything, cross-faded between tracks. */
 function Backdrop() {
@@ -252,5 +254,5 @@ export function App() {
 
 // Handy for debugging and for the automated UI test.
 Object.assign(window, {
-  __wave: { backup: { snapshot, restorePlaylist, restoreLikes, keepUploads, keepGoneDownloads, toDownload }, share: { round: shareRound, useShare, downloadShared, read: (link: string) => readShared(link, (r) => transport.request(r)), asTrack, readMark, withMark, addToMine }, offline, storage, ownToKeep, silence: { leadingSilence }, usePlayer, useApp, audio, api, navigate, recsFeedback, recentPlays, playLog, stats, setPrivacy, setAiPrefs, transport, current, playTracks, setRate, setSleep, setVolume, toggleShuffle, toggleLike, trackMenu, findMix, eqOutputLevel, levelLift, pulseLevel, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } }, together: { startTogether, joinRoom, leaveTogether, inviteLink, useTogether, ...togetherProbe } },
+  __wave: { backup: { snapshot, restorePlaylist, restoreLikes, keepUploads, keepGoneDownloads, toDownload }, share: { round: shareRound, shareUpload, byLink: (key: string) => trackByLink(linkUrl(key), (r) => transport.request(r)), sweepLinks: (root: string) => sweepLinks(disk, root), useShare, downloadShared, read: (link: string) => readShared(link, (r) => transport.request(r)), asTrack, readMark, withMark, addToMine }, offline, storage, ownToKeep, silence: { leadingSilence }, usePlayer, useApp, audio, api, navigate, recsFeedback, recentPlays, playLog, stats, setPrivacy, setAiPrefs, transport, current, playTracks, setRate, setSleep, setVolume, toggleShuffle, toggleLike, trackMenu, findMix, eqOutputLevel, levelLift, pulseLevel, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } }, together: { startTogether, joinRoom, leaveTogether, inviteLink, useTogether, ...togetherProbe } },
 });

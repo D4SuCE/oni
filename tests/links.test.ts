@@ -52,6 +52,10 @@ test('oni:// links: track, album, artist, playlist', () => {
   same(linkFrom('oni://playlist/a%40b.ru/3'), { kind: 'playlist', owner: 'a@b.ru', id: '3' });
 });
 test('not a link to anything: wrong ids, extra parts, other things', () => {
+  same(linkFrom('oni://upload/KW-tlYmg7h4mtg/'), { kind: 'upload', key: 'KW-tlYmg7h4mtg' });
+  same(linkFrom(shareUrl({ kind: 'upload', key: 'KW-tlYmg7h4mtg' })), { kind: 'upload', key: 'KW-tlYmg7h4mtg' });
+  eq(linkFrom('oni://upload/x'), null);
+  eq(linkFrom('oni://upload/a/b'), null);
   eq(linkFrom('oni://track/abc'), null);
   eq(linkFrom('oni://track/1/2'), null);
   eq(linkFrom('oni://playlist/x'), null);
@@ -94,6 +98,11 @@ test('the page: nothing to open', () => {
   eq(route('#'), null);
   eq(route('#track/'), null);
   eq(route('#track/1/2'), null);
+  eq(route('#upload/KW-tlYmg7h4mtg').oni, 'oni://upload/KW-tlYmg7h4mtg');
+  eq(route('#upload/KW-tlYmg7h4mtg').yandex, null);
+  eq(route('#upload/x'), null);
+  eq(route('#upload/a b c d'), null);
+  eq(route('#upload/KW-tlYmg7h4mtg/1'), null);
   eq(route('#playlist/<script>/1'), null);
   eq(route('#playlist/%E0%A4%A/1'), null);
 });

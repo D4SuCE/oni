@@ -9,7 +9,7 @@ import { addToPlaylist, createPlaylist, dislike, errorText, isOwn, navigate, toa
 import { transport } from '../api/client.ts';
 import { downloadTrack, offlineState, removeDownload, useCover, useDownloadProgress, useOfflineVersion, type OfflineState } from '../ui/offline.ts';
 import { isIos } from '../ui/platform.ts';
-import { shareTrack } from '../ui/share.ts';
+import { shareTrack, shareUpload } from '../ui/share.ts';
 import { cx, fmtTime } from '../ui/util.ts';
 import { ArtistLinks, Cover } from './Common.tsx';
 import { trackMatches } from './ListSearch.tsx';
@@ -88,6 +88,7 @@ export function trackMenu(t: Track, extra: MenuItem[] = []): MenuItem[] {
       ...linked,
       dontRecommend,
       addTo,
+      { label: tx.menu.share, icon: <Share size={15} />, submenu: [{ label: tx.menu.copyLink, icon: <Link size={15} />, onClick: () => void shareUpload(t) }] },
       { label: tx.menu.edit, icon: <Pencil size={15} />, onClick: () => editUpload(t) },
       details,
       ...(extra.length ? [{ label: '', separator: true }, ...extra] : []),

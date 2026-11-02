@@ -12,12 +12,15 @@ import type { Playlist, Track } from '../api/types.ts';
 import { disk, useSync } from '../sync/index.ts';
 import { readMark, withMark } from './mark.ts';
 import { tr } from '../i18n.ts';
-import { fileOf, INDEX, SHARED, sharedTracks, type SharedIndex, type SharedPlaylist } from './shared.ts';
+import { linkId } from '../together/disk.ts';
+import { fileOf, INDEX, LINK_FILE, LINK_INFO, LINK_LIFE, LINKS, SHARED, sharedTracks, sweepLinks, type SharedIndex, type SharedPlaylist } from './shared.ts';
 
 export { fileOf };
 
 const ON = 'share.uploads';
 const LINK = 'share.link';
+/** The links made to single tracks (ui/share.ts). */
+export const MADE_LINKS = 'share.trackLinks';
 /** Liked's kind, as a playlist. */
 const LIKED = 3;
 
@@ -74,8 +77,27 @@ let running: Promise<void> | null = null;
 /** Brings the shared folder up to date with the playlists (one round at a time). */
 export function shareUploads(): Promise<void> {
   if (!useShare.getState().on || !useSync.getState().connected) return Promise.resolve();
-  running ??= round().then(() => {}).finally(() => (running = null));
+  // and the links past their time go: this is what runs at each start of Oni
+  running ??= round().then(() => sweepLinks(disk, LINKS)).catch(() => {}).finally(() => (running = null));
   return running;
+}
+
+/** An upload's own open folder (shared.ts, `trackByLink`), made once; its key for the link and till
+ * when it lasts (sent again, it lasts longer). The file is kept apart from the shared folder: the link
+ * goes on working when the track leaves its playlist. */
+export async function uploadLink(t: Track, root = LINKS, now = Date.now()) {
+  const folder = `${root}/${t.id}`;
+  await disk.mkdir(root);
+  await disk.mkdir(folder);
+  const account = await api.account();
+  const { after: _, file: __, ...track } = sharedTracks([t])[0];
+  const until = now + LINK_LIFE;
+  // the info first: a folder with it is one being made or made, not a leftover (sweepLinks)
+  await disk.write(`${folder}/${LINK_INFO}`, JSON.stringify({ v: 1, owner: account.displayName || account.login || '', until, track }));
+  if (!(await disk.folder(folder)).some((f) => f.name === LINK_FILE)) await sendUpload(`${folder}/${LINK_FILE}`, String(t.id));
+  const key = linkId(await disk.publish(folder));
+  if (!key) throw new Error('the Disk gave no link');
+  return { key, until };
 }
 
 let soon: ReturnType<typeof setTimeout> | null = null;
@@ -179,7 +201,10 @@ async function unshare() {
     for (const pl of await api.playlists()) if (readMark(pl.description)) await api.setPlaylistDescription(pl.kind, withMark(pl.description, null));
     await disk.unpublish(SHARED);
     await disk.remove(`${SHARED}/${INDEX}`);
+    // the links to single tracks go too: sharing off means nothing is open
+    await disk.remove(LINKS);
     storage.setItem(LINK, '');
+    storage.setItem(MADE_LINKS, '');
     useShare.setState({ at: null, tracks: 0, playlists: 0, error: null });
   } catch (e) {
     useShare.setState({ error: e instanceof Error ? e.message : String(e) });
