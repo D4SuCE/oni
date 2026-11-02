@@ -272,6 +272,7 @@ await step("a link to one's own upload: made from the track's menu, it opens in 
     if (!playing.menu.includes('Добавить себе')) throw new Error(`its menu: ${playing.menu.join(', ')}`);
     await page.evaluate(() => window.__wave.audio.pause());
     // asked again: the same link, nothing sent anew
+    const firstUntil = await page.evaluate(([r, id]) => JSON.parse(window.__wave.storage.getItem('share.trackLinks') || '{}')[`${r}/${id}`]?.until, [root, t.id]);
     await app.evaluate(({ clipboard }) => clipboard.writeText(''));
     await page.evaluate(async ([x, r]) => {
       const before = window.__wave.share.useShare.getState().on;
@@ -279,9 +280,34 @@ await step("a link to one's own upload: made from the track's menu, it opens in 
       await window.__wave.share.shareUpload(x, r).finally(() => window.__wave.share.useShare.setState({ on: before }));
     }, [t, root]);
     if ((await app.evaluate(({ clipboard }) => clipboard.readText())) !== url) throw new Error('another link the second time');
+    // sent again, it lasts from now, written while the link is already on its way: over before going on
+    await page.waitForFunction(([r, id, before]) => JSON.parse(window.__wave.storage.getItem('share.trackLinks') || '{}')[`${r}/${id}`]?.until > before, [root, t.id, firstUntil], { timeout: 30000 });
+    // past its time: refused at once, whatever the Disk still holds; the owner's next look removes its
+    // copy, and only its; a link still in its time stays
+    const expired = await page.evaluate(async ([r, id, k]) => {
+      const { sync, share } = window.__wave;
+      const at = `${r}/${id}/info.json`;
+      const info = JSON.parse(await sync.disk.read(at));
+      if (!(info.until > Date.now() + 6 * 24 * 3600 * 1000)) return { error: `until ${info.until}` };
+      await sync.disk.mkdir(`${r}/fresh`);
+      await sync.disk.write(`${r}/fresh/info.json`, JSON.stringify(info));
+      await sync.disk.write(at, JSON.stringify({ ...info, until: Date.now() - 1000 }));
+      const refused = await share.byLink(k).then(() => false, () => true);
+      await share.sweepLinks(r);
+      // the Disk removes a folder in its own time: a look for a while, and what the folder's info says if it stays
+      let left = await sync.disk.folders(r);
+      for (let i = 0; i < 20 && left.length > 1; i++) {
+        await new Promise((ok) => setTimeout(ok, 1000));
+        left = await sync.disk.folders(r);
+      }
+      const stayed = left.includes(id) ? await sync.disk.read(at).catch((e) => String(e)) : null;
+      return { refused, left, stayed };
+    }, [root, t.id, key]);
+    if (expired.error || !expired.refused) throw new Error(`past its time: ${JSON.stringify(expired)}`);
+    if (expired.left.join() !== 'fresh') throw new Error(`left after the sweep: ${expired.left.join()}; its info: ${String(expired.stayed).slice(0, 120)}`);
     // a link that leads nowhere
     await app.evaluate(({ app }) => app.emit('second-instance', {}, ['Oni.exe', 'oni://upload/no-such-link-at-all'], ''));
-    await page.waitForFunction(() => /больше нет/.test(document.querySelector('[data-testid="toast"]')?.textContent ?? ''), null, { timeout: 15000 });
+    await page.waitForFunction(() => /Срок этой ссылки/.test(document.querySelector('[data-testid="toast"]')?.textContent ?? ''), null, { timeout: 15000 });
     console.log(`       "${t.title}": ${url}`);
   } finally {
     await page.evaluate(() => window.__wave.audio.pause());

@@ -196,13 +196,13 @@ await step('uploaded mp3s are marked in a playlist', async () => {
     return { first: badge.parentElement.firstElementChild === badge, dx: i.x + i.width / 2 - (b.x + b.width / 2), dy: i.y + i.height / 2 - (b.y + b.height / 2) };
   });
   if (!geometry.first || Math.abs(geometry.dx) > 0.5 || Math.abs(geometry.dy) > 0.5) throw new Error(`badge: ${JSON.stringify(geometry)}`);
-  // Only what the official app offers for an upload, plus removing it from this playlist.
+  // What the official app offers for an upload, a link of Oni's own (src/share), and removing it from this playlist.
   await page.locator('.track-row', { has: page.locator('[data-testid="upload-badge"]') }).first().click({ button: 'right' });
   await page.waitForSelector('.menu');
   const items = (await page.locator('.menu .menu-item .menu-label').allInnerTexts()).map((x) => x.trim());
-  // The official app's order: like, download, don't recommend, add to playlist, edit, details.
-  const want = ['Скачать', 'Не рекомендовать', 'Добавить в плейлист', 'Изменить', 'Информация о треке', 'Удалить из плейлиста'];
-  if (items.length !== 7 || !/нравится/.test(items[0]) || want.some((w, k) => items[k + 1] !== w)) throw new Error(`upload menu: ${items.join(' | ')}`);
+  // The official app's order: like, download, don't recommend, add to playlist, (share,) edit, details.
+  const want = ['Скачать', 'Не рекомендовать', 'Добавить в плейлист', 'Поделиться', 'Изменить', 'Информация о треке', 'Удалить из плейлиста'];
+  if (items.length !== 8 || !/нравится/.test(items[0]) || want.some((w, k) => items[k + 1] !== w)) throw new Error(`upload menu: ${items.join(' | ')}`);
   await page.keyboard.press('Escape');
 
   // Edit: rename, see it in the list, and always put the real name back.

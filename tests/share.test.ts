@@ -5,7 +5,7 @@ import { readMark, visible, withMark } from '../src/share/mark.ts';
 import { YandexMusic } from '../src/api/yandex.ts';
 import { trimTrack } from '../src/player/recent.ts';
 import { withTitle } from '../src/share/id3.ts';
-import { asTrack, fileName, shareLinkOf, sharedTracks, trackByLink, withUploads } from '../src/share/shared.ts';
+import { asTrack, fileName, shareLinkOf, sharedTracks, sweepLinks, trackByLink, withUploads } from '../src/share/shared.ts';
 
 let passed = 0;
 let failed = 0;
@@ -92,13 +92,47 @@ await test("a link to one upload: its folder's info is the track, playing from t
   // The user, 2.11.2026: "send him a link to the song, and it opens in Oni".
   const read = (info: unknown, ok = true) =>
     trackByLink(LINK, (async (req: any) => (req.query ? { ok: true, status: 200, data: { href: 'https://file/' } } : { ok, status: ok ? 200 : 404, data: JSON.stringify(info) })) as any);
-  const t = await read({ v: 1, owner: 'Друг', track: { id: 'abc-1', title: 'Песня', artists: ['Автор', 5], durationMs: 200000, cover: 'avatars.yandex.net/c/%%' } });
+  const until = Date.now() + 60_000;
+  const t = await read({ v: 1, owner: 'Друг', until, track: { id: 'abc-1', title: 'Песня', artists: ['Автор', 5], durationMs: 200000, cover: 'avatars.yandex.net/c/%%' } });
   assert(t.id === 'share-abc-1' && t.share?.file === 'track.mp3' && t.share.link === LINK && t.share.owner === 'Друг', JSON.stringify(t));
   assert(t.artists.map((a) => a.name).join() === 'Автор' && t.durationMs === 200000 && t.coverUri === 'avatars.yandex.net/c/%%', JSON.stringify(t));
-  for (const bad of [{ v: 2, track: { id: 'a', title: 't' } }, { v: 1 }, { v: 1, track: { id: '../x', title: 't' } }, { v: 1, track: { id: 'a' } }]) {
+  const track = { id: 'a', title: 't' };
+  for (const bad of [{ v: 2, until, track }, { v: 1, until }, { v: 1, until, track: { id: '../x', title: 't' } }, { v: 1, until, track: { id: 'a' } }, { v: 1, track }, { v: 1, until: Date.now() - 1, track }]) {
     const refused = await read(bad).then(() => false, () => true);
     assert(refused, `took ${JSON.stringify(bad)}`);
   }
+});
+
+await test('links past their time go with their copy; the rest stay, and one not read now is not a reason to remove it', async () => {
+  // It removes files on the user's Disk: run here over a Disk in memory. The user, 2.11.2026.
+  const now = 1_000_000;
+  const files: Record<string, string> = {
+    'links/old/info.json': JSON.stringify({ until: now - 1 }),
+    'links/old/track.mp3': 'x',
+    'links/fresh/info.json': JSON.stringify({ until: now + 1 }),
+    'links/fresh/track.mp3': 'x',
+    'links/never/track.mp3': 'x',
+    'links/noanswer/info.json': 'cannot be read',
+    'links/nountil/info.json': '{}',
+    'links/broken/info.json': 'not json',
+  };
+  const names = (path: string) => Object.keys(files).filter((f) => f.startsWith(`${path}/`)).map((f) => f.slice(path.length + 1));
+  const disk = {
+    folders: async (path: string) => [...new Set(names(path).map((f) => f.split('/')[0]))],
+    folder: async (path: string) => names(path).map((name) => ({ name })),
+    read: async (path: string) => {
+      if (files[path] === 'cannot be read') throw new Error('no answer');
+      return files[path];
+    },
+    remove: async (path: string) => {
+      for (const f of Object.keys(files)) if (f.startsWith(`${path}/`)) delete files[f];
+    },
+  };
+  await sweepLinks(disk, 'links', now);
+  assert((await disk.folders('links')).sort().join() === 'broken,fresh,noanswer', (await disk.folders('links')).join());
+  assert(files['links/fresh/track.mp3'] === 'x', 'a live link keeps its track');
+  await sweepLinks({ ...disk, folders: async () => { throw new Error('no answer'); } }, 'links', now).catch(() => {});
+  assert((await disk.folders('links')).length === 3, 'no answer: nothing goes');
 });
 
 test('"+ Mine" names the file "Artist - Title.mp3", with nothing a file name cannot have', () => {
