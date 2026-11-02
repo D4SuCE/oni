@@ -105,13 +105,19 @@ const get = usePlayer.getState;
 export const history = new ListenHistory(storage);
 /** Hidden tracks and demoted artists, for the mixes. */
 export const recsFeedback = new RecsFeedback(storage);
+/** Where a track's file is now: Yandex's, or a friend's upload on their Disk (src/share), an mp3. */
+export async function streamOf(t: Pick<Track, 'id' | 'share'>) {
+  if (!t.share) return api.stream(t.id, get().quality);
+  return { url: await sharedFileUrl(t.share.link, t.share.file, (r) => transport.request(r)), codec: 'mp3', bitrate: 0 };
+}
+
 /** Downloaded tracks; null where the shell keeps no files. */
 export const offline =
   transport.files && transport.fetchBytes
     ? new OfflineLibrary({
         files: transport.files,
         fetchBytes: (url) => transport.fetchBytes!(url),
-        stream: (id) => api.stream(id, get().quality),
+        stream: (_id, t) => streamOf(t),
         store: storage,
         crypto,
         fetchCover: async (t) => {
@@ -327,8 +333,7 @@ export function setDislikedCheck(fn: (id: string) => boolean) {
 async function streamUrl(t: Track) {
   const cached = prefetched.get(t.id);
   if (cached && Date.now() - cached.at < STREAM_TTL) return cached;
-  // a friend's own upload: from his Yandex Disk (src/share), an mp3
-  const s = t.share ? { url: await sharedFileUrl(t.share.link, t.share.file, (r) => transport.request(r)), codec: 'mp3', bitrate: 0 } : await api.stream(t.id, get().quality);
+  const s = await streamOf(t);
   const entry = { url: s.url, at: Date.now(), codec: s.codec, bitrate: s.bitrate };
   prefetched.set(t.id, entry);
   return entry;
@@ -808,8 +813,11 @@ export function waveFeedback(type: 'like' | 'dislike', t: Track) {
 
 /** A list for the device this one controls: a small one as its tracks, a big one as their keys (it
  * fetches them itself: a 1,600-track playlist whole would be megabytes through Disk). */
-export type RemoteList = { tracks?: Track[]; keys?: string[] };
-const listForRemote = (tracks: Track[]): RemoteList => (tracks.length <= 150 ? { tracks: tracks.map(trimTrack) } : { keys: tracks.map(trackKey) });
+/** `shared`: a friend's uploads among the keys, whole: Yandex knows no such id, and one in an ask
+ * turns the whole ask down. */
+export type RemoteList = { tracks?: Track[]; keys?: string[]; shared?: Track[] };
+const keysForRemote = (tracks: Track[]): RemoteList => ({ keys: tracks.map(trackKey), shared: tracks.filter((t) => t.share).map(trimTrack) });
+const listForRemote = (tracks: Track[]): RemoteList => (tracks.length <= 150 ? { tracks: tracks.map(trimTrack) } : keysForRemote(tracks));
 
 export async function playTracks(tracks: Track[], start = 0, title = tr().common.list, from?: PlayContext, extra: PlayExtra = {}) {
   // A remote: it plays on the device controlled (the user, 25.10.2026: "the remote in full").
@@ -830,7 +838,7 @@ const canPlay = (t: Track) => playable(t) && (!offlineMode || Boolean(offline?.h
 /** A list still coming in parts (a big playlist, ui/listLoader.ts): its later tracks join the
  * queue as they come, if it is what plays, in its order (not shuffled). */
 export function extendList(list: string, tracks: Track[]) {
-  if (elsewhere) return elsewhere.send('extendList', [list, { keys: tracks.map(trackKey) }]);
+  if (elsewhere) return elsewhere.send('extendList', [list, keysForRemote(tracks)]);
   const s = get();
   if (listKeyOf(s.source) !== list || s.shuffle) return;
   const queue = tracks.filter(canPlay);

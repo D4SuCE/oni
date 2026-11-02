@@ -456,6 +456,7 @@ const fetched = new Map<string, Track>();
 async function tracksOf(list: RemoteList | undefined): Promise<Track[]> {
   if (list?.tracks) return list.tracks;
   const keys = list?.keys ?? [];
+  for (const t of list?.shared ?? []) fetched.set(String(t.id), t);
   const id = (k: string) => k.split(':')[0];
   const missing = keys.filter((k) => !fetched.has(id(k)));
   const pieces = Array.from({ length: Math.ceil(missing.length / 200) }, (_, i) => missing.slice(i * 200, i * 200 + 200));

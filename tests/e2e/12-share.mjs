@@ -79,6 +79,47 @@ await step("shared uploads: a playlist's own uploads go to a folder on Disk open
     }, [link, pl.tracks[2]]);
     if (!mine.got || mine.got[0] !== mine.want[0] || mine.got[1] !== mine.want[1]) throw new Error(`"+ Mine" made ${JSON.stringify(mine)}`);
     console.log(`       "${pl.title}": the index there with ${early.pending} on their way; ${pl.tracks.map((t) => t.title).join(', ')} — played from the Disk, one downloaded, one added to mine as "${mine.got.join(' — ')}"`);
+    // a friend's playlist itself: as Yandex gives it to them (no uploads), with the mark — the page shows
+    // the uploads in their places, counts them, plays one, and "Download" keeps one from the Disk
+    // (the user, 2.11.2026: "the same order, with the uploaded tracks")
+    const friendList = await page.evaluate(async ([l, k]) => {
+      const { api, share } = window.__wave;
+      const chart = (await api.chart()).filter((t) => t.available !== false).slice(0, 3);
+      const fake = { uid: 999000999, kind: k, title: 'oni-e2e-friend', trackCount: chart.length, owner: { uid: 999000999, login: 'friend', name: 'Друг' }, description: share.withMark('', l), tracks: chart.map((track) => ({ id: track.id, track })) };
+      api.playlist = async (uid, kind, rich) => (String(uid) === '999000999' ? fake : Object.getPrototypeOf(api).playlist.call(api, uid, kind, rich));
+      window.__wave.navigate({ name: 'playlist', uid: 999000999, kind: k });
+      return chart.map((t) => String(t.id));
+    }, [link, kind]);
+    try {
+      const want = [...pl.tracks.map((x) => `share-${x.id}`), ...friendList];
+      // the test's uploads lie first in their playlist, or at least above what the test put there
+      await page.waitForFunction((n) => document.querySelectorAll('.track-row').length === n, want.length, { timeout: 30000 });
+      const rows = await page.evaluate(() => [...document.querySelectorAll('.track-row')].map((r) => r.dataset.trackId));
+      const sameSet = rows.length === want.length && want.every((id) => rows.includes(id));
+      const uploadsInOrder = rows.filter((id) => id.startsWith('share-')).join() === pl.tracks.map((x) => `share-${x.id}`).join();
+      const catalogInOrder = rows.filter((id) => !id.startsWith('share-')).join() === friendList.join();
+      if (!sameSet || !uploadsInOrder || !catalogInOrder) throw new Error(`rows ${rows.join()} want ${want.join()}`);
+      const meta = await page.locator('.page-meta').first().innerText();
+      if (!meta.includes(String(want.length))) throw new Error(`the count says "${meta}", ${want.length} tracks`);
+      if ((await page.locator('.track-row [data-testid="upload-badge"]').count()) !== pl.tracks.length) throw new Error('the uploads are not marked');
+      await shot('12-friend-playlist');
+      await page.locator(`.track-row[data-track-id="${pl.tracks[1] ? `share-${pl.tracks[1].id}` : ''}"]`).dblclick();
+      await page.waitForFunction((f) => window.__wave.usePlayer.getState().queue[window.__wave.usePlayer.getState().index]?.share?.file === f, pl.tracks[1].file, { timeout: 10000 });
+      await waitPlaying(0.5, 60000);
+      await page.evaluate(() => window.__wave.audio.pause());
+      // through the list's way of downloading, which knows Yandex's streams and now the Disk's
+      const kept = await page.evaluate(async (id) => {
+        const { offline, usePlayer } = window.__wave;
+        const t = usePlayer.getState().queue.find((x) => x.id === id);
+        await offline.download(t);
+        return { size: offline.entry(id)?.size ?? 0, share: offline.entry(id)?.track.share?.file };
+      }, `share-${pl.tracks[1].id}`);
+      await page.evaluate((id) => window.__wave.offline.remove(id), `share-${pl.tracks[1].id}`);
+      if (kept.size < 50000 || !kept.share) throw new Error(`downloaded ${JSON.stringify(kept)}`);
+      console.log(`       a friend's playlist: ${rows.length} rows, ${pl.tracks.length} uploads in their places, one played and downloaded from the Disk`);
+    } finally {
+      await page.evaluate(() => delete window.__wave.api.playlist);
+    }
     // the friend's page: his uploaded playlists by the link, a row per track, Play plays them
     await page.evaluate(() => window.__wave.audio.pause());
     await page.evaluate((l) => window.__wave.navigate({ name: 'shared', link: l, owner: 'e2e' }), link);
@@ -146,6 +187,31 @@ await step("shared uploads: a playlist's own uploads go to a folder on Disk open
   } finally {
     await page.evaluate(() => window.__wave.audio.pause());
     await page.evaluate(() => window.__wave.navigate({ name: 'home' }));
+    await page.evaluate((f) => window.__wave.sync.disk.remove(f), folder);
+  }
+});
+
+await step("shared uploads: Liked goes too, each upload with the place it has in Liked (a folder of its own, removed again; no marks)", async () => {
+  // The user, 2.11.2026: a friend's main playlist is one's Liked.
+  if (!(await page.evaluate(() => window.__wave.sync.useSync.getState().connected))) return console.log('       skipped: no YANDEX_DISK_TOKEN');
+  const folder = `shared-e2e-liked-${Date.now()}`;
+  try {
+    const seen = await page.evaluate(async (f) => {
+      const { api, share } = window.__wave;
+      const link = await share.round({ folder: f, maxTracks: 2, mark: false });
+      if (!link) return { error: share.useShare.getState().error };
+      const liked = (await share.read(link)).playlists.find((p) => String(p.kind) === '3');
+      return { liked, ids: (await api.likedTrackKeys()).map((k) => k.split(':')[0]) };
+    }, folder);
+    if (seen.error) throw new Error(`the round failed: ${seen.error}`);
+    if (!seen.ids.some((id) => !/^\d+$/.test(id))) return console.log('       skipped: no uploads in Liked');
+    if (!seen.liked?.tracks.length) throw new Error('Liked is not in the index');
+    for (const x of seen.liked.tracks) {
+      const above = seen.ids.slice(0, seen.ids.indexOf(x.id)).filter((id) => /^\d+$/.test(id)).pop() ?? null;
+      if (x.after !== above) throw new Error(`"${x.title}" placed after ${x.after}, in Liked after ${above}`);
+    }
+    console.log(`       ${seen.liked.title}: ${seen.liked.tracks.length} uploads, each with its place`);
+  } finally {
     await page.evaluate((f) => window.__wave.sync.disk.remove(f), folder);
   }
 });

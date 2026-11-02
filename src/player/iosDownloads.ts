@@ -7,11 +7,11 @@
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { registerPlugin } from '@capacitor/core';
 import { create } from 'zustand';
-import { api, storage } from '../api/client.ts';
+import { storage } from '../api/client.ts';
 import { tr } from '../i18n.ts';
 import { fromBase64 } from '../api/bytes.ts';
 import { BackgroundDownloads } from './backgroundDownloads.ts';
-import { downloadLog, offline, usePlayer } from './player.ts';
+import { downloadLog, offline, streamOf } from './player.ts';
 
 interface DownloadsPlugin {
   enqueue(options: { items: { id: string; url: string }[] }): Promise<void>;
@@ -73,7 +73,7 @@ export function iosBackgroundDownloads() {
       },
       remove: (id) => Filesystem.deleteFile({ ...INCOMING, path: `${INCOMING.path}/${id}` }),
     },
-    stream: (id) => api.stream(id, usePlayer.getState().quality),
+    stream: (_id, t) => streamOf(t),
     keep: (track, audio, codec, bitrate) => lib.keep(track, audio, codec, bitrate),
     has: (id) => lib.has(id),
     store: storage,

@@ -316,6 +316,7 @@ export async function toggleLike(t: Track) {
   set({ liked, likedKeys });
   try {
     await api.setLiked([trackKey(t)], !wasLiked);
+    if (t.trackSource === 'UGC') void import('./share/owner.ts').then((m) => m.shareSoon());
     if (!wasLiked) {
       waveFeedback('like', t);
       if (get().disliked.has(id)) {
@@ -368,6 +369,7 @@ export async function addToPlaylist(pl: Playlist, t: Track) {
     await api.addToPlaylist(fresh, [t], fresh.trackCount);
     toast(tr().toast.added(pl.title));
     refreshPlaylists();
+    if (t.trackSource === 'UGC') void import('./share/owner.ts').then((m) => m.shareSoon());
   } catch (e) {
     toast(tr().toast.addFailed(errorText(e)));
   }

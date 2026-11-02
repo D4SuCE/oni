@@ -1,3 +1,4 @@
+import { shareSoon } from '../share/owner.ts';
 import { ArrowUpDown, FileDown, Heart, Import, Library as LibraryIcon, MoreHorizontal, Plus, Radio, Shuffle } from 'lucide-react';
 import { exportCsv } from '../ui/exportCsv.ts';
 import { openMenu } from '../components/Menu.tsx';
@@ -39,6 +40,7 @@ const LIKED = { label: { key: 'liked' } } as const;
 async function moveLiked(tracks: Track[], from: number, to: number) {
   const next = moved(tracks, from, to);
   await api.setLiked(next.slice(0, to + 1).map(trackKey), true);
+  shareSoon();
   return next;
 }
 

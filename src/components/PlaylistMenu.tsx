@@ -7,6 +7,7 @@ import { Download, FileDown, Heart, Pencil, Play, Radio, Share, Shuffle, Trash2 
 import { api } from '../api/client.ts';
 import type { Playlist, Track } from '../api/types.ts';
 import { tr } from '../i18n.ts';
+import { friendsList } from '../share/friend.ts';
 import { offline, playRadio, playShuffled, playTracks } from '../player/player.ts';
 import { back, errorText, isOwn, refreshPlaylists, samePlaylist, toast, togglePlaylistLike, useApp } from '../store.ts';
 import { downloadList } from '../ui/offline.ts';
@@ -17,7 +18,8 @@ import type { MenuItem } from './Menu.tsx';
 
 async function tracksOf(pl: Playlist): Promise<Track[]> {
   const full = await api.playlist(pl.uid, pl.kind);
-  return (full.tracks || []).map((i) => i.track).filter((t): t is Track => Boolean(t));
+  const tracks = (full.tracks || []).map((i) => i.track).filter((t): t is Track => Boolean(t));
+  return isOwn(pl) ? tracks : friendsList(full, tracks);
 }
 
 /** "Rename" on its page and in its menu: the new title, or null when left as it was. */

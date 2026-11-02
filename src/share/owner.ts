@@ -7,14 +7,19 @@
 // Disk fetches each file itself from the upload's stream (the user, 26.10.2026: "why only the PC?").
 
 import { create } from 'zustand';
-import { api, storage } from '../api/client.ts';
+import { api, storage, transport } from '../api/client.ts';
 import type { Playlist, Track } from '../api/types.ts';
 import { disk, useSync } from '../sync/index.ts';
 import { readMark, withMark } from './mark.ts';
-import { INDEX, SHARED, type SharedIndex, type SharedPlaylist } from './shared.ts';
+import { tr } from '../i18n.ts';
+import { fileOf, INDEX, SHARED, sharedTracks, type SharedIndex, type SharedPlaylist } from './shared.ts';
+
+export { fileOf };
 
 const ON = 'share.uploads';
 const LINK = 'share.link';
+/** Liked's kind, as a playlist. */
+const LIKED = 3;
 
 export interface ShareState {
   on: boolean;
@@ -50,7 +55,16 @@ export async function tracksOf(pl: Playlist): Promise<Track[]> {
 }
 
 export const isUpload = (t: Track) => t.trackSource === 'UGC';
-export const fileOf = (t: Track) => `${t.id}.mp3`;
+
+/** Liked in its order: the uploads whole (they are few), the rest only as ids, which is all a place
+ * needs. Liked is no playlist of `api.playlists`, and its description holds no mark. */
+async function likedList(): Promise<Track[]> {
+  const ids = (await api.likedTrackKeys()).map((k) => k.split(':')[0]);
+  const named = ids.filter((id) => !/^\d+$/.test(id));
+  const uploads = named.length ? await api.tracks(named) : [];
+  const byId = new Map(uploads.map((t) => [String(t.id), t]));
+  return ids.map((id) => byId.get(id) ?? ({ id } as Track));
+}
 
 /** An upload put on the Disk as `path`, the Disk fetching it from Yandex itself. */
 export const sendUpload = (path: string, id: string) => disk.uploadFresh(path, async () => (await api.stream(id)).url);
@@ -62,6 +76,16 @@ export function shareUploads(): Promise<void> {
   if (!useShare.getState().on || !useSync.getState().connected) return Promise.resolve();
   running ??= round().then(() => {}).finally(() => (running = null));
   return running;
+}
+
+let soon: ReturnType<typeof setTimeout> | null = null;
+
+/** A playlist changed by hand: a friend sees it so a little later, not at the next start. Once for a
+ * few changes in a row (not from a test run: it would mark the account's playlists). */
+export function shareSoon() {
+  if (transport.testMode) return;
+  if (soon) clearTimeout(soon);
+  soon = setTimeout(() => void shareUploads(), 15_000);
 }
 
 /** A round's reach (the e2e run: a folder of its own, one playlist, a few tracks, no marks — the
@@ -82,16 +106,15 @@ export async function round(opts: RoundOptions = {}): Promise<string | null> {
     const mine = (await api.playlists()).filter((p) => !opts.only || opts.only.map(String).includes(String(p.kind)));
     const shared: SharedPlaylist[] = [];
     const wanted = new Map<string, Track>();
-    for (const pl of mine) {
-      const uploads = (await tracksOf(pl)).filter(isUpload).slice(0, opts.maxTracks ?? Infinity);
-      if (!uploads.length) continue;
-      shared.push({
-        kind: pl.kind,
-        title: pl.title,
-        tracks: uploads.map((t) => ({ id: String(t.id), file: fileOf(t), title: t.title, artists: (t.artists ?? []).map((a) => a.name), durationMs: t.durationMs })),
-      });
+    const add = (kind: number | string, title: string, all: Track[]) => {
+      const uploads = all.filter(isUpload).slice(0, opts.maxTracks ?? Infinity);
+      if (!uploads.length) return;
+      shared.push({ kind, title, tracks: sharedTracks(all).slice(0, uploads.length) });
       for (const t of uploads) wanted.set(fileOf(t), t);
-    }
+    };
+    for (const pl of mine) add(pl.kind, pl.title, await tracksOf(pl));
+    // a friend's "main playlist" may well be one's Liked (the user, 2.11.2026)
+    if (!opts.only) add(LIKED, tr().common.liked, await likedList());
     await disk.mkdir(folder);
     const there = new Set((await disk.folder(folder)).map((f) => f.name));
     const send = [...wanted].filter(([file]) => !there.has(file));
