@@ -3,11 +3,12 @@
 // do (the user, 29.10.2026: "to do something with it without going in"). The tracks are loaded
 // when an item needs them.
 
-import { Download, FileDown, Heart, Pencil, Play, Radio, Share, Shuffle, Trash2 } from 'lucide-react';
+import { Download, FileDown, Heart, Lock, Pencil, Play, Radio, Share, Shuffle, Trash2 } from 'lucide-react';
 import { api } from '../api/client.ts';
 import type { Playlist, Track } from '../api/types.ts';
 import { tr } from '../i18n.ts';
 import { friendsList } from '../share/friend.ts';
+import { shareSoon } from '../share/owner.ts';
 import { offline, playRadio, playShuffled, playTracks } from '../player/player.ts';
 import { back, errorText, isOwn, refreshPlaylists, samePlaylist, toast, togglePlaylistLike, useApp } from '../store.ts';
 import { downloadList } from '../ui/offline.ts';
@@ -40,6 +41,23 @@ export async function deletePlaylist(pl: Playlist) {
   if (route.name === 'playlist' && samePlaylist(route, pl)) back();
 }
 
+/** "Private playlist" on its page and in its menu (the user, 2.11.2026): closed, Yandex shows it to
+ * nobody else, and a friend's Oni no longer has its uploads either (share/owner.ts). The new state,
+ * or null when it failed. */
+export async function setPlaylistPrivate(pl: Playlist, on: boolean) {
+  const value = on ? 'private' : 'public';
+  try {
+    await api.setPlaylistVisibility(pl.kind, value);
+  } catch (e) {
+    toast(errorText(e));
+    return null;
+  }
+  void refreshPlaylists();
+  shareSoon();
+  toast(on ? tr().playlist.madePrivate : tr().playlist.madePublic);
+  return value;
+}
+
 export function playlistMenu(pl: Playlist): MenuItem[] {
   const t = tr();
   const from = { playlist: `${pl.uid}:${pl.kind}` };
@@ -69,6 +87,7 @@ export function playlistMenu(pl: Playlist): MenuItem[] {
       ? []
       : isOwn(pl)
       ? [
+          { label: t.playlist.private, icon: <Lock size={15} />, on: pl.visibility === 'private', onClick: () => void setPlaylistPrivate(pl, pl.visibility !== 'private') },
           { label: t.playlist.rename, icon: <Pencil size={15} />, onClick: () => renamePlaylist(pl).catch((e) => toast(errorText(e))) },
           { label: t.playlist.delete, icon: <Trash2 size={15} />, danger: true, onClick: () => deletePlaylist(pl).catch((e) => toast(errorText(e))) },
         ]

@@ -11,6 +11,8 @@ export interface MenuItem {
   submenu?: MenuItem[];
   danger?: boolean;
   separator?: boolean;
+  /** A setting: the line has a switch, on or off. */
+  on?: boolean;
 }
 
 const useMenu = create<{ x: number; y: number; items: MenuItem[] } | null>(() => null);
@@ -102,6 +104,7 @@ function MenuList({ items, x, y, parentLeft, onEnter }: { items: MenuItem[]; x: 
             <span className="menu-icon">{it.icon}</span>
             <span className="menu-label">{it.label}</span>
             {it.submenu && <ChevronRight size={14} className="menu-chevron" />}
+            {it.on !== undefined && <span className={cx('menu-switch', it.on && 'on')} />}
           </button>
         ),
       )}

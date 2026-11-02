@@ -407,6 +407,12 @@ const ru = {
   },
   playlist: {
     yours: 'Ваш плейлист',
+    yoursPrivate: 'Ваш приватный плейлист',
+    private: 'Приватный плейлист',
+    privateOn: 'Плейлист приватный: виден только вам. Нажмите, чтобы открыть доступ',
+    privateOff: 'Плейлист открыт: его могут найти и слушать другие. Нажмите, чтобы закрыть доступ',
+    madePrivate: 'Доступ закрыт: плейлист виден только вам',
+    madePublic: 'Доступ открыт: друг может зайти в плейлист и подписаться',
     byOwner: (owner: string) => `Плейлист · ${owner}`,
     moveFailed: (msg: string) => `Не удалось переместить трек: ${msg}`,
     removeFailed: (msg: string) => `Не удалось удалить: ${msg}`,
@@ -649,7 +655,7 @@ const ru = {
     toMine: 'Добавить себе',
     setting: 'Делиться загруженными треками',
     settingHint:
-      'Ваши загруженные mp3 по плейлистам выгружаются в папку Oni на Яндекс Диске. Друг с Oni, открыв ваш плейлист или «Мне нравится», увидит его таким же, как у вас: с загруженными треками, в том же порядке. Ссылка на папку нигде не видна.',
+      'Ваши загруженные mp3 по плейлистам выгружаются в папку Oni на Яндекс Диске. Друг с Oni, открыв ваш плейлист или «Мне нравится», увидит его таким же, как у вас: с загруженными треками, в том же порядке. Приватные плейлисты друг не видит. Ссылка на папку нигде не видна.',
     needsDisk: 'Нужен подключённый Яндекс Диск (выше)',
     syncing: (done: number, total: number) => (total ? `Выгружаю треки: ${done} из ${total}` : 'Проверяю плейлисты…'),
     status: (tracks: number, playlists: number) => `Общих: ${tracks} ${tracks === 1 ? 'трек' : 'треков'} в ${playlists} ${playlists === 1 ? 'плейлисте' : 'плейлистах'}`,
@@ -1199,6 +1205,12 @@ const en: Dict = {
   },
   playlist: {
     yours: 'Your playlist',
+    yoursPrivate: 'Your private playlist',
+    private: 'Private playlist',
+    privateOn: 'Private: only you can see it. Click to open it',
+    privateOff: 'Open: others can find and play it. Click to close it',
+    madePrivate: 'Closed: only you can see this playlist',
+    madePublic: 'Opened: a friend can open this playlist and follow it',
     byOwner: (owner) => `Playlist · ${owner}`,
     moveFailed: (msg) => `Couldn't move the track: ${msg}`,
     removeFailed: (msg) => `Couldn't remove: ${msg}`,
@@ -1440,7 +1452,7 @@ const en: Dict = {
     toMine: 'Add to mine',
     setting: 'Share my uploaded tracks',
     settingHint:
-      "Your uploaded mp3s go, by playlist, to Oni's folder on your Yandex Disk. A friend with Oni who opens a playlist of yours or your Liked sees it as you do: with your uploads, in the same order. The folder's link is shown nowhere.",
+      "Your uploaded mp3s go, by playlist, to Oni's folder on your Yandex Disk. A friend with Oni who opens a playlist of yours or your Liked sees it as you do: with your uploads, in the same order. Private playlists stay out of it. The folder's link is shown nowhere.",
     needsDisk: 'Yandex Disk has to be connected (above)',
     syncing: (done, total) => (total ? `Uploading tracks: ${done} of ${total}` : 'Looking at the playlists…'),
     status: (tracks, playlists) => `Shared: ${tracks} ${tracks === 1 ? 'track' : 'tracks'} in ${playlists} ${playlists === 1 ? 'playlist' : 'playlists'}`,
