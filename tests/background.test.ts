@@ -4,6 +4,7 @@
 import type { Track } from '../src/api/types.ts';
 import { BackgroundDownloads, type BackgroundDeps } from '../src/player/backgroundDownloads.ts';
 import { DownloadLog } from '../src/player/downloadLog.ts';
+import { SoundLog } from '../src/player/soundLog.ts';
 
 let passed = 0;
 let failed = 0;
@@ -226,6 +227,16 @@ await test('the log says what asked for which tracks and when each landed (the u
   assert(again.own().length === 3, 'kept');
   for (let i = 0; i < 250; i++) again.arrived('x', String(i));
   assert(again.own().length === 200 && again.own()[199].ids[0] === '249', 'the latest 200');
+});
+
+await test('the sound log keeps what iOS said, with the version, across a restart (the user, 2.11.2026)', async () => {
+  const { deps } = setup();
+  const log = new SoundLog(deps.store, '3.0.4');
+  log.add({ at: 1, kind: 'others', others: true, taking: true, playing: true });
+  const again = new SoundLog(deps.store);
+  assert(again.own().length === 1 && again.own()[0].v === '3.0.4' && again.own()[0].taking === true, JSON.stringify(again.own()));
+  for (let i = 0; i < 350; i++) again.add({ at: i, kind: 'play', others: false, taking: false, playing: true });
+  assert(again.own().length === 300 && again.own()[299].at === 349, 'the latest 300');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

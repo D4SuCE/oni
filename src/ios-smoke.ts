@@ -335,23 +335,28 @@ async function nativePlayer() {
   await wave().audio.play();
 }
 
-/** Another app's video without sound (VK's feed: iOS only says "another app plays") leaves the music
- * alone; the app taking the sound for itself (the sound turned on) pauses it, as the only sign iOS gives. */
+/** Another app's video without sound (VK's feed) looks to iOS like sound, however iOS words it (the user's
+ * phone, 3.0.3): neither way pauses the music. Only iOS's own interruption does; all of it is written down. */
 async function othersSound() {
-  // Long enough for a fade on the cloud Mac: there the old pause came only after 2.5 s (the first run).
+  const told: string[] = [];
+  await OniPlayer.addListener('sound', (e) => told.push(e.kind + (e.detail ? `:${e.detail}` : '')));
+  // Long enough for a fade on the cloud Mac: there the first fix's fade ended only after 2.5 s.
   await OniPlayer.testOthers({ playing: true, taking: false });
   await sleep(6000);
   const muted = await OniPlayer.state();
-  const pageOn = !wave().audio.paused;
   await OniPlayer.testOthers({ playing: true, taking: true });
   await sleep(6000);
+  const hinted = await OniPlayer.state();
+  const pageOn = !wave().audio.paused;
+  await OniPlayer.testOthers({ interrupt: true });
+  await sleep(2000);
   const taken = await OniPlayer.state();
-  await OniPlayer.testOthers({});
   await wave().audio.play();
   await sleep(1000);
   const back = await OniPlayer.state();
-  report('muted-video-keeps-music', muted.playing && pageOn, JSON.stringify({ muted, pageOn }));
-  report('sound-taken-pauses', !taken.playing && back.playing, JSON.stringify({ taken, back }));
+  report('muted-video-keeps-music', muted.playing && hinted.playing && pageOn, JSON.stringify({ muted, hinted, pageOn }));
+  report('interruption-pauses', !taken.playing && back.playing, JSON.stringify({ taken, back }));
+  report('sound-log', told.includes('others') && told.includes('interrupted:options 0') && told.includes('halt:interruption') && told.includes('play'), told.join());
 }
 
 /** Speed (AVAudioUnitTimePitch after both nodes): at 1.5× the player's own clock, which counts

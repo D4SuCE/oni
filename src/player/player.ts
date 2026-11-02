@@ -15,6 +15,7 @@ import { RecentPlays, trimTrack } from './recent.ts';
 import { albumLoudness, levellingGain, type Loudness } from './loudness.ts';
 import { OfflineLibrary } from './offline.ts';
 import { DownloadLog } from './downloadLog.ts';
+import { SoundLog } from './soundLog.ts';
 import { PlayStats, type Origin } from './stats.ts';
 import { isIos } from '../ui/platform.ts';
 import { audio } from './audio.ts';
@@ -122,6 +123,9 @@ export const offline =
     : null;
 /** Every download asked for and landed, with what asked (downloadLog.ts); goes to Disk with the device's file. */
 export const downloadLog = new DownloadLog(storage, typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '');
+/** The iPhone's plays, pauses and what iOS said of other apps' sound (soundLog.ts); goes to Disk the same way. */
+export const soundLog = new SoundLog(storage, typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '');
+if (isIos) OniPlayer.addListener('sound', (e) => soundLog.add(e)).catch(() => {});
 // The room rules (Settings → Downloads) once the files are counted; the track playing is kept.
 offline?.reconcile().then(() => offline!.sweep()).catch(() => {});
 if (offline) offline.pin = (id) => String(current()?.id) === id;
