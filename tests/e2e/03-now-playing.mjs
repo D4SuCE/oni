@@ -1,5 +1,5 @@
 // e2e: now playing (part of tests/e2e.mjs; run the whole with npm run test:e2e).
-import { app, page, SLOW, step, shot } from './harness.mjs';
+import { app, page, step, shot } from './harness.mjs';
 
 await step('now playing screen', async () => {
   await page.click('.pb-cover');
@@ -31,10 +31,9 @@ await step('Now Playing has the volume under play, as on the iPhone: it moves th
     await page.mouse.click(box.x + box.width * 0.2, box.y + box.height / 2);
     const quiet = await page.evaluate(() => window.__wave.usePlayer.getState().volume);
     if (!(quiet > 0.1 && quiet < 0.3)) throw new Error(`clicked at 20%, the volume is ${quiet}`);
-    await slider.hover();
-    await page.mouse.wheel(0, -100);
-    // A machine with no graphics card draws this blurred screen slowly, and the wheel comes in its turn.
-    await page.waitForFunction((q) => window.__wave.usePlayer.getState().volume > q, quiet, { timeout: 5000 * SLOW });
+    // The event itself: the mouse's own wheel does not reach the page on GitHub's machines (e2e.yml).
+    await slider.evaluate((el) => el.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, bubbles: true })));
+    await page.waitForFunction((q) => window.__wave.usePlayer.getState().volume > q, quiet, { timeout: 2000 });
     // In the smallest window (electron/main.cjs) all of the column is on screen, nothing on top of anything;
     // at every size, the phone's rules too, the line is a little shorter than the seek line, right under its middle.
     for (const [w, h, phone] of [[960, 620], [1320, 840], [1920, 1040], [390, 844, true]]) {
