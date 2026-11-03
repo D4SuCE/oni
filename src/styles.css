@@ -2239,15 +2239,20 @@ html.ios .wave-blobs i {
   width: var(--np-col);
   margin: 18px 0 10px;
 }
-/* The volume under play, a little shorter than the seek line above it (the user, 3.11.2026). The
-   iPhone's margin: under html.ios. */
+/* The volume under play (the user, 3.11.2026): its line a little shorter than the seek line above
+   it and in the very middle under it, the icon beside it. 100px: what the times take off the seek
+   line (.seek). The empty third column keeps the line in the middle. */
 .np-volume {
-  width: calc(var(--np-col) * 0.72);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) calc((100% - 100px) * 0.85) minmax(0, 1fr);
+  width: var(--np-col);
   margin-top: 10px;
 }
+.np-volume .icon-btn {
+  justify-self: end;
+}
 .np-volume .range {
-  width: auto;
-  flex: 1;
+  width: 100%;
 }
 .np-side {
   display: flex;
@@ -3492,11 +3497,9 @@ kbd {
   }
   .np-cover,
   .np-meta,
-  .np-seek {
-    width: 100%;
-  }
+  .np-seek,
   .np-volume {
-    width: 72%;
+    width: 100%;
   }
   .shelf {
     grid-auto-columns: 140px;
@@ -3864,9 +3867,6 @@ kbd {
   html.ios .nowplaying.sung .transport,
   html.ios .nowplaying.sung .np-volume {
     grid-column: 1 / -1;
-  }
-  html.ios .nowplaying.sung .np-volume {
-    justify-self: center;
   }
   /* the buttons in the middle, as under the cover (a row of the grid is the whole width: they sat
      at its left, the user, 26.10.2026) */
