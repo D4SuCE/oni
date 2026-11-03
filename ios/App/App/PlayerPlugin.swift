@@ -1083,12 +1083,18 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         call.resolve()
     }
 
-    /// { playing, taking, interrupt } — for the simulator run: what iOS would say of other apps' sound
-    /// (none: iOS is asked); `interrupt`: iOS tells that another app took the sound.
+    /// { playing, taking, interrupt, interruptionEnded, mayResume } — for the simulator run: what iOS would
+    /// say of other apps' sound (none: iOS is asked); `interrupt`: a call takes the sound, as on a real phone:
+    /// the engine is stopped first, and iOS tells of it after; `interruptionEnded`: it is over.
     @objc func testOthers(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
             self.othersForTest = call.getBool("playing").map { ($0, call.getBool("taking") ?? false) }
+            if call.getBool("interruptionEnded") == true {
+                let options: AVAudioSession.InterruptionOptions = call.getBool("mayResume") == true ? .shouldResume : []
+                NotificationCenter.default.post(name: AVAudioSession.interruptionNotification, object: nil, userInfo: [AVAudioSessionInterruptionTypeKey: AVAudioSession.InterruptionType.ended.rawValue, AVAudioSessionInterruptionOptionKey: options.rawValue])
+            }
             if call.getBool("interrupt") == true {
+                self.engine.stop()
                 NotificationCenter.default.post(name: AVAudioSession.interruptionNotification, object: nil, userInfo: [AVAudioSessionInterruptionTypeKey: AVAudioSession.InterruptionType.began.rawValue])
             }
             call.resolve()

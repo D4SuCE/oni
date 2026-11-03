@@ -35,8 +35,8 @@ interface PlayerPlugin {
   latency(): Promise<{ seconds: number }>;
   /** For the simulator run: downloads held to a slow network's pace (0: off). */
   testThrottle(options: { bytesPerSecond: number }): Promise<void>;
-  /** For the simulator run: what iOS would say of other apps' sound (nothing given: iOS is asked); `interrupt`: iOS tells the sound was taken. */
-  testOthers(options: { playing?: boolean; taking?: boolean; interrupt?: boolean }): Promise<void>;
+  /** For the simulator run: what iOS would say of other apps' sound (nothing given: iOS is asked); `interrupt`: a call takes the sound; `interruptionEnded`: it is over, `mayResume`: iOS allows playing on. */
+  testOthers(options: { playing?: boolean; taking?: boolean; interrupt?: boolean; interruptionEnded?: boolean; mayResume?: boolean }): Promise<void>;
   /** For the simulator run: what the system equalizer set up as Oni's does at each frequency (dB). */
   eqResponse(options: { gains: number[]; preamp: number; frequencies: number[] } & EqShape): Promise<{ db: number[] }>;
   /** The simulator run: a picture of Oni's window, kept as Documents/shot-<name>.png (ios.yml copies them). */
