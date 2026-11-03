@@ -349,14 +349,44 @@ async function othersSound() {
   await sleep(6000);
   const hinted = await OniPlayer.state();
   const pageOn = !wave().audio.paused;
+  // A call (the user, 3.11.2026: the music did not come back after it, and pressing play started the track over).
+  const before = await OniPlayer.state();
   await OniPlayer.testOthers({ interrupt: true });
   await sleep(2000);
   const taken = await OniPlayer.state();
+  await OniPlayer.testOthers({ interruptionEnded: true, mayResume: true });
+  await sleep(2500);
+  const back = await OniPlayer.state();
+  const followed = !wave().audio.paused;
+  await sleep(1500);
+  const on = await OniPlayer.state();
+  report('call-keeps-place', !taken.playing && before.time > 2 && Math.abs(taken.time - before.time) < 1.5, JSON.stringify({ before: before.time, taken: taken.time }));
+  report('call-resumes', back.playing && followed && back.time >= taken.time && on.time > back.time && on.time - taken.time < 8, JSON.stringify({ taken: taken.time, back, followed, on: on.time }));
+  // iOS does not allow it: stays paused, and play goes on from the place.
+  await OniPlayer.testOthers({ interrupt: true });
+  await sleep(1500);
+  const held = await OniPlayer.state();
+  await OniPlayer.testOthers({ interruptionEnded: true, mayResume: false });
+  await sleep(1500);
+  const still = await OniPlayer.state();
+  await wave().audio.play();
+  await sleep(1500);
+  const pressed = await OniPlayer.state();
+  report('call-play-by-hand', !still.playing && pressed.playing && pressed.time >= held.time && pressed.time - held.time < 5 && held.time > 2, JSON.stringify({ held: held.time, still, pressed }));
+  // Paused before the call: stays paused after it.
+  await wave().audio.pause();
+  await sleep(500);
+  await OniPlayer.testOthers({ interrupt: true });
+  await sleep(1000);
+  await OniPlayer.testOthers({ interruptionEnded: true, mayResume: true });
+  await sleep(2000);
+  const paused = await OniPlayer.state();
   await wave().audio.play();
   await sleep(1000);
-  const back = await OniPlayer.state();
+  const again = await OniPlayer.state();
+  report('call-while-paused', !paused.playing && again.playing && again.time >= paused.time, JSON.stringify({ paused, again }));
   report('muted-video-keeps-music', muted.playing && hinted.playing && pageOn, JSON.stringify({ muted, hinted, pageOn }));
-  report('interruption-pauses', !taken.playing && back.playing, JSON.stringify({ taken, back }));
+  report('interruption-pauses', !taken.playing, JSON.stringify({ taken }));
   report('sound-log', told.includes('others') && told.includes('interrupted:options 0') && told.includes('halt:interruption') && told.includes('play'), told.join());
 }
 
