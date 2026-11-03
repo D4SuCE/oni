@@ -9,6 +9,7 @@ import { storage, transport } from './api/client.ts';
 import { OniRemote } from './player/remote.ts';
 import { OniPlayer, type EqShape } from './player/nativeAudio.ts';
 import { OniVolume } from './player/volume.ts';
+import { usePhoneSound } from './player/phoneSound.ts';
 import { background } from './ui/offline.ts';
 import { EQ_PRESETS, EQ_Q, eqResponse } from './player/eqCurve.ts';
 import { registerPlugin } from '@capacitor/core';
@@ -560,6 +561,21 @@ async function crossfadeQuiet() {
   } catch (e) {
     report('crossfade-after-quiet', false, String(e));
   }
+}
+
+/** The volume slider on Now Playing (Settings > Playback): its line a little shorter than the seek line,
+ * right under its middle and the play button's (the user, 3.11.2026). */
+async function volumeCentred() {
+  const was = usePhoneSound.getState().volumeSlider;
+  usePhoneSound.setState({ volumeSlider: true });
+  await until(() => document.querySelector('.np-volume'), 3000);
+  const rect = (s: string) => document.querySelector(`.nowplaying ${s}`)!.getBoundingClientRect();
+  const middle = (r: DOMRect) => r.left + r.width / 2;
+  const line = rect('.np-volume input[type=range]');
+  const seek = rect('.np-seek input[type=range]');
+  const off = Math.abs(middle(line) - middle(seek)) + Math.abs(middle(line) - middle(rect('.play-btn')));
+  report('np-volume-centred', line.width < seek.width && line.width > seek.width * 0.6 && off <= 2, `line ${Math.round(line.width)} of ${Math.round(seek.width)}, ${off.toFixed(1)}px off the middle`);
+  usePhoneSound.setState({ volumeSlider: was });
 }
 
 /** Volume levelling on the native player: a quiet track is raised above full volume (its lift unit,
@@ -1423,6 +1439,7 @@ export async function runSmoke() {
     await npTitle();
     const { value } = await OniVolume.get().catch(() => ({ value: -1 }));
     report('phone-volume', value >= 0 && value <= 1, `system volume ${value}`);
+    await volumeCentred();
     nowPlayingCloses();
     report('np-swipe-down', await until(() => !document.querySelector('.nowplaying'), 3000));
     click('.pb-cover');

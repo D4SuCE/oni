@@ -2100,14 +2100,20 @@ html.ios .drawer-grip {
   padding: 60px 48px 36px;
 }
 .np-art {
+  /* The column's width. A low window takes it off the cover: 336px is the padding of .np-stage and
+     the name, seek line, buttons and volume under the cover. */
+  --np-col: min(54vh, 100vh - 336px, 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   min-height: 0;
 }
+html.ios .np-art {
+  --np-col: min(54vh, 100%);
+}
 .np-cover {
-  width: min(54vh, 100%);
+  width: var(--np-col);
   border-radius: 20px;
   box-shadow: 0 40px 100px rgba(0, 0, 0, 0.55);
 }
@@ -2197,7 +2203,7 @@ html.ios .wave-blobs i {
   }
 }
 .np-meta {
-  width: min(54vh, 100%);
+  width: var(--np-col);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2230,8 +2236,23 @@ html.ios .wave-blobs i {
   gap: 4px;
 }
 .np-seek {
-  width: min(54vh, 100%);
+  width: var(--np-col);
   margin: 18px 0 10px;
+}
+/* The volume under play (the user, 3.11.2026): its line a little shorter than the seek line above
+   it and in the very middle under it, the icon beside it. 100px: what the times take off the seek
+   line (.seek). The empty third column keeps the line in the middle. */
+.np-volume {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) calc((100% - 100px) * 0.85) minmax(0, 1fr);
+  width: var(--np-col);
+  margin-top: 10px;
+}
+.np-volume .icon-btn {
+  justify-self: end;
+}
+.np-volume .range {
+  width: 100%;
 }
 .np-side {
   display: flex;
@@ -3476,7 +3497,8 @@ kbd {
   }
   .np-cover,
   .np-meta,
-  .np-seek {
+  .np-seek,
+  .np-volume {
     width: 100%;
   }
   .shelf {
@@ -3772,11 +3794,7 @@ kbd {
   }
   /* The volume slider on Now Playing, under play (Settings > Playback). */
   html.ios .np-volume {
-    width: 100%;
     margin-top: 18px;
-  }
-  html.ios .np-volume .range {
-    flex: 1;
   }
 
   /* Now Playing is the track's card: its name whole (the user, 25.10.2026: "Am I …" was cut by the
