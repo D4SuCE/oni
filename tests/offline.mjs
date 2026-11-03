@@ -197,6 +197,14 @@ await step('no network: a playlist with a downloaded track opens and plays it', 
   await page.evaluate(({ uid, kind }) => window.__wave.navigate({ name: 'playlist', uid, kind }), playlist);
   await page.waitForSelector('[data-testid="list-play"]', { timeout: 10000 });
   if (!(await page.locator('h1', { hasText: playlist.title }).count())) throw new Error('no playlist title');
+  // A long playlist is drawn in portions, and a track downloaded for Liked may be far down in it: its rows are
+  // counted once all are drawn.
+  const drawn = () => page.locator('.track-row').count();
+  for (let last = -1; last !== (await drawn()); ) {
+    last = await drawn();
+    await page.locator('.track-row').last().scrollIntoViewIfNeeded();
+    await page.waitForTimeout(500);
+  }
   const playable = await downloadedRows();
   await page.click('[data-testid="list-play"]');
   await playingFromFile(page);
