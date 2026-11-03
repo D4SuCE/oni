@@ -129,6 +129,12 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     private var generation = 0
     private var playing = false
     private var pausedAt: Double = 0
+    /// Where the node's clock last said the track was. A call stops the engine before iOS tells of it, and
+    /// the clock is gone by then: without this, the track went back to the last pause (or to its start).
+    private var heard: Double?
+    /// The music played when iOS took the sound: it comes back when iOS allows (`.shouldResume`), unless
+    /// the user has done something about it in the meantime.
+    private var resumeAfterCall = false
     private var timer: Timer?
     private let lock = NSLock()
     /// Oni is in the background: the clock goes to the page once a second, not four times, and the
@@ -458,6 +464,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
             call.reject("id is required")
             return
         }
+        // Another track chosen while a call goes on: what was left is not brought back.
+        DispatchQueue.main.async { self.resumeAfterCall = false }
         let ext = call.getString("ext") ?? "mp3"
         let keep = call.getArray("keep", String.self) ?? [id]
         let fade = call.getDouble("fade") ?? 0
@@ -618,6 +626,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     private func schedule(from frame: AVAudioFramePosition) {
         guard let file = file else { return }
         let from = max(0, frame)
+        heard = nil
         startFrame = from
         scheduledEnd = from
         outstanding = 0
@@ -701,6 +710,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         pausedAt = Double(scheduledEnd) / (format?.sampleRate ?? 44100)
         generation += 1
         node.stop()
+        heard = nil
         startFrame = scheduledEnd
         outstanding = 0
         stalled = true
@@ -722,8 +732,11 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
 
     private var position: Double {
         guard let file = file else { return 0 }
-        guard playing, !stalled, let last = node.lastRenderTime, let time = node.playerTime(forNodeTime: last) else { return pausedAt }
-        return min(duration, Double(startFrame + time.sampleTime) / file.processingFormat.sampleRate)
+        guard playing, !stalled else { return pausedAt }
+        guard let last = node.lastRenderTime, let time = node.playerTime(forNodeTime: last) else { return heard ?? pausedAt }
+        let now = min(duration, Double(startFrame + time.sampleTime) / file.processingFormat.sampleRate)
+        heard = now
+        return now
     }
 
     @objc func play(_ call: CAPPluginCall) {
@@ -752,6 +765,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         // Waiting for more of the track: it plays once that comes (extend).
         if !stalled { node.play() }
         playing = true
+        resumeAfterCall = false
         startTimer()
         tick()
     }
@@ -769,12 +783,14 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
 
     /// The lock screen's pause (main thread).
     func pauseNow() -> Bool {
+        resumeAfterCall = false
         halt("lock-screen")
         return true
     }
 
     @objc func pause(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
+            self.resumeAfterCall = false
             self.halt("page")
             call.resolve()
         }
@@ -786,6 +802,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         // A pause mid-crossfade ends it: what comes back is the new track alone.
         endCross()
         pausedAt = position
+        heard = nil
         node.pause()
         // The engine too: running, it fed the output silence, and iOS took the app for playing, so
         // the lock screen and the shade kept "pause" up after a pause in Oni (the user). Play
@@ -1171,14 +1188,49 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         (othersPlaying, othersTaking) = others
     }
 
-    /// A call or another app took the sound: paused, and the page told (it shows paused).
+    /// A call or another app took the sound: paused, and the page told (it shows paused). When it is over and iOS
+    /// allows, the music goes on by itself from where it was (the user, 3.11.2026).
     @objc private func interrupted(_ note: Notification) {
         guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt else { return }
         let began = AVAudioSession.InterruptionType(rawValue: raw) == .began
         let options = note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
         DispatchQueue.main.async {
             self.note(began ? "interrupted" : "interruption-ended", "options \(options)")
-            if began { self.halt("interruption") }
+            if began {
+                if self.playing { self.resumeAfterCall = true }
+                self.halt("interruption")
+                self.replant()
+            } else if AVAudioSession.InterruptionOptions(rawValue: options).contains(.shouldResume) {
+                self.comeBack()
+            } else {
+                self.resumeAfterCall = false
+            }
+        }
+    }
+
+    /// iOS stopped the engine under the node, and what it was given may be gone: given again from the place.
+    private func replant() {
+        guard file != nil else { return }
+        let at = pausedAt
+        generation += 1
+        node.stop()
+        schedule(from: AVAudioFramePosition(at * (format?.sampleRate ?? 44100)))
+        pausedAt = at
+    }
+
+    /// After a call. iOS may not give the sound back at the first asking: asked again for a few seconds.
+    private func comeBack(tries: Int = 4) {
+        guard resumeAfterCall, !playing, file != nil else { return }
+        do {
+            try start()
+            claimLockScreen()
+        } catch {
+            if tries > 1 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.comeBack(tries: tries - 1) }
+            } else {
+                resumeAfterCall = false
+                note("comeback-failed", error.localizedDescription)
+            }
         }
     }
 
@@ -1211,6 +1263,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
             if was, (try? self.engine.start()) != nil {
                 if !self.stalled { self.node.play() }
             } else {
+                // iOS has taken the sound and has not told yet: `interrupted` will find it not playing.
+                if was { self.resumeAfterCall = true }
                 self.playing = false
             }
             self.tick()
