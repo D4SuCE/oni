@@ -1,5 +1,5 @@
 // e2e: now playing (part of tests/e2e.mjs; run the whole with npm run test:e2e).
-import { page, step, shot } from './harness.mjs';
+import { app, page, step, shot } from './harness.mjs';
 
 await step('now playing screen', async () => {
   await page.click('.pb-cover');
@@ -8,6 +8,59 @@ await step('now playing screen', async () => {
   await shot('04-now-playing');
   await page.keyboard.press('Escape');
   await page.waitForSelector('.nowplaying', { state: 'detached' });
+});
+
+await step('Now Playing has the volume under play, as on the iPhone: it moves the volume and fits the smallest window', async () => {
+  // The user, 3.11.2026: "you have to leave the card to turn it down".
+  const win = await app.browserWindow(page);
+  const size = await win.evaluate((w) => w.getSize());
+  const before = await page.evaluate(() => window.__wave.usePlayer.getState().volume);
+  try {
+    await page.evaluate(async () => {
+      if (window.__wave.usePlayer.getState().queue.length) return;
+      const r = await window.__wave.api.search('Rammstein Du hast', 'track');
+      await window.__wave.playTracks(r.tracks.results.slice(0, 1), 0, 'e2e volume');
+      window.__wave.audio.pause();
+    });
+    await page.click('.pb-cover');
+    await page.waitForSelector('.nowplaying');
+    const slider = page.locator('.nowplaying .np-volume input[type="range"]');
+    await slider.waitFor({ timeout: 5000 });
+    const box = await slider.boundingBox();
+    // Near the left end of the line: quiet, and the player's volume follows the mouse.
+    await page.mouse.click(box.x + box.width * 0.2, box.y + box.height / 2);
+    const quiet = await page.evaluate(() => window.__wave.usePlayer.getState().volume);
+    if (!(quiet > 0.1 && quiet < 0.3)) throw new Error(`clicked at 20%, the volume is ${quiet}`);
+    await slider.hover();
+    await page.mouse.wheel(0, -100);
+    await page.waitForFunction((q) => window.__wave.usePlayer.getState().volume > q, quiet, { timeout: 2000 });
+    // Everything in the column is on screen in the smallest window (electron/main.cjs), nothing on top of anything.
+    for (const [w, h] of [[960, 620], [1320, 840]]) {
+      await win.evaluate((x, [a, b]) => x.setSize(a, b), [w, h]);
+      await page.waitForTimeout(400);
+      const fit = await page.evaluate(() => {
+        const rect = (s) => document.querySelector(`.nowplaying ${s}`).getBoundingClientRect();
+        const parts = ['.np-cover', '.np-meta', '.np-seek', '.transport', '.np-volume'].map((s) => [s, rect(s)]);
+        // 30px: the same room below as the queue's column leaves, not pressed against the window's edge.
+        const out = parts.filter(([, r]) => r.top < 0 || r.bottom > innerHeight - 30).map(([s]) => s);
+        const over = parts.slice(1).filter(([, r], i) => r.top < parts[i][1].bottom - 1).map(([s]) => s);
+        const close = rect('.np-close');
+        // The volume's line a little shorter than the seek line, both under the middle of the cover.
+        const seek = rect('.np-seek input[type="range"], .np-seek .seek-line');
+        const volume = rect('.np-volume input[type="range"]');
+        const middle = (r) => r.left + r.width / 2;
+        return { out, over, underClose: parts[0][1].top < close.bottom && parts[0][1].left < close.right, shorter: volume.width < seek.width && volume.width > seek.width * 0.6, centred: Math.abs(middle(rect('.np-volume')) - middle(parts[0][1])) < 2, line: [Math.round(volume.width), Math.round(seek.width)], cover: parts[0][1].width };
+      });
+      if (fit.out.length || fit.over.length || fit.underClose || !fit.shorter || !fit.centred) throw new Error(`${w}×${h}: ${JSON.stringify(fit)}`);
+      await shot(`04-now-playing-${h}`);
+      console.log(`       ${w}×${h}: all on screen, the cover ${Math.round(fit.cover)}px, volume ${fit.line[0]}px under a ${fit.line[1]}px seek line`);
+    }
+  } finally {
+    await win.evaluate((x, [a, b]) => x.setSize(a, b), size);
+    await page.evaluate((v) => window.__wave.setVolume(v), before);
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('.nowplaying', { state: 'detached' }).catch(() => {});
+  }
 });
 
 await step('a track Yandex has no lyrics for gets them from LRCLIB, saying so; "Wrong lyrics" takes them away and Genius is offered', async () => {

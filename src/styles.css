@@ -2100,14 +2100,20 @@ html.ios .drawer-grip {
   padding: 60px 48px 36px;
 }
 .np-art {
+  /* The column's width. A low window takes it off the cover: 336px is the padding of .np-stage and
+     the name, seek line, buttons and volume under the cover. */
+  --np-col: min(54vh, 100vh - 336px, 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   min-height: 0;
 }
+html.ios .np-art {
+  --np-col: min(54vh, 100%);
+}
 .np-cover {
-  width: min(54vh, 100%);
+  width: var(--np-col);
   border-radius: 20px;
   box-shadow: 0 40px 100px rgba(0, 0, 0, 0.55);
 }
@@ -2197,7 +2203,7 @@ html.ios .wave-blobs i {
   }
 }
 .np-meta {
-  width: min(54vh, 100%);
+  width: var(--np-col);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2230,8 +2236,18 @@ html.ios .wave-blobs i {
   gap: 4px;
 }
 .np-seek {
-  width: min(54vh, 100%);
+  width: var(--np-col);
   margin: 18px 0 10px;
+}
+/* The volume under play, a little shorter than the seek line above it (the user, 3.11.2026). The
+   iPhone's margin: under html.ios. */
+.np-volume {
+  width: calc(var(--np-col) * 0.72);
+  margin-top: 10px;
+}
+.np-volume .range {
+  width: auto;
+  flex: 1;
 }
 .np-side {
   display: flex;
@@ -3479,6 +3495,9 @@ kbd {
   .np-seek {
     width: 100%;
   }
+  .np-volume {
+    width: 72%;
+  }
   .shelf {
     grid-auto-columns: 140px;
   }
@@ -3772,11 +3791,7 @@ kbd {
   }
   /* The volume slider on Now Playing, under play (Settings > Playback). */
   html.ios .np-volume {
-    width: 100%;
     margin-top: 18px;
-  }
-  html.ios .np-volume .range {
-    flex: 1;
   }
 
   /* Now Playing is the track's card: its name whole (the user, 25.10.2026: "Am I …" was cut by the
@@ -3849,6 +3864,9 @@ kbd {
   html.ios .nowplaying.sung .transport,
   html.ios .nowplaying.sung .np-volume {
     grid-column: 1 / -1;
+  }
+  html.ios .nowplaying.sung .np-volume {
+    justify-self: center;
   }
   /* the buttons in the middle, as under the cover (a row of the grid is the whole width: they sat
      at its left, the user, 26.10.2026) */

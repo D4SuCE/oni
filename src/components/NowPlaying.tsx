@@ -375,8 +375,9 @@ export function NowPlaying() {
               )}
               <SeekBar className="np-seek" />
               <Transport big />
-              {/* A remote always has it: the volume there (the iPhone's buttons are the phone's own). */}
-              {isIos && (volumeSlider || remote) && <VolumeControl className="np-volume" />}
+              {/* The desktop always has it: the player bar is under this screen (the user, 3.11.2026). The iPhone by
+                  the setting, its buttons being the phone's own; a remote always: the volume there. */}
+              {(!isIos || volumeSlider || remote) && <VolumeControl className="np-volume" />}
             </>
           )}
         </div>
