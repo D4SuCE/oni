@@ -23,6 +23,31 @@ await step("the data lives in IndexedDB; what an older Oni left in localStorage 
   await page.waitForSelector('.wave-hero');
 });
 
+await step('the database connection dropped (iOS does that in the background): it opens again and the write is kept', async () => {
+  const found = await page.evaluate(async () => {
+    const { storage } = window.__wave;
+    storage.dropConnection();
+    storage.setItem('e2e.dropped', 'kept');
+    await new Promise((r) => setTimeout(r, 1000));
+    const read = () =>
+      new Promise((resolve, reject) => {
+        const req = indexedDB.open('oni', 1);
+        req.onerror = () => reject(req.error);
+        req.onsuccess = () => {
+          const get = req.result.transaction('kv').objectStore('kv').get('e2e.dropped');
+          get.onsuccess = () => {
+            req.result.close();
+            resolve(get.result);
+          };
+        };
+      });
+    const value = await read();
+    storage.removeItem('e2e.dropped');
+    return value;
+  });
+  if (found !== 'kept') throw new Error(`in the database: ${found}`);
+});
+
 await step('the oni mask sits in the middle of the logo', async () => {
   // The mask's axis is the nose line where the white half meets the black one: per row of the
   // nose, the sharpest light-to-dark step near the middle; its median must be the image centre.

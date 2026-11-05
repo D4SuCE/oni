@@ -4,6 +4,7 @@
 import type { Track } from '../src/api/types.ts';
 import { audioType, OfflineLibrary, type OfflineDeps } from '../src/player/offline.ts';
 import { RemovedDownloads } from '../src/player/removedDownloads.ts';
+import { newEntries } from '../src/api/storage.ts';
 
 let passed = 0;
 let failed = 0;
@@ -166,6 +167,78 @@ await test('reconcile: forgets entries without a file, deletes files without an 
   lib.subscribe(() => told++);
   await lib.reconcile();
   assert(!lib.has('12') && lib.has('13') && !disk.has('99.oni') && told === 1, 'cleaned up');
+});
+
+// The list of downloads lives in the app's database, the tracks in a folder. A database that did not
+// open (or came back empty) said "nothing is downloaded", and every file looked like a leftover.
+await test('an empty list never deletes the files: they are not leftovers then', async () => {
+  const { lib, disk } = setup();
+  disk.set('1.oni', new Uint8Array(10));
+  disk.set('2.oni', new Uint8Array(10));
+  disk.set('2.jpg', new Uint8Array(10));
+  await lib.reconcile();
+  assert(disk.size === 3, `files left: ${disk.size}`);
+});
+
+await test('a folder that reads empty does not forget the library', async () => {
+  const { lib, deps } = setup();
+  await lib.downloadAll([track('1'), track('2')]);
+  const blind = new OfflineLibrary({ ...deps, files: { ...deps.files, list: async () => [] } });
+  await blind.reconcile();
+  assert(blind.has('1') && blind.has('2'), 'still known');
+});
+
+await test('the database lost: the list and the key come back from the copy beside the tracks, and the audio opens', async () => {
+  const { lib, deps, kv, disk } = setup();
+  await lib.downloadAll([track('1'), track('2')]);
+  await lib.saveBackup();
+  kv.clear();
+  const again = new OfflineLibrary(deps);
+  await again.reconcile();
+  assert(again.has('1') && again.has('2') && disk.has('1.oni') && disk.has('2.oni'), 'back');
+  const { blob } = await again.open('1');
+  assert((await blob.text()).startsWith('ID3 fake audio of track'), 'decrypted with the old key');
+});
+
+await test('a download straight after the database is lost seals with the old key, not a new one', async () => {
+  const { lib, deps, kv } = setup();
+  await lib.download(track('1'));
+  await lib.saveBackup();
+  const old = kv.get('offline.key.v1');
+  kv.clear();
+  const again = new OfflineLibrary(deps);
+  await again.download(track('2'));
+  assert(kv.get('offline.key.v1') === old, 'same key');
+});
+
+await test('a database that did not open: nothing deleted, the copy left as it was, downloads still found', async () => {
+  const { lib, deps, kv, disk } = setup();
+  await lib.downloadAll([track('1')]);
+  await lib.saveBackup();
+  const copy = disk.get('_library.oni')!.slice();
+  kv.clear();
+  disk.set('99.oni', new Uint8Array(10));
+  const shaky = new OfflineLibrary({ ...deps, trusted: () => false });
+  await shaky.reconcile();
+  assert(shaky.has('1') && disk.has('99.oni'), 'found, nothing deleted');
+  await shaky.remove('1');
+  await shaky.saveBackup();
+  assert(disk.get('_library.oni')!.length === copy.length, 'the copy not overwritten');
+});
+
+await test('the copy is no leftover; an interrupted download still is', async () => {
+  const { lib, disk } = setup();
+  await lib.download(track('1'));
+  await lib.saveBackup();
+  disk.set('99.oni', new Uint8Array(10));
+  await lib.reconcile();
+  assert(disk.has('_library.oni') && !disk.has('99.oni') && lib.has('1'), 'as it should');
+  assert(!lib.entries().some((e) => String(e.track.id).startsWith('_')), 'not listed');
+});
+
+await test('moving to the database: what it holds already is not overwritten (a session without it started from nothing)', () => {
+  const moved = newEntries([['player.playlog.v1', '{"plays":[]}'], ['offline.key.v1', 'new'], ['e2e.older', 'kept']], ['player.playlog.v1', 'offline.key.v1']);
+  assert(moved.length === 1 && moved[0][0] === 'e2e.older', JSON.stringify(moved));
 });
 
 await test('covers: kept beside a download, read back, removed with it, kept by reconcile, filled in for older ones', async () => {
