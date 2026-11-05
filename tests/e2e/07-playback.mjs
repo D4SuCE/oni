@@ -256,6 +256,61 @@ await step('tracks that will not play: the downloads stand in, and the list come
   }
 });
 
+await step('a track whose file will not load: one fresh address, then the next track; and what never played is not counted as heard', async () => {
+  // Found reading the code, 5.11.2026: an address that failed asked for a new one for ever (605 asks
+  // in 30 s, the player stuck on that track), and a track that never started went to History, to the
+  // log and to the repeat filter as heard to its end.
+  const got = await page.evaluate(async () => {
+    const w = window.__wave;
+    const base = 990000000 + Math.floor(Math.random() * 100000) * 10;
+    const mk = (n) => ({ id: String(base + n), title: `e2e broken ${n}`, durationMs: 200000, artists: [], albums: [], available: true });
+    const asked = [];
+    const counted = (ids) => {
+      const log = JSON.parse(w.storage.getItem('player.playlog.v1') || '{"plays":[]}').plays.filter((p) => ids.includes(p.id)).length;
+      const recent = w.recentPlays.list().filter((p) => ids.includes(String(p.track.id))).length;
+      const filter = JSON.parse(w.storage.getItem('wave.history.v1') || '{}');
+      return { log, recent, filter: ids.filter((i) => filter[i]).length };
+    };
+    const run = async (first, stream) => {
+      asked.length = 0;
+      w.api.stream = async (id) => {
+        asked.push(String(id));
+        return stream(id);
+      };
+      const tracks = [mk(first), mk(first + 1), mk(first + 2)];
+      void w.playTracks(tracks, 0, 'e2e broken');
+      const seen = new Set();
+      const until = performance.now() + 2600;
+      while (performance.now() < until) {
+        seen.add(w.usePlayer.getState().index);
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      const firstAsks = asked.filter((id) => id === tracks[0].id).length;
+      return { firstAsks, moved: seen.has(1), counted: counted(tracks.map((t) => t.id)) };
+    };
+    // A real server's refusal of the file, at once.
+    const noFile = await run(1, async () => ({ url: 'https://api.music.yandex.net/oni-no-such-file.mp3', codec: 'mp3', bitrate: 192 }));
+    // Yandex gives no address at all.
+    const refused = await run(4, async () => {
+      throw new Error('refused');
+    });
+    return { noFile, refused };
+  });
+  await page.evaluate(() => {
+    delete window.__wave.api.stream;
+    window.__wave.audio.pause();
+  });
+  await page.evaluate(async () => {
+    // Out of the stand-in those failures may have started: an ordinary list again.
+    const t = (await window.__wave.api.chart()).find((x) => x.available !== false);
+    await window.__wave.playTracks([t], 0, 'e2e after broken');
+    window.__wave.audio.pause();
+  });
+  if (got.noFile.firstAsks > 2 || !got.noFile.moved) throw new Error(`no file: ${JSON.stringify(got.noFile)}`);
+  for (const [what, r] of Object.entries(got)) if (r.counted.log || r.counted.recent || r.counted.filter) throw new Error(`${what} counted as heard: ${JSON.stringify(r)}`);
+  if (!got.refused.moved) throw new Error(`refused: ${JSON.stringify(got.refused)}`);
+});
+
 await step('keyboard: space toggles playback', async () => {
   // Nothing focused (a click could land on a switch of the page open, and space would flip it).
   await page.evaluate(() => document.activeElement?.blur());

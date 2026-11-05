@@ -192,6 +192,8 @@ function forgetResume() {
   refusedTrack = null;
   probeTracks = [];
   waitingForYandex = false;
+  // and the tracks of what played before are no run of failures for what comes now
+  failedInRow = 0;
   stopProbe();
 }
 
@@ -499,28 +501,41 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
     if (get().source?.kind === 'wave') fillWave();
   } catch (e: any) {
     if (opening === seq) opening = 0;
-    if (seq !== loadSeq || e?.name === 'AbortError') return;
-    // The wave lost the network: the downloads play instead of skipping through its queue.
-    if (get().source?.kind === 'wave' && (offlineMode || isNetworkError(e)) && fallBackToDownloads()) return;
-    // A list lost it: the app goes offline, so what is not downloaded is passed over at once.
-    if (!offlineMode && isNetworkError(e)) networkLost();
-    // Several in a row would not start (Yandex refusing, say): the downloads stand in until it
-    // gives them again; the downloads themselves failing, it stops and says why.
-    if (!offlineMode && failedInRow === 0) failedFrom = index;
-    if (!offlineMode && ++failedInRow >= MAX_FAILED_IN_ROW) {
-      failedInRow = 0;
-      if (get().source?.kind === 'list' && (get().source as { list?: string }).list === 'downloads') {
-        audio.pause();
-        set({ loading: false, playing: false, error: tr().player.cantPlayMany(errorMessage(e)) });
-        return;
-      }
-      const from = Math.min(failedFrom, index);
-      return standIn(get().queue[from] ?? t, from, e);
-    }
-    set({ loading: false, error: tr().player.cantPlay(t.title) });
-    setTimeout(() => seq === loadSeq && next(false), offlineMode ? 0 : 1500);
+    if (e?.name === 'AbortError') return;
+    wouldNotPlay(t, index, seq, e);
   }
   persistSoon();
+}
+
+/** The load whose failure is dealt with: a file that will not load says so twice (the element's
+ * "error" and the refused play()), and it is one failed track. */
+let failedLoad = 0;
+/** The track that has had its one more try with a fresh address. */
+let freshTried: string | null = null;
+
+/** A track did not start (or broke off): told, and on to the next one, not counted as heard. */
+function wouldNotPlay(t: Track, index: number, seq: number, e: unknown) {
+  if (seq !== loadSeq || failedLoad === seq) return;
+  failedLoad = seq;
+  // The wave lost the network: the downloads play instead of skipping through its queue.
+  if (get().source?.kind === 'wave' && (offlineMode || isNetworkError(e)) && fallBackToDownloads()) return;
+  // A list lost it: the app goes offline, so what is not downloaded is passed over at once.
+  if (!offlineMode && isNetworkError(e)) networkLost();
+  // Several in a row would not start (Yandex refusing, say): the downloads stand in until it
+  // gives them again; the downloads themselves failing, it stops and says why.
+  if (!offlineMode && failedInRow === 0) failedFrom = index;
+  if (!offlineMode && ++failedInRow >= MAX_FAILED_IN_ROW) {
+    failedInRow = 0;
+    if (get().source?.kind === 'list' && (get().source as { list?: string }).list === 'downloads') {
+      audio.pause();
+      set({ loading: false, playing: false, error: tr().player.cantPlayMany(errorMessage(e)) });
+      return;
+    }
+    const from = Math.min(failedFrom, index);
+    return standIn(get().queue[from] ?? t, from, e);
+  }
+  set({ loading: false, error: tr().player.cantPlay(t.title) });
+  setTimeout(() => seq === loadSeq && next(false, 0, true), offlineMode ? 0 : 1500);
 }
 
 /** What of the current play is written already: it is written as it plays, not only when the track
@@ -921,15 +936,18 @@ export function toggle() {
   }
 }
 
-/** `fade`: the crossfade's seconds, when the track playing flows into the next. */
-export async function next(user = true, fade = 0) {
+/** `fade`: the crossfade's seconds, when the track playing flows into the next. `failed`: the track
+ * broke off: it did not end, and a few seconds of it are no skip of the user's either. */
+export async function next(user = true, fade = 0, failed = false) {
   if (elsewhere) return void (user && elsewhere.send('next', []));
   const s = get();
   if (!s.queue.length) return;
+  if (failed && listened < HEARD_SECONDS) listened = 0;
+  const ended = !user && !failed;
   // The network is back (or Yandex gives the tracks again): the wave or list the downloads stood
   // in for plays again, from this track's end on.
-  if (canResume()) return resumeNow(!user);
-  finishCurrent(!user);
+  if (canResume()) return resumeNow(ended);
+  finishCurrent(ended);
   const how = user ? 'user' : 'natural';
   if (s.index + 1 < s.queue.length) return told(how, () => loadAt(s.index + 1, true, fade));
   if (s.source?.kind === 'wave') {
@@ -1164,6 +1182,7 @@ async function fallAsleep() {
 
 audio.addEventListener('playing', () => {
   failedInRow = 0;
+  freshTried = null;
   set({ playing: true, loading: false });
 });
 // While this device is another's remote, its own audio's last events (the pause that stopped it)
@@ -1228,16 +1247,19 @@ audio.addEventListener('ended', () => {
   next(false);
 });
 audio.addEventListener('error', () => {
-  if (!audio.src || !current()) return;
-  // Signed stream URLs expire — retry once with a fresh one.
+  if (!audio.src || !current() || elsewhere) return;
   const t = current()!;
-  if (prefetched.has(t.id)) {
+  // Signed stream URLs expire: one more try with a fresh one. Once: the fresh one is in `prefetched`
+  // too, and going by that alone a file that will not load asked for addresses for ever, the player
+  // stuck on it.
+  if (prefetched.has(t.id) && freshTried !== t.id) {
+    freshTried = t.id;
     prefetched.delete(t.id);
     const at = audio.currentTime;
     loadAt(get().index).then(() => at > 1 && seek(at));
     return;
   }
-  set({ loading: false, error: tr().player.playbackError(t.title) });
+  wouldNotPlay(t, get().index, loadSeq, new Error(audio.error?.message || tr().player.cantPlay(t.title)));
 });
 
 // --------------------------------------------------------------- media keys
