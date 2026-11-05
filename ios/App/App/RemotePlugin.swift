@@ -24,6 +24,7 @@ public class RemotePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "setNowPlaying", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "state", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "press", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "testLose", returnType: CAPPluginReturnPromise),
     ]
 
     private var artworkURL: String?
@@ -96,12 +97,12 @@ public class RemotePlugin: CAPPlugin, CAPBridgedPlugin {
                 MPMediaItemPropertyAlbumTitle: album,
                 MPMediaItemPropertyPlaybackDuration: duration,
                 MPNowPlayingInfoPropertyElapsedPlaybackTime: position,
-                MPNowPlayingInfoPropertyPlaybackRate: playing ? 1.0 : 0.0,
+                MPNowPlayingInfoPropertyPlaybackRate: playing ? lockScreenRate : 0.0,
                 MPNowPlayingInfoPropertyDefaultPlaybackRate: 1.0,
                 MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
             ]
             if artworkURL == self.artworkURL, let artwork = self.artwork { info[MPMediaItemPropertyArtwork] = artwork }
-            MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+            tellLockScreen(info)
             MPNowPlayingInfoCenter.default().playbackState = playing ? .playing : .paused
             MPRemoteCommandCenter.shared().likeCommand.isActive = liked
             if artworkURL != self.artworkURL { self.loadArtwork(artworkURL) }
@@ -125,9 +126,9 @@ public class RemotePlugin: CAPPlugin, CAPBridgedPlugin {
                 guard let self = self, self.artworkURL == address else { return }
                 let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
                 self.artwork = artwork
-                var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+                var info = toldLockScreen
                 info[MPMediaItemPropertyArtwork] = artwork
-                MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+                tellLockScreen(info)
             }
         }.resume()
     }
@@ -162,6 +163,17 @@ public class RemotePlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
+    /// For the simulator run: the player gone from the lock screen, and Oni's look at it: whether it
+    /// saw that, and what the system is told then.
+    @objc func testLose(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            let lost = claimLockScreen()
+            let info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+            call.resolve(["lost": lost, "title": info[MPMediaItemPropertyTitle] as? String ?? ""])
+        }
+    }
+
     /// For the simulator run: what the system was told, and which commands are on.
     @objc func state(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
@@ -178,15 +190,28 @@ public class RemotePlugin: CAPPlugin, CAPBridgedPlugin {
     }
 }
 
+/// What Oni last told the system plays (main thread). The system's own copy can go (another app, a
+/// reset of the media services): from this one it is told again, title and cover included. Going by
+/// the system's copy, what was gone stayed gone, and the clock's update put up a player with no title.
+private var toldLockScreen: [String: Any] = [:]
+
+private func tellLockScreen(_ info: [String: Any]) {
+    toldLockScreen = info
+    MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+}
+
+/// The lock screen's clock runs at the music's speed (Sound settings), or it runs away from the track.
+private var lockScreenRate: Double { PlayerPlugin.shared?.speedNow ?? 1 }
+
 /// Playing or paused, and where, on the lock screen and in the widget, by the player itself (main
 /// thread): the page may be frozen by iOS with the phone locked, and a pause iOS made (a call,
 /// headphones out, another app's sound) left "pause" on the lock screen with nothing playing (a user's
 /// screenshots, 25.10.2026).
 func showOnLockScreen(playing: Bool, at time: Double) {
-    var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+    var info = toldLockScreen
     info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = time
-    info[MPNowPlayingInfoPropertyPlaybackRate] = playing ? 1.0 : 0.0
-    MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+    info[MPNowPlayingInfoPropertyPlaybackRate] = playing ? lockScreenRate : 0.0
+    tellLockScreen(info)
     MPNowPlayingInfoCenter.default().playbackState = playing ? .playing : .paused
     if let was = NowPlayingShare.read() {
         var shared = was
@@ -200,17 +225,22 @@ func showOnLockScreen(playing: Bool, at time: Double) {
 /// Oni playing on with no player there (the user, 30.10.2026: VK opened from the lock screen to read
 /// messages, closed, the phone locked again; the music played, the player was gone). iOS does not
 /// give it back by itself; Oni says again what it plays (main thread) whenever the screen locks,
-/// Oni leaves the screen, or another app's sound ends while Oni plays. The info is cleared first:
-/// the same dictionary set again may be taken for no change.
-func claimLockScreen() {
-    guard let player = PlayerPlugin.shared, player.isPlaying else { return }
+/// Oni leaves the screen, another app's sound ends while Oni plays, and every little while in the
+/// background (PlayerPlugin.keepOnLockScreen), so a player gone at any moment comes back by itself.
+/// It used to clear the info first, on every lock: that takes the player off the lock screen for a
+/// moment at the very moment it is looked at, and the user kept losing it (5.11.2026). The clock's
+/// new place makes it a change anyway. Returns whether the system had lost it.
+@discardableResult
+func claimLockScreen() -> Bool {
+    guard let player = PlayerPlugin.shared, player.isPlaying, !toldLockScreen.isEmpty else { return false }
     let center = MPNowPlayingInfoCenter.default()
-    guard var info = center.nowPlayingInfo, !info.isEmpty else { return }
+    let lost = center.nowPlayingInfo?.isEmpty ?? true
     // Not the session's setActive: playing, it is active already, and on the main thread it may block.
     UIApplication.shared.beginReceivingRemoteControlEvents()
+    var info = toldLockScreen
     info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = player.currentTime
-    info[MPNowPlayingInfoPropertyPlaybackRate] = 1.0
-    center.nowPlayingInfo = nil
-    center.nowPlayingInfo = info
+    info[MPNowPlayingInfoPropertyPlaybackRate] = lockScreenRate
+    tellLockScreen(info)
     center.playbackState = .playing
+    return lost
 }

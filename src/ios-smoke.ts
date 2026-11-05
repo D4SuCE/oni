@@ -1456,11 +1456,17 @@ export async function runSmoke() {
     report('playback', playing, `"${title}" at ${wave().audio.currentTime.toFixed(1)} s`);
     // No CORS request for the stream here: the CDN would refuse it and nothing would play.
     report('no-cors-audio', wave().audio.crossOrigin === null);
-    // The lock screen title adds the version ("Title (Slowed)"), see updateMediaSession.
-    report('media-session', navigator.mediaSession?.metadata?.title?.startsWith(title) === true, `"${navigator.mediaSession?.metadata?.title ?? ''}"`);
+    // WebKit's own player is told nothing: the lock screen is the native one's alone.
+    report('media-session', !navigator.mediaSession?.metadata, `"${navigator.mediaSession?.metadata?.title ?? ''}"`);
     // The lock screen: told what plays, with previous / next / like and no ±10 s (OniRemote).
     const remote = await OniRemote.state();
     report('lock-screen', remote.title.startsWith(title) && remote.next && remote.prev && remote.like && !remote.skip, JSON.stringify(remote));
+    // Gone from the lock screen (it can go at any moment): told again, whole, from Oni's own copy.
+    const wasPlaying = !wave().audio.paused;
+    if (!wasPlaying) await wave().audio.play();
+    const back = await OniRemote.testLose();
+    report('lock-screen-comes-back', back.lost && back.title.startsWith(title), JSON.stringify(back));
+    if (!wasPlaying) wave().audio.pause();
 
     click('.pb-cover');
     report('now-playing', await until(() => document.querySelector('.nowplaying'), 5000));
