@@ -5,7 +5,7 @@
 import http from 'node:http';
 import { createRequire } from 'node:module';
 import { setLang, tr } from '../src/i18n.ts';
-import { listKeyOf } from '../src/player/source.ts';
+import { continueSeed, listKeyOf } from '../src/player/source.ts';
 import { runJob, stopJob, useJobs } from '../src/share/jobs.ts';
 import { readMark, visible, withMark } from '../src/share/mark.ts';
 import { fileName } from '../src/share/shared.ts';
@@ -172,6 +172,17 @@ await test('Plus: "gone" told once while it is gone, "ending" once per end, told
   assert(r.tell === 'ending', JSON.stringify(r));
   assert(plusNotice(acc({ plusUntil: now + 2 * day, plusRenews: false }), r.told, now).tell === null, 'ending told twice');
   assert(plusNotice(acc({ plusUntil: now + 10 * day, plusRenews: false }), '', now).tell === null, 'told too early');
+});
+
+await test('what a list that has ended goes on from', () => {
+  const t = (id: string, extra = {}) => ({ id, ...extra });
+  const list = (from?: object) => ({ kind: 'list' as const, title: 'x', from });
+  assert(continueSeed(list({ album: 7 }), [t('1')]) === 'album:7', 'an album');
+  assert(continueSeed(list({ playlist: '5:3' }), [t('1')]) === 'playlist:5:3', 'a playlist');
+  assert(continueSeed(list(), [t('1'), t('2')]) === 'track:2', 'the last track');
+  assert(continueSeed(list(), [t('1'), t('2', { share: {} }), t('3', { trackSource: 'UGC' })]) === 'track:1', 'the last that is Yandex\'s');
+  assert(continueSeed(list(), [t('2', { share: {} })]) === null, 'nothing of Yandex\'s');
+  assert(continueSeed({ kind: 'wave' }, [t('1')]) === null, 'a wave goes on by itself');
 });
 
 /** A local server answering each request with `serve`. */
