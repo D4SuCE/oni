@@ -230,9 +230,16 @@ function createWindow() {
   // Started with Windows: it stays in the tray until opened from there.
   mainWindow.once('ready-to-show', () => !desktop.startedHidden && mainWindow.show());
   // A crashed renderer leaves an empty see-through window: log it and load the page again.
+  // Crashing again and again, it waits longer each time (up to a minute): loaded again at once, a page
+  // that crashes at its start kept the computer busy doing only that.
+  let crashes = 0;
+  let crashedAt = 0;
   mainWindow.webContents.on('render-process-gone', (_e, details) => {
     writeLog('error', 'renderer', `process gone: ${details.reason} (exit ${details.exitCode})`);
-    if (details.reason !== 'clean-exit' && !mainWindow.isDestroyed()) mainWindow.webContents.reload();
+    if (details.reason === 'clean-exit' || mainWindow.isDestroyed()) return;
+    crashes = Date.now() - crashedAt > 5 * 60_000 ? 1 : crashes + 1;
+    crashedAt = Date.now();
+    setTimeout(() => !mainWindow.isDestroyed() && mainWindow.webContents.reload(), crashes === 1 ? 0 : Math.min(60_000, 1000 * 2 ** crashes));
   });
   mainWindow.on('unresponsive', () => writeLog('warn', 'renderer', 'window is not responding'));
   desktop.keepHome(mainWindow.webContents);

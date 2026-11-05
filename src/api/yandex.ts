@@ -40,6 +40,10 @@ export class ApiError extends Error {
   }
 }
 
+/** Yandex refused the sign-in itself. Any other answer (a 500 while it is down, say) says nothing of
+ * the token: taken for a refusal, an outage of Yandex's put the user on the sign-in page. */
+export const signInRefused = (e: unknown) => e instanceof ApiError && (e.status === 401 || e.status === 403);
+
 /** A request that never reached Yandex (no network, or it dropped): the one error that means
  * "offline". Anything else (a track that would not start, a refusal) is not. */
 export class NetworkError extends Error {}

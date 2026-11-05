@@ -1183,6 +1183,10 @@ export function playNext(t: Track) {
     queue.splice(s.index + 1, 0, t);
     return { queue };
   });
+  if (unshuffled) {
+    const at = unshuffled.indexOf(get().queue[get().index]);
+    unshuffled = [...unshuffled.slice(0, at + 1), t, ...unshuffled.slice(at + 1)];
+  }
   if (get().index < 0) loadAt(0);
   else shared({});
   prefetchNext();
@@ -1191,6 +1195,7 @@ export function playNext(t: Track) {
 export function enqueue(t: Track) {
   if (elsewhere) return elsewhere.send('enqueue', [t]);
   set((s) => ({ queue: [...s.queue, t] }));
+  if (unshuffled) unshuffled = [...unshuffled, t];
   if (get().index < 0) loadAt(0);
   else shared({});
 }
@@ -1212,6 +1217,12 @@ export function removeAt(i: number) {
   if (elsewhere) return elsewhere.send('removeAt', [i]);
   const s = get();
   if (i === s.index) return;
+  // Taken out while shuffled: not back when the shuffle is off. Going by the track itself (the same
+  // track twice: one of them).
+  if (unshuffled) {
+    const at = unshuffled.indexOf(s.queue[i]);
+    if (at >= 0) unshuffled = unshuffled.filter((_, j) => j !== at);
+  }
   const queue = s.queue.filter((_, j) => j !== i);
   set({ queue, index: i < s.index ? s.index - 1 : s.index });
   shared({});
@@ -1229,6 +1240,7 @@ export function dropFromQueue(trackId: string) {
     return;
   }
   const queue = s.queue.filter((t) => t.id !== trackId);
+  if (unshuffled) unshuffled = unshuffled.filter((t) => t.id !== trackId);
   set({ queue, index: cur ? queue.indexOf(cur) : -1 });
   shared({});
 }
@@ -1245,9 +1257,12 @@ function shuffleArray<T>(arr: T[]) {
 // ---------------------------------------------------------------- sleep timer
 
 let sleepTimer: ReturnType<typeof setTimeout> | null = null;
+/** Bumped by every setting of the timer: a fade under way that was called off stops, the volume back. */
+let sleeps = 0;
 
 /** The sleep timer: in so many minutes, at the end of this track, or off (null). */
 export function setSleep(when: number | 'track' | null) {
+  sleeps++;
   if (sleepTimer) clearTimeout(sleepTimer);
   sleepTimer = null;
   if (typeof when === 'number') {
@@ -1262,11 +1277,14 @@ async function fallAsleep() {
   sleepTimer = null;
   set({ sleep: { until: null, afterTrack: false } });
   if (audio.paused) return;
+  const mine = sleeps;
   const steps = 16;
   for (let i = steps - 1; i >= 0; i--) {
+    if (mine !== sleeps) return applyVolume();
     applyVolume(i / steps);
     await new Promise((r) => setTimeout(r, 250));
   }
+  if (mine !== sleeps) return applyVolume();
   audio.pause();
   applyVolume();
 }
@@ -1335,7 +1353,7 @@ audio.addEventListener('ended', () => {
     finishCurrent(true);
     newPlay(); // the same track again is another play
     audio.currentTime = 0;
-    audio.play();
+    audio.play().catch(() => {});
     return;
   }
   next(false);
