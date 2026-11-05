@@ -221,12 +221,14 @@ await step('no network: Downloads lists everything downloaded', async () => {
   if (titles.length !== 4 || !titles.includes(title)) throw new Error(`downloads offline: ${titles}`);
 });
 
-await step('the network is back: the app goes online again', async () => {
+await step('the network is back: the app goes online again, and what needs the network starts (it was off until a restart)', async () => {
+  if (await page.evaluate(() => window.__wave.useApp.getState().onlineStarted)) throw new Error('started with no network');
   await page.evaluate(() => {
     window.wave.setNetworkForTest(true);
     window.dispatchEvent(new Event('online'));
   });
   await page.waitForSelector('[data-testid="offline-banner"]', { state: 'detached', timeout: 15000 });
+  if (!(await page.evaluate(() => window.__wave.useApp.getState().onlineStarted))) throw new Error('not started');
   await page.click('[data-testid="nav-home"]');
   await page.waitForSelector('.wave-hero', { timeout: 15000 });
 });

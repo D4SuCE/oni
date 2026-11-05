@@ -100,7 +100,9 @@ export function capacitorTransport(): Transport {
     },
 
     async fetchBytes(url) {
-      const r = await CapacitorHttp.request({ url, method: 'GET', responseType: 'arraybuffer' });
+      // Without a limit of its own the native side waits ten minutes on a silent server; this one is
+      // the wait for the next bytes, so a long download goes on as long as it moves.
+      const r = await CapacitorHttp.request({ url, method: 'GET', responseType: 'arraybuffer', readTimeout: 30_000 });
       if (r.status < 200 || r.status >= 300) throw new Error(`HTTP ${r.status}`);
       return asBytes(r.data) as ArrayBuffer;
     },
@@ -140,6 +142,9 @@ export function capacitorTransport(): Transport {
         headers,
         data,
         dataType,
+        // Ten minutes on a silent server otherwise, the app on its splash screen or the track not
+        // starting. An upload's body takes as long as it takes. (As electron/fetching.cjs.)
+        readTimeout: data !== undefined ? 600_000 : /(^|\.)disk\.yandex\./.test(url.hostname) ? 120_000 : 20_000,
         // Parse JSON here, like the desktop: the native side only parses it for JSON content types.
         responseType: 'text',
       });

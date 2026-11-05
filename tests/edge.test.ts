@@ -2,6 +2,8 @@
 // failed sent again (src/sync/disk.ts), "Add all to mine" and "Download" stopped (src/share/jobs.ts),
 // the key a page knows its list playing by, times, Russian plurals, file names, the hidden mark.
 // Run: npm run test:edge
+import http from 'node:http';
+import { createRequire } from 'node:module';
 import { setLang, tr } from '../src/i18n.ts';
 import { listKeyOf } from '../src/player/source.ts';
 import { runJob, stopJob, useJobs } from '../src/share/jobs.ts';
@@ -11,6 +13,8 @@ import { YandexDisk } from '../src/sync/disk.ts';
 import { fmtTime } from '../src/ui/util.ts';
 import { plusNotice } from '../src/ui/plus.ts';
 import { plusTerm } from '../src/api/yandex.ts';
+
+const { fetchBytes, requestLimit } = createRequire(import.meta.url)('../electron/fetching.cjs');
 
 let passed = 0;
 let failed = 0;
@@ -168,6 +172,52 @@ await test('Plus: "gone" told once while it is gone, "ending" once per end, told
   assert(r.tell === 'ending', JSON.stringify(r));
   assert(plusNotice(acc({ plusUntil: now + 2 * day, plusRenews: false }), r.told, now).tell === null, 'ending told twice');
   assert(plusNotice(acc({ plusUntil: now + 10 * day, plusRenews: false }), '', now).tell === null, 'told too early');
+});
+
+/** A local server answering each request with `serve`. */
+async function server(serve: http.RequestListener) {
+  const srv = http.createServer(serve);
+  await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
+  return { url: `http://127.0.0.1:${(srv.address() as { port: number }).port}/`, close: () => srv.closeAllConnections() ?? srv.close() };
+}
+
+await test('waiting for the network: an answer not long, a file from Disk longer, an upload longest', () => {
+  const api = requestLimit('https://api.music.yandex.net/account/status', false);
+  const disk = requestLimit('https://downloader.disk.yandex.ru/x', false);
+  const up = requestLimit('https://uploader1.disk.yandex.net/x', true);
+  assert(api <= 30_000 && disk > api && up > disk, JSON.stringify({ api, disk, up }));
+});
+
+await test('a download from a server that says nothing is given up', async () => {
+  const s = await server(() => {});
+  const from = Date.now();
+  const e = await fetchBytes(s.url, 150).catch((x: Error) => x);
+  s.close();
+  assert(e instanceof Error && e.name === 'TimeoutError' && Date.now() - from < 2000, String(e));
+});
+
+await test('a download that stops moving half way is given up; slow but moving goes on to its end', async () => {
+  const stops = await server((_, res) => void res.write('part'));
+  const e = await fetchBytes(stops.url, 150).catch((x: Error) => x);
+  stops.close();
+  assert(e instanceof Error && e.name === 'TimeoutError', String(e));
+  const slow = await server(async (_, res) => {
+    for (let i = 0; i < 6; i++) {
+      res.write('ab');
+      await new Promise((r) => setTimeout(r, 60));
+    }
+    res.end();
+  });
+  const bytes = await fetchBytes(slow.url, 150);
+  slow.close();
+  assert(new TextDecoder().decode(bytes) === 'abababababab', 'whole');
+});
+
+await test('a refusal of a download is final, marked so', async () => {
+  const s = await server((_, res) => void res.writeHead(404).end());
+  const e = await fetchBytes(s.url, 500).catch((x: Error & { answered?: boolean }) => x);
+  s.close();
+  assert(e instanceof Error && (e as { answered?: boolean }).answered === true && e.message === 'HTTP 404', String(e));
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

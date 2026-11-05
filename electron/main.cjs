@@ -9,6 +9,7 @@ const updater = require('./updater.cjs');
 const hotkeys = require('./hotkeys.cjs');
 const { setupLan } = require('./lan.cjs');
 const { setupTogether } = require('./together.cjs');
+const { requestLimit, fetchBytes } = require('./fetching.cjs');
 
 // The app was called Wave before it became Oni; keep its data folder so the sign-in,
 // history and settings survive the rename.
@@ -139,16 +140,19 @@ async function request(req) {
   // Yandex's servers now and then drop one (the user's picture of a friend's uploads, 27.10.2026).
   // A write is not: it may have been done.
   let resp;
+  let text;
   for (let i = 1; ; i++) {
     try {
-      resp = await fetch(url, { method, headers, body });
+      // One limit for the answer and its reading.
+      resp = await fetch(url, { method, headers, body, signal: AbortSignal.timeout(requestLimit(url.href, body !== undefined)) });
+      text = await resp.text();
       break;
     } catch (e) {
-      if (method === 'GET' && i < 3 && !networkDown) continue;
+      // Silence was waited for long enough already: not twice more.
+      if (method === 'GET' && i < 3 && !networkDown && e?.name !== 'TimeoutError') continue;
       throw e;
     }
   }
-  const text = await resp.text();
   let data = text;
   if (req.responseType !== 'text') {
     try {
@@ -301,15 +305,12 @@ ipcMain.handle('wave:fetch-bytes', async (_e, url) => {
   // A server not reached is tried twice more: through a VPN some of Yandex's are now and then
   // (27.10.2026); an answer, even a refusal, is final.
   for (let i = 1; ; i++) {
-    let r;
     try {
-      r = await fetch(url);
+      return await fetchBytes(url);
     } catch (e) {
-      if (i < 3 && !networkDown) continue;
+      if (!e?.answered && e?.name !== 'TimeoutError' && i < 3 && !networkDown) continue;
       throw e;
     }
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return r.arrayBuffer();
   }
 });
 // Tests only: requests fail as with no network, to check the offline mode.
