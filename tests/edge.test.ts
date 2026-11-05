@@ -12,7 +12,7 @@ import { fileName } from '../src/share/shared.ts';
 import { YandexDisk } from '../src/sync/disk.ts';
 import { fmtTime } from '../src/ui/util.ts';
 import { plusNotice } from '../src/ui/plus.ts';
-import { plusTerm } from '../src/api/yandex.ts';
+import { ApiError, NetworkError, plusTerm, signInRefused } from '../src/api/yandex.ts';
 
 const { fetchBytes, requestLimit } = createRequire(import.meta.url)('../electron/fetching.cjs');
 
@@ -183,6 +183,11 @@ await test('what a list that has ended goes on from', () => {
   assert(continueSeed(list(), [t('1'), t('2', { share: {} }), t('3', { trackSource: 'UGC' })]) === 'track:1', 'the last that is Yandex\'s');
   assert(continueSeed(list(), [t('2', { share: {} })]) === null, 'nothing of Yandex\'s');
   assert(continueSeed({ kind: 'wave' }, [t('1')]) === null, 'a wave goes on by itself');
+});
+
+await test('only a refusal of the token asks to sign in again: an outage of Yandex does not', () => {
+  assert(signInRefused(new ApiError(401, 'x')) && signInRefused(new ApiError(403, 'x')), 'a refusal');
+  assert(!signInRefused(new ApiError(500, 'x')) && !signInRefused(new ApiError(503, 'x')) && !signInRefused(new NetworkError('x')) && !signInRefused(new Error('x')), 'no refusal');
 });
 
 /** A local server answering each request with `serve`. */

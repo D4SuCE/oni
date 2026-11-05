@@ -230,7 +230,8 @@ await step('tracks that will not play: the downloads stand in, and the list come
         return real(id, ...rest);
       };
     }, String(fresh[0].id));
-    await page.waitForTimeout(4500);
+    // The probe's turn (3 s in a test run) and Yandex's answers to it: at the end of a long day of GitHub's it takes longer.
+    await page.waitForTimeout(8000);
     await page.evaluate(() => window.__wave.audio.dispatchEvent(new Event('ended')));
     await page.waitForFunction((second) => { const s = window.__wave.usePlayer.getState(); return s.source?.title === 'e2e refused' && String(s.queue[s.index]?.id) === second; }, String(fresh[1].id), { timeout: 15000 }).catch(where('not back to the list at the next track'));
     await give();
@@ -359,6 +360,47 @@ await step("a crossfade does not cut off a list's last track: it plays to its en
   }
 });
 
+await step('the queue while shuffled: what is added stays when the shuffle goes off, what is taken out does not come back', async () => {
+  const got = await page.evaluate(async () => {
+    const w = window.__wave;
+    const chart = (await w.api.chart()).filter((t) => t.available !== false).slice(10, 16);
+    await w.playTracks(chart.slice(0, 4), 0, 'e2e shuffled');
+    w.audio.pause();
+    w.toggleShuffle();
+    const s = w.usePlayer.getState();
+    const out = s.queue[s.index + 1];
+    w.removeAt(s.index + 1);
+    w.enqueue(chart[4]);
+    w.playNext(chart[5]);
+    const cur = w.usePlayer.getState().queue[w.usePlayer.getState().index];
+    w.toggleShuffle();
+    const t = w.usePlayer.getState();
+    return { ids: t.queue.map((x) => String(x.id)), index: t.index, playing: String(t.queue[t.index]?.id) === String(cur.id), out: String(out.id), added: [String(chart[4].id), String(chart[5].id)] };
+  });
+  if (!got.added.every((id) => got.ids.includes(id)) || got.ids.includes(got.out) || !got.playing || got.ids.length !== 5) throw new Error(JSON.stringify(got));
+});
+
+await step('the sleep timer called off while it fades: the music goes on at its volume', async () => {
+  const got = await page.evaluate(async () => {
+    const w = window.__wave;
+    const a = w.audio;
+    const t = (await w.api.chart()).filter((x) => x.available !== false && x.durationMs > 60000)[9];
+    await w.playTracks([t], 0, 'e2e sleep');
+    const end = performance.now() + 15000;
+    while ((a.paused || a.currentTime < 0.2) && performance.now() < end) await new Promise((r) => setTimeout(r, 50));
+    const before = a.volume;
+    w.setSleep(0.0005); // 30 ms
+    await new Promise((r) => setTimeout(r, 900));
+    const fading = a.volume;
+    w.setSleep(null);
+    await new Promise((r) => setTimeout(r, 4500));
+    const res = { before, fading, after: a.volume, paused: a.paused };
+    a.pause();
+    return res;
+  });
+  if (got.fading >= got.before || got.paused || Math.abs(got.after - got.before) > 0.01) throw new Error(JSON.stringify(got));
+});
+
 await step('a track whose file will not load: one fresh address, then the next track; and what never played is not counted as heard', async () => {
   // Found reading the code, 5.11.2026: an address that failed asked for a new one for ever (605 asks
   // in 30 s, the player stuck on that track), and a track that never started went to History, to the
@@ -383,8 +425,9 @@ await step('a track whose file will not load: one fresh address, then the next t
       const tracks = [mk(first), mk(first + 1), mk(first + 2)];
       void w.playTracks(tracks, 0, 'e2e broken');
       const seen = new Set();
-      const until = performance.now() + 2600;
-      while (performance.now() < until) {
+      // Up to the second track: how soon the failure comes is the network's (2 s here, more on GitHub's machines).
+      const until = performance.now() + 20000;
+      while (performance.now() < until && !seen.has(1)) {
         seen.add(w.usePlayer.getState().index);
         await new Promise((r) => setTimeout(r, 50));
       }

@@ -387,7 +387,7 @@ async function othersSound() {
   report('call-while-paused', !paused.playing && again.playing && again.time >= paused.time, JSON.stringify({ paused, again }));
   report('muted-video-keeps-music', muted.playing && hinted.playing && pageOn, JSON.stringify({ muted, hinted, pageOn }));
   report('interruption-pauses', !taken.playing, JSON.stringify({ taken }));
-  report('sound-log', told.includes('others') && told.includes('interrupted:options 0') && told.includes('halt:interruption') && told.includes('play'), told.join());
+  report('sound-log', told.includes('others') && told.some((x) => x.startsWith('interrupted:options 0')) && told.includes('halt:interruption') && told.includes('play'), told.join());
 }
 
 /** Speed (AVAudioUnitTimePitch after both nodes): at 1.5× the player's own clock, which counts

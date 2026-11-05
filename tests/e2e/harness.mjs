@@ -21,7 +21,8 @@ export const app = await electron.launch({
   env: { ...process.env, WAVE_E2E: '1', WAVE_USER_DATA: userData },
 });
 export const page = await app.firstWindow();
-page.on('console', (m) => m.type() === 'error' && consoleErrors.push(m.text()));
+// A file asked for that is known not to be there (07-playback, "will not load") is no error of the app's.
+page.on('console', (m) => m.type() === 'error' && !m.location().url?.includes('oni-no-such-file') && consoleErrors.push(m.text()));
 page.on('pageerror', (e) => consoleErrors.push(String(e)));
 
 /** GitHub's machines (e2e.yml) have no graphics card and are slower than the user's PC: the speed

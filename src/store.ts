@@ -3,9 +3,9 @@
 import { create } from 'zustand';
 import type { Account, Playlist, Track } from './api/types.ts';
 import { api, loadJson, storage, transport } from './api/client.ts';
-import { ApiError, trackKey } from './api/yandex.ts';
+import { signInRefused, trackKey } from './api/yandex.ts';
 import { tr, useLang } from './i18n.ts';
-import { dropFromQueue, offline, onNetworkLost, setDislikedCheck, setLikedCheck, setOfflineMode, usePlayer, warmWave, waveFeedback } from './player/player.ts';
+import { audio, dropFromQueue, offline, onNetworkLost, setDislikedCheck, setLikedCheck, setOfflineMode, usePlayer, warmWave, waveFeedback } from './player/player.ts';
 import { connectDisk, startSync } from './sync/index.ts';
 import { checkWaiting } from './import/run.ts';
 import { openPlus, plusNotice } from './ui/plus.ts';
@@ -145,12 +145,13 @@ export async function init() {
     storage.setItem(ACCOUNT_CACHE, JSON.stringify(account));
     set({ account, auth: 'ready', offline: false });
     setOfflineMode(false);
+    showKeptLibrary();
     refreshLibrary();
     startOnline(account);
   } catch (e) {
     // No network (not a refused token): start from what was saved last time, with the downloads.
     const cached = loadJson<Account | null>(ACCOUNT_CACHE, null);
-    if (!(e instanceof ApiError) && cached) return goOffline(cached);
+    if (!signInRefused(e) && cached) return goOffline(cached);
     toast(tr().toast.loginFailed(errorText(e)));
     set({ auth: 'login' });
   }
@@ -292,18 +293,52 @@ export async function loginWithYandex() {
 
 export async function logout() {
   await transport.setToken(null);
-  set({ auth: 'login', account: null, playlists: [], likedPlaylists: [], liked: new Set(), likedKeys: [] });
+  // Nothing of this account for the next one: its music stops, its library and its likes go.
+  audio.pause();
+  clearTimeout(libraryRetry);
+  storage.removeItem(LIBRARY_CACHE);
+  storage.removeItem(ACCOUNT_CACHE);
+  startedOnline = false;
+  set({ auth: 'login', account: null, playlists: [], likedPlaylists: [], liked: new Set(), likedKeys: [], disliked: new Set(), libraryReady: false, onlineStarted: false });
 }
 
 // ------------------------------------------------------------------ library
 
+/** The library as it was last time, at once: the sidebar and the hearts do not wait for Yandex. */
+function showKeptLibrary() {
+  const lib = loadJson<LibraryCache | null>(LIBRARY_CACHE, null);
+  if (!lib || get().libraryReady) return;
+  set({
+    likedKeys: lib.likedKeys,
+    liked: new Set(lib.likedKeys.map((k) => k.split(':')[0])),
+    disliked: new Set(lib.disliked),
+    playlists: lib.playlists,
+    likedPlaylists: lib.likedPlaylists,
+  });
+}
+
+let libraryRetry: ReturnType<typeof setTimeout> | undefined;
+const LIBRARY_RETRY = 30_000;
+
 export async function refreshLibrary() {
+  clearTimeout(libraryRetry);
+  let missing = false;
+  /** A part that failed stays as it is, and it is asked for again: read once a run, a moment of bad
+   * network at the start left the likes empty for the whole run, and empty in the copy for a start
+   * with no network. */
+  const part = <T,>(asked: Promise<T>, kept: () => T) =>
+    asked.catch(() => {
+      missing = true;
+      return kept();
+    });
   const [likedKeys, disliked, playlists, likedPlaylists] = await Promise.all([
-    api.likedTrackKeys().catch(() => get().likedKeys),
-    api.dislikedTrackIds().catch(() => [...get().disliked]),
-    api.playlists().catch(() => get().playlists),
-    api.likedPlaylists().catch(() => get().likedPlaylists),
+    part(api.likedTrackKeys(), () => get().likedKeys),
+    part(api.dislikedTrackIds(), () => [...get().disliked]),
+    part(api.playlists(), () => get().playlists),
+    part(api.likedPlaylists(), () => get().likedPlaylists),
   ]);
+  // Signed out meanwhile: this was the old account's.
+  if (!get().account) return;
   // Covers for tracks downloaded before they were kept (in the background, once there is a network).
   offline?.fillCovers().catch(() => {});
   set({
@@ -314,6 +349,10 @@ export async function refreshLibrary() {
     disliked: new Set(disliked),
     playlists,
   });
+  if (missing) {
+    if (!get().offline) libraryRetry = setTimeout(() => void refreshLibrary(), LIBRARY_RETRY);
+    return;
+  }
   // For a start without a network: the sidebar and likes as they were.
   storage.setItem(LIBRARY_CACHE, JSON.stringify({ likedKeys, disliked, playlists, likedPlaylists } satisfies LibraryCache));
 }
