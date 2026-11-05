@@ -52,6 +52,8 @@ interface AppState {
   tuningOpen: boolean;
   soundOpen: boolean;
   searchQuery: string;
+  /** What needs the network has been started (startOnline). */
+  onlineStarted: boolean;
 }
 
 export const useApp = create<AppState>(() => ({
@@ -73,6 +75,7 @@ export const useApp = create<AppState>(() => ({
   tuningOpen: false,
   soundOpen: false,
   searchQuery: '',
+  onlineStarted: false,
 }));
 
 const set = useApp.setState;
@@ -141,13 +144,9 @@ export async function init() {
     const account = await api.account(true);
     storage.setItem(ACCOUNT_CACHE, JSON.stringify(account));
     set({ account, auth: 'ready', offline: false });
-    tellPlus(account);
     setOfflineMode(false);
     refreshLibrary();
-    warmWave();
-    // A room listened in a little while ago (the iPhone's Oni put to sleep) is joined again, once Disk is known.
-    void startSync().then(() => import('./together/index.ts')).then((m) => m.resumeTogether());
-    lookAgain();
+    startOnline(account);
   } catch (e) {
     // No network (not a refused token): start from what was saved last time, with the downloads.
     const cached = loadJson<Account | null>(ACCOUNT_CACHE, null);
@@ -155,6 +154,21 @@ export async function init() {
     toast(tr().toast.loginFailed(errorText(e)));
     set({ auth: 'login' });
   }
+}
+
+/** What needs the network and runs once a run, at the first moment there is one: at the start or, a
+ * start without a network, when it comes back (until then the history, the remote and the backup
+ * stayed off until Oni was started again). */
+let startedOnline = false;
+function startOnline(account: Account) {
+  if (startedOnline) return;
+  startedOnline = true;
+  useApp.setState({ onlineStarted: true });
+  tellPlus(account);
+  warmWave();
+  // A room listened in a little while ago (the iPhone's Oni put to sleep) is joined again, once Disk is known.
+  void startSync().then(() => import('./together/index.ts')).then((m) => m.resumeTogether());
+  lookAgain();
 }
 
 /** Tracks of imported playlists Yandex had not got: asked for again once a day, added to their
@@ -245,16 +259,19 @@ if (typeof window !== 'undefined') window.addEventListener('offline', lostNetwor
 
 async function reconnect() {
   if (!get().offline) return;
+  let account: Account;
   try {
-    await api.account(true);
+    account = await api.account(true);
   } catch {
     return;
   }
   clearInterval(reconnecting);
   window.removeEventListener('online', reconnect);
-  set({ offline: false });
+  storage.setItem(ACCOUNT_CACHE, JSON.stringify(account));
+  set({ offline: false, account });
   setOfflineMode(false);
   refreshLibrary();
+  startOnline(account);
   toast(tr().downloads.backOnline);
 }
 
