@@ -230,7 +230,8 @@ await step('tracks that will not play: the downloads stand in, and the list come
         return real(id, ...rest);
       };
     }, String(fresh[0].id));
-    await page.waitForTimeout(4500);
+    // The probe's turn (3 s in a test run) and Yandex's answers to it: at the end of a long day of GitHub's it takes longer.
+    await page.waitForTimeout(8000);
     await page.evaluate(() => window.__wave.audio.dispatchEvent(new Event('ended')));
     await page.waitForFunction((second) => { const s = window.__wave.usePlayer.getState(); return s.source?.title === 'e2e refused' && String(s.queue[s.index]?.id) === second; }, String(fresh[1].id), { timeout: 15000 }).catch(where('not back to the list at the next track'));
     await give();
@@ -424,8 +425,9 @@ await step('a track whose file will not load: one fresh address, then the next t
       const tracks = [mk(first), mk(first + 1), mk(first + 2)];
       void w.playTracks(tracks, 0, 'e2e broken');
       const seen = new Set();
-      const until = performance.now() + 2600;
-      while (performance.now() < until) {
+      // Up to the second track: how soon the failure comes is the network's (2 s here, more on GitHub's machines).
+      const until = performance.now() + 20000;
+      while (performance.now() < until && !seen.has(1)) {
         seen.add(w.usePlayer.getState().index);
         await new Promise((r) => setTimeout(r, 50));
       }

@@ -1010,10 +1010,11 @@ function moreAfter() {
   return s.index + 1 < s.queue.length || s.source?.kind === 'wave' || s.repeat === 'all' || canGoOn();
 }
 
-/** Not in a room (each member would start a radio of its own) and not with no network. */
+/** Not in a room (each member would start a radio of its own), not with no network. */
 const canGoOn = () => {
   const s = get();
-  return s.autoContinue && !together && !offlineMode && continueSeed(s.source, s.queue) !== null;
+  // Nor while the downloads stand in for something that comes back by itself.
+  return s.autoContinue && !together && !offlineMode && !waveToResume && !listToResume && continueSeed(s.source, s.queue) !== null;
 };
 
 /**
