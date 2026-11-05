@@ -25,6 +25,8 @@ interface RemotePlugin {
   state(): Promise<{ title: string; next: boolean; prev: boolean; skip: boolean; like: boolean }>;
   /** For the simulator run: a lock-screen button, as iOS hands it over; whether it plays right after. */
   press(options: { name: string }): Promise<{ playing: boolean }>;
+  /** For the simulator run: the player gone from the lock screen; whether Oni saw that and what it told then. */
+  testLose(): Promise<{ lost: boolean; title: string }>;
   addListener(event: 'command', cb: (e: { name: string; position?: number }) => void): Promise<PluginListenerHandle>;
 }
 

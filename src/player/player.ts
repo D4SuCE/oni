@@ -1220,7 +1220,7 @@ audio.addEventListener('timeupdate', () => {
     crossLoading = true;
     void next(false, fade).finally(() => (crossLoading = false));
   }
-  if ('setPositionState' in navigator.mediaSession && Number.isFinite(audio.duration)) {
+  if (!isIos && 'setPositionState' in navigator.mediaSession && Number.isFinite(audio.duration)) {
     try {
       navigator.mediaSession.setPositionState({ duration: audio.duration, position: Math.min(t, audio.duration), playbackRate: get().rate });
     } catch {
@@ -1264,8 +1264,10 @@ audio.addEventListener('error', () => {
 
 // --------------------------------------------------------------- media keys
 
+// The iPhone's lock screen is the native player's (remote.ts): WebKit is told nothing, so that its
+// own player never has a say there. The native one was losing its place on the lock screen.
 function updateMediaSession(t: Track) {
-  if (!('mediaSession' in navigator)) return;
+  if (isIos || !('mediaSession' in navigator)) return;
   const art = trackCover(t, 400);
   navigator.mediaSession.metadata = new MediaMetadata({
     title: t.title + (t.version ? ` (${t.version})` : ''),
@@ -1275,15 +1277,14 @@ function updateMediaSession(t: Track) {
   });
 }
 
-if ('mediaSession' in navigator) {
+if (!isIos && 'mediaSession' in navigator) {
   const ms = navigator.mediaSession;
   ms.setActionHandler('play', () => toggle());
   ms.setActionHandler('pause', () => toggle());
   ms.setActionHandler('nexttrack', () => next(true));
   ms.setActionHandler('previoustrack', () => prev());
   ms.setActionHandler('seekto', (d) => d.seekTime !== undefined && seek(d.seekTime));
-  // The iPhone lock screen showed -10 s / +10 s instead of previous / next: clear the seek
-  // actions explicitly, so only the track ones are offered (not every browser knows them).
+  // Only the track actions are offered (not every browser knows these).
   for (const action of ['seekbackward', 'seekforward'] as const) {
     try {
       ms.setActionHandler(action, null);
@@ -1295,7 +1296,7 @@ if ('mediaSession' in navigator) {
 // Back from the background (the iPhone may have held the page): the wave tops up its queue.
 document.addEventListener('visibilitychange', () => !document.hidden && get().source?.kind === 'wave' && fillWave());
 
-// That alone did not change the iPhone's lock screen: there a native plugin runs it (remote.ts).
+// The iPhone's lock screen: a native plugin runs it (remote.ts).
 if (isIos) import('./remote.ts').then((m) => m.connectRemote());
 // A remote shows the other device's volume instead.
 if (isIos) import('./volume.ts').then((m) => m.followSystemVolume((volume) => !elsewhere && set({ volume })));

@@ -224,10 +224,61 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         center.addObserver(self, selector: #selector(returning), name: UIApplication.didBecomeActiveNotification, object: nil)
         // The screen locked (with a passcode): the lock screen's player is Oni's again (claimLockScreen).
         center.addObserver(self, selector: #selector(locking), name: UIApplication.protectedDataWillBecomeUnavailableNotification, object: nil)
+        center.addObserver(self, selector: #selector(unlocked), name: UIApplication.protectedDataDidBecomeAvailableNotification, object: nil)
+        // iOS's sound service restarted: everything of the sound is gone, the lock screen's player too.
+        center.addObserver(self, selector: #selector(mediaServicesReset), name: AVAudioSession.mediaServicesWereResetNotification, object: nil)
     }
 
     @objc private func locking() {
+        note("locked", lockScreenState)
         claimLockScreen()
+    }
+
+    @objc private func unlocked() {
+        note("unlocked", lockScreenState)
+    }
+
+    /// For the log: is the player there as far as Oni can see (iOS does not say what the lock screen shows).
+    private var lockScreenState: String {
+        (MPNowPlayingInfoCenter.default().nowPlayingInfo?.isEmpty ?? true) ? "no info" : "info"
+    }
+
+    /// The speed the music plays at (the lock screen's clock runs by it).
+    var speedNow: Double { Double(speed.rate) }
+
+    private var keptAt = Date.distantPast
+    private static let keepEvery: TimeInterval = 15
+
+    /// In the background, playing, every little while: the lock screen's player is told again (it can
+    /// go at any moment, and iOS says nothing), and what the sound depends on is looked at. What was
+    /// found goes to the log (soundLog.ts): the next time the answer is read there.
+    private func keepOnLockScreen() {
+        guard away, Date().timeIntervalSince(keptAt) >= PlayerPlugin.keepEvery else { return }
+        keptAt = Date()
+        if claimLockScreen() { note("lock-screen-lost") }
+        let session = AVAudioSession.sharedInstance()
+        if session.category != .playback {
+            note("category", session.category.rawValue)
+            try? session.setCategory(.playback, mode: .default)
+        }
+        if !engine.isRunning {
+            note("engine-stopped")
+            if (try? engine.start()) != nil, !stalled { node.play() }
+        }
+    }
+
+    @objc private func mediaServicesReset() {
+        DispatchQueue.main.async {
+            self.note("media-reset")
+            let was = self.playing
+            let session = AVAudioSession.sharedInstance()
+            try? session.setCategory(.playback, mode: .default)
+            if was { try? session.setActive(true) }
+            self.engine.stop()
+            self.restartHere()
+            UIApplication.shared.beginReceivingRemoteControlEvents()
+            showOnLockScreen(playing: self.playing, at: self.position)
+        }
     }
 
     @objc private func leaving() {
@@ -878,6 +929,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
             self.speed.rate = rate
             self.speed.pitch = keepPitch ? 0 : 1200 * log2(rate)
             self.speed.bypass = rate == 1
+            if self.file != nil { showOnLockScreen(playing: self.playing, at: self.position) }
             call.resolve()
         }
     }
@@ -1135,7 +1187,10 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         if let end = musicEnd { data["musicEnd"] = end }
         notifyListeners("time", data: data)
         findMusicEnd()
-        if playing { watchOthers() }
+        if playing {
+            watchOthers()
+            keepOnLockScreen()
+        }
     }
 
     /// The track's music end, looked for in the background once its file is whole (a track still
@@ -1194,8 +1249,9 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt else { return }
         let began = AVAudioSession.InterruptionType(rawValue: raw) == .began
         let options = note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+        let reason = note.userInfo?[AVAudioSessionInterruptionReasonKey] as? UInt ?? 0
         DispatchQueue.main.async {
-            self.note(began ? "interrupted" : "interruption-ended", "options \(options)")
+            self.note(began ? "interrupted" : "interruption-ended", "options \(options) reason \(reason)")
             if began {
                 if self.playing { self.resumeAfterCall = true }
                 self.halt("interruption")
@@ -1251,24 +1307,27 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
 
     /// The output changed under the engine (a route, a sample rate): restart it where it was.
     @objc private func configurationChanged(_ note: Notification) {
-        DispatchQueue.main.async {
-            self.endCross()
-            let at = self.position
-            let was = self.playing
-            self.generation += 1
-            self.node.stop()
-            if let format = self.format { self.engine.connect(self.node, to: self.mix, fromBus: 0, toBus: self.active, format: format) }
-            self.schedule(from: AVAudioFramePosition(at * (self.format?.sampleRate ?? 44100)))
-            self.pausedAt = at
-            if was, (try? self.engine.start()) != nil {
-                if !self.stalled { self.node.play() }
-            } else {
-                // iOS has taken the sound and has not told yet: `interrupted` will find it not playing.
-                if was { self.resumeAfterCall = true }
-                self.playing = false
-            }
-            self.tick()
+        DispatchQueue.main.async { self.restartHere() }
+    }
+
+    /// The engine started again under the track, where it was.
+    private func restartHere() {
+        endCross()
+        let at = position
+        let was = playing
+        generation += 1
+        node.stop()
+        if let format = format { engine.connect(node, to: mix, fromBus: 0, toBus: active, format: format) }
+        schedule(from: AVAudioFramePosition(at * (format?.sampleRate ?? 44100)))
+        pausedAt = at
+        if was, (try? engine.start()) != nil {
+            if !stalled { node.play() }
+        } else {
+            // iOS has taken the sound and has not told yet: `interrupted` will find it not playing.
+            if was { resumeAfterCall = true }
+            playing = false
         }
+        tick()
     }
 }
 
