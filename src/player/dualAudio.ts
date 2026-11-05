@@ -10,6 +10,7 @@ const EVENTS = ['play', 'playing', 'pause', 'waiting', 'canplay', 'loadedmetadat
 export class DualAudio extends EventTarget {
   readonly elements: [HTMLAudioElement, HTMLAudioElement];
   private active = 0;
+  private ready: string | null = null;
   /** The volume asked for; a fade scales it per element. */
   private level = 1;
   /** `ms`: the old one's fade out; `inMs`: the new one's fade in; `fromLevel`: the old one's own
@@ -23,6 +24,24 @@ export class DualAudio extends EventTarget {
       el.preload = 'auto';
       for (const type of EVENTS) el.addEventListener(type, () => el === this.el && this.dispatchEvent(new Event(type)));
     }
+  }
+
+  /**
+   * The next track's address on the other element, silent, so its start is there when it is wanted
+   * (a track used to start from nothing at the moment the last one ended). Nothing of it is heard or
+   * told until `src` or `crossfade` is given the same address.
+   */
+  prepare(url: string) {
+    if (this.fade) return;
+    const to = this.other;
+    to.volume = 0;
+    this.ready = url;
+    to.src = url;
+  }
+
+  /** The address `prepare` was last given (for the tests, too). */
+  get prepared() {
+    return this.ready;
   }
 
   /** The element playing now. */
@@ -57,7 +76,8 @@ export class DualAudio extends EventTarget {
     const from = this.el;
     const fromAt = Math.max(0, Math.min(1, fromLevel ?? from.volume));
     const to = this.other;
-    to.src = url;
+    if (this.ready !== url || to.error) to.src = url;
+    this.ready = null;
     // Past its silence at the start (the smart crossfade, silence.ts).
     if (startAt > 0) to.currentTime = startAt;
     to.volume = 0;
@@ -92,7 +112,16 @@ export class DualAudio extends EventTarget {
   }
   set src(value: string) {
     this.endFade();
-    this.el.src = value;
+    // (One that failed meanwhile told nobody: loaded again here, it says so as any track does.)
+    if (this.ready !== null && this.ready === value && !this.other.error) {
+      // Waiting ready on the other element: that one is the one now.
+      const from = this.el;
+      this.active = 1 - this.active;
+      from.pause();
+      this.el.volume = this.level;
+      this.dispatchEvent(new Event('emptied'));
+    } else this.el.src = value;
+    this.ready = null;
   }
   get currentTime() {
     return this.el.currentTime;

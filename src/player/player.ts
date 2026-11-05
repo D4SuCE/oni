@@ -312,6 +312,8 @@ let lastTime = 0;
 let unshuffled: Track[] | null = null;
 const prefetched = new Map<string, { url: string; at: number; codec: string; bitrate: number }>();
 const STREAM_TTL = 90_000;
+/** Seconds before a track's end that the next one is made ready (its address lives less than a track). */
+const READY_LEAD = 25;
 
 export const current = () => {
   const s = get();
@@ -338,8 +340,39 @@ async function streamUrl(t: Track) {
   if (cached && Date.now() - cached.at < STREAM_TTL) return cached;
   const s = await streamOf(t);
   const entry = { url: s.url, at: Date.now(), codec: s.codec, bitrate: s.bitrate };
+  // A night of the wave: the old addresses are of no use and need not pile up.
+  for (const [id, old] of prefetched) if (entry.at - old.at > STREAM_TTL) prefetched.delete(id);
   prefetched.set(t.id, entry);
   return entry;
+}
+
+/** The silence at a track's start, found ahead of the crossfade (it takes up to 1.5 s then). */
+let readyLead: { url: string; lead: number } | null = null;
+/** This track's next one has been made ready (once a track). */
+let madeReady = false;
+
+/**
+ * The desktop, near a track's end: the next one's fresh address, and its start loaded on the other
+ * element. The address asked for when a track began had expired by its end (it lives 90 s), so every
+ * next track waited for Yandex and then for its first bytes, with silence meanwhile.
+ */
+function readyNext() {
+  madeReady = true;
+  const s = get();
+  const next = s.queue[s.index + 1] ?? (s.repeat === 'all' && s.source?.kind !== 'wave' ? s.queue[0] : undefined);
+  const dual = audio as unknown as { prepare?: (url: string) => void };
+  if (!next || !dual.prepare || offlineMode || offline?.has(next.id) || s.repeat === 'one') return;
+  const seq = loadSeq;
+  streamUrl(next)
+    .then((st) => {
+      if (seq !== loadSeq) return;
+      dual.prepare!(st.url);
+      if (!get().crossfade) return;
+      void leadingSilence(st.url).then((lead) => {
+        readyLead = { url: st.url, lead };
+      });
+    })
+    .catch(() => {});
 }
 
 function prefetchNext() {
@@ -424,6 +457,7 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
   const fadedOut = fade > 0 && tail.fading(audio.currentTime);
   const oldLevel = fade > 0 ? levelling() : 1;
   crossStarted = false;
+  madeReady = false;
   tail.reset();
   stale = false;
   // Taken over from another device: it goes on from where it was there.
@@ -472,7 +506,7 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
       set({ stream: { codec: stream.codec, bitrate: stream.bitrate } });
       const url = sealedKey ? `oni-sealed:${t.id}` : (localUrl ?? stream.url);
       // The desktop starts it past its silence at the start (the iPhone's player does that itself).
-      const lead = isIos ? 0 : await leadingSilence(url);
+      const lead = isIos ? 0 : readyLead?.url === url ? readyLead.lead : await leadingSilence(url);
       if (seq !== loadSeq) return;
       // The old one fades at its own level: the new one's (applyVolume below) would lift its end, and
       // the lift above full volume both share (eq.ts) is the new one's, so the old one is let down by
@@ -1204,6 +1238,7 @@ audio.addEventListener('timeupdate', () => {
   }
   lastTime = t;
   set({ position: t });
+  if (!isIos && !madeReady && !audio.paused && Number.isFinite(audio.duration) && audio.duration - t <= READY_LEAD * get().rate) readyNext();
   // Crossfade: the next track begins this many seconds before this one ends (not on repeat-one,
   // not when the sleep timer stops after this track, not for tracks too short for it).
   const fade = get().crossfade;
