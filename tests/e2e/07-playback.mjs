@@ -256,6 +256,42 @@ await step('tracks that will not play: the downloads stand in, and the list come
   }
 });
 
+await step('the next track is ready before this one ends: its fresh address on the other element, and it starts at once', async () => {
+  // Found reading the code, 5.11.2026: the address asked for when a track began had expired by its end.
+  const got = await page.evaluate(async () => {
+    const w = window.__wave;
+    const a = w.audio;
+    const chart = (await w.api.chart()).filter((t) => t.available !== false && t.durationMs > 60000).slice(2, 4);
+    await w.playTracks(chart, 0, 'e2e ready');
+    const until = async (what, ms) => {
+      const end = performance.now() + ms;
+      while (!what() && performance.now() < end) await new Promise((r) => setTimeout(r, 20));
+      return what();
+    };
+    await until(() => !a.paused && a.currentTime > 0.3 && Number.isFinite(a.duration), 15000);
+    const old = a.el;
+    a.currentTime = a.duration - 8;
+    await until(() => a.prepared, 8000);
+    const prepared = a.prepared;
+    const other = a.elements.find((e) => e !== old);
+    await until(() => other.readyState >= 3, 6000);
+    const buffered = other.readyState;
+    const asked = [];
+    const stream = w.api.stream.bind(w.api);
+    w.api.stream = (id, ...rest) => (asked.push(String(id)), stream(id, ...rest));
+    await until(() => w.usePlayer.getState().index === 1, 15000);
+    const from = performance.now();
+    await until(() => !a.paused && a.currentTime > 0.05, 5000);
+    const start = Math.round(performance.now() - from);
+    delete w.api.stream;
+    const swapped = a.el === other;
+    a.pause();
+    return { prepared: Boolean(prepared), buffered, askedAgain: asked.filter((id) => id === String(chart[1].id)).length, start, swapped, oldHeard: old.volume };
+  });
+  if (!got.prepared || !got.swapped || got.askedAgain) throw new Error(JSON.stringify(got));
+  console.log(`       the next track started ${got.start} ms after the last one ended`);
+});
+
 await step('a track whose file will not load: one fresh address, then the next track; and what never played is not counted as heard', async () => {
   // Found reading the code, 5.11.2026: an address that failed asked for a new one for ever (605 asks
   // in 30 s, the player stuck on that track), and a track that never started went to History, to the
