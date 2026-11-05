@@ -25,7 +25,7 @@ import { setBoost } from './eq.ts';
 import { isPrivate, usePrivacy } from './privacy.ts';
 import { isAi, isKnownAi, lookAi, useAi } from '../recs/ai.ts';
 import type { CommandName } from '../sync/playing.ts';
-import { isMyWave, isOwnWave, listKeyOf, sourceTitle, wavePicks, type ListLabel, type PlayContext, type PlayExtra, type Repeat, type Source } from './source.ts';
+import { continueSeed, isMyWave, isOwnWave, listKeyOf, sourceTitle, wavePicks, type ListLabel, type PlayContext, type PlayExtra, type Repeat, type Source } from './source.ts';
 import { sharedFileUrl } from '../share/shared.ts';
 
 export * from './source.ts';
@@ -51,6 +51,8 @@ interface Prefs {
   /** Playback speed (1: as recorded); `keepPitch`: faster without the voice going higher. */
   rate: number;
   keepPitch: boolean;
+  /** A list that has ended goes on with what sounds like it (a radio from it). */
+  autoContinue: boolean;
 }
 
 export interface PlayerState extends Prefs {
@@ -80,6 +82,7 @@ prefs.quality ??= 'lossless';
 prefs.crossfade ??= 0;
 prefs.rate ??= 1;
 prefs.keepPitch ??= true;
+prefs.autoContinue ??= true;
 
 export const usePlayer = create<PlayerState>(() => ({
   ...prefs,
@@ -995,8 +998,64 @@ export async function next(user = true, fade = 0, failed = false) {
     return;
   }
   if (s.repeat === 'all') return told(how, () => loadAt(0, true, fade));
+  // Pressed "next" on the last track is a wish for more as much as its end is.
+  if (await goOn(fade)) return;
   audio.pause();
   shared({ playing: false }, how);
+}
+
+/** There is something after the track playing: the queue's next, the wave's, or the list's beginning. */
+function moreAfter() {
+  const s = get();
+  return s.index + 1 < s.queue.length || s.source?.kind === 'wave' || s.repeat === 'all' || canGoOn();
+}
+
+/** Not in a room (each member would start a radio of its own) and not with no network. */
+const canGoOn = () => {
+  const s = get();
+  return s.autoContinue && !together && !offlineMode && continueSeed(s.source, s.queue) !== null;
+};
+
+/**
+ * The list has ended: a radio from it goes on, its tracks after the list's in the queue, so "back"
+ * still leads into the list. False when it does not (off, nothing to seed from, Yandex gave nothing):
+ * the music stops, as it always did.
+ */
+async function goOn(fade = 0) {
+  const s = get();
+  const seed = continueSeed(s.source, s.queue);
+  if (!canGoOn() || !seed || s.source?.kind !== 'list') return false;
+  const start = ++waveStarts;
+  const title = s.source.title;
+  const station: Source & { kind: 'wave' } = { kind: 'wave', station: { seed, title, label: s.source.label } };
+  const was = { engine, source: s.source, shuffle: s.shuffle, unshuffled };
+  const mine = makeStation(station);
+  try {
+    set({ waveBusy: true, loading: true });
+    await withTimeout(mine.start());
+    const first = await withTimeout(mine.next());
+    if (start !== waveStarts) return true;
+    if (!first) throw new Error(tr().player.waveEmpty);
+    engine = mine;
+    unshuffled = null;
+    set((now) => ({ source: station, shuffle: false, queue: [...now.queue, first], waveStats: { ...mine.stats } }));
+    await told('natural', () => loadAt(get().queue.length - 1, true, fade));
+    return true;
+  } catch (e) {
+    if (start !== waveStarts) return true;
+    console.warn('the list could not go on', e);
+    engine = was.engine;
+    unshuffled = was.unshuffled;
+    set({ source: was.source, shuffle: was.shuffle, loading: false });
+    return false;
+  } finally {
+    if (start === waveStarts) set({ waveBusy: false });
+  }
+}
+
+export function setAutoContinue(autoContinue: boolean) {
+  set({ autoContinue });
+  savePrefs();
 }
 
 export function prev() {
@@ -1250,7 +1309,7 @@ audio.addEventListener('timeupdate', () => {
   // Faster or slower, the fade still takes `fade` seconds of the clock: that many more (or fewer) of the track.
   const span = fade * get().rate;
   const heard = fade > 0 && !isIos && !crossStarted && Number.isFinite(d) && d - t <= fade + 30 && quietTail(t);
-  if (fade > 0 && !crossStarted && !audio.paused && canCrossfade() && Number.isFinite(d) && d > fade * 3 && (end - t <= span || heard) && get().repeat !== 'one' && !get().sleep.afterTrack) {
+  if (fade > 0 && !crossStarted && !audio.paused && canCrossfade() && Number.isFinite(d) && d > fade * 3 && (end - t <= span || heard) && get().repeat !== 'one' && !get().sleep.afterTrack && moreAfter()) {
     crossStarted = true;
     crossLoading = true;
     void next(false, fade).finally(() => (crossLoading = false));
@@ -1339,8 +1398,8 @@ if (isIos) import('./volume.ts').then((m) => m.followSystemVolume((volume) => !e
 // -------------------------------------------------------------- persistence
 
 function savePrefs() {
-  const { volume, repeat, normalize, quality, crossfade, ownMode, rate, keepPitch } = get();
-  storage.setItem('player.prefs', JSON.stringify({ volume, repeat, normalize, quality, crossfade, ownMode, rate, keepPitch }));
+  const { volume, repeat, normalize, quality, crossfade, ownMode, rate, keepPitch, autoContinue } = get();
+  storage.setItem('player.prefs', JSON.stringify({ volume, repeat, normalize, quality, crossfade, ownMode, rate, keepPitch, autoContinue }));
 }
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;

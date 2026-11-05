@@ -64,6 +64,18 @@ export function sourceTitle(source: Source | null) {
   return source?.station ? tr().common.radioOf(source.station.title) : tr().common.myWave;
 }
 
+/**
+ * The seed of the radio that goes on after a list ends (the auto-continue, player.ts): the album or
+ * playlist it was, else the last track that is Yandex's own; none for a list of a friend's uploads.
+ */
+export function continueSeed(source: Source | null, tracks: { id: string | number; share?: unknown; trackSource?: string }[]) {
+  if (source?.kind !== 'list') return null;
+  if (source.from?.album !== undefined) return `album:${source.from.album}`;
+  if (source.from?.playlist) return `playlist:${source.from.playlist}`;
+  for (let i = tracks.length - 1; i >= 0; i--) if (!tracks[i].share && tracks[i].trackSource !== 'UGC') return `track:${tracks[i].id}`;
+  return null;
+}
+
 /** My Wave's Yandex-side picks, as keys (put in words when shown); the activity or genre by its name. */
 export interface WavePicks {
   context?: string;

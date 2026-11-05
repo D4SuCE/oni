@@ -7,7 +7,7 @@ import { Fragment, useEffect, useState } from 'react';
 import { Segmented } from '../components/Wave.tsx';
 import { LANGS, setLang, useLang, useT } from '../i18n.ts';
 import { canAnalyzeAudio } from '../player/eq.ts';
-import { offline, recsFeedback, setCrossfade, setNormalize, stats, usePlayer } from '../player/player.ts';
+import { offline, recsFeedback, setCrossfade, setNormalize, stats, usePlayer, setAutoContinue } from '../player/player.ts';
 import { SMART_EVERY, setSmartEvery, useSmartEvery } from '../recs/smartShuffle.ts';
 import type { SpaceRules } from '../player/offline.ts';
 import { logout, navigate, toast, undislike, useApp } from '../store.ts';
@@ -35,6 +35,7 @@ export function SettingsView() {
   const account = useApp((s) => s.account);
   const normalize = usePlayer((s) => s.normalize);
   const crossfade = usePlayer((s) => s.crossfade);
+  const autoContinue = usePlayer((s) => s.autoContinue);
   const smartEvery = useSmartEvery((s) => s.every);
   const lang = useLang((s) => s.lang);
   const motion = useMotion((s) => s.enabled);
@@ -134,6 +135,13 @@ export function SettingsView() {
             <div className="hint">{s.normalizeHint}</div>
           </div>
           <input type="checkbox" className="switch" checked={normalize} onChange={(e) => setNormalize(e.target.checked)} />
+        </label>
+        <label className="toggle-row">
+          <div>
+            <div>{s.autoContinue}</div>
+            <div className="hint">{s.autoContinueHint}</div>
+          </div>
+          <input type="checkbox" className="switch" checked={autoContinue} onChange={(e) => setAutoContinue(e.target.checked)} data-testid="auto-continue" />
         </label>
         <div className="slider-row">
           <div className="slider-head">

@@ -292,6 +292,73 @@ await step('the next track is ready before this one ends: its fresh address on t
   console.log(`       the next track started ${got.start} ms after the last one ended`);
 });
 
+await step("auto-continue: a list's end goes on with a radio from it, after its tracks; off, the music stops", async () => {
+  const got = await page.evaluate(async () => {
+    const w = window.__wave;
+    const a = w.audio;
+    const chart = (await w.api.chart()).filter((t) => t.available !== false && t.durationMs > 60000).slice(5, 7);
+    const until = async (what, ms) => {
+      const end = performance.now() + ms;
+      while (!what() && performance.now() < end) await new Promise((r) => setTimeout(r, 50));
+      return what();
+    };
+    const toEnd = async () => {
+      await until(() => !a.paused && a.currentTime > 0.3 && Number.isFinite(a.duration), 15000);
+      a.currentTime = a.duration - 2;
+    };
+    await w.playTracks([chart[0]], 0, 'e2e goes on');
+    await toEnd();
+    await until(() => w.usePlayer.getState().queue.length > 1 && !a.paused, 25000);
+    const s = w.usePlayer.getState();
+    const on = { kind: s.source?.kind, seed: s.source?.station?.seed, first: String(s.queue[0]?.id), index: s.index, playing: !a.paused };
+    // Turned off: as it always was.
+    w.usePlayer.setState({ autoContinue: false });
+    await w.playTracks([chart[1]], 0, 'e2e stops');
+    await toEnd();
+    await until(() => a.paused, 15000);
+    await new Promise((r) => setTimeout(r, 500));
+    const t = w.usePlayer.getState();
+    const off = { kind: t.source?.kind, queue: t.queue.length, paused: a.paused };
+    w.usePlayer.setState({ autoContinue: true });
+    a.pause();
+    return { on, off, want: String(chart[0].id) };
+  });
+  if (got.on.kind !== 'wave' || got.on.seed !== `track:${got.want}` || got.on.first !== got.want || got.on.index !== 1 || !got.on.playing) throw new Error(`on: ${JSON.stringify(got)}`);
+  if (got.off.kind !== 'list' || got.off.queue !== 1 || !got.off.paused) throw new Error(`off: ${JSON.stringify(got)}`);
+});
+
+await step("a crossfade does not cut off a list's last track: it plays to its end", async () => {
+  // Found reading the code, 5.11.2026: the crossfade set off on the last track too, and with nothing
+  // after it, it was paused that many seconds before its end.
+  await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
+  await page.locator('[data-testid="crossfade"]').fill('4');
+  try {
+    const got = await page.evaluate(async () => {
+      const w = window.__wave;
+      const a = w.audio;
+      w.usePlayer.setState({ autoContinue: false });
+      const t = (await w.api.chart()).filter((x) => x.available !== false && x.durationMs > 60000)[7];
+      await w.playTracks([t], 0, 'e2e the last one');
+      const until = async (what, ms) => {
+        const end = performance.now() + ms;
+        while (!what() && performance.now() < end) await new Promise((r) => setTimeout(r, 20));
+        return what();
+      };
+      await until(() => !a.paused && a.currentTime > 0.3 && Number.isFinite(a.duration), 15000);
+      a.currentTime = a.duration - 7;
+      await until(() => a.paused, 15000);
+      const left = a.duration - a.currentTime;
+      w.usePlayer.setState({ autoContinue: true });
+      return left;
+    });
+    if (got > 1) throw new Error(`stopped ${got.toFixed(1)} s before its end`);
+  } finally {
+    await page.locator('[data-testid="crossfade"]').fill('0');
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.evaluate(() => window.__wave.audio.pause());
+  }
+});
+
 await step('a track whose file will not load: one fresh address, then the next track; and what never played is not counted as heard', async () => {
   // Found reading the code, 5.11.2026: an address that failed asked for a new one for ever (605 asks
   // in 30 s, the player stuck on that track), and a track that never started went to History, to the
