@@ -14,6 +14,8 @@ const CACHES = ['recs.v1'];
 
 let db: IDBDatabase | null = null;
 const memory = new Map<string, string>();
+/** It did not open at the start (it exists, but gave nothing): this session started from nothing. */
+let failed = false;
 
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -32,6 +34,13 @@ const done = (tx: IDBTransaction) =>
     tx.onabort = () => reject(tx.error ?? new Error('aborted'));
   });
 
+/** What localStorage holds that the database does not. What it holds already stays: a session that
+ * ran without it started from nothing, and moved over, its short log replaced a year of plays. */
+export const newEntries = (local: [string, string][], known: string[]) => {
+  const have = new Set(known);
+  return local.filter(([key]) => !have.has(key));
+};
+
 /**
  * Before the app: everything kept in IndexedDB into memory, and what is still in localStorage (an
  * older Oni's, or a move cut short) moved there first, then removed from localStorage once kept.
@@ -46,8 +55,12 @@ export async function loadStorage() {
       if (key !== null && !STAYS(key)) moving.push([key, localStorage.getItem(key) ?? '']);
     }
     if (moving.length) {
+      const look = opened.transaction(STORE, 'readonly');
+      const known = look.objectStore(STORE).getAllKeys();
+      await done(look);
+      const fresh = newEntries(moving, known.result.map(String));
       const tx = opened.transaction(STORE, 'readwrite');
-      for (const [key, value] of moving) tx.objectStore(STORE).put(value, key);
+      for (const [key, value] of fresh) tx.objectStore(STORE).put(value, key);
       await done(tx);
     }
     const tx = opened.transaction(STORE, 'readonly');
@@ -59,10 +72,58 @@ export async function loadStorage() {
     for (const [key] of moving) localStorage.removeItem(key);
     db = opened;
     if (moving.length) console.info(`[storage] ${moving.length} entries moved to IndexedDB`);
+    // Asked not to be let go when the disk fills up; the answer changes nothing here.
+    void navigator.storage?.persist?.().catch(() => {});
   } catch (e) {
     memory.clear();
+    failed = true;
     console.warn('[storage] IndexedDB unavailable, localStorage it is', e);
   }
+}
+
+/** Keys whose write failed: the connection is opened anew (iOS drops it in the background and every
+ * write after that failed, unseen, until a restart) and the latest values go in. */
+const unwritten = new Set<string>();
+let reopening = false;
+let failures = 0;
+const MAX_FAILURES = 3;
+
+function write(key: string) {
+  try {
+    const tx = db!.transaction(STORE, 'readwrite');
+    const value = memory.get(key);
+    if (value === undefined) tx.objectStore(STORE).delete(key);
+    else tx.objectStore(STORE).put(value, key);
+    tx.oncomplete = () => {
+      failures = 0;
+    };
+    tx.onabort = () => writeAgain(key, tx.error);
+  } catch (e) {
+    writeAgain(key, e);
+  }
+}
+
+function writeAgain(key: string, why: unknown) {
+  unwritten.add(key);
+  if (reopening) return;
+  // A full disk fails every time: not for ever.
+  if (++failures > MAX_FAILURES) {
+    console.warn(`[storage] ${key} not kept`, why);
+    unwritten.clear();
+    return;
+  }
+  reopening = true;
+  open()
+    .then((opened) => {
+      db = opened;
+    })
+    .catch((e) => console.warn('[storage] IndexedDB did not open again', e))
+    .finally(() => {
+      reopening = false;
+      const keys = [...unwritten];
+      unwritten.clear();
+      for (const k of keys) write(k);
+    });
 }
 
 /** Never throws: a broken or full storage must not crash the app. */
@@ -78,13 +139,7 @@ export const storage = {
   setItem(key: string, value: string) {
     if (db && !STAYS(key)) {
       memory.set(key, value);
-      try {
-        const tx = db.transaction(STORE, 'readwrite');
-        tx.objectStore(STORE).put(value, key);
-        tx.onerror = () => console.warn(`[storage] ${key} not kept`, tx.error);
-      } catch (e) {
-        console.warn(`[storage] ${key} not kept`, e);
-      }
+      write(key);
       return;
     }
     try {
@@ -109,11 +164,7 @@ export const storage = {
   removeItem(key: string) {
     if (db && !STAYS(key)) {
       memory.delete(key);
-      try {
-        db.transaction(STORE, 'readwrite').objectStore(STORE).delete(key);
-      } catch {
-        /* gone with the page */
-      }
+      write(key);
       return;
     }
     try {
@@ -125,5 +176,13 @@ export const storage = {
   /** Where the data is: 'indexeddb' or 'localstorage' (for the tests). */
   get kind() {
     return db ? 'indexeddb' : 'localstorage';
+  },
+  /** Holds what it should: false after a start where the database did not open. */
+  get healthy() {
+    return !failed;
+  },
+  /** Tests: the connection dropped, as iOS drops it in the background. */
+  dropConnection() {
+    db?.close();
   },
 };

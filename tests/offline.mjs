@@ -13,6 +13,8 @@ import path from 'node:path';
 const root = path.resolve(import.meta.dirname, '..');
 const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'wave-offline-'));
 const offlineDir = path.join(userData, 'offline');
+/** The tracks and covers, without the copy of the list that lies beside them (`_library.oni`). */
+const trackFiles = () => fs.readdirSync(offlineDir).filter((f) => f !== '_library.oni');
 const shots = path.join(root, 'tests', 'screenshots');
 fs.mkdirSync(shots, { recursive: true });
 const shot = (page, name) => page.screenshot({ path: path.join(shots, `${name}.png`) });
@@ -73,7 +75,7 @@ await step('download a track: encrypted on disk, then it plays from the file', a
 
   // The track, encrypted, and its cover beside it.
   await page.waitForFunction(() => window.__wave.offline.entries()[0]?.cover, null, { timeout: 15000 });
-  const files = fs.readdirSync(offlineDir).sort();
+  const files = trackFiles().sort();
   if (files.length !== 2 || !files[0].endsWith('.jpg') || !files[1].endsWith('.oni')) throw new Error(`files: ${files}`);
   const head = fs.readFileSync(path.join(offlineDir, files[1])).subarray(0, 4096);
   // Not an mp3 anyone can open: no ID3 tag, no MPEG frame sync at the start.
@@ -258,7 +260,7 @@ await step('room for downloads: a limit shows how full; forgetting asks first, t
   await pick('space-forget', '1 мес.');
   await page.locator('.dialog button.danger').click();
   await page.waitForFunction((n) => window.__wave.offline.entries().length === n - 2, before, { timeout: 5000 });
-  const files = fs.readdirSync(offlineDir).filter((f) => f.endsWith('.oni')).length;
+  const files = trackFiles().filter((f) => f.endsWith('.oni')).length;
   if (files !== before - 2) throw new Error(`files ${files}, want ${before - 2}`);
   await pick('space-forget', 'Нет');
 });
@@ -267,7 +269,7 @@ await step('remove all from Settings frees the space', async () => {
   await page.click('[data-testid="downloads-remove-all"]');
   await page.locator('.dialog button.danger').click();
   await page.waitForSelector('[data-testid="downloads-remove-all"]', { state: 'detached', timeout: 5000 });
-  if (fs.readdirSync(offlineDir).length) throw new Error('files left');
+  if (trackFiles().length) throw new Error('files left');
 });
 
 await app.close().catch(() => {});

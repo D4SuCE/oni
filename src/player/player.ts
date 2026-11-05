@@ -119,6 +119,7 @@ export const offline =
         fetchBytes: (url) => transport.fetchBytes!(url),
         stream: (_id, t) => streamOf(t),
         store: storage,
+        trusted: () => storage.healthy,
         crypto,
         fetchCover: async (t) => {
           const url = trackCover(t, 400);

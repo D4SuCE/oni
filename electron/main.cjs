@@ -263,7 +263,12 @@ function offlinePath(name) {
 
 ipcMain.handle('wave:files:write', async (_e, name, data) => {
   await fs.promises.mkdir(offlineDir(), { recursive: true });
-  await fs.promises.writeFile(offlinePath(name), Buffer.from(data));
+  // Whole or not at all: a write cut short (Oni closed, the disk full) never leaves half a file under
+  // the real name.
+  const target = offlinePath(name);
+  const part = `${target}.part`;
+  await fs.promises.writeFile(part, Buffer.from(data));
+  await fs.promises.rename(part, target);
 });
 ipcMain.handle('wave:files:read', async (_e, name) => {
   const b = await fs.promises.readFile(offlinePath(name));
@@ -271,8 +276,24 @@ ipcMain.handle('wave:files:read', async (_e, name) => {
 });
 ipcMain.handle('wave:files:remove', (_e, name) => fs.promises.rm(offlinePath(name), { force: true }));
 ipcMain.handle('wave:files:list', async () => {
-  const names = await fs.promises.readdir(offlineDir()).catch(() => []);
-  return Promise.all(names.map(async (name) => ({ name, size: (await fs.promises.stat(path.join(offlineDir(), name))).size })));
+  // No folder yet is no files; a folder that could not be read is an error, not "no files".
+  const names = await fs.promises.readdir(offlineDir()).catch((e) => {
+    if (e.code === 'ENOENT') return [];
+    throw e;
+  });
+  // What a write cut short left, and a file removed meanwhile, are not in the list.
+  const found = await Promise.all(
+    names.map(async (name) => {
+      const full = path.join(offlineDir(), name);
+      if (name.endsWith('.part')) {
+        await fs.promises.rm(full, { force: true }).catch(() => {});
+        return null;
+      }
+      const stat = await fs.promises.stat(full).catch(() => null);
+      return stat && { name, size: stat.size };
+    }),
+  );
+  return found.filter(Boolean);
 });
 ipcMain.handle('wave:fetch-bytes', async (_e, url) => {
   if (networkDown) throw new TypeError('fetch failed');

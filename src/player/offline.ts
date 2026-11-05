@@ -30,6 +30,9 @@ export interface OfflineDeps {
   fetchLyrics?(track: Track): Promise<unknown>;
   /** The clock (tests run their own). */
   now?(): number;
+  /** The store holds what it should: false when the app's database did not open and it started from
+   * nothing. Then no file is taken for a leftover and the copy beside the tracks stays as it is. */
+  trusted?(): boolean;
 }
 
 /**
@@ -66,6 +69,9 @@ const DAY = 24 * 60 * 60 * 1000;
  * bigger than the limit stops instead of eating its own start). */
 const SESSION_GAP = 10 * 60 * 1000;
 const IV = 12;
+/** A copy of the list and the key beside the tracks: the database going never loses the music. */
+const BACKUP = '_library.oni';
+const BACKUP_DELAY = 15_000;
 
 const fileName = (id: string | number) => `${id}.oni`;
 const coverName = (id: string | number) => `${id}.jpg`;
@@ -95,6 +101,9 @@ export class OfflineLibrary {
   full = false;
   private sessionStart = 0;
   private lastAdd = 0;
+  private recovered: Promise<void> | null = null;
+  private backupTimer: ReturnType<typeof setTimeout> | null = null;
+  private backedUp = '';
 
   constructor(deps: OfflineDeps) {
     this.deps = deps;
@@ -112,6 +121,56 @@ export class OfflineLibrary {
   private changed() {
     this.deps.store.setItem(INDEX, JSON.stringify(this.index));
     for (const fn of this.listeners) fn();
+    this.backupSoon();
+  }
+
+  private trusted() {
+    return this.deps.trusted?.() ?? true;
+  }
+
+  private backupSoon() {
+    if (this.backupTimer) return;
+    this.backupTimer = setTimeout(() => {
+      this.backupTimer = null;
+      void this.saveBackup().catch(() => {});
+    }, BACKUP_DELAY);
+    (this.backupTimer as { unref?: () => void }).unref?.();
+  }
+
+  /** The list and the key, written beside the tracks (the list of a shaky store is not worth keeping). */
+  async saveBackup() {
+    const key = this.deps.store.getItem(KEY);
+    if (!key || !this.trusted()) return;
+    const text = JSON.stringify({ key, index: this.index });
+    if (text === this.backedUp) return;
+    await this.deps.files.write(BACKUP, new TextEncoder().encode(text).buffer as ArrayBuffer);
+    this.backedUp = text;
+  }
+
+  /** Before anything else: a list or a key gone from the store comes back from the copy. */
+  private recover() {
+    return (this.recovered ??= this.readBackup());
+  }
+
+  private async readBackup() {
+    const empty = !Object.keys(this.index).length;
+    const key = this.deps.store.getItem(KEY);
+    if (!empty && key) return;
+    const raw = await this.deps.files.read(BACKUP).catch(() => null);
+    if (!raw) return;
+    let copy: { key?: string; index?: Record<string, OfflineEntry> };
+    try {
+      copy = JSON.parse(new TextDecoder().decode(raw));
+    } catch {
+      return;
+    }
+    const back = empty && Object.keys(copy.index ?? {}).length > 0;
+    // The list's files are sealed with its key: a key made since sealed nothing of them.
+    if (copy.key && (back || !key)) this.deps.store.setItem(KEY, copy.key);
+    if (back) {
+      this.index = copy.index!;
+      this.changed();
+    }
   }
 
   /** Called after every change (a download starts or ends, a track is removed). */
@@ -124,6 +183,7 @@ export class OfflineLibrary {
 
   private cryptoKey() {
     this.key ??= (async () => {
+      await this.recover();
       let raw = this.deps.store.getItem(KEY);
       if (!raw) {
         raw = toBase64(this.deps.crypto.getRandomValues(new Uint8Array(32)));
@@ -387,8 +447,13 @@ export class OfflineLibrary {
 
   /** Drops index entries whose file is gone, and files nothing points to (an interrupted download). */
   async reconcile() {
-    const files = await this.deps.files.list().catch(() => null);
-    if (!files) return;
+    await this.recover();
+    const listed = await this.deps.files.list().catch(() => null);
+    if (!listed) return;
+    const files = listed.filter((f) => f.name !== BACKUP);
+    // A folder that reads empty under a list of tracks says nothing (it could not be read, say):
+    // believed, the list went, and the files with it at the next start.
+    if (!files.length) return this.backupSoon();
     const onDisk = new Set(files.map((f) => f.name));
     let changed = false;
     for (const id of Object.keys(this.index)) {
@@ -400,10 +465,14 @@ export class OfflineLibrary {
         changed = true;
       }
     }
-    for (const f of files) {
+    // Leftovers only against a list that can be believed: with none (or a store that did not open)
+    // every track looks like one.
+    const leftovers = this.trusted() && Object.keys(this.index).length ? files : [];
+    for (const f of leftovers) {
       const id = f.name.replace(/\.(oni|jpg)$/, '');
       if (!this.index[id] && !this.busy.has(id) && !this.protect(id)) await this.deps.files.remove(f.name).catch(() => {});
     }
     if (changed) this.changed();
+    this.backupSoon();
   }
 }
