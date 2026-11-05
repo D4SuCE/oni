@@ -9,6 +9,8 @@ import { api } from '../api/client.ts';
 
 const FIRST = 100;
 const PART = 200;
+const PART_TRIES = 4;
+const PART_WAIT = 5_000;
 
 /** A playlist as the page has it: with tracks in it (small, or kept for the offline mode) or ids only. */
 const keyOf = (item: NonNullable<Playlist['tracks']>[number]) => (item.albumId ? `${item.id}:${item.albumId}` : String(item.id));
@@ -37,9 +39,14 @@ export function useListTracks(pl: Playlist | null | undefined): ListTracks {
       let have: Track[] = [];
       for (let from = 0; from < keys.length && alive; ) {
         const size = from === 0 ? FIRST : PART;
-        const part = await api.tracks(keys.slice(from, from + size)).catch(() => null);
+        // A part that failed (a moment without network) is asked for again: a list stopping there
+        // stayed cut short until opened anew, and "play all" played only what had come.
+        let part: Track[] | null = null;
+        for (let tries = 1; !part && alive && tries <= PART_TRIES; tries++) {
+          part = await api.tracks(keys.slice(from, from + size)).catch(() => null);
+          if (!part && tries < PART_TRIES) await new Promise((r) => setTimeout(r, PART_WAIT));
+        }
         if (!alive) return;
-        // A part that failed (a moment without network): the list stops where it got to.
         if (!part) break;
         // In the list's order whatever order they came back in.
         const byId = new Map(part.map((t) => [String(t.id), t]));

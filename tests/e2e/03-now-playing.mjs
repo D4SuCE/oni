@@ -43,7 +43,9 @@ await step('Now Playing has the volume under play, as on the iPhone: it moves th
       }, [w, h, phone]);
       await page.evaluate((on) => document.documentElement.classList.toggle('ios', on), Boolean(phone));
       await page.waitForTimeout(400);
-      const fit = await page.evaluate(() => {
+      // On GitHub's machines the window can take longer than that to settle (the same code passes and
+      // fails, 5.11.2026): measured until it fits, up to a few seconds.
+      const measure = () => page.evaluate(() => {
         const rect = (s) => document.querySelector(`.nowplaying ${s}`).getBoundingClientRect();
         const parts = ['.np-cover', '.np-meta', '.np-seek', '.transport', '.np-volume'].map((s) => [s, rect(s)]);
         // 30px: the same room below as the queue's column leaves, not pressed against the window's edge.
@@ -65,8 +67,13 @@ await step('Now Playing has the volume under play, as on the iPhone: it moves th
           cover: parts[0][1].width,
         };
       });
-      const placed = fit.shorter && fit.beside && fit.off.every((x) => x <= 1);
-      if (!placed || (!phone && (fit.out.length || fit.over.length || fit.underClose))) throw new Error(`${w}×${h}: ${JSON.stringify(fit)}`);
+      const fits = (f) => f.shorter && f.beside && f.off.every((x) => x <= 1) && (phone || !(f.out.length || f.over.length || f.underClose));
+      let fit = await measure();
+      for (let tries = 0; !fits(fit) && tries < 12; tries++) {
+        await page.waitForTimeout(250);
+        fit = await measure();
+      }
+      if (!fits(fit)) throw new Error(`${w}×${h}: ${JSON.stringify(fit)}`);
       await shot(`04-now-playing-${h}`);
       console.log(`       ${w}×${h}: the cover ${Math.round(fit.cover)}px, volume ${fit.line[0]}px in the middle under a ${fit.line[1]}px seek line`);
     }
