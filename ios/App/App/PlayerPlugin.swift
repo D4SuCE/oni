@@ -123,6 +123,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     /// When the crossfade began, and the old track's fade out (s).
     private var crossStart = Date()
     private var crossOut: Double = 0
+    /// To the words (src/player/automix.ts): the old track stays at its level this long (its last words), then fades.
+    private var crossHold: Double = 0
     /// Where the current schedule starts, in frames; position = this + what the node has played.
     private var startFrame: AVAudioFramePosition = 0
     /// Bumped on every new schedule: the completion of an older one (stopped, replaced) is ignored.
@@ -524,6 +526,10 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         let keep = call.getArray("keep", String.self) ?? [id]
         let fade = call.getDouble("fade") ?? 0
         let hint = call.getDouble("duration") ?? 0
+        // A crossing to the words: where the new track starts (s), the old one's hold and the new one's fade in (ms).
+        let from = call.getDouble("from")
+        let hold = (call.getDouble("hold") ?? 0) / 1000
+        let fadeIn = call.getDouble("fadeIn").map { $0 / 1000 }
         lock.lock()
         opens += 1
         let mine = opens
@@ -536,7 +542,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
             guard newest else { return call.reject("superseded") }
             self.stream = fetch
             self.durationHint = hint
-            if fade > 0 && self.playing { self.cross(into: file, seconds: fade / 1000) } else { self.begin(file) }
+            if fade > 0 && self.playing { self.cross(into: file, seconds: fade / 1000, from: from, hold: hold, fadeIn: fadeIn) } else { self.begin(file) }
             self.trim(keeping: keep)
             call.resolve(["duration": self.duration])
         }
@@ -621,12 +627,13 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
 
     /// The crossfade: `file` starts on the other node at silence and rises while the playing one
     /// falls (equal power: as loud through the middle), then the old node stops.
-    private func cross(into file: AVAudioFile, seconds: Double) {
+    private func cross(into file: AVAudioFile, seconds: Double, from: Double? = nil, hold: Double = 0, fadeIn: Double? = nil) {
         endCross()
         // What is left of the old track while they cross: already quiet (its fade-out under way), it
         // leaves nothing to blend with, and the new one comes in at once, not out of silence.
         let quietEnd = self.file.map { fadedOut($0.url, from: position, seconds: seconds) } ?? false
-        crossIn = quietEnd ? quickIn : seconds
+        crossIn = quietEnd ? quickIn : min(seconds, fadeIn ?? seconds)
+        crossHold = quietEnd ? 0 : max(0, min(seconds - 0.1, hold))
         tailGain = gain
         let old = node
         // The old track's end is no longer the end of what plays.
@@ -639,8 +646,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         musicEnd = nil
         tracksOpened += 1
         endOf = tracksOpened
-        // From its first sound, past the silence at its start (the smart crossfade).
-        let lead = leadIn(file.url)
+        // From its first sound, past the silence at its start (the smart crossfade); to the words, from where asked.
+        let lead = from.map { max(0, $0) } ?? leadIn(file.url)
         pausedAt = lead
         schedule(from: AVAudioFramePosition(lead * file.processingFormat.sampleRate))
         if !stalled { node.play() }
@@ -658,7 +665,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     private func crossStep() {
         guard let old = tail else { return }
         let passed = Date().timeIntervalSince(crossStart)
-        let out = min(1, passed / max(0.1, crossOut))
+        let out = min(1, max(0, passed - crossHold) / max(0.1, crossOut - crossHold))
         let into = min(1, passed / max(0.05, crossIn))
         old.volume = min(1, tailGain / max(gain, 0.0001)) * Float(cos(out * .pi / 2))
         node.volume = Float(sin(into * .pi / 2))

@@ -58,6 +58,8 @@ interface Prefs {
   autoContinue: boolean;
   /** The crossfade like a DJ's (automix.ts): by the voice, and by the beat where the tracks allow. */
   automix: boolean;
+  /** To the words (automix.ts, part 3): long wordless ends and starts left out (not an album in order). */
+  toWords: boolean;
 }
 
 export interface PlayerState extends Prefs {
@@ -89,6 +91,7 @@ prefs.rate ??= 1;
 prefs.keepPitch ??= true;
 prefs.autoContinue ??= true;
 prefs.automix ??= true;
+prefs.toWords ??= true;
 
 export const usePlayer = create<PlayerState>(() => ({
   ...prefs,
@@ -422,7 +425,7 @@ function applyVolume(k = 1) {
 }
 
 /** The audio element can cross from one track into the next (dualAudio.ts; the iPhone's native player). */
-type Crossfading = { crossfade(url: string, ms: number, ended?: () => void, startAt?: number, how?: { inMs?: number; fromLevel?: number; sync?: BeatSync }): Promise<void>; musicEnd?: number };
+type Crossfading = { crossfade(url: string, ms: number, ended?: () => void, startAt?: number, how?: { inMs?: number; fromLevel?: number; sync?: BeatSync; outDelay?: number }): Promise<void>; musicEnd?: number };
 /** The next track's fade in when the old one is fading out already (a click-free start, no more). */
 const QUICK_IN_MS = 300;
 const canCrossfade = () => typeof (audio as unknown as Partial<Crossfading>).crossfade === 'function';
@@ -455,9 +458,16 @@ let mixNow: (Plan & { into: string }) | null = null;
 let mixTimer: ReturnType<typeof setTimeout> | null = null;
 /** The last crossing planned, for the log and the tests. */
 let lastMix: (Plan & { out: string; into: string; t: number }) | null = null;
+/** When the crossing planned now starts (this track's time): the next one is made ready for it. */
+let planAt: number | null = null;
 export const automixLast = () => lastMix;
 
-const automixOn = () => get().automix && get().crossfade > 0 && !together;
+const automixOn = () => (get().automix || get().toWords) && get().crossfade > 0 && !together;
+/** An album played in order is not cut (a concept album, a live one). */
+const albumInOrder = () => {
+  const s = get();
+  return s.source?.kind === 'list' && s.source.from?.album !== undefined && !s.shuffle;
+};
 
 /** As the track plays: the singing of this one and the next (both platforms), this one's end (the desktop). */
 function gatherMix(t: number) {
@@ -470,8 +480,9 @@ function gatherMix(t: number) {
   if (!isIos && t > 5 && s.stream && audio.src) askTail(cur.id, audio.src, s.stream.codec, s.stream.bitrate, audio.duration);
 }
 
-/** The crossing into the queue's next track, from what is known of both (null: none next). */
-function mixPlan(end: number): Plan | null {
+/** The crossing into the queue's next track, from what is known of both (null: none next). `t`: now;
+ * a skip to the words already past (a seek, a restart) is not made at once: the plain plan instead. */
+function mixPlan(end: number, t = audio.currentTime): Plan | null {
   const s = get();
   const cur = current();
   const next = s.queue[s.index + 1];
@@ -481,12 +492,12 @@ function mixPlan(end: number): Plan | null {
   // The desktop knows where the music ends from the decoded tail.
   const tailEnd = a.tail?.end;
   const musicEnd = !isIos && tailEnd && tailEnd > audio.duration - 30 ? Math.min(end, tailEnd) : end;
-  const p = mixPlanOf(
-    { duration: audio.duration, end: musicEnd, voice: a.voice, grid: isIos ? null : a.tail?.grid, rate: s.rate },
-    { lead: isIos ? 0 : (b.head?.lead ?? 0), voice: b.voice, grid: isIos ? null : b.head?.grid },
-    s.crossfade * s.rate,
-  );
-  return p;
+  const out = { duration: audio.duration, end: musicEnd, voice: a.voice, grid: isIos ? null : a.tail?.grid, rate: s.rate };
+  const inc = { lead: isIos ? 0 : (b.head?.lead ?? 0), voice: b.voice, grid: isIos ? null : b.head?.grid };
+  const allow = { mix: s.automix, jump: s.toWords && !albumInOrder() };
+  const p = mixPlanOf(out, inc, s.crossfade * s.rate, allow);
+  if (p.hold === undefined || p.at >= t - 2) return p;
+  return mixPlanOf(out, inc, s.crossfade * s.rate, { ...allow, jump: false });
 }
 
 /** The crossing begins: the next track with the plan's start, length and beat. */
@@ -525,6 +536,7 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
   const oldLevel = fade > 0 ? levelling() : 1;
   crossStarted = false;
   endsHere = false;
+  planAt = null;
   if (mixTimer) clearTimeout(mixTimer);
   mixTimer = null;
   const mix = mixNow?.into === String(t.id) ? mixNow : null;
@@ -578,7 +590,8 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
       set({ stream: { codec: stream.codec, bitrate: stream.bitrate } });
       const url = sealedKey ? `oni-sealed:${t.id}` : (localUrl ?? stream.url);
       // The desktop starts it past its silence at the start (the iPhone's player does that itself).
-      const lead = isIos ? 0 : mix ? mix.from : readyLead?.url === url ? readyLead.lead : await leadingSilence(url);
+      // The iPhone's player finds the silence at the start itself; a start to the words is told to it.
+      const lead = mix ? (isIos && !mix.hold && mix.from === 0 ? 0 : mix.from) : isIos ? 0 : readyLead?.url === url ? readyLead.lead : await leadingSilence(url);
       if (seq !== loadSeq) return;
       // The old one fades at its own level: the new one's (applyVolume below) would lift its end, and
       // the lift above full volume both share (eq.ts) is the new one's, so the old one is let down by
@@ -586,7 +599,7 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
       const fromLevel = Math.min(1, audio.volume * Math.max(1, oldLevel) / Math.max(1, levelling()));
       await (audio as unknown as Crossfading).crossfade(url, fade * 1000, () => {
         if (old) URL.revokeObjectURL(old);
-      }, lead, { inMs: fadedOut && !mix?.sync ? QUICK_IN_MS : fade * 1000, fromLevel, sync: mix?.sync });
+      }, lead, { inMs: mix?.fadeIn ? mix.fadeIn * 1000 : fadedOut && !mix?.sync ? QUICK_IN_MS : fade * 1000, fromLevel, sync: mix?.sync, outDelay: (mix?.hold ?? 0) * 1000 });
       // After the crossing has begun: this track's level (normalization) leads the fade, not the old one's.
       applyVolume();
     } else {
@@ -1222,6 +1235,11 @@ export function setAutomix(automix: boolean) {
   savePrefs();
 }
 
+export function setToWords(toWords: boolean) {
+  set({ toWords });
+  savePrefs();
+}
+
 export function setCrossfade(seconds: number) {
   set({ crossfade: Math.max(0, Math.min(12, Math.round(seconds))) });
   savePrefs();
@@ -1392,7 +1410,8 @@ audio.addEventListener('timeupdate', () => {
   }
   lastTime = t;
   set({ position: t });
-  if (!isIos && !madeReady && !audio.paused && Number.isFinite(audio.duration) && audio.duration - t <= READY_LEAD * get().rate) readyNext();
+  // The next one made ready this long before it starts: before this one's end, or its crossing to the words.
+  if (!isIos && !madeReady && !audio.paused && Number.isFinite(audio.duration) && (audio.duration - t <= READY_LEAD * get().rate || (planAt !== null && planAt - t <= READY_LEAD * get().rate))) readyNext();
   // Crossfade: the next track begins this many seconds before this one ends (not on repeat-one,
   // not when the sleep timer stops after this track, not for tracks too short for it).
   const fade = get().crossfade;
@@ -1407,7 +1426,9 @@ audio.addEventListener('timeupdate', () => {
   // Like a DJ (automix.ts): where the voices and the beats allow, from what is gathered as it plays.
   const mixing = fade > 0 && automixOn() && Number.isFinite(d) && !audio.paused;
   if (mixing) gatherMix(t);
-  const mix = mixing && !crossStarted && d - t <= 40 && get().index + 1 < get().queue.length ? mixPlan(end) : null;
+  // To the words, the crossing may start a minute or more before the end.
+  const mix = mixing && !crossStarted && d - t <= 150 && get().index + 1 < get().queue.length ? mixPlan(end, t) : null;
+  planAt = mix?.at ?? null;
   const can = fade > 0 && !crossStarted && !audio.paused && canCrossfade() && Number.isFinite(d) && d > fade * 3 && get().repeat !== 'one' && !get().sleep.afterTrack && moreAfter();
   if (can && mix) {
     // On the beat: a timer for its moment; else the clock's tick is near enough.
@@ -1508,8 +1529,8 @@ if (isIos) import('./volume.ts').then((m) => m.followSystemVolume((volume) => !e
 // -------------------------------------------------------------- persistence
 
 function savePrefs() {
-  const { volume, repeat, normalize, quality, crossfade, ownMode, rate, keepPitch, autoContinue, automix } = get();
-  storage.setItem('player.prefs', JSON.stringify({ volume, repeat, normalize, quality, crossfade, ownMode, rate, keepPitch, autoContinue, automix }));
+  const { volume, repeat, normalize, quality, crossfade, ownMode, rate, keepPitch, autoContinue, automix, toWords } = get();
+  storage.setItem('player.prefs', JSON.stringify({ volume, repeat, normalize, quality, crossfade, ownMode, rate, keepPitch, autoContinue, automix, toWords }));
 }
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;

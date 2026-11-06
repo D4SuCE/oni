@@ -137,5 +137,48 @@ test('a wobbly grid on either side, or the speed changed: by the voice only', ()
   assert(!plan({ ...out, rate: 1.25, grid: steadyA }, { lead: 0, grid: grid(126, 0.5) }, 6).sync, 'matched at 1.25×');
 });
 
+const jump = { mix: true, jump: true };
+
+test('to the words: a long wordless end and start left out, the next words a breath after the last', () => {
+  // This one's words end at 150 s of 199; the next one sings from 40 s.
+  const p = plan({ ...out, voice: { first: 10, last: 150 } }, { lead: 0, voice: { first: 40, last: 150 } }, 6, jump);
+  assert(near(p.from, 36, 1e-9), `from ${p.from}`);
+  // Its words at 150.6 s of this one's time: started 4 s before.
+  assert(near(p.at, 146.6, 1e-9), `at ${p.at}`);
+  assert(near(p.at + (40 - p.from), 150.6, 1e-9), 'the next words not a breath after the last');
+  // This one stays at its level to its last word, then fades; the next one comes in up to its words.
+  assert(near(p.hold!, 3.4, 1e-9) && near(p.fadeIn!, 4, 1e-9) && near(p.fade, 5, 1e-9), JSON.stringify(p));
+});
+
+test("to the words: singing to its end, only the next one's long start is skipped, no voices together", () => {
+  const p = plan({ ...out, voice: { first: 10, last: 197 } }, { lead: 0, voice: { first: 40, last: 150 } }, 6, jump);
+  assert(near(p.from, 36, 1e-9), `from ${p.from}`);
+  assert(p.at + 4 >= 197 + 0.6 - 1e-9 && p.at < 199, `at ${p.at}`);
+});
+
+test('to the words: short starts and ends, or the singing not known — as without it', () => {
+  const short = plan({ ...out, voice: { first: 10, last: 195 } }, { lead: 0, voice: { first: 5, last: 150 } }, 6, jump);
+  assert(short.at === 193 && short.from === 0 && !short.hold, JSON.stringify(short));
+  const unknown = plan(out, { lead: 0, voice: { first: 40, last: 150 } }, 6, jump);
+  assert(unknown.at === 193 && unknown.from === 0, JSON.stringify(unknown));
+  const instrumental = plan({ ...out, voice: null }, { lead: 0, voice: { first: 40, last: 150 } }, 6, jump);
+  assert(instrumental.at === 193, JSON.stringify(instrumental));
+});
+
+test("to the words, steady beats of a near tempo: the next one starts on its beat two bars before its words, on this one's beat", () => {
+  const a = grid(125, 0.1);
+  const b = grid(126, 0.5);
+  const p = plan({ ...out, grid: a, voice: { first: 10, last: 150 } }, { lead: 0, grid: b, voice: { first: 40, last: 150 } }, 6, jump);
+  assert(p.sync, p.why);
+  // Its start beat: 8 of its beats before its words, on its grid.
+  const k = (p.sync.to - 0.5) / b.period;
+  assert(near(k, Math.round(k), 1e-6) && near(40 - p.sync.to, 8 * b.period, b.period / 2 + 1e-9), `to ${p.sync.to}`);
+  // Laid on a beat of this one's, its words not over this one's last.
+  const kk = (p.sync.on - 0.1) / a.period;
+  assert(near(kk, Math.round(kk), 1e-6), `on ${p.sync.on}`);
+  assert(p.sync.on + (40 - p.sync.to) / p.sync.rate >= 150.3, 'the next words over the last ones');
+  assert(near(p.at + (p.sync.to - p.from) / p.sync.rate, p.sync.on, 1e-9), JSON.stringify(p));
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

@@ -40,7 +40,7 @@ export class DualAudio extends EventTarget {
   private level = 1;
   /** `ms`: the old one's fade out; `inMs`: the new one's fade in; `fromLevel`: the old one's own
    * volume, kept while it fades (the volume asked for from then on is the new track's). */
-  private fade: { from: HTMLAudioElement; to: HTMLAudioElement; start: number; ms: number; inMs: number; fromLevel: number; frame: number; done: () => void; sync?: BeatSync; jumped: number; nudged: number; lastJump?: boolean; offs: number[] } | null = null;
+  private fade: { from: HTMLAudioElement; to: HTMLAudioElement; start: number; ms: number; inMs: number; outDelay: number; fromLevel: number; frame: number; done: () => void; sync?: BeatSync; jumped: number; nudged: number; lastJump?: boolean; offs: number[] } | null = null;
   /** The speed asked for (both elements, outside a crossing by the beat). */
   private rate = 1;
   /** The new track easing back to `rate` after a crossing by the beat. */
@@ -136,7 +136,7 @@ export class DualAudio extends EventTarget {
    * one comes in this fast (the old one already quiet: nothing to blend with, see player.ts);
    * `fromLevel`: the old one's volume as it fades (its own level, not the new track's).
    */
-  async crossfade(url: string, ms: number, ended: () => void = () => {}, startAt = 0, { inMs = ms, fromLevel, sync }: { inMs?: number; fromLevel?: number; sync?: BeatSync } = {}) {
+  async crossfade(url: string, ms: number, ended: () => void = () => {}, startAt = 0, { inMs = ms, fromLevel, sync, outDelay = 0 }: { inMs?: number; fromLevel?: number; sync?: BeatSync; outDelay?: number } = {}) {
     this.endFade();
     this.stopGlide();
     const from = this.el;
@@ -168,7 +168,8 @@ export class DualAudio extends EventTarget {
         f.frame = requestAnimationFrame(step);
         return;
       }
-      const out = Math.min(1, passed / f.ms);
+      // The old one at its own level for `outDelay` (its last words), then out over the rest.
+      const out = Math.min(1, Math.max(0, passed - f.outDelay) / Math.max(1, f.ms - f.outDelay));
       const into = Math.min(1, passed / f.inMs);
       // Equal power: the sum stays as loud through the middle.
       f.from.volume = f.fromLevel * Math.cos((out * Math.PI) / 2);
@@ -178,7 +179,7 @@ export class DualAudio extends EventTarget {
     };
     // By the beat: silent while it is put on the beat, then the crossing.
     const start = performance.now() + (sync ? sync.quiet * 1000 : 0);
-    this.fade = { from, to, start, ms, inMs: Math.max(1, Math.min(ms, inMs)), fromLevel: fromAt, frame: requestAnimationFrame(step), done: ended, sync, jumped: 0, nudged: 0, offs: [] };
+    this.fade = { from, to, start, ms, inMs: Math.max(1, Math.min(ms, inMs)), outDelay: Math.max(0, Math.min(ms - 1, outDelay)), fromLevel: fromAt, frame: requestAnimationFrame(step), done: ended, sync, jumped: 0, nudged: 0, offs: [] };
   }
 
   /**

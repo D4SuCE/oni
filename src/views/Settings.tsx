@@ -7,7 +7,7 @@ import { Fragment, useEffect, useState } from 'react';
 import { Segmented } from '../components/Wave.tsx';
 import { LANGS, setLang, useLang, useT } from '../i18n.ts';
 import { canAnalyzeAudio } from '../player/eq.ts';
-import { offline, recsFeedback, setCrossfade, setNormalize, stats, usePlayer, setAutoContinue, setAutomix } from '../player/player.ts';
+import { offline, recsFeedback, setCrossfade, setNormalize, stats, usePlayer, setAutoContinue, setAutomix, setToWords } from '../player/player.ts';
 import { SMART_EVERY, setSmartEvery, useSmartEvery } from '../recs/smartShuffle.ts';
 import type { SpaceRules } from '../player/offline.ts';
 import { logout, navigate, toast, undislike, useApp } from '../store.ts';
@@ -37,6 +37,7 @@ export function SettingsView() {
   const crossfade = usePlayer((s) => s.crossfade);
   const autoContinue = usePlayer((s) => s.autoContinue);
   const automix = usePlayer((s) => s.automix);
+  const toWords = usePlayer((s) => s.toWords);
   const smartEvery = useSmartEvery((s) => s.every);
   const lang = useLang((s) => s.lang);
   const motion = useMotion((s) => s.enabled);
@@ -169,6 +170,15 @@ export function SettingsView() {
               <div className="hint">{isIos ? s.automixHintIos : s.automixHint}</div>
             </div>
             <input type="checkbox" className="switch" checked={automix} onChange={(e) => setAutomix(e.target.checked)} data-testid="automix" />
+          </label>
+        )}
+        {crossfade > 0 && (
+          <label className="toggle-row">
+            <div>
+              <div>{s.toWords}</div>
+              <div className="hint">{s.toWordsHint}</div>
+            </div>
+            <input type="checkbox" className="switch" checked={toWords} onChange={(e) => setToWords(e.target.checked)} data-testid="to-words" />
           </label>
         )}
         <div className="slider-row">
