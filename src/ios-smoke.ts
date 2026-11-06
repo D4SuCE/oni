@@ -561,6 +561,9 @@ async function crossfade() {
     await wave().playTracks([{ ...chart[0], r128: { i: -4, tp: -1 } }, { ...chart[1], r128: { i: -9, tp: -3 } }], 0, 'smoke crossfade');
     const audio = wave().audio;
     await until(() => !audio.paused && audio.currentTime > 1 && Number.isFinite(audio.duration), 60000);
+    // The file whole first: while it comes, its length is a guess (~110 s of 166 once, 6.11.2026), and
+    // "6 s before the end" landed in its middle — no crossing in the step's time.
+    await until(async () => !((await OniPlayer.state()) as unknown as { streaming?: boolean }).streaming, 60000);
     audio.currentTime = audio.duration - 6;
     type Crossing = { crossing?: boolean; tailLevel: number; tailGain: number; gain: number };
     let highest = 0;
