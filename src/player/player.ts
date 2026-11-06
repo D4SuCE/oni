@@ -56,10 +56,9 @@ interface Prefs {
   keepPitch: boolean;
   /** A list that has ended goes on with what sounds like it (a radio from it). */
   autoContinue: boolean;
-  /** The crossfade like a DJ's (automix.ts): by the voice, and by the beat where the tracks allow. */
+  /** The seamless crossing (automix.ts, one setting since 6.11.2026): to the words (long wordless ends and
+   * starts left out, not in an album in order), the voices apart, the beats on each other where they allow. */
   automix: boolean;
-  /** To the words (automix.ts, part 3): long wordless ends and starts left out (not an album in order). */
-  toWords: boolean;
 }
 
 export interface PlayerState extends Prefs {
@@ -91,7 +90,6 @@ prefs.rate ??= 1;
 prefs.keepPitch ??= true;
 prefs.autoContinue ??= true;
 prefs.automix ??= true;
-prefs.toWords ??= true;
 
 export const usePlayer = create<PlayerState>(() => ({
   ...prefs,
@@ -462,7 +460,7 @@ let lastMix: (Plan & { out: string; into: string; t: number }) | null = null;
 let planAt: number | null = null;
 export const automixLast = () => lastMix;
 
-const automixOn = () => (get().automix || get().toWords) && get().crossfade > 0 && !together;
+const automixOn = () => get().automix && get().crossfade > 0 && !together;
 /** An album played in order is not cut (a concept album, a live one). */
 const albumInOrder = () => {
   const s = get();
@@ -494,7 +492,7 @@ function mixPlan(end: number, t = audio.currentTime): Plan | null {
   const musicEnd = !isIos && tailEnd && tailEnd > audio.duration - 30 ? Math.min(end, tailEnd) : end;
   const out = { duration: audio.duration, end: musicEnd, voice: a.voice, grid: isIos ? null : a.tail?.grid, rate: s.rate };
   const inc = { lead: isIos ? 0 : (b.head?.lead ?? 0), voice: b.voice, grid: isIos ? null : b.head?.grid };
-  const allow = { mix: s.automix, jump: s.toWords && !albumInOrder() };
+  const allow = { mix: true, jump: !albumInOrder() };
   const p = mixPlanOf(out, inc, s.crossfade * s.rate, allow);
   if (p.hold === undefined || p.at >= t - 2) return p;
   return mixPlanOf(out, inc, s.crossfade * s.rate, { ...allow, jump: false });
@@ -1235,10 +1233,6 @@ export function setAutomix(automix: boolean) {
   savePrefs();
 }
 
-export function setToWords(toWords: boolean) {
-  set({ toWords });
-  savePrefs();
-}
 
 export function setCrossfade(seconds: number) {
   set({ crossfade: Math.max(0, Math.min(12, Math.round(seconds))) });
@@ -1529,8 +1523,8 @@ if (isIos) import('./volume.ts').then((m) => m.followSystemVolume((volume) => !e
 // -------------------------------------------------------------- persistence
 
 function savePrefs() {
-  const { volume, repeat, normalize, quality, crossfade, ownMode, rate, keepPitch, autoContinue, automix, toWords } = get();
-  storage.setItem('player.prefs', JSON.stringify({ volume, repeat, normalize, quality, crossfade, ownMode, rate, keepPitch, autoContinue, automix, toWords }));
+  const { volume, repeat, normalize, quality, crossfade, ownMode, rate, keepPitch, autoContinue, automix } = get();
+  storage.setItem('player.prefs', JSON.stringify({ volume, repeat, normalize, quality, crossfade, ownMode, rate, keepPitch, autoContinue, automix }));
 }
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;

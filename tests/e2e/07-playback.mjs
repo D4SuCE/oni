@@ -402,7 +402,7 @@ await step('mix like a DJ: a steady track into itself meets on the beat, heard w
   // Татьяна Буланова, «Ледяное сердце»: 128 BPM, its beats 4.5 ms off a straight line (measured 6.11.2026).
   await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
   await page.locator('[data-testid="crossfade"]').fill('6');
-  if (!(await page.locator('[data-testid="automix"]').isChecked())) throw new Error('automix not on by default');
+  if (!(await page.locator('[data-testid="automix"]').isChecked())) throw new Error('seamless transitions not on by default');
   try {
     const got = await page.evaluate(async () => {
       const w = window.__wave;
@@ -444,7 +444,7 @@ await step('skip to the words: the long wordless end left out, the next one star
   // «Ледяное сердце»: words from 44.4 s to 227.7 s of 266 (its synced lyrics).
   await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
   await page.locator('[data-testid="crossfade"]').fill('6');
-  if (!(await page.locator('[data-testid="to-words"]').isChecked())) throw new Error('skip to the words not on by default');
+  if (!(await page.locator('[data-testid="automix"]').isChecked())) throw new Error('seamless transitions not on by default');
   try {
     const got = await page.evaluate(async () => {
       const w = window.__wave;
