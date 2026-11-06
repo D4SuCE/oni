@@ -524,6 +524,26 @@ async function lanLink() {
   }
 }
 
+/** The link to the PC while the app is busy (6.11.2026): the main thread held 3 s just as the link
+ * opens (the app allows 2.5 s for the PC's answer). The link lived on the main thread, its hello
+ * waited behind the busy moment and the PC's answer came too late: the remote fell back to Disk. */
+async function lanBusy() {
+  const lan = registerPlugin<{
+    open(o: { id: string; url: string; hello: string; timeout?: number }): Promise<void>;
+    close(o: { id: string }): Promise<void>;
+    testBusyMain(o: { ms: number }): Promise<void>;
+  }>('OniLan');
+  const started = performance.now();
+  const opening = lan.open({ id: 'mac-busy', url: 'ws://127.0.0.1:47999', hello: JSON.stringify({ t: 'hello', key: 'smoke', device: { id: 'sim-busy' } }), timeout: 2500 }).then(
+    () => 'open',
+    (e) => String(e),
+  );
+  await lan.testBusyMain({ ms: 3000 });
+  const got = await opening;
+  report('lan-busy-main', got === 'open', `${got} after ${(performance.now() - started).toFixed(0)} ms, the main thread busy for 3000`);
+  await lan.close({ id: 'mac-busy' }).catch(() => {});
+}
+
 /** Listening together, the iPhone as the one who started (LanPlugin.swift's serve, together/lan.ts):
  * it listens, a wrong key is refused, a guest (itself, through OniLan.open) is welcomed, and a
  * message goes there and back. */
@@ -1549,6 +1569,7 @@ export async function runSmoke() {
     await twice(speed);
     await twice(awakeAfterPause);
     await twice(lanLink);
+    await lanBusy().catch((e) => report('lan-busy-main', false, String(e)));
     await twice(togetherServe);
     await twice(iosPulse);
     await twice(crossfade);
