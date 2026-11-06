@@ -135,6 +135,9 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     /// The music played when iOS took the sound: it comes back when iOS allows (`.shouldResume`), unless
     /// the user has done something about it in the meantime.
     private var resumeAfterCall = false
+    /// When the engine was found stopped under playing music before iOS told of an interruption
+    /// (restartHere): the interruption that follows within seconds is that one.
+    private var takenUnheraldedAt = Date.distantPast
     private var timer: Timer?
     private let lock = NSLock()
     /// Oni is in the background: the clock goes to the page once a second, not four times, and the
@@ -1253,7 +1256,10 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         DispatchQueue.main.async {
             self.note(began ? "interrupted" : "interruption-ended", "options \(options) reason \(reason)")
             if began {
-                if self.playing { self.resumeAfterCall = true }
+                // Only what played now (or a moment ago, the engine stopped before this notice) comes
+                // back. A call whose end iOS never told (it happens) left this set, and a later
+                // interruption's end — an alarm, Siri, hours on, the music paused — started it by itself.
+                self.resumeAfterCall = self.playing || (self.resumeAfterCall && Date().timeIntervalSince(self.takenUnheraldedAt) < 5)
                 self.halt("interruption")
                 self.replant()
             } else if AVAudioSession.InterruptionOptions(rawValue: options).contains(.shouldResume) {
@@ -1324,7 +1330,10 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
             if !stalled { node.play() }
         } else {
             // iOS has taken the sound and has not told yet: `interrupted` will find it not playing.
-            if was { resumeAfterCall = true }
+            if was {
+                resumeAfterCall = true
+                takenUnheraldedAt = Date()
+            }
             playing = false
         }
         tick()

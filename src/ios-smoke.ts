@@ -51,22 +51,40 @@ async function until(what: () => unknown, timeout: number) {
 let held: string[] | null = null;
 const report = (step: string, ok: boolean, detail = '') => {
   const line = `SMOKE ${step} ${ok ? 'ok' : 'FAIL'}${detail ? ` ${detail}` : ''}`;
+  if (!step.startsWith('crash-after-')) lastStep = step;
   if (held) held.push(line);
   else console.log(line);
 };
 
-/** Steps that hang on the cloud Mac's speed (they passed and failed on the same code; ROADMAP,
- * «Хвосты»): a failure gets one more try. The first try's failures are printed as SMOKE-SLOW (seen in
- * the log, not failing the run); the second try's count. */
-async function twice(fn: () => Promise<void>) {
-  held = [];
-  await fn().catch((e) => held!.push(`SMOKE step-crash FAIL ${e}`));
-  const first = held;
-  held = null;
-  if (!first.some((l) => / FAIL( |$)/.test(l))) return first.forEach((l) => console.log(l));
+/** Every step gets one more try if it fails: on the cloud Mac steps failed now and then on the same
+ * code (5 whole runs of ~17 min for one batch, 5.11.2026: of 92 steps none failed every time, a
+ * dozen failed once each, each time others). The first try's failures are printed as SMOKE-SLOW (in
+ * the log and as a warning on the run's page, not failing the run); the second try's count. A step
+ * that throws is reported as failed and the run goes on (it used to end the run: "crash"). */
+const unsteady: string[] = [];
+/** The last step reported: a crash is named after it (the build renames functions, fn.name is no use). */
+let lastStep = 'start';
+async function twice(fn: () => Promise<unknown> | unknown) {
+  const tryOnce = async () => {
+    held = [];
+    const before = lastStep;
+    await Promise.resolve()
+      .then(fn)
+      .catch((e) => report(`crash-after-${before}`, false, String(e)));
+    const lines = held;
+    held = null;
+    return lines;
+  };
+  const failing = (lines: string[]) => lines.filter((l) => / FAIL( |$)/.test(l)).map((l) => l.split(' ')[1]);
+  const first = await tryOnce();
+  if (!failing(first).length) return first.forEach((l) => console.log(l));
   first.forEach((l) => console.log(l.replace(/^SMOKE (\S+) FAIL/, 'SMOKE-SLOW $1 first try failed:')));
-  await fn();
+  await sleep(1500);
+  const second = await tryOnce();
+  second.forEach((l) => console.log(l));
+  if (!failing(second).length) unsteady.push(...failing(first));
 }
+
 /** A picture of Oni's window as it is now (OniPlayer.snapshot; the cloud run copies it out). A
  * picture taken by the run from outside came late (the console reaches it in batches) and with
  * the notifications prompt over it. */
@@ -385,6 +403,21 @@ async function othersSound() {
   await sleep(1000);
   const again = await OniPlayer.state();
   report('call-while-paused', !paused.playing && again.playing && again.time >= paused.time, JSON.stringify({ paused, again }));
+  // A call whose end iOS never tells (it happens), then, the music paused all along, another
+  // interruption (an alarm, Siri) that ends with "may resume": the music stays paused. It started by
+  // itself: the first call's "bring it back" was kept (6.11.2026).
+  await OniPlayer.testOthers({ interrupt: true });
+  await sleep(1500);
+  const lost = await OniPlayer.state();
+  await sleep(5500);
+  await OniPlayer.testOthers({ interrupt: true });
+  await sleep(1000);
+  await OniPlayer.testOthers({ interruptionEnded: true, mayResume: true });
+  await sleep(2500);
+  const later = await OniPlayer.state();
+  await wave().audio.play();
+  await sleep(1000);
+  report('call-end-lost', !lost.playing && !later.playing && !wave().audio.paused, JSON.stringify({ lost: lost.playing, later: later.playing, page: !wave().audio.paused }));
   report('muted-video-keeps-music', muted.playing && hinted.playing && pageOn, JSON.stringify({ muted, hinted, pageOn }));
   report('interruption-pauses', !taken.playing, JSON.stringify({ taken }));
   report('sound-log', told.includes('others') && told.some((x) => x.startsWith('interrupted:options 0')) && told.includes('halt:interruption') && told.includes('play'), told.join());
@@ -451,7 +484,10 @@ async function lanLink() {
   const got: string[] = [];
   const listener = await lan.addListener('message', (m) => got.push(m.text));
   try {
-    const refused = await lan.open({ id: 'mac', url: 'ws://127.0.0.1:47999', hello: JSON.stringify({ t: 'hello', key: 'wrong', device: { id: 'sim' } }), timeout: 2000 }).then(() => false, () => true);
+    // Refused by the PC (it closes the connection), not just unanswered: with 2 s and any failure
+    // counted, a hello that never got there passed as "refused" (the stand-in PC's log, 5.11.2026).
+    const refusal = await lan.open({ id: 'mac', url: 'ws://127.0.0.1:47999', hello: JSON.stringify({ t: 'hello', key: 'wrong', device: { id: 'sim' } }), timeout: 20000 }).then(() => 'let in', (e) => String(e));
+    const refused = !/let in|no answer/.test(refusal);
     // The hello went before the connection was open and was lost now and then (3 of 4 runs on
     // 25.10.2026; LanPlugin.swift now says it once open). The runner's simulator takes seconds to
     // connect even to itself (the stand-in saw it 2-3 s late): up to 20 s, a second try allowed and told.
@@ -465,7 +501,7 @@ async function lanLink() {
     const at = performance.now();
     await lan.send({ id: 'mac', text: '{"t":"ping"}' });
     const back = await until(() => got.some((t) => t.includes('pong')), 3000);
-    report('lan-link', refused && Boolean(back), `wrong key ${refused ? 'refused' : 'let in'}, open in ${opened.toFixed(0)} ms (try ${tries}), answer ${back ? `in ${(performance.now() - at).toFixed(0)} ms` : 'none'}`);
+    report('lan-link', refused && Boolean(back), `wrong key: ${refusal}, open in ${opened.toFixed(0)} ms (try ${tries}), answer ${back ? `in ${(performance.now() - at).toFixed(0)} ms` : 'none'}`);
     await lan.close({ id: 'mac' });
   } catch (e) {
     report('lan-link', false, String(e));
@@ -494,14 +530,15 @@ async function togetherServe() {
   try {
     const { hosts, port } = await lan.serve({ key: 'smokeroom', welcome: JSON.stringify({ t: 'welcome', device: { id: 'smokehost' } }) });
     const url = `ws://127.0.0.1:${port}`;
-    const refused = await lan.open({ id: 'tog-wrong', url, hello: JSON.stringify({ t: 'hello', key: 'nope', device: { id: 'g' } }), timeout: 3000 }).then(() => false, () => true);
+    const refusal = await lan.open({ id: 'tog-wrong', url, hello: JSON.stringify({ t: 'hello', key: 'nope', device: { id: 'g' } }), timeout: 20000 }).then(() => 'let in', (e) => String(e));
+    const refused = !/let in|no answer/.test(refusal);
     const hello = { id: 'tog-smokehost', url, hello: JSON.stringify({ t: 'hello', key: 'smokeroom', device: { id: 'smokeguest' } }), timeout: 20000 };
     await lan.open(hello).catch(() => lan.open(hello));
     await lan.send({ id: 'tog-smokehost', text: '{"t":"up"}' });
     const up = await until(() => toHost.includes('smokeguest:{"t":"up"}'), 3000);
     await lan.serveSend({ text: '{"t":"down"}' });
     const down = await until(() => toGuest.includes('{"t":"down"}'), 3000);
-    report('together-serve', refused && Boolean(up) && Boolean(down), `port ${port}, addresses ${hosts.join(' ')}; wrong key ${refused ? 'refused' : 'let in'}, guest→host ${up ? 'ok' : 'none'}, host→guest ${down ? 'ok' : 'none'}`);
+    report('together-serve', refused && Boolean(up) && Boolean(down), `port ${port}, addresses ${hosts.join(' ')}; wrong key: ${refusal}, guest→host ${up ? 'ok' : 'none'}, host→guest ${down ? 'ok' : 'none'}`);
     await lan.close({ id: 'tog-smokehost' });
   } catch (e) {
     report('together-serve', false, String(e));
@@ -909,8 +946,9 @@ const REVIVE = 'oni-smoke-revive';
 async function revived() {
   sessionStorage.removeItem(REVIVE);
   const shown = await until(() => document.querySelector('[data-testid="nav-home"]'), 30000);
-  // Slow on the cloud Mac: the page loads anew and takes the playing track up (45 s of the run's 60).
-  const playing = await until(() => wave()?.audio && !wave().audio.paused, 45000);
+  // Slow on the cloud Mac: the page loads anew and takes the playing track up (45 s were not always
+  // enough, 5.11.2026; the run waits 130 s for this line).
+  const playing = await until(() => wave()?.audio && !wave().audio.paused, 90000);
   report('revived', shown && playing, `page ${shown ? 'shown' : 'not shown'}, music ${playing ? 'playing' : 'not seen playing'}`);
 }
 
@@ -1489,26 +1527,26 @@ export async function runSmoke() {
     // Opened by the native player from the sealed file (no audio through the page).
     const local = await until(() => wave().audio.src.startsWith('oni-sealed:') && !wave().audio.paused && wave().audio.currentTime > 1, 20000);
     report('offline-playback', local, wave().audio.src.slice(0, 12));
-    await nativePlayer();
-    await othersSound();
+    await twice(nativePlayer);
+    await twice(othersSound);
     await twice(speed);
-    await awakeAfterPause();
+    await twice(awakeAfterPause);
     await twice(lanLink);
     await twice(togetherServe);
     await twice(iosPulse);
-    await crossfade();
-    await crossfadeQuiet();
-    await levelling();
-    await uploadPlays();
+    await twice(crossfade);
+    await twice(crossfadeQuiet);
+    await twice(levelling);
+    await twice(uploadPlays);
     await twice(fastStart);
-    await intents();
-    await backgroundDownload();
-    await ownWave();
+    await twice(intents);
+    await twice(backgroundDownload);
+    await twice(ownWave);
 
     // Next to the shortcut's link: Capacitor hands a link to iOS only while the scene is active
     // (WebViewDelegationHandler), and by the end of the run it was not (the links went nowhere).
-    await playlistHold().catch((e) => report('playlist-hold', false, String(e)));
-    await shareLinks().catch((e) => report('share-links', false, String(e)));
+    await twice(playlistHold);
+    await twice(shareLinks);
     // "Save as CSV" (ui/exportCsv.ts) hands the file to the share sheet: WebKit must take a CSV file.
     const csv = new File(['Track Name\r\n'], 'Oni.csv', { type: 'text/csv' });
     report('csv-share', Boolean(navigator.canShare?.({ files: [csv] })), `canShare: ${typeof navigator.canShare}`);
@@ -1521,37 +1559,38 @@ export async function runSmoke() {
     const input = document.querySelector<HTMLInputElement>('[data-testid="search-input"]');
     const keyboard = document.activeElement === input;
     report('search-link', Boolean(searched) && input?.value === 'Кино Группа крови' && !keyboard, `"${input?.value ?? ''}", ${document.querySelectorAll('.track-row').length} tracks${keyboard ? ', keyboard up' : ''}`);
-    await longPressMenu();
+    await twice(longPressMenu);
     await sleep(1100); // past the hold's aftermath (src/ui/longPress.ts); a real tap would start a new touch
-    await tapToPlay();
+    await twice(tapToPlay);
     await sleep(1100);
-    await holdHint();
+    await twice(holdHint);
     buttonNames('search');
     await sleep(1100);
-    await uploadForm();
-    await textResponse();
-    await playlistActions();
-    await swipeBack();
-    await importList();
-    await swipeTabs();
-    await memoryWalk();
-    await swipeTrack();
-    await phoneTop();
-    await moveTracks();
+    await twice(uploadForm);
+    await twice(textResponse);
+    await twice(playlistActions);
+    await twice(swipeBack);
+    await twice(importList);
+    await twice(swipeTabs);
+    await twice(memoryWalk);
+    await twice(swipeTrack);
+    await twice(phoneTop);
+    await twice(moveTracks);
     // The Taptic Engine's plugin is there and answers (the simulator has nothing to feel).
     const { OniHaptics } = await import('./ui/haptics.ts');
     const tapped = await OniHaptics.tap({ kind: 'pick' }).then(() => '', (e) => String(e));
     report('haptics', !tapped, tapped);
-    await holdHintRound();
+    await twice(holdHintRound);
     await twice(recap);
-    await eqMatch().catch((e) => report('eq-match', false, String(e)));
-    await eqButton().catch((e) => report('eq-button', false, String(e)));
-    await voiceShortcuts();
-    await animLight().catch((e) => report('anim-light', false, String(e)));
-    await updateCheck();
+    await twice(eqMatch);
+    await twice(eqButton);
+    await twice(voiceShortcuts);
+    await twice(animLight);
+    await twice(updateCheck);
   } catch (e) {
     report('crash', false, String(e));
   }
+  if (unsteady.length) console.log(`SMOKE-UNSTEADY ${unsteady.join(' ')}`);
   backgroundProbe();
   console.log('SMOKE done');
 }

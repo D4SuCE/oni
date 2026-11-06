@@ -8,13 +8,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { steps } from './step.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 /** The Electron binary (the `electron` package exports its path). */
 const electronExe = createRequire(import.meta.url)('electron');
 const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'wave-desktop-'));
-let passed = 0;
-let failed = 0;
 
 async function launch(env = {}) {
   const app = await electron.launch({ args: [root], cwd: root, env: { ...process.env, WAVE_E2E: '1', WAVE_USER_DATA: userData, ...env } });
@@ -33,16 +32,8 @@ const win = (app, fn, arg) =>
     [fn.toString(), arg],
   );
 
-async function step(name, fn) {
-  try {
-    await fn();
-    passed++;
-    console.log(`  ok   ${name}`);
-  } catch (e) {
-    failed++;
-    console.log(`  FAIL ${name}: ${e?.message || e}`);
-  }
-}
+/** A step (tests/step.mjs: a failure gets a second try). */
+const { step, summary } = steps({ suite: 'desktop' });
 
 let { app, page } = await launch();
 
@@ -416,5 +407,4 @@ await step('global hotkeys: a key another program holds shows as taken', async (
 await app.close().catch(() => {});
 discord.close();
 fs.rmSync(userData, { recursive: true, force: true });
-console.log(`\n${passed} passed, ${failed} failed.`);
-if (failed) process.exit(1);
+if (summary()) process.exit(1);
