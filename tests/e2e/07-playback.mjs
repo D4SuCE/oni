@@ -7,6 +7,24 @@ await step('settings page', async () => {
   await shot('11-settings');
 });
 
+await step('About shows how many devices opened Oni today (read from GitHub; a test run is not counted), and "Don\'t count me" stays', async () => {
+  const row = page.locator('[data-testid="users-count"]');
+  await row.scrollIntoViewIfNeeded();
+  // GitHub's API answers within a few seconds; "…" until then (or if it is busy: then only the row is checked).
+  await page.waitForFunction(() => /\d/.test(document.querySelector('[data-testid="users-count"]')?.textContent ?? ''), null, { timeout: 15000 }).catch(() => {});
+  const text = await row.textContent();
+  if (!/^Сегодня в Oni: (\d[\d\s]*|…)$/.test(text ?? '')) throw new Error(`row "${text}"`);
+  const counted = await page.evaluate(() => window.__wave.storage.getItem('stats.day'));
+  if (counted) throw new Error(`a test run counted itself: ${counted}`);
+  const off = page.locator('[data-testid="count-me-off"]');
+  await off.check();
+  try {
+    if ((await page.evaluate(() => window.__wave.storage.getItem('stats.off'))) !== '1') throw new Error('"Don\'t count me" not kept');
+  } finally {
+    await off.uncheck();
+  }
+});
+
 await step('download new likes: a track liked downloads by itself (like and download reverted)', async () => {
   // The user's wish (accepted proposals), as in Yandex's app.
   await page.locator('label', { has: page.locator('[data-testid="auto-likes"]') }).click();
