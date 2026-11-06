@@ -307,7 +307,8 @@ export const useRecent = create<{ version: number }>(() => ({ version: 0 }));
 export { audio };
 
 let engine: Station | null = null;
-const waveApi = transport.testMode ? { waveStart: api.waveStart.bind(api), waveMore: api.waveMore.bind(api), waveFeedback: async () => {} } : api;
+// Called through `api` each time (not bound once): an e2e step stands a failing Yandex in for it.
+const waveApi = transport.testMode ? { waveStart: (...a: Parameters<typeof api.waveStart>) => api.waveStart(...a), waveMore: (...a: Parameters<typeof api.waveMore>) => api.waveMore(...a), waveFeedback: async () => {} } : api;
 let isDisliked: (id: string) => boolean = () => false;
 let loadSeq = 0;
 let listened = 0;
@@ -441,6 +442,9 @@ function quietTail(t: number) {
 /** The crossfade's next track is still loading (a slow address or file): the old track plays on
  * meanwhile, and its clock and its end are not the next one's — its end would skip the next. */
 let crossLoading = false;
+/** A crossfade set off for the list's radio (goOn) that did not come: the last track plays out and
+ * the music stops at its end (it was paused the fade's seconds early, 6.11.2026). */
+let endsHere = false;
 
 /** `fade`: seconds to cross into this track from the one playing (the crossfade setting). */
 async function loadAt(index: number, autoplay = true, fade = 0) {
@@ -460,6 +464,7 @@ async function loadAt(index: number, autoplay = true, fade = 0) {
   const fadedOut = fade > 0 && tail.fading(audio.currentTime);
   const oldLevel = fade > 0 ? levelling() : 1;
   crossStarted = false;
+  endsHere = false;
   madeReady = false;
   tail.reset();
   stale = false;
@@ -1000,6 +1005,8 @@ export async function next(user = true, fade = 0, failed = false) {
   if (s.repeat === 'all') return told(how, () => loadAt(0, true, fade));
   // Pressed "next" on the last track is a wish for more as much as its end is.
   if (await goOn(fade)) return;
+  // A crossfade's start, not the end: what is left of the track still plays ('ended' stops there).
+  if (fade > 0 && !user && !audio.paused) return void (endsHere = true);
   audio.pause();
   shared({ playing: false }, how);
 }
@@ -1344,6 +1351,12 @@ audio.addEventListener('timeupdate', () => {
 audio.addEventListener('ended', () => {
   // The old track of a crossfade ended before the next one loaded: that one plays when it has.
   if (crossLoading) return;
+  // Its end was counted when the crossfade set off: only the stop is left.
+  if (endsHere) {
+    endsHere = false;
+    audio.pause();
+    return shared({ playing: false }, 'natural');
+  }
   // "At the end of this track": it ends, and nothing comes after it.
   if (get().sleep.afterTrack) {
     finishCurrent(true);
