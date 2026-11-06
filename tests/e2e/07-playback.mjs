@@ -416,10 +416,13 @@ await step('mix like a DJ: a steady track into itself meets on the beat, heard w
       await w.playTracks([t, t], 0, 'e2e automix');
       await until(() => !a.paused && a.currentTime > 0.5 && Number.isFinite(a.duration), 20000);
       a.currentTime = a.duration - 32;
-      const started = await until(() => w.automix.last(), 40000);
+      // This crossing's plan (an earlier step's crossing out of the same chart track left one too).
+      const since = Date.now();
+      const started = await until(() => w.automix.last()?.t >= since && w.automix.last().into === String(t.id), 40000);
       const plan = w.automix.last();
       const known = w.automix.known(t.id);
-      if (!started || !plan.sync) return { plan, tail: known.tail && { end: known.tail.end, bpm: known.tail.grid?.bpm, wobble: known.tail.grid?.wobble }, head: known.head && { lead: known.head.lead, bpm: known.head.grid?.bpm } };
+      const st = w.usePlayer.getState();
+      if (!started || !plan.sync) return { queue: st.queue.map((x) => String(x.id)), index: st.index, crossfade: st.crossfade, rate: st.rate, automix: st.automix, plan, tail: known.tail && { end: known.tail.end, bpm: known.tail.grid?.bpm, wobble: known.tail.grid?.wobble }, head: known.head && { lead: known.head.lead, bpm: known.head.grid?.bpm } };
       // Heard: how far off the beat, measured as it crosses.
       await until(() => a.syncError.length > 30, 15000);
       const errors = a.syncError.slice(10).map(Math.abs).sort((x, y) => x - y);

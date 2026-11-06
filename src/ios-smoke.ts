@@ -431,13 +431,23 @@ async function speed() {
   const ask = async () => {
     const sent = performance.now();
     const { time } = await OniPlayer.state();
-    return { at: (sent + performance.now()) / 2, time };
+    return { at: (sent + performance.now()) / 2, time, trip: performance.now() - sent };
   };
+  // A dozen readings over ~4 s, the slow answers left out (a two-reading pace read 1.16–1.67 for 1.5×,
+  // 6.11.2026), and a straight line through the rest.
   const pace = async () => {
-    const a = await ask();
-    await sleep(3000);
-    const b = await ask();
-    return (b.time - a.time) / ((b.at - a.at) / 1000);
+    const all: { at: number; time: number; trip: number }[] = [];
+    for (let i = 0; i < 12; i++) {
+      all.push(await ask());
+      await sleep(300);
+    }
+    const quick = [...all].sort((x, y) => x.trip - y.trip)[Math.floor(all.length / 2)].trip;
+    const use = all.filter((r) => r.trip <= Math.max(60, quick * 1.5));
+    const mx = use.reduce((s, r) => s + r.at, 0) / use.length;
+    const my = use.reduce((s, r) => s + r.time, 0) / use.length;
+    const sxy = use.reduce((s, r) => s + (r.at - mx) * (r.time - my), 0);
+    const sxx = use.reduce((s, r) => s + (r.at - mx) ** 2, 0);
+    return (sxy / sxx) * 1000;
   };
   wave().setRate(1.5, false);
   await sleep(500);
@@ -1475,7 +1485,7 @@ export async function runSmoke() {
   try {
     noZoom();
     noLoupe();
-    await loginRedirect();
+    await twice(loginRedirect);
     report('home', await until(() => document.querySelector('.wave-hero'), 30000));
     // "Keep mine offline": Wi-Fi known (the simulator's network is not mobile data), its switch on by default.
     const { OniDownloads } = await import('./player/iosDownloads.ts');
