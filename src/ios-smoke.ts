@@ -496,7 +496,11 @@ async function lanLink() {
   try {
     // Refused by the PC (it closes the connection), not just unanswered: with 2 s and any failure
     // counted, a hello that never got there passed as "refused" (the stand-in PC's log, 5.11.2026).
-    const refusal = await lan.open({ id: 'mac', url: 'ws://127.0.0.1:47999', hello: JSON.stringify({ t: 'hello', key: 'wrong', device: { id: 'sim' } }), timeout: 20000 }).then(() => 'let in', (e) => String(e));
+    // As with the right key below: the hello is lost now and then on the cloud Mac (the stand-in PC
+    // sees the connection and no hello), a second try allowed.
+    const wrong = () => lan.open({ id: 'mac', url: 'ws://127.0.0.1:47999', hello: JSON.stringify({ t: 'hello', key: 'wrong', device: { id: 'sim' } }), timeout: 20000 }).then(() => 'let in', (e) => String(e));
+    let refusal = await wrong();
+    if (/no answer/.test(refusal)) refusal = await wrong();
     const refused = !/let in|no answer/.test(refusal);
     // The hello went before the connection was open and was lost now and then (3 of 4 runs on
     // 25.10.2026; LanPlugin.swift now says it once open). The runner's simulator takes seconds to
