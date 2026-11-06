@@ -398,6 +398,45 @@ await step("a crossfade into the list's radio that does not come: the last track
   }
 });
 
+await step('mix like a DJ: a steady track into itself meets on the beat, heard within 20 ms, and its speed eases back', async () => {
+  // Татьяна Буланова, «Ледяное сердце»: 128 BPM, its beats 4.5 ms off a straight line (measured 6.11.2026).
+  await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
+  await page.locator('[data-testid="crossfade"]').fill('6');
+  if (!(await page.locator('[data-testid="automix"]').isChecked())) throw new Error('automix not on by default');
+  try {
+    const got = await page.evaluate(async () => {
+      const w = window.__wave;
+      const a = w.audio;
+      const until = async (what, ms) => {
+        const end = performance.now() + ms;
+        while (!what() && performance.now() < end) await new Promise((r) => setTimeout(r, 50));
+        return what();
+      };
+      const [t] = await w.api.tracks(['32416249']);
+      await w.playTracks([t, t], 0, 'e2e automix');
+      await until(() => !a.paused && a.currentTime > 0.5 && Number.isFinite(a.duration), 20000);
+      a.currentTime = a.duration - 32;
+      const started = await until(() => w.automix.last(), 40000);
+      const plan = w.automix.last();
+      const known = w.automix.known(t.id);
+      if (!started || !plan.sync) return { plan, tail: known.tail && { end: known.tail.end, bpm: known.tail.grid?.bpm, wobble: known.tail.grid?.wobble }, head: known.head && { lead: known.head.lead, bpm: known.head.grid?.bpm } };
+      // Heard: how far off the beat, measured as it crosses.
+      await until(() => a.syncError.length > 30, 15000);
+      const errors = a.syncError.slice(10).map(Math.abs).sort((x, y) => x - y);
+      const median = errors[Math.floor(errors.length / 2)];
+      await until(() => w.usePlayer.getState().index === 1 && Math.abs(a.playbackRate - 1) < 1e-3, 20000);
+      return { plan, median, worst: errors.at(-1), rate: a.playbackRate, index: w.usePlayer.getState().index };
+    });
+    if (!got.plan?.sync) throw new Error(`not matched: ${JSON.stringify(got)}`);
+    if (!(got.median <= 0.02)) throw new Error(`off the beat: ${JSON.stringify(got)}`);
+    if (got.index !== 1 || Math.abs(got.rate - 1) > 1e-3) throw new Error(`after: ${JSON.stringify(got)}`);
+  } finally {
+    await page.locator('[data-testid="crossfade"]').fill('0');
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.evaluate(() => window.__wave.audio.pause());
+  }
+});
+
 await step('the queue while shuffled: what is added stays when the shuffle goes off, what is taken out does not come back', async () => {
   const got = await page.evaluate(async () => {
     const w = window.__wave;

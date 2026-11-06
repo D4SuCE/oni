@@ -21,7 +21,8 @@ import { deviceSync, disk, syncNow, useSync } from './sync/index.ts';
 import { disconnect, elsewhereSync, leave, listen, look, publish, useElsewhere } from './sync/elsewhere.ts';
 import { inviteLink, joinRoom, leaveTogether, startTogether, togetherProbe, useTogether } from './together/index.ts';
 import { TuningPanel } from './components/Wave.tsx';
-import { audio, current, enqueue, next, offline, playLog, playNext, recentPlays, recsFeedback, playTracks, prev, removeAt, restoreSession, setRate, setSleep, setVolume, stats, toggle, toggleShuffle, usePlayer } from './player/player.ts';
+import { knownOf } from './player/mixing.ts';
+import { audio, automixLast, current, enqueue, next, offline, playLog, playNext, recentPlays, recsFeedback, playTracks, prev, removeAt, restoreSession, setRate, setSleep, setVolume, stats, toggle, toggleShuffle, usePlayer } from './player/player.ts';
 import { setPrivacy } from './player/privacy.ts';
 import { setAiPrefs } from './recs/ai.ts';
 import { back, historyStep, init, navigate, toast, toggleLike, useApp } from './store.ts';
@@ -254,5 +255,5 @@ export function App() {
 
 // Handy for debugging and for the automated UI test.
 Object.assign(window, {
-  __wave: { backup: { snapshot, restorePlaylist, restoreLikes, keepUploads, keepGoneDownloads, toDownload }, share: { round: shareRound, shareUpload, byLink: (key: string) => trackByLink(linkUrl(key), (r) => transport.request(r)), sweepLinks: (root: string) => sweepLinks(disk, root), useShare, downloadShared, read: (link: string) => readShared(link, (r) => transport.request(r)), asTrack, readMark, withMark, addToMine }, offline, storage, ownToKeep, silence: { leadingSilence }, usePlayer, useApp, audio, api, navigate, recsFeedback, recentPlays, playLog, stats, setPrivacy, setAiPrefs, transport, current, playTracks, setRate, setSleep, setVolume, toggleShuffle, enqueue, playNext, removeAt, toggleLike, trackMenu, findMix, eqOutputLevel, levelLift, pulseLevel, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } }, together: { startTogether, joinRoom, leaveTogether, inviteLink, useTogether, ...togetherProbe } },
+  __wave: { automix: { last: automixLast, known: knownOf }, backup: { snapshot, restorePlaylist, restoreLikes, keepUploads, keepGoneDownloads, toDownload }, share: { round: shareRound, shareUpload, byLink: (key: string) => trackByLink(linkUrl(key), (r) => transport.request(r)), sweepLinks: (root: string) => sweepLinks(disk, root), useShare, downloadShared, read: (link: string) => readShared(link, (r) => transport.request(r)), asTrack, readMark, withMark, addToMine }, offline, storage, ownToKeep, silence: { leadingSilence }, usePlayer, useApp, audio, api, navigate, recsFeedback, recentPlays, playLog, stats, setPrivacy, setAiPrefs, transport, current, playTracks, setRate, setSleep, setVolume, toggleShuffle, enqueue, playNext, removeAt, toggleLike, trackMenu, findMix, eqOutputLevel, levelLift, pulseLevel, sync: { disk, deviceSync, syncNow, useSync, elsewhere: { look, publish, leave, disconnect, listen, useElsewhere, elsewhereSync } }, together: { startTogether, joinRoom, leaveTogether, inviteLink, useTogether, ...togetherProbe } },
 });

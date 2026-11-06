@@ -4,6 +4,31 @@
 // fades out, and from then on the other is the one. Events come from the playing one only (the
 // fading one's "ended" is nobody's business). The equalizer takes both (`elements`).
 
+/** A crossing by the beat (automix.ts): the new track at `rate` (this one's tempo), its time `to` laid
+ * on the old one's `on`; silent for `quiet` s while it is put on the beat. */
+export interface BeatSync {
+  rate: number;
+  on: number;
+  to: number;
+  quiet: number;
+}
+
+/** Off the beat by more than this while still silent: put right by a jump (s), again and again (a
+ * jump lands a little off itself), one a JUMP_MS at most. */
+const JUMP = 0.004;
+const JUMP_MS = 200;
+/** Heard, it is put right by its speed: off by more than DEADBAND, a speed that makes it up in about
+ * a second (at most MAX_NUDGE off), looked at again after NUDGE_MS. A speed changed every frame
+ * made the element stumble (its time jumped 20–25 ms every couple of seconds, 6.11.2026). */
+const DEADBAND = 0.005;
+const MAX_NUDGE = 0.02;
+const NUDGE_MS = 600;
+/** After the crossing the new track eases back to the speed asked over this long (ms), in steps
+ * (each change of speed is a small stumble) of at most GLIDE_STEP, one a GLIDE_EVERY. */
+const GLIDE_MS = 6000;
+const GLIDE_STEP = 0.005;
+const GLIDE_EVERY = 500;
+
 /** Events the app listens to on its audio element. */
 const EVENTS = ['play', 'playing', 'pause', 'waiting', 'canplay', 'loadedmetadata', 'durationchange', 'timeupdate', 'ended', 'error', 'seeking', 'seeked', 'emptied'];
 
@@ -15,7 +40,16 @@ export class DualAudio extends EventTarget {
   private level = 1;
   /** `ms`: the old one's fade out; `inMs`: the new one's fade in; `fromLevel`: the old one's own
    * volume, kept while it fades (the volume asked for from then on is the new track's). */
-  private fade: { from: HTMLAudioElement; to: HTMLAudioElement; start: number; ms: number; inMs: number; fromLevel: number; frame: number; done: () => void } | null = null;
+  private fade: { from: HTMLAudioElement; to: HTMLAudioElement; start: number; ms: number; inMs: number; fromLevel: number; frame: number; done: () => void; sync?: BeatSync; jumped: number; nudged: number; lastJump?: boolean; offs: number[] } | null = null;
+  /** The speed asked for (both elements, outside a crossing by the beat). */
+  private rate = 1;
+  /** The new track easing back to `rate` after a crossing by the beat. */
+  private glide: { el: HTMLAudioElement; from: number; start: number; frame: number } | null = null;
+  /** How far off the beat the last crossing by the beat was, measured once heard (s; the tests read it). */
+  syncError: number[] = [];
+  /** A jump in a playing element lands this late (s): it plays on from the new place only after a
+   * moment, so it is aimed that far ahead. Learnt from the jumps themselves. */
+  private seekLead = 0.03;
 
   constructor() {
     super();
@@ -61,8 +95,39 @@ export class DualAudio extends EventTarget {
     cancelAnimationFrame(f.frame);
     f.from.pause();
     f.from.volume = 0;
+    f.from.playbackRate = this.rate;
     f.to.volume = this.level;
+    if (f.sync) this.startGlide(f.to);
     f.done();
+  }
+
+  /** The new track of a crossing by the beat back to the speed asked, slowly (a tempo change heard as none). */
+  private startGlide(el: HTMLAudioElement) {
+    this.stopGlide();
+    const from = el.playbackRate;
+    const steps = Math.ceil(Math.abs(from - this.rate) / GLIDE_STEP);
+    if (steps <= 1) {
+      el.playbackRate = this.rate;
+      return;
+    }
+    const g = { el, from, start: performance.now(), frame: 0 };
+    let done = 0;
+    const step = () => {
+      if (this.glide !== g) return;
+      done++;
+      el.playbackRate = done >= steps ? this.rate : from + ((this.rate - from) * done) / steps;
+      if (done >= steps) this.glide = null;
+      else g.frame = window.setTimeout(step, Math.max(GLIDE_EVERY, GLIDE_MS / steps));
+    };
+    this.glide = g;
+    g.frame = window.setTimeout(step, GLIDE_EVERY);
+  }
+
+  private stopGlide() {
+    if (!this.glide) return;
+    clearTimeout(this.glide.frame);
+    this.glide.el.playbackRate = this.rate;
+    this.glide = null;
   }
 
   /**
@@ -71,8 +136,9 @@ export class DualAudio extends EventTarget {
    * one comes in this fast (the old one already quiet: nothing to blend with, see player.ts);
    * `fromLevel`: the old one's volume as it fades (its own level, not the new track's).
    */
-  async crossfade(url: string, ms: number, ended: () => void = () => {}, startAt = 0, { inMs = ms, fromLevel }: { inMs?: number; fromLevel?: number } = {}) {
+  async crossfade(url: string, ms: number, ended: () => void = () => {}, startAt = 0, { inMs = ms, fromLevel, sync }: { inMs?: number; fromLevel?: number; sync?: BeatSync } = {}) {
     this.endFade();
+    this.stopGlide();
     const from = this.el;
     const fromAt = Math.max(0, Math.min(1, fromLevel ?? from.volume));
     const to = this.other;
@@ -81,6 +147,9 @@ export class DualAudio extends EventTarget {
     // Past its silence at the start (the smart crossfade, silence.ts).
     if (startAt > 0) to.currentTime = startAt;
     to.volume = 0;
+    to.playbackRate = sync ? sync.rate : this.rate;
+    if (sync) to.preservesPitch = true;
+    this.syncError = [];
     this.active = 1 - this.active;
     this.dispatchEvent(new Event('emptied'));
     try {
@@ -93,7 +162,12 @@ export class DualAudio extends EventTarget {
     const step = () => {
       const f = this.fade;
       if (!f) return;
+      if (f.sync) this.keepOnBeat(f);
       const passed = performance.now() - f.start;
+      if (passed < 0) {
+        f.frame = requestAnimationFrame(step);
+        return;
+      }
       const out = Math.min(1, passed / f.ms);
       const into = Math.min(1, passed / f.inMs);
       // Equal power: the sum stays as loud through the middle.
@@ -102,7 +176,45 @@ export class DualAudio extends EventTarget {
       if (out >= 1 && into >= 1) this.endFade();
       else f.frame = requestAnimationFrame(step);
     };
-    this.fade = { from, to, start: performance.now(), ms, inMs: Math.max(1, Math.min(ms, inMs)), fromLevel: fromAt, frame: requestAnimationFrame(step), done: ended };
+    // By the beat: silent while it is put on the beat, then the crossing.
+    const start = performance.now() + (sync ? sync.quiet * 1000 : 0);
+    this.fade = { from, to, start, ms, inMs: Math.max(1, Math.min(ms, inMs)), fromLevel: fromAt, frame: requestAnimationFrame(step), done: ended, sync, jumped: 0, nudged: 0, offs: [] };
+  }
+
+  /**
+   * The new track's beat on the old one's: how far off it is now (both elements' clocks read at the
+   * same moment), put right by a jump while it is silent, by its speed once heard.
+   */
+  private keepOnBeat(f: NonNullable<DualAudio['fade']>) {
+    const s = f.sync!;
+    if (f.to.paused || f.from.paused || f.to.seeking) return;
+    const off = f.to.currentTime - s.to - s.rate * (f.from.currentTime - s.on);
+    const silent = performance.now() < f.start;
+    // Still silent, or hardly heard yet (the first part of its fade in): put right by a jump.
+    const early = silent || (performance.now() - f.start < 600 && Math.abs(off) > 0.02);
+    if (early) {
+      // A jump takes a moment to land: not another one sooner; what it still missed by teaches the next.
+      if (performance.now() - f.jumped > JUMP_MS) {
+        if (f.jumped && f.lastJump) this.seekLead = Math.max(0, Math.min(0.15, this.seekLead - 0.7 * off));
+        f.lastJump = false;
+        if (Math.abs(off) > JUMP) {
+          f.to.currentTime = f.to.currentTime - off + this.seekLead * f.to.playbackRate;
+          f.jumped = performance.now();
+          f.lastJump = true;
+        }
+      }
+      if (silent) return;
+    }
+    this.syncError.push(off);
+    // By the mean since the last look: one reading strays by a few ms (the clocks' steps).
+    f.offs.push(off);
+    const now = performance.now();
+    if (now - f.nudged < NUDGE_MS) return;
+    f.nudged = now;
+    const mean = f.offs.reduce((a, b) => a + b, 0) / f.offs.length;
+    f.offs = [];
+    const want = Math.abs(mean) > DEADBAND ? s.rate * (1 - Math.max(-MAX_NUDGE, Math.min(MAX_NUDGE, mean))) : s.rate;
+    if (Math.abs(f.to.playbackRate - want) > 1e-6) f.to.playbackRate = want;
   }
 
   // ------------------------------------------------- the surface of one element
@@ -122,6 +234,7 @@ export class DualAudio extends EventTarget {
       this.dispatchEvent(new Event('emptied'));
     } else this.el.src = value;
     this.ready = null;
+    this.stopGlide();
   }
   get currentTime() {
     return this.el.currentTime;
@@ -160,7 +273,9 @@ export class DualAudio extends EventTarget {
     return this.el.playbackRate;
   }
   set playbackRate(value: number) {
-    for (const el of this.elements) el.playbackRate = value;
+    this.rate = value;
+    this.stopGlide();
+    for (const el of this.elements) if (!this.fade?.sync || el !== this.fade.to) el.playbackRate = value;
   }
   get defaultPlaybackRate() {
     return this.el.defaultPlaybackRate;
@@ -184,8 +299,10 @@ export class DualAudio extends EventTarget {
     return this.el.play();
   }
   pause() {
-    // A pause mid-fade ends it: what comes back is the new track alone.
+    // A pause mid-fade ends it: what comes back is the new track alone (at the speed asked).
+    const glide = this.fade?.sync;
     this.endFade();
+    if (glide) this.stopGlide();
     this.el.pause();
   }
 }
