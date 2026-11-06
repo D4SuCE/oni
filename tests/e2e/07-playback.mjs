@@ -398,6 +398,86 @@ await step("a crossfade into the list's radio that does not come: the last track
   }
 });
 
+await step('mix like a DJ: a steady track into itself meets on the beat, heard within 20 ms, and its speed eases back', async () => {
+  // Татьяна Буланова, «Ледяное сердце»: 128 BPM, its beats 4.5 ms off a straight line (measured 6.11.2026).
+  await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
+  await page.locator('[data-testid="crossfade"]').fill('6');
+  if (!(await page.locator('[data-testid="automix"]').isChecked())) throw new Error('seamless transitions not on by default');
+  try {
+    const got = await page.evaluate(async () => {
+      const w = window.__wave;
+      const a = w.audio;
+      const until = async (what, ms) => {
+        const end = performance.now() + ms;
+        while (!what() && performance.now() < end) await new Promise((r) => setTimeout(r, 50));
+        return what();
+      };
+      const [t] = await w.api.tracks(['32416249']);
+      await w.playTracks([t, t], 0, 'e2e automix');
+      await until(() => !a.paused && a.currentTime > 0.5 && Number.isFinite(a.duration), 20000);
+      a.currentTime = a.duration - 32;
+      // This crossing's plan (an earlier step's crossing out of the same chart track left one too).
+      const since = Date.now();
+      const started = await until(() => w.automix.last()?.t >= since && w.automix.last().into === String(t.id), 40000);
+      const plan = w.automix.last();
+      const known = w.automix.known(t.id);
+      const st = w.usePlayer.getState();
+      if (!started || !plan.sync) return { queue: st.queue.map((x) => String(x.id)), index: st.index, crossfade: st.crossfade, rate: st.rate, automix: st.automix, plan, tail: known.tail && { end: known.tail.end, bpm: known.tail.grid?.bpm, wobble: known.tail.grid?.wobble }, head: known.head && { lead: known.head.lead, bpm: known.head.grid?.bpm } };
+      // Heard: how far off the beat, measured as it crosses.
+      await until(() => a.syncError.length > 30, 15000);
+      const errors = a.syncError.slice(10).map(Math.abs).sort((x, y) => x - y);
+      const median = errors[Math.floor(errors.length / 2)];
+      await until(() => w.usePlayer.getState().index === 1 && Math.abs(a.playbackRate - 1) < 1e-3, 20000);
+      return { plan, median, worst: errors.at(-1), rate: a.playbackRate, index: w.usePlayer.getState().index };
+    });
+    if (!got.plan?.sync) throw new Error(`not matched: ${JSON.stringify(got)}`);
+    if (!(got.median <= 0.02)) throw new Error(`off the beat: ${JSON.stringify(got)}`);
+    if (got.index !== 1 || Math.abs(got.rate - 1) > 1e-3) throw new Error(`after: ${JSON.stringify(got)}`);
+  } finally {
+    await page.locator('[data-testid="crossfade"]').fill('0');
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.evaluate(() => window.__wave.audio.pause());
+  }
+});
+
+await step('skip to the words: the long wordless end left out, the next one starts shortly before its first words', async () => {
+  // «Ледяное сердце»: words from 44.4 s to 227.7 s of 266 (its synced lyrics).
+  await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
+  await page.locator('[data-testid="crossfade"]').fill('6');
+  if (!(await page.locator('[data-testid="automix"]').isChecked())) throw new Error('seamless transitions not on by default');
+  try {
+    const got = await page.evaluate(async () => {
+      const w = window.__wave;
+      const a = w.audio;
+      const until = async (what, ms) => {
+        const end = performance.now() + ms;
+        while (!what() && performance.now() < end) await new Promise((r) => setTimeout(r, 50));
+        return what();
+      };
+      const [t] = await w.api.tracks(['32416249']);
+      await w.playTracks([t, t], 0, 'e2e to the words');
+      await until(() => !a.paused && a.currentTime > 0.5 && Number.isFinite(a.duration), 20000);
+      a.currentTime = 205;
+      const since = Date.now();
+      const started = await until(() => w.automix.last()?.t >= since && w.automix.last().into === String(t.id), 60000);
+      const plan = w.automix.last();
+      const known = w.automix.known(t.id);
+      if (!started) return { plan, voice: known.voice };
+      await until(() => w.usePlayer.getState().index === 1, 10000);
+      await new Promise((r) => setTimeout(r, 1500));
+      return { plan, voice: known.voice, index: w.usePlayer.getState().index, at: a.currentTime, duration: a.duration };
+    });
+    const p = got.plan;
+    if (!p?.why?.startsWith('words') || !(p.at < 232) || !(p.from > 30 && p.from < 44)) throw new Error(JSON.stringify(got));
+    // Playing the next one from where it was started, not from its beginning.
+    if (got.index !== 1 || !(got.at > 32 && got.at < 50)) throw new Error(`after: ${JSON.stringify(got)}`);
+  } finally {
+    await page.locator('[data-testid="crossfade"]').fill('0');
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.evaluate(() => window.__wave.audio.pause());
+  }
+});
+
 await step('the queue while shuffled: what is added stays when the shuffle goes off, what is taken out does not come back', async () => {
   const got = await page.evaluate(async () => {
     const w = window.__wave;

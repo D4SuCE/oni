@@ -118,6 +118,8 @@ await step('Liked opened again shows its Download button at once and the whole l
   if (ms > 500 || rows < keys) throw new Error(`Download after ${ms} ms, ${rows} of ${keys} rows after ${whole} ms`);
 });
 
+/** The big playlist's first open (a second try finds it kept, whole at once). */
+let bigOpened = false;
 await step('a big playlist opens at once, the rest of it comes in parts and joins a queue started early', async () => {
   // The user: a friend's 1,600-track playlist took seconds to open. That one (pavel_hope's Liked,
   // saved by the user), or the account's own Liked as a playlist if it is gone.
@@ -134,6 +136,8 @@ await step('a big playlist opens at once, the rest of it comes in parts and join
   // Started before the rest is in: the queue grows to the whole list as it comes.
   await page.locator('.track-row').first().locator('.tr-play').click();
   await page.waitForSelector('[data-testid="list-loading"]', { state: 'detached', timeout: 60000 });
+  // The rows are drawn a moment after the last part is in (1480 of 1698 counted at once on GitHub, 6.11.2026).
+  await page.waitForFunction((n) => document.querySelectorAll('.track-row').length >= n * 0.9, big.n, { timeout: 10000 }).catch(() => {});
   const all = Date.now() - t0;
   const rows = await page.locator('.track-row').count();
   const playable = await page.locator('.track-row:not(.unavailable)').count();
@@ -147,7 +151,9 @@ await step('a big playlist opens at once, the rest of it comes in parts and join
   });
   if (gap > 2) throw new Error(`the search button is ${gap}px short of the right edge`);
   // The first part shows before the whole list is in (the old page waited for all of it).
-  if (first > 2000 * SLOW || early >= rows) throw new Error(`the first rows took ${first} ms, ${early} of ${rows}`);
+  const again = bigOpened;
+  bigOpened = true;
+  if (first > 2000 * SLOW || (early >= rows && !again)) throw new Error(`the first rows took ${first} ms, ${early} of ${rows}`);
   if (rows < big.n * 0.9 || queue < playable) throw new Error(`${rows} rows, queue ${queue} of ${playable}`);
   await page.evaluate(() => window.__wave.audio.pause());
 });

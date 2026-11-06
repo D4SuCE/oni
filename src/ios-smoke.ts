@@ -431,13 +431,23 @@ async function speed() {
   const ask = async () => {
     const sent = performance.now();
     const { time } = await OniPlayer.state();
-    return { at: (sent + performance.now()) / 2, time };
+    return { at: (sent + performance.now()) / 2, time, trip: performance.now() - sent };
   };
+  // A dozen readings over ~4 s, the slow answers left out (a two-reading pace read 1.16–1.67 for 1.5×,
+  // 6.11.2026), and a straight line through the rest.
   const pace = async () => {
-    const a = await ask();
-    await sleep(3000);
-    const b = await ask();
-    return (b.time - a.time) / ((b.at - a.at) / 1000);
+    const all: { at: number; time: number; trip: number }[] = [];
+    for (let i = 0; i < 12; i++) {
+      all.push(await ask());
+      await sleep(300);
+    }
+    const quick = [...all].sort((x, y) => x.trip - y.trip)[Math.floor(all.length / 2)].trip;
+    const use = all.filter((r) => r.trip <= Math.max(60, quick * 1.5));
+    const mx = use.reduce((s, r) => s + r.at, 0) / use.length;
+    const my = use.reduce((s, r) => s + r.time, 0) / use.length;
+    const sxy = use.reduce((s, r) => s + (r.at - mx) * (r.time - my), 0);
+    const sxx = use.reduce((s, r) => s + (r.at - mx) ** 2, 0);
+    return (sxy / sxx) * 1000;
   };
   wave().setRate(1.5, false);
   await sleep(500);
@@ -486,7 +496,11 @@ async function lanLink() {
   try {
     // Refused by the PC (it closes the connection), not just unanswered: with 2 s and any failure
     // counted, a hello that never got there passed as "refused" (the stand-in PC's log, 5.11.2026).
-    const refusal = await lan.open({ id: 'mac', url: 'ws://127.0.0.1:47999', hello: JSON.stringify({ t: 'hello', key: 'wrong', device: { id: 'sim' } }), timeout: 20000 }).then(() => 'let in', (e) => String(e));
+    // As with the right key below: the hello is lost now and then on the cloud Mac (the stand-in PC
+    // sees the connection and no hello), a second try allowed.
+    const wrong = () => lan.open({ id: 'mac', url: 'ws://127.0.0.1:47999', hello: JSON.stringify({ t: 'hello', key: 'wrong', device: { id: 'sim' } }), timeout: 20000 }).then(() => 'let in', (e) => String(e));
+    let refusal = await wrong();
+    if (/no answer/.test(refusal)) refusal = await wrong();
     const refused = !/let in|no answer/.test(refusal);
     // The hello went before the connection was open and was lost now and then (3 of 4 runs on
     // 25.10.2026; LanPlugin.swift now says it once open). The runner's simulator takes seconds to
@@ -1475,7 +1489,7 @@ export async function runSmoke() {
   try {
     noZoom();
     noLoupe();
-    await loginRedirect();
+    await twice(loginRedirect);
     report('home', await until(() => document.querySelector('.wave-hero'), 30000));
     // "Keep mine offline": Wi-Fi known (the simulator's network is not mobile data), its switch on by default.
     const { OniDownloads } = await import('./player/iosDownloads.ts');
