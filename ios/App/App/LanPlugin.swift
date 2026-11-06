@@ -16,8 +16,14 @@ import Accelerate
 /// and key are in Oni's folder on Yandex Disk. Native, not the page's own WebSocket: the page's
 /// origin (capacitor://) may not open a plain ws:// one, and iOS keeps this one going while Oni
 /// plays in the background. JS: registerPlugin('OniLan').
+///
+/// All of it on its own queue, with Network.framework (as the listening side below), not
+/// URLSessionWebSocketTask on the main thread (6.11.2026): in the cloud check the PC saw a connection
+/// and no hello for 10-20 s, a cancelled one closed only when the app quit and the next ones never
+/// came (the task stuck), and whatever the link did waited for the main thread too: a busy moment
+/// of the app held the hello past the 2.5 s the app allows, and the remote fell back to Disk.
 @objc(LanPlugin)
-public class LanPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDelegate {
+public class LanPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "LanPlugin"
     public let jsName = "OniLan"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -27,19 +33,22 @@ public class LanPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDelegate
         CAPPluginMethod(name: "serve", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "serveSend", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "serveStop", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "testBusyMain", returnType: CAPPluginReturnPromise),
     ]
 
-    private lazy var session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+    /// Every connection's state and callbacks live here, off the main thread.
+    private let queue = DispatchQueue(label: "oni.lan")
     /// The connections, by the id of the device at the other end.
-    private var sockets: [String: URLSessionWebSocketTask] = [:]
-    private var pings: [String: Timer] = [:]
-    /// What a connection says first (its hello), by task, said once it is open: sent before that, it
-    /// was lost now and then (the stand-in PC in the cloud check saw connections and never a hello,
-    /// 25.10.2026), and the link was given up for Disk.
-    private var hellos: [Int: () -> Void] = [:]
+    private var sockets: [String: NWConnection] = [:]
+    private var pings: [String: DispatchSourceTimer] = [:]
 
-    public func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
-        DispatchQueue.main.async { self.hellos.removeValue(forKey: webSocketTask.taskIdentifier)?() }
+    private static func webSocket() -> NWParameters {
+        let ws = NWProtocolWebSocket.Options()
+        ws.autoReplyPing = true
+        ws.maximumMessageSize = 4 * 1024 * 1024
+        let params = NWParameters.tcp
+        params.defaultProtocolStack.applicationProtocols.insert(ws, at: 0)
+        return params
     }
 
     /// { id, url, hello, timeout (ms) }: resolves once the other side answers the hello (its first
@@ -49,42 +58,49 @@ public class LanPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDelegate
             return call.reject("id, url and hello")
         }
         let timeout = (call.getDouble("timeout") ?? 2500) / 1000
-        DispatchQueue.main.async {
+        queue.async {
             self.drop(id)
-            let task = self.session.webSocketTask(with: url)
-            task.maximumMessageSize = 4 * 1024 * 1024
-            self.sockets[id] = task
+            let conn = NWConnection(to: .url(url), using: LanPlugin.webSocket())
+            self.sockets[id] = conn
             var settled = false
             let settle: (String?) -> Void = { error in
-                DispatchQueue.main.async {
-                    guard !settled else { return }
-                    settled = true
-                    self.hellos[task.taskIdentifier] = nil
-                    if let error = error {
-                        self.drop(id, task)
-                        call.reject(error)
-                    } else {
-                        call.resolve()
-                    }
+                guard !settled else { return }
+                settled = true
+                if let error = error {
+                    self.drop(id, conn)
+                    call.reject(error)
+                } else {
+                    call.resolve()
                 }
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { settle("no answer") }
-            self.hellos[task.taskIdentifier] = {
-                task.send(.string(hello)) { error in if let error = error { settle(error.localizedDescription) } }
-            }
-            task.resume()
-            task.receive { result in
-                switch result {
-                case .success(.string(let text)) where text.contains("\"welcome\""):
-                    settle(nil)
-                    self.listen(id, task)
-                    DispatchQueue.main.async { self.keepAlive(id, task) }
-                case .success:
-                    settle("unexpected answer")
-                case .failure(let error):
+            self.queue.asyncAfter(deadline: .now() + timeout) { settle("no answer") }
+            conn.stateUpdateHandler = { [weak self] state in
+                switch state {
+                case .ready:
+                    // Said as soon as it is open, from here: nothing waits for the main thread.
+                    LanPlugin.sendText(conn, hello)
+                case .waiting(let error), .failed(let error):
+                    // Refused or unreachable: not tried again and again in the background; broken
+                    // later: gone, and the page told.
                     settle(error.localizedDescription)
+                    self?.drop(id, conn)
+                case .cancelled:
+                    settle("closed")
+                default:
+                    break
                 }
             }
+            conn.receiveMessage { [weak self] data, context, _, error in
+                guard let self = self else { return }
+                if let text = LanPlugin.text(data, context), text.contains("\"welcome\"") {
+                    settle(nil)
+                    self.listen(id, conn)
+                    self.keepAlive(id, conn)
+                } else {
+                    settle(error?.localizedDescription ?? (LanPlugin.closing(context) ? "closed by the other side" : "unexpected answer"))
+                }
+            }
+            conn.start(queue: self.queue)
         }
     }
 
@@ -92,11 +108,11 @@ public class LanPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDelegate
     @objc func send(_ call: CAPPluginCall) {
         let id = call.getString("id") ?? ""
         let text = call.getString("text") ?? ""
-        DispatchQueue.main.async {
-            guard let task = self.sockets[id] else { return call.reject("not connected") }
-            task.send(.string(text)) { error in
+        queue.async {
+            guard let conn = self.sockets[id] else { return call.reject("not connected") }
+            LanPlugin.sendText(conn, text) { error in
                 if let error = error {
-                    DispatchQueue.main.async { self.drop(id, task) }
+                    self.drop(id, conn)
                     call.reject(error.localizedDescription)
                 } else {
                     call.resolve()
@@ -108,45 +124,76 @@ public class LanPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDelegate
     /// { id }
     @objc func close(_ call: CAPPluginCall) {
         let id = call.getString("id") ?? ""
-        DispatchQueue.main.async {
+        queue.async {
             self.drop(id)
             call.resolve()
         }
     }
 
-    private func listen(_ id: String, _ task: URLSessionWebSocketTask) {
-        task.receive { [weak self] result in
+    /// The test build only: the main thread busy for { ms } (the cloud check: the link must not wait for it).
+    @objc func testBusyMain(_ call: CAPPluginCall) {
+        #if DEBUG
+        let ms = call.getDouble("ms") ?? 0
+        DispatchQueue.main.async {
+            Thread.sleep(forTimeInterval: ms / 1000)
+            call.resolve()
+        }
+        #else
+        call.reject("test build only")
+        #endif
+    }
+
+    private func listen(_ id: String, _ conn: NWConnection) {
+        conn.receiveMessage { [weak self] data, context, _, error in
             guard let self = self else { return }
-            switch result {
-            case .success(.string(let text)):
-                self.notifyListeners("message", data: ["id": id, "text": text])
-                self.listen(id, task)
-            case .success:
-                self.listen(id, task)
-            case .failure:
-                DispatchQueue.main.async { self.drop(id, task) }
-            }
+            if error != nil || LanPlugin.closing(context) { return self.drop(id, conn) }
+            if let text = LanPlugin.text(data, context) { self.notifyListeners("message", data: ["id": id, "text": text]) }
+            self.listen(id, conn)
         }
     }
 
-    /// A connection gone quiet (the PC asleep, another network) is noticed within half a minute.
-    private func keepAlive(_ id: String, _ task: URLSessionWebSocketTask) {
-        pings[id]?.invalidate()
-        pings[id] = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in
-            task.sendPing { error in
-                if error != nil { DispatchQueue.main.async { self?.drop(id, task) } }
-            }
+    /// A connection gone quiet (the PC asleep, another network) is noticed within half a minute:
+    /// a ping every 20 s, and no pong in 10 s closes it.
+    private func keepAlive(_ id: String, _ conn: NWConnection) {
+        pings[id]?.cancel()
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + 20, repeating: 20)
+        timer.setEventHandler { [weak self] in
+            guard let self = self else { return }
+            var answered = false
+            let meta = NWProtocolWebSocket.Metadata(opcode: .ping)
+            meta.setPongHandler(self.queue) { error in if error == nil { answered = true } }
+            let context = NWConnection.ContentContext(identifier: "ping", metadata: [meta])
+            conn.send(content: Data(), contentContext: context, isComplete: true, completion: .contentProcessed { _ in })
+            self.queue.asyncAfter(deadline: .now() + 10) { if !answered { self.drop(id, conn) } }
         }
+        pings[id] = timer
+        timer.resume()
     }
 
-    /// Closes the connection to `id` (only `task`, if given: a newer one stays) and tells the page.
-    private func drop(_ id: String, _ task: URLSessionWebSocketTask? = nil) {
-        guard let current = sockets[id], task == nil || current === task else { return }
+    /// Closed (on the queue): this one, or whichever is open for `id`.
+    private func drop(_ id: String, _ conn: NWConnection? = nil) {
+        guard let current = sockets[id], conn == nil || current === conn else { return }
         sockets[id] = nil
-        pings[id]?.invalidate()
+        pings[id]?.cancel()
         pings[id] = nil
-        current.cancel(with: .goingAway, reason: nil)
+        // A goodbye first, so the other side knows at once (a bare close left the PC waiting).
+        let meta = NWProtocolWebSocket.Metadata(opcode: .close)
+        meta.closeCode = .protocolCode(.goingAway)
+        let context = NWConnection.ContentContext(identifier: "close", metadata: [meta])
+        current.send(content: nil, contentContext: context, isComplete: true, completion: .contentProcessed { _ in current.cancel() })
+        queue.asyncAfter(deadline: .now() + 1) { current.cancel() }
         notifyListeners("closed", data: ["id": id])
+    }
+
+    /// A message's text (a text frame's), or nil.
+    private static func text(_ data: Data?, _ context: NWConnection.ContentContext?) -> String? {
+        guard let data = data, let meta = context?.protocolMetadata(definition: NWProtocolWebSocket.definition) as? NWProtocolWebSocket.Metadata, meta.opcode == .text else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private static func closing(_ context: NWConnection.ContentContext?) -> Bool {
+        (context?.protocolMetadata(definition: NWProtocolWebSocket.definition) as? NWProtocolWebSocket.Metadata)?.opcode == .close
     }
 
     // ------------------------------------------------ listening together: this iPhone listens
@@ -163,19 +210,14 @@ public class LanPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDelegate
     @objc func serve(_ call: CAPPluginCall) {
         let key = call.getString("key") ?? ""
         let welcome = call.getString("welcome") ?? ""
-        DispatchQueue.main.async {
+        queue.async {
             if self.listener != nil && self.serveKey != key { self.stopServing() }
             self.serveKey = key
             self.welcome = welcome
             if let port = self.listener?.port?.rawValue {
                 return call.resolve(["port": Int(port), "hosts": LanPlugin.addresses()])
             }
-            let ws = NWProtocolWebSocket.Options()
-            ws.autoReplyPing = true
-            ws.maximumMessageSize = 4 * 1024 * 1024
-            let params = NWParameters.tcp
-            params.defaultProtocolStack.applicationProtocols.insert(ws, at: 0)
-            guard let listener = try? NWListener(using: params, on: .any) else { return call.reject("cannot listen") }
+            guard let listener = try? NWListener(using: LanPlugin.webSocket(), on: .any) else { return call.reject("cannot listen") }
             self.listener = listener
             var settled = false
             listener.stateUpdateHandler = { [weak self] state in
@@ -195,7 +237,7 @@ public class LanPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDelegate
                 }
             }
             listener.newConnectionHandler = { [weak self] conn in self?.accept(conn) }
-            listener.start(queue: .main)
+            listener.start(queue: self.queue)
         }
     }
 
@@ -203,14 +245,14 @@ public class LanPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDelegate
     @objc func serveSend(_ call: CAPPluginCall) {
         let to = call.getString("to")
         let text = call.getString("text") ?? ""
-        DispatchQueue.main.async {
+        queue.async {
             for (id, conn) in self.guests where to == nil || to == id { LanPlugin.sendText(conn, text) }
             call.resolve()
         }
     }
 
     @objc func serveStop(_ call: CAPPluginCall) {
-        DispatchQueue.main.async {
+        queue.async {
             self.stopServing()
             call.resolve()
         }
@@ -236,9 +278,9 @@ public class LanPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDelegate
                 break
             }
         }
-        conn.start(queue: .main)
+        conn.start(queue: queue)
         // A connection that has not said the key in 5 s is closed.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { if id == nil { conn.cancel() } }
+        queue.asyncAfter(deadline: .now() + 5) { if id == nil { conn.cancel() } }
         func receive() {
             conn.receiveMessage { [weak self] data, _, _, error in
                 guard let self = self, error == nil else { return conn.cancel() }
@@ -264,10 +306,10 @@ public class LanPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDelegate
         receive()
     }
 
-    private static func sendText(_ conn: NWConnection, _ text: String) {
+    private static func sendText(_ conn: NWConnection, _ text: String, done: ((NWError?) -> Void)? = nil) {
         let meta = NWProtocolWebSocket.Metadata(opcode: .text)
         let context = NWConnection.ContentContext(identifier: "text", metadata: [meta])
-        conn.send(content: text.data(using: .utf8), contentContext: context, isComplete: true, completion: .contentProcessed { _ in })
+        conn.send(content: text.data(using: .utf8), contentContext: context, isComplete: true, completion: .contentProcessed { error in done?(error) })
     }
 
     /// The iPhone's addresses on its Wi-Fi (a simulator's: the Mac's), the likeliest first.
