@@ -9,6 +9,7 @@ import { _electron as electron } from 'playwright-core';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { steps } from './step.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'wave-offline-'));
@@ -18,8 +19,6 @@ const trackFiles = () => fs.readdirSync(offlineDir).filter((f) => f !== '_librar
 const shots = path.join(root, 'tests', 'screenshots');
 fs.mkdirSync(shots, { recursive: true });
 const shot = (page, name) => page.screenshot({ path: path.join(shots, `${name}.png`) });
-let passed = 0;
-let failed = 0;
 
 async function launch(offline = false) {
   const app = await electron.launch({
@@ -32,16 +31,8 @@ async function launch(offline = false) {
   return { app, page };
 }
 
-async function step(name, fn) {
-  try {
-    await fn();
-    passed++;
-    console.log(`  ok   ${name}`);
-  } catch (e) {
-    failed++;
-    console.log(`  FAIL ${name}: ${e?.message || e}`);
-  }
-}
+/** A step (tests/step.mjs: a failure gets a second try). */
+const { step, summary } = steps({ suite: 'offline' });
 
 const state = (page) => page.evaluate(() => {
   const s = window.__wave.usePlayer.getState();
@@ -276,5 +267,4 @@ await step('remove all from Settings frees the space', async () => {
 
 await app.close().catch(() => {});
 fs.rmSync(userData, { recursive: true, force: true });
-console.log(`\n${passed} passed, ${failed} failed.`);
-if (failed) process.exit(1);
+if (summary()) process.exit(1);

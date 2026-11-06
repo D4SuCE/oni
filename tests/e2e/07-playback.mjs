@@ -360,6 +360,44 @@ await step("a crossfade does not cut off a list's last track: it plays to its en
   }
 });
 
+await step("a crossfade into the list's radio that does not come: the last track still plays to its end", async () => {
+  // Found reading the code, 6.11.2026: with auto-continue on, the crossfade set off for the radio,
+  // and when Yandex gave none (an error, no network) the track was paused the fade's seconds early.
+  await page.locator('.sidebar > .nav-item', { hasText: 'Настройки' }).click();
+  await page.locator('[data-testid="crossfade"]').fill('4');
+  try {
+    const got = await page.evaluate(async () => {
+      const w = window.__wave;
+      const a = w.audio;
+      const start = w.api.waveStart;
+      w.api.waveStart = () => Promise.reject(new Error('e2e: Yandex gives no radio'));
+      try {
+        w.usePlayer.setState({ autoContinue: true });
+        const t = (await w.api.chart()).filter((x) => x.available !== false && x.durationMs > 60000)[8];
+        await w.playTracks([t], 0, 'e2e no radio');
+        const until = async (what, ms) => {
+          const end = performance.now() + ms;
+          while (!what() && performance.now() < end) await new Promise((r) => setTimeout(r, 20));
+          return what();
+        };
+        await until(() => !a.paused && a.currentTime > 0.3 && Number.isFinite(a.duration), 15000);
+        a.currentTime = a.duration - 7;
+        await until(() => a.paused, 15000);
+        await new Promise((r) => setTimeout(r, 500));
+        const s = w.usePlayer.getState();
+        return { left: a.duration - a.currentTime, kind: s.source?.kind, queue: s.queue.length, playing: s.playing };
+      } finally {
+        w.api.waveStart = start;
+      }
+    });
+    if (got.left > 1 || got.kind !== 'list' || got.queue !== 1 || got.playing) throw new Error(JSON.stringify(got));
+  } finally {
+    await page.locator('[data-testid="crossfade"]').fill('0');
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.evaluate(() => window.__wave.audio.pause());
+  }
+});
+
 await step('the queue while shuffled: what is added stays when the shuffle goes off, what is taken out does not come back', async () => {
   const got = await page.evaluate(async () => {
     const w = window.__wave;

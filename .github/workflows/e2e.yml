@@ -1,10 +1,18 @@
 # The end-to-end tests (npm run test:e2e) on a Windows machine of GitHub's, against the real account
 # (YANDEX_MUSIC_TOKEN secret): the same run as on the user's PC, for a change made in the cloud (the
 # watch's agent, watch/AGENT.md) or any branch. Run: gh workflow run e2e.yml --ref <branch>
+# One step again: gh workflow run e2e.yml --ref <branch> -f only='<part of its name>'
+# A failed step gets a second try in the run itself (tests/step.mjs): passed then, it is a warning
+# on the run's page, not a failure; the run fails only for a step that failed twice.
 name: e2e
 
 on:
   workflow_dispatch:
+    inputs:
+      only:
+        description: Only the main run's steps whose names match (E2E_ONLY); empty — all
+        type: string
+        default: ''
 
 concurrency:
   group: e2e-${{ github.ref }}
@@ -20,7 +28,16 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      # Electron's zip from GitHub's releases: a 504 there once failed the whole run (5.11.2026).
+      # Kept between runs, and npm ci tried again once.
+      - uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/electron/Cache
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-${{ runner.os }}-
+      - name: npm ci
+        shell: bash
+        run: npm ci || { echo "::warning::npm ci failed, trying again"; sleep 20; npm ci; }
       # The machine's screen is 1024x768: Oni's window was smaller than on any PC and the track menu
       # covered its own "…" button. A monitor's size, as the user's.
       - name: Screen 1920x1080
@@ -34,6 +51,7 @@ jobs:
         run: npm run test:e2e
         env:
           YANDEX_MUSIC_TOKEN: ${{ secrets.YANDEX_MUSIC_TOKEN }}
+          E2E_ONLY: ${{ inputs.only }}
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

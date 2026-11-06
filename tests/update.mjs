@@ -8,14 +8,13 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import { steps } from './step.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const { version: current } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'wave-update-'));
 const config = path.join(userData, 'app-update.yml');
 const CACHE_DIR = 'oni-updater-test';
-let passed = 0;
-let failed = 0;
 
 // ------------------------------------------------------------------ the feed
 
@@ -63,16 +62,8 @@ async function launch() {
 
 const waitStatus = (page, status, timeout = 30000) => page.waitForSelector(`[data-testid="update"][data-status="${status}"]`, { timeout });
 
-async function step(name, fn) {
-  try {
-    await fn();
-    passed++;
-    console.log(`  ok   ${name}`);
-  } catch (e) {
-    failed++;
-    console.log(`  FAIL ${name}: ${e?.message || e}`);
-  }
-}
+/** A step (tests/step.mjs: a failure gets a second try). */
+const { step, summary } = steps({ suite: 'update' });
 
 // --------------------------------------------------------------------- steps
 
@@ -127,5 +118,4 @@ await app.close().catch(() => {});
 server.close();
 fs.rmSync(userData, { recursive: true, force: true });
 fs.rmSync(path.join(process.env.LOCALAPPDATA || os.tmpdir(), CACHE_DIR), { recursive: true, force: true });
-console.log(`\n${passed} passed, ${failed} failed.`);
-if (failed) process.exit(1);
+if (summary()) process.exit(1);

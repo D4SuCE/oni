@@ -5,21 +5,12 @@ import { _electron as electron } from 'playwright-core';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { steps } from './step.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
-let passed = 0;
-let failed = 0;
 
-async function step(name, fn) {
-  try {
-    await fn();
-    passed++;
-    console.log(`  ok   ${name}`);
-  } catch (e) {
-    failed++;
-    console.log(`  FAIL ${name}: ${e?.message || e}`);
-  }
-}
+/** A step (tests/step.mjs: a failure gets a second try). */
+const { step, summary } = steps({ suite: 'login' });
 
 /** Opens the Yandex sign-in window with the interface in `lang` and returns its text. */
 async function signInPage(lang) {
@@ -54,5 +45,4 @@ await step('Yandex sign-in follows an English interface', async () => {
   if (!/Enter|Log in|phone/i.test(text) || /Введите/.test(text)) throw new Error(`page: ${text.slice(0, 120)}`);
 });
 
-console.log(`\n${passed} passed, ${failed} failed.`);
-if (failed) process.exit(1);
+if (summary()) process.exit(1);

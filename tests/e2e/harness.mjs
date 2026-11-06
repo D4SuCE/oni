@@ -5,14 +5,13 @@ import { _electron as electron } from 'playwright-core';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { steps } from '../step.mjs';
 
 export const root = path.resolve(import.meta.dirname, '..', '..');
 export const shots = process.env.WAVE_SHOTS || path.join(root, 'tests', 'screenshots');
 fs.mkdirSync(shots, { recursive: true });
 export const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'wave-e2e-'));
 
-let passed = 0;
-let failed = 0;
 export const consoleErrors = [];
 
 export const app = await electron.launch({
@@ -29,15 +28,6 @@ page.on('pageerror', (e) => consoleErrors.push(String(e)));
  * checks get this much more room there; on the PC they stay as they are. */
 export const SLOW = process.env.CI ? 3 : 1;
 
-/** E2E_ONLY=<regex>: only the steps it matches, after the first (the app starts, signed in). For
- * trying one step again; a finished change still runs them all. */
-const only = process.env.E2E_ONLY ? new RegExp(process.env.E2E_ONLY, 'i') : null;
-let first = true;
-
-/** A broken connection to Yandex or Disk, not the app: the step is worth one more try. Disk also
- * answers 404 for a file just written now and then, and 5xx when busy. */
-const NETWORK = /fetch failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket hang up|Yandex Disk: no answer|Yandex Disk[^:]*: HTTP (404|5\d\d)|net::ERR_/i;
-
 /** After a failed step: menus, dialogs and sheets it left open are closed, so the next steps are
  * not blocked by them (one failure took the rest down with it). What plays is left as it is. */
 async function recover() {
@@ -45,30 +35,20 @@ async function recover() {
   await page.waitForTimeout(300).catch(() => {});
 }
 
-export async function step(name, fn) {
-  if (only && !first && !only.test(name)) return;
+/** A step (tests/step.mjs: a failure gets a second try). E2E_ONLY=<regex>: only the steps it
+ * matches, after the first (the app starts, signed in). For trying one step again; a finished
+ * change still runs them all. */
+const run = steps({
+  suite: 'e2e',
+  filter: true,
+  recover,
+  onFail: (name) => page.screenshot({ path: path.join(shots, `FAIL-${name.replace(/\W+/g, '_')}.png`) }),
+});
+let first = true;
+export function step(name, fn) {
+  const always = first;
   first = false;
-  for (let attempt = 1; ; attempt++) {
-    try {
-      await fn();
-      passed++;
-      console.log(`  ok   ${name}${attempt > 1 ? ' (on a second try: the network broke)' : ''}`);
-      return;
-    } catch (e) {
-      const why = e?.message || String(e);
-      if (attempt === 1 && NETWORK.test(why)) {
-        console.log(`  ..   ${name}: the network broke (${why.split('\n')[0].slice(0, 120)}), trying again`);
-        await recover();
-        await page.waitForTimeout(5000);
-        continue;
-      }
-      failed++;
-      console.log(`  FAIL ${name}: ${why}`);
-      await page.screenshot({ path: path.join(shots, `FAIL-${name.replace(/\W+/g, '_')}.png`) }).catch(() => {});
-      await recover();
-      return;
-    }
-  }
+  return run.step(name, fn, { always });
 }
 
 export const shot = (name) => page.screenshot({ path: path.join(shots, `${name}.png`) });
@@ -111,6 +91,6 @@ export async function finish() {
   await sweepDisk();
   await app.close();
   fs.rmSync(userData, { recursive: true, force: true });
-  console.log(`\n${passed} passed, ${failed} failed. Screenshots: ${shots}`);
-  if (failed) process.exit(1);
+  console.log(`Screenshots: ${shots}`);
+  if (run.summary()) process.exit(1);
 }
