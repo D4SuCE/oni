@@ -44,6 +44,9 @@
   артефакт `yandex-app` запуска. Агент — routine Claude Code «Oni — сторож Яндекс Музыки» (10:00 UTC,
   https://claude.ai/code/routines), окружение `Default` с переменными `GH_TOKEN` и `YANDEX_MUSIC_TOKEN`.
   Секрет `RELEASES_TOKEN` в D4SuCE/oni — токен с правом выпусков D4SuCE/oni-releases (для `release.yml`).
+  Счётчик «Сегодня в Oni» (6.11.2026): в D4SuCE/oni-releases предварительный выпуск `stats` (автообновление его не видит:
+  берёт `/releases/latest`) с файлами `day-YYYY-MM-DD`; их раскладывает на день вперёд, удаляет старше 90 дней и пишет
+  `stats.json` (вчера и 30 дней — для значка на витрине) `.github/workflows/stats.yml` там же, в 00:05 UTC.
   Обновления приложения Яндекса: `https://desktop.app.music.yandex.net/stable/latest.yml` (узлы CDN отвечают
   разными версиями, пока новая раскатывается — берётся самая новая из нескольких ответов).
 - Автопилот: две routine «Oni — разработка» (дважды в час, Opus 5.5) делают по одной задаче из «Очереди задач»

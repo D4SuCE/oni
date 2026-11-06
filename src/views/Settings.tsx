@@ -16,6 +16,7 @@ import { isIos } from '../ui/platform.ts';
 import { setPhoneSound, usePhoneSound } from '../player/phoneSound.ts';
 import { pushPresence } from '../player/shell.ts';
 import { setPrivacy, usePrivacy } from '../player/privacy.ts';
+import { readCount, setCountOff, useUsers } from '../ui/userCount.ts';
 import { setAiPrefs, useAi } from '../recs/ai.ts';
 import { MAX_SEE_THROUGH, setSeeThrough, useSeeThrough } from '../ui/seeThrough.ts';
 import { checkIosUpdate, installIosUpdate, installUpdateShortcut, setAutoUpdate, setUpdateViaShortcut, UPDATE_SHORTCUT, useAutoUpdate } from '../ui/iosUpdate.ts';
@@ -337,12 +338,44 @@ export function SettingsView() {
             </button>
           )}
         </div>
+        <UsersRow />
         <UpdateRow />
         {isIos && <AutoUpdateRow />}
       </div>
 
       <p className="hint center">{s.disclaimer}</p>
     </div>
+  );
+}
+
+/** "Today in Oni: N": how many devices opened Oni today (ui/userCount.ts), and "Don't count me". */
+function UsersRow() {
+  const t = useT();
+  const s = t.settings;
+  const { today, yesterday, off } = useUsers();
+  const n = (v: number | null) => (v === null ? '…' : v.toLocaleString(useLang.getState().lang));
+  useEffect(() => {
+    void readCount();
+  }, []);
+  return (
+    <>
+      <div className="settings-row" data-testid="users-row">
+        <div>
+          <div data-testid="users-count">{s.users(n(today))}</div>
+          <div className="hint">
+            {yesterday !== null && `${s.usersYesterday(n(yesterday))} · `}
+            {s.usersHint}
+          </div>
+        </div>
+      </div>
+      <label className="toggle-row">
+        <div>
+          <div>{s.countMeOff}</div>
+          <div className="hint">{s.countMeHint}</div>
+        </div>
+        <input type="checkbox" className="switch" checked={off} onChange={(e) => setCountOff(e.target.checked)} data-testid="count-me-off" />
+      </label>
+    </>
   );
 }
 
