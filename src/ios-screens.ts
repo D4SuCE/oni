@@ -7,6 +7,7 @@
 
 import { OniPlayer } from './player/nativeAudio.ts';
 import { next } from './player/player.ts';
+import { setLang } from './i18n.ts';
 
 type Wave = {
   audio: HTMLAudioElement;
@@ -53,6 +54,8 @@ async function go(route: object, ready: string, timeout = 30000) {
 
 export async function runScreens() {
   try {
+    // The interface in English (the user, 6.11.2026: the showcase's pictures in English).
+    setLang('en');
     await until(() => $('.wave-hero'), 60000);
     // My Wave playing: the bar at the bottom shows a track, Play shows Pause
     await until(() => document.querySelectorAll('[data-testid="mix-card"]').length > 3, 60000);
@@ -77,7 +80,7 @@ export async function runScreens() {
     await screen('now-playing');
     closeAll();
     // Home: My Wave and the shelves under it, all filled in
-    await until(() => !document.body.innerText.includes('Собираю'), 60000);
+    await until(() => !/Собираю|Building your mixes/.test(document.body.innerText), 60000);
     await sleep(2500);
     await screen('home');
 

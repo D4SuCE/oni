@@ -16,6 +16,13 @@ const app = await electron.launch({ args: [root], cwd: root, env: { ...process.e
 const page = await app.firstWindow();
 await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setBounds({ x: 60, y: 40, width: 1440, height: 900 }));
 await page.waitForSelector('.wave-hero', { timeout: 30000 });
+// The interface in English (the user, 6.11.2026: the showcase's pictures in English); SHOTS_LANG=ru for Russian.
+const lang = process.env.SHOTS_LANG || 'en';
+if ((await page.evaluate(() => localStorage.getItem('ui.lang'))) !== lang) {
+  await page.evaluate((l) => localStorage.setItem('ui.lang', l), lang);
+  await page.reload();
+  await page.waitForSelector('.wave-hero', { timeout: 30000 });
+}
 
 const anonymize = () =>
   page.evaluate(() => {
@@ -38,7 +45,7 @@ const closeFullscreen = async () => {
 
 // Home with the "For you" shelf filled in, all of it ("Собираю подборки…" gone; ~25 s).
 await page.waitForSelector('[data-testid="mix-card"]', { timeout: 60000 });
-await page.waitForFunction(() => !document.body.innerText.includes('Собираю'), null, { timeout: 90000 }).catch(() => {});
+await page.waitForFunction(() => !/Собираю|Building your mixes/.test(document.body.innerText), null, { timeout: 90000 }).catch(() => {});
 await settle();
 await shot('home');
 
@@ -112,6 +119,19 @@ await page.evaluate(() => {
 await page.waitForSelector('.page-title, h1', { timeout: 20000 });
 await settle();
 await shot('artist');
+
+// Playback settings: the crossfade on, with the seamless transitions and autoplay under it.
+await page.evaluate(() => window.__wave.usePlayer.setState({ crossfade: 8 }));
+await page.click('[data-testid="nav-settings"]');
+await page.waitForSelector('[data-testid="automix"]', { timeout: 10000 });
+await page.evaluate(() => {
+  const row = document.querySelector('[data-testid="auto-continue"]')?.closest('.toggle-row');
+  row?.scrollIntoView({ block: 'start' });
+  document.querySelector('.main')?.scrollBy(0, -90);
+});
+await settle(1200);
+await shot('playback');
+await page.evaluate(() => window.__wave.usePlayer.setState({ crossfade: 0 }));
 
 // Mini player, shot on its own.
 const opened = app.waitForEvent('window');
