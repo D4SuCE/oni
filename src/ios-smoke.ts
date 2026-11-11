@@ -388,6 +388,9 @@ async function othersSound() {
   await sleep(1500);
   const still = await OniPlayer.state();
   const shown = await OniRemote.state();
+  // A moment only: then truly paused, or the lock screen shows it playing (the user, 11.11.2026, on 3.6.2).
+  await sleep(3000);
+  const settled = await OniPlayer.state();
   await wave().audio.play();
   await sleep(1500);
   const pressed = await OniPlayer.state();
@@ -395,7 +398,7 @@ async function othersSound() {
   // A VK video with sound took the music, and ended without "may resume" (the user's phone, 11.11.2026):
   // the lock screen's player and the headphones stayed VK's. Oni plays again — silence, paused — and says
   // what is on, so they are Oni's again.
-  report('other-app-gives-back', !still.playing && still.engine === true && shown.title !== '', JSON.stringify({ still, shown }));
+  report('other-app-gives-back', !still.playing && still.engine === true && shown.title !== '' && !settled.playing && settled.engine === false, JSON.stringify({ still, shown, settled }));
   // Paused before the call: stays paused after it.
   await wave().audio.pause();
   await sleep(500);
@@ -432,10 +435,12 @@ async function othersSound() {
   await OniPlayer.testOthers({ interrupt: true, reason: 4 });
   await sleep(2500);
   const off = await OniPlayer.state();
+  await sleep(3000);
+  const offLater = await OniPlayer.state();
   await wave().audio.play();
   await sleep(1500);
   const onAgain = await OniPlayer.state();
-  report('headphones-gives-back', !off.playing && off.engine === true && onAgain.playing && onAgain.time >= off.time, JSON.stringify({ off, onAgain }));
+  report('headphones-gives-back', !off.playing && off.engine === true && !offLater.playing && offLater.engine === false && onAgain.playing && onAgain.time >= off.time, JSON.stringify({ off, offLater, onAgain }));
   report('muted-video-keeps-music', muted.playing && hinted.playing && pageOn, JSON.stringify({ muted, hinted, pageOn }));
   report('interruption-pauses', !taken.playing, JSON.stringify({ taken }));
   report('sound-log', told.includes('others') && told.some((x) => x.startsWith('interrupted:options 0')) && told.includes('halt:interruption') && told.includes('play'), told.join());

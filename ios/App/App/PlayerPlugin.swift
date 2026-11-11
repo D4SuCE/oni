@@ -143,8 +143,11 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     /// The sound iOS took was Oni's (playing, or paused and kept awake): when it is over, Oni takes the
     /// lock screen back (standBy), whether it plays on or not.
     private var takenFromOni = false
-    /// After another app's sound, the engine runs silent at least this long (standBy).
-    private static let standByFor: TimeInterval = 10
+    /// After another app's sound, the engine runs silent this long (standBy): long enough for iOS to take
+    /// Oni for the app that played last, short so the lock screen does not show it playing. Kept running
+    /// as long as kept awake (10 minutes), the lock screen showed "pause" over silence, and its button
+    /// started the music (the user, 11.11.2026, on 3.6.2).
+    private static let standByFor: TimeInterval = 3
     /// When the headphones were last taken off (routeChanged).
     private var headphonesOutAt = Date.distantPast
     private var timer: Timer?
@@ -1334,7 +1337,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     /// the screen locked: the user, 11.11.2026; iOS said "ended", options 0). The lock screen's player
     /// and the headphones' buttons stayed that app's: the player was gone from the lock screen, and
     /// play did nothing until Oni was opened. iOS gives them to the app that played last, so Oni plays
-    /// again: silence, paused where it was, for a while (as kept awake after a pause), and says what is
+    /// again: silence, paused where it was, for a moment (standByFor), then paused truly, and says what is
     /// on. Play — on the lock screen, the headphones, the page — goes on from the place.
     private func standBy(tries: Int = 4) {
         guard !playing, file != nil else { return }
@@ -1352,7 +1355,11 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         }
         UIApplication.shared.beginReceivingRemoteControlEvents()
         sleepTimer?.invalidate()
-        sleepTimer = Timer.scheduledTimer(withTimeInterval: max(awakeFor, PlayerPlugin.standByFor), repeats: false) { [weak self] _ in self?.fallAsleep() }
+        sleepTimer = Timer.scheduledTimer(withTimeInterval: PlayerPlugin.standByFor, repeats: false) { [weak self] _ in
+            guard let self = self else { return }
+            self.fallAsleep()
+            if !self.playing { showOnLockScreen(playing: false, at: self.pausedAt) }
+        }
         showOnLockScreen(playing: false, at: pausedAt)
         note("stand-by")
     }
