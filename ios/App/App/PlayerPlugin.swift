@@ -140,6 +140,13 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     /// When the engine was found stopped under playing music before iOS told of an interruption
     /// (restartHere): the interruption that follows within seconds is that one.
     private var takenUnheraldedAt = Date.distantPast
+    /// The sound iOS took was Oni's (playing, or paused and kept awake): when it is over, Oni takes the
+    /// lock screen back (standBy), whether it plays on or not.
+    private var takenFromOni = false
+    /// After another app's sound, the engine runs silent at least this long (standBy).
+    private static let standByFor: TimeInterval = 10
+    /// When the headphones were last taken off (routeChanged).
+    private var headphonesOutAt = Date.distantPast
     private var timer: Timer?
     private let lock = NSLock()
     /// Oni is in the background: the clock goes to the page once a second, not four times, and the
@@ -1162,9 +1169,10 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         call.resolve()
     }
 
-    /// { playing, taking, interrupt, interruptionEnded, mayResume } — for the simulator run: what iOS would
+    /// { playing, taking, interrupt, reason, interruptionEnded, mayResume, headphonesOut } — for the simulator run: what iOS would
     /// say of other apps' sound (none: iOS is asked); `interrupt`: a call takes the sound, as on a real phone:
-    /// the engine is stopped first, and iOS tells of it after; `interruptionEnded`: it is over.
+    /// the engine is stopped first, and iOS tells of it after (`reason`: iOS's reason for it); `interruptionEnded`:
+    /// it is over; `headphonesOut`: the headphones are taken off.
     @objc func testOthers(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
             self.othersForTest = call.getBool("playing").map { ($0, call.getBool("taking") ?? false) }
@@ -1172,9 +1180,14 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
                 let options: AVAudioSession.InterruptionOptions = call.getBool("mayResume") == true ? .shouldResume : []
                 NotificationCenter.default.post(name: AVAudioSession.interruptionNotification, object: nil, userInfo: [AVAudioSessionInterruptionTypeKey: AVAudioSession.InterruptionType.ended.rawValue, AVAudioSessionInterruptionOptionKey: options.rawValue])
             }
+            if call.getBool("headphonesOut") == true {
+                NotificationCenter.default.post(name: AVAudioSession.routeChangeNotification, object: nil, userInfo: [AVAudioSessionRouteChangeReasonKey: AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue])
+            }
             if call.getBool("interrupt") == true {
                 self.engine.stop()
-                NotificationCenter.default.post(name: AVAudioSession.interruptionNotification, object: nil, userInfo: [AVAudioSessionInterruptionTypeKey: AVAudioSession.InterruptionType.began.rawValue])
+                var info: [AnyHashable: Any] = [AVAudioSessionInterruptionTypeKey: AVAudioSession.InterruptionType.began.rawValue]
+                if let reason = call.getInt("reason") { info[AVAudioSessionInterruptionReasonKey] = UInt(reason) }
+                NotificationCenter.default.post(name: AVAudioSession.interruptionNotification, object: nil, userInfo: info)
             }
             call.resolve()
         }
@@ -1267,12 +1280,25 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
                 // back. A call whose end iOS never told (it happens) left this set, and a later
                 // interruption's end — an alarm, Siri, hours on, the music paused — started it by itself.
                 self.resumeAfterCall = self.playing || (self.resumeAfterCall && Date().timeIntervalSince(self.takenUnheraldedAt) < 5)
+                self.takenFromOni = self.resumeAfterCall || self.sleepTimer != nil
                 self.halt("interruption")
                 self.replant()
-            } else if AVAudioSession.InterruptionOptions(rawValue: options).contains(.shouldResume) {
+                // The headphones gone, iOS takes the sound a moment after the pause (reason 4,
+                // routeDisconnected: the user's phone, 6.11.2026) and never says it is over. A friend
+                // of the user's: headphones off, paused; on again, their button did nothing and the
+                // lock screen had no player (11.11.2026). Nothing else is coming: Oni stands by now.
+                let gone = reason == 4 && (self.takenFromOni || Date().timeIntervalSince(self.headphonesOutAt) < 5)
+                if gone {
+                    self.takenFromOni = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.standBy() }
+                }
+            } else if AVAudioSession.InterruptionOptions(rawValue: options).contains(.shouldResume), self.resumeAfterCall {
+                self.takenFromOni = false
                 self.comeBack()
             } else {
                 self.resumeAfterCall = false
+                if self.takenFromOni { self.standBy() }
+                self.takenFromOni = false
             }
         }
     }
@@ -1299,8 +1325,36 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
             } else {
                 resumeAfterCall = false
                 note("comeback-failed", error.localizedDescription)
+                standBy()
             }
         }
+    }
+
+    /// Another app's sound took the music and, over, did not let it go on (a VK video with sound, then
+    /// the screen locked: the user, 11.11.2026; iOS said "ended", options 0). The lock screen's player
+    /// and the headphones' buttons stayed that app's: the player was gone from the lock screen, and
+    /// play did nothing until Oni was opened. iOS gives them to the app that played last, so Oni plays
+    /// again: silence, paused where it was, for a while (as kept awake after a pause), and says what is
+    /// on. Play — on the lock screen, the headphones, the page — goes on from the place.
+    private func standBy(tries: Int = 4) {
+        guard !playing, file != nil else { return }
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+            if !engine.isRunning { try engine.start() }
+        } catch {
+            // The other app may not have let go yet.
+            if tries > 1 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.standBy(tries: tries - 1) }
+            } else {
+                note("stand-by-failed", error.localizedDescription)
+            }
+            return
+        }
+        UIApplication.shared.beginReceivingRemoteControlEvents()
+        sleepTimer?.invalidate()
+        sleepTimer = Timer.scheduledTimer(withTimeInterval: max(awakeFor, PlayerPlugin.standByFor), repeats: false) { [weak self] _ in self?.fallAsleep() }
+        showOnLockScreen(playing: false, at: pausedAt)
+        note("stand-by")
     }
 
     /// The hint's own notice (only written down: it comes for a video without sound too).
@@ -1314,7 +1368,10 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         guard let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt else { return }
         DispatchQueue.main.async {
             self.note("route", "\(raw)")
-            if AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable { self.halt("headphones") }
+            if AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable {
+                self.headphonesOutAt = Date()
+                self.halt("headphones")
+            }
         }
     }
 

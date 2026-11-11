@@ -387,10 +387,15 @@ async function othersSound() {
   await OniPlayer.testOthers({ interruptionEnded: true, mayResume: false });
   await sleep(1500);
   const still = await OniPlayer.state();
+  const shown = await OniRemote.state();
   await wave().audio.play();
   await sleep(1500);
   const pressed = await OniPlayer.state();
   report('call-play-by-hand', !still.playing && pressed.playing && pressed.time >= held.time && pressed.time - held.time < 5 && held.time > 2, JSON.stringify({ held: held.time, still, pressed }));
+  // A VK video with sound took the music, and ended without "may resume" (the user's phone, 11.11.2026):
+  // the lock screen's player and the headphones stayed VK's. Oni plays again — silence, paused — and says
+  // what is on, so they are Oni's again.
+  report('other-app-gives-back', !still.playing && still.engine === true && shown.title !== '', JSON.stringify({ still, shown }));
   // Paused before the call: stays paused after it.
   await wave().audio.pause();
   await sleep(500);
@@ -418,6 +423,19 @@ async function othersSound() {
   await wave().audio.play();
   await sleep(1000);
   report('call-end-lost', !lost.playing && !later.playing && !wave().audio.paused, JSON.stringify({ lost: lost.playing, later: later.playing, page: !wave().audio.paused }));
+  // Headphones off: paused, and a moment on iOS takes the sound (reason 4) and never says it is over (the
+  // user's phone, 6.11.2026). A friend's (11.11.2026): on again, their button did nothing, no player on the
+  // lock screen. Oni plays silence again, paused, so the lock screen and the headphones are its own.
+  await sleep(1500);
+  await OniPlayer.testOthers({ headphonesOut: true });
+  await sleep(300);
+  await OniPlayer.testOthers({ interrupt: true, reason: 4 });
+  await sleep(2500);
+  const off = await OniPlayer.state();
+  await wave().audio.play();
+  await sleep(1500);
+  const onAgain = await OniPlayer.state();
+  report('headphones-gives-back', !off.playing && off.engine === true && onAgain.playing && onAgain.time >= off.time, JSON.stringify({ off, onAgain }));
   report('muted-video-keeps-music', muted.playing && hinted.playing && pageOn, JSON.stringify({ muted, hinted, pageOn }));
   report('interruption-pauses', !taken.playing, JSON.stringify({ taken }));
   report('sound-log', told.includes('others') && told.some((x) => x.startsWith('interrupted:options 0')) && told.includes('halt:interruption') && told.includes('play'), told.join());
