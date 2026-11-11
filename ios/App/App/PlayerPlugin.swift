@@ -140,6 +140,11 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     /// When the engine was found stopped under playing music before iOS told of an interruption
     /// (restartHere): the interruption that follows within seconds is that one.
     private var takenUnheraldedAt = Date.distantPast
+    /// The sound iOS took was Oni's (playing, or paused and kept awake): when it is over, Oni takes the
+    /// lock screen back (standBy), whether it plays on or not.
+    private var takenFromOni = false
+    /// After another app's sound, the engine runs silent at least this long (standBy).
+    private static let standByFor: TimeInterval = 10
     private var timer: Timer?
     private let lock = NSLock()
     /// Oni is in the background: the clock goes to the page once a second, not four times, and the
@@ -1267,12 +1272,16 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
                 // back. A call whose end iOS never told (it happens) left this set, and a later
                 // interruption's end — an alarm, Siri, hours on, the music paused — started it by itself.
                 self.resumeAfterCall = self.playing || (self.resumeAfterCall && Date().timeIntervalSince(self.takenUnheraldedAt) < 5)
+                self.takenFromOni = self.resumeAfterCall || self.sleepTimer != nil
                 self.halt("interruption")
                 self.replant()
-            } else if AVAudioSession.InterruptionOptions(rawValue: options).contains(.shouldResume) {
+            } else if AVAudioSession.InterruptionOptions(rawValue: options).contains(.shouldResume), self.resumeAfterCall {
+                self.takenFromOni = false
                 self.comeBack()
             } else {
                 self.resumeAfterCall = false
+                if self.takenFromOni { self.standBy() }
+                self.takenFromOni = false
             }
         }
     }
@@ -1299,8 +1308,36 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
             } else {
                 resumeAfterCall = false
                 note("comeback-failed", error.localizedDescription)
+                standBy()
             }
         }
+    }
+
+    /// Another app's sound took the music and, over, did not let it go on (a VK video with sound, then
+    /// the screen locked: the user, 11.11.2026; iOS said "ended", options 0). The lock screen's player
+    /// and the headphones' buttons stayed that app's: the player was gone from the lock screen, and
+    /// play did nothing until Oni was opened. iOS gives them to the app that played last, so Oni plays
+    /// again: silence, paused where it was, for a while (as kept awake after a pause), and says what is
+    /// on. Play — on the lock screen, the headphones, the page — goes on from the place.
+    private func standBy(tries: Int = 4) {
+        guard !playing, file != nil else { return }
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+            if !engine.isRunning { try engine.start() }
+        } catch {
+            // The other app may not have let go yet.
+            if tries > 1 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.standBy(tries: tries - 1) }
+            } else {
+                note("stand-by-failed", error.localizedDescription)
+            }
+            return
+        }
+        UIApplication.shared.beginReceivingRemoteControlEvents()
+        sleepTimer?.invalidate()
+        sleepTimer = Timer.scheduledTimer(withTimeInterval: max(awakeFor, PlayerPlugin.standByFor), repeats: false) { [weak self] _ in self?.fallAsleep() }
+        showOnLockScreen(playing: false, at: pausedAt)
+        note("stand-by")
     }
 
     /// The hint's own notice (only written down: it comes for a video without sound too).
