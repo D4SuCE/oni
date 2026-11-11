@@ -387,10 +387,15 @@ async function othersSound() {
   await OniPlayer.testOthers({ interruptionEnded: true, mayResume: false });
   await sleep(1500);
   const still = await OniPlayer.state();
+  const shown = await OniRemote.state();
   await wave().audio.play();
   await sleep(1500);
   const pressed = await OniPlayer.state();
   report('call-play-by-hand', !still.playing && pressed.playing && pressed.time >= held.time && pressed.time - held.time < 5 && held.time > 2, JSON.stringify({ held: held.time, still, pressed }));
+  // A VK video with sound took the music, and ended without "may resume" (the user's phone, 11.11.2026):
+  // the lock screen's player and the headphones stayed VK's. Oni plays again — silence, paused — and says
+  // what is on, so they are Oni's again.
+  report('other-app-gives-back', !still.playing && still.engine === true && shown.title !== '', JSON.stringify({ still, shown }));
   // Paused before the call: stays paused after it.
   await wave().audio.pause();
   await sleep(500);
