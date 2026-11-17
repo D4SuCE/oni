@@ -39,10 +39,15 @@
   winget `nabdev.iloader`) — по инструкции docs.sidestore.io. Тихая установка iTunes через winget
   не ставит Apple Mobile Device Support (без неё iloader не видит iPhone): её MSI достаётся из
   `iTunes64Setup.exe /extract` и ставится `msiexec /i AppleMobileDeviceSupport64.msi`.
-- Сторож в облаке: `.github/workflows/ym-watch.yml` (каждый день 09:00 UTC = 12:00 МСК; `scripts/ym-watch.mjs`),
-  состояние — ветка `ym-watch` (`snapshot.json`, `report.md`, `pending.md` — ждёт разбора), код новой версии —
-  артефакт `yandex-app` запуска. Агент — routine Claude Code «Oni — сторож Яндекс Музыки» (10:00 UTC,
-  https://claude.ai/code/routines), окружение `Default` с переменными `GH_TOKEN` и `YANDEX_MUSIC_TOKEN`.
+- Сторож: GitHub Actions `.github/workflows/ym-watch.yml` проверяет Яндекс ежедневно (09:00 UTC = 12:00 МСК).
+  Отчёт на разбор — `codex-pending.md` в ветке `ym-watch`, артефакт `yandex-app` — в запуске из `pending-run-id.txt`.
+  Задача Windows `Oni - Codex watch` каждые 30 минут проверяет ветку под вошедшим пользователем. Пока ПК выключен
+  или пользователь вышел из Windows, отчёт ждёт на GitHub. Один и тот же отчёт повторно проверяется спустя сутки.
+  Используются вход Codex через ChatGPT, вход `gh auth login` и пользовательская переменная `YANDEX_MUSIC_TOKEN`.
+  Рабочие копии и журналы — `%LOCALAPPDATA%\Oni\codex-watch`. Установка и обновление задачи:
+  `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/oni-codex-watch.ps1 -Install`.
+  `-Smoke` проверяет сам Codex, доступ к GitHub и наличие переменной Яндекса. Для паузы выключи задачу Windows.
+  Прежняя routine Claude ищет `pending.md`; при переходе GitHub перенесёт ожидающий отчёт под новым именем.
   Секрет `RELEASES_TOKEN` в D4SuCE/oni — токен с правом выпусков D4SuCE/oni-releases (для `release.yml`).
   Счётчик «Сегодня в Oni» (6.11.2026): в D4SuCE/oni-releases предварительный выпуск `stats` (автообновление его не видит:
   берёт `/releases/latest`) с файлами `day-YYYY-MM-DD`; их раскладывает на день вперёд, удаляет старше 90 дней и пишет
