@@ -41,11 +41,13 @@
   `iTunes64Setup.exe /extract` и ставится `msiexec /i AppleMobileDeviceSupport64.msi`.
 - Сторож: GitHub Actions `.github/workflows/ym-watch.yml` проверяет Яндекс ежедневно (09:00 UTC = 12:00 МСК).
   Отчёт на разбор — `codex-pending.md` в ветке `ym-watch`, артефакт `yandex-app` — в запуске из `pending-run-id.txt`.
-  Задача Windows `Oni - Codex watch` каждые 30 минут проверяет ветку под вошедшим пользователем. Пока ПК выключен
-  или пользователь вышел из Windows, отчёт ждёт на GitHub. Один и тот же отчёт повторно проверяется спустя сутки.
+  Задача Windows `Oni - Codex watch` под вошедшим пользователем проверяет ветку через 30 секунд после подключения
+  Happ в режиме TUN (`happ-default-tun`) и раз в день в 23:00 по времени Windows, если Happ подключён.
+  Пока VPN или ПК выключены, отчёт ждёт на GitHub. Суточная отсечка для одного отчёта действует после
+  нормального завершения Codex. При сетевом сбое ближайшее подключение VPN может запустить повтор.
   Используются вход Codex через ChatGPT, вход `gh auth login` и пользовательская переменная `YANDEX_MUSIC_TOKEN`.
   Рабочие копии и журналы — `%LOCALAPPDATA%\Oni\codex-watch`. Установка и обновление задачи:
-  `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/oni-codex-watch.ps1 -Install`.
+  `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/oni-codex-watch.ps1 -Install -VpnProfile happ-default-tun`.
   `-Smoke` проверяет сам Codex, доступ к GitHub и наличие переменной Яндекса. Для паузы выключи задачу Windows.
   Прежняя routine Claude ищет `pending.md`; при переходе GitHub перенесёт ожидающий отчёт под новым именем.
   Секрет `RELEASES_TOKEN` в D4SuCE/oni — токен с правом выпусков D4SuCE/oni-releases (для `release.yml`).

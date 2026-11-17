@@ -1,7 +1,12 @@
 # Run the second half of ym-watch on Windows with the user's ChatGPT sign-in.
 # Install: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/oni-codex-watch.ps1 -Install
 [CmdletBinding()]
-param([switch]$Install, [switch]$Smoke)
+param(
+    [switch]$Install,
+    [switch]$Smoke,
+    [ValidatePattern('^[a-zA-Z0-9_.-]+$')]
+    [string]$VpnProfile
+)
 
 $ErrorActionPreference = 'Stop'
 if ($Install -and $Smoke) { throw 'Use -Install or -Smoke separately.' }
@@ -13,16 +18,27 @@ New-Item -ItemType Directory -Path $data -Force | Out-Null
 if ($Install) {
     $runner = Join-Path $data 'oni-codex-watch.ps1'
     if ($PSCommandPath -ne $runner) { Copy-Item -LiteralPath $PSCommandPath -Destination $runner -Force }
+    $arguments = '-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}"' -f $runner
+    $triggers = @(New-ScheduledTaskTrigger -Daily -At ([DateTime]::Today.AddHours(23)))
+    if ($VpnProfile) {
+        $arguments += " -VpnProfile $VpnProfile"
+        $networkLog = 'Microsoft-Windows-NetworkProfile/Operational'
+        $subscription = @"
+<QueryList><Query Id="0" Path="$networkLog"><Select Path="$networkLog">*[System[EventID=10000] and EventData[Data[@Name='Name']='$VpnProfile']]</Select></Query></QueryList>
+"@
+        $eventTrigger = New-CimInstance -Namespace Root/Microsoft/Windows/TaskScheduler -ClassName MSFT_TaskEventTrigger `
+            -ClientOnly -Property @{ Enabled = $true; Subscription = $subscription; Delay = 'PT30S' }
+        $eventTrigger.PSObject.TypeNames.Add('Microsoft.Management.Infrastructure.CimInstance#MSFT_TaskTrigger')
+        $triggers += $eventTrigger
+    }
     $action = New-ScheduledTaskAction -Execute (Join-Path $PSHOME 'powershell.exe') `
-        -Argument ('-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}"' -f $runner) `
-        -WorkingDirectory $data
-    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 30)
+        -Argument $arguments -WorkingDirectory $data
     $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value) `
         -LogonType Interactive -RunLevel Limited
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew `
         -ExecutionTimeLimit (New-TimeSpan -Hours 2) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
     Register-ScheduledTask -TaskName $taskName -Description 'Review pending Oni Yandex Music watch reports with Codex.' `
-        -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+        -Action $action -Trigger $triggers -Principal $principal -Settings $settings -Force | Out-Null
     Write-Output "Installed $taskName. Logs: $data"
     return
 }
@@ -30,7 +46,7 @@ if ($Install) {
 $origin = 'https://github.com/D4SuCE/oni.git'
 $log = Join-Path $data ('watch-{0:yyyy-MM-dd}.log' -f (Get-Date))
 $mirror = Join-Path $data 'mirror.git'
-$attempt = Join-Path $data 'last-report.txt'
+$lastReview = Join-Path $data 'last-reviewed-report.txt'
 $checkout = $null
 $exitCode = 0
 $env:GCM_INTERACTIVE = 'Never'
@@ -47,6 +63,10 @@ function Invoke-WatchGit {
 }
 
 try {
+    if (!$Smoke -and $VpnProfile -and !(Get-NetAdapter -Name $VpnProfile -ErrorAction SilentlyContinue | Where-Object Status -eq 'Up')) {
+        Write-WatchLog "VPN adapter $VpnProfile is down. Report check skipped."
+        return
+    }
     if (!(Test-Path -LiteralPath (Join-Path $mirror 'HEAD'))) {
         Invoke-WatchGit clone --quiet --bare --no-tags --single-branch --branch main $origin $mirror
     }
@@ -57,9 +77,9 @@ try {
         $pending = Invoke-WatchGit -C $mirror ls-tree refs/heads/ym-watch -- codex-pending.md
         if (!$pending) { Write-WatchLog 'No pending report.'; return }
         $reportId = Invoke-WatchGit -C $mirror rev-parse 'refs/heads/ym-watch:codex-pending.md'
-        if ((Test-Path -LiteralPath $attempt) -and (Get-Content -Raw -LiteralPath $attempt).Trim() -eq $reportId -and
-            (Get-Item -LiteralPath $attempt).LastWriteTimeUtc -gt [DateTime]::UtcNow.AddHours(-24)) {
-            Write-WatchLog 'This report has already been attempted in the last 24 hours.'
+        if ((Test-Path -LiteralPath $lastReview) -and (Get-Content -Raw -LiteralPath $lastReview).Trim() -eq $reportId -and
+            (Get-Item -LiteralPath $lastReview).LastWriteTimeUtc -gt [DateTime]::UtcNow.AddHours(-24)) {
+            Write-WatchLog 'Codex already completed a review of this report in the last 24 hours.'
             return
         }
     }
@@ -105,8 +125,6 @@ try {
     $prompt = 'You are Oni''s Codex watcher. Read and follow watch/AGENT.md in this checkout. Use the installed gh.exe and npm.cmd on Windows. Write the report in Russian.'
     if ($Smoke) {
         $prompt = 'Connection test only. Run gh api repos/D4SuCE/oni --jq .permissions.push and verify it returns true. Run git config --local oni.watchSmoke passed to verify local Git writes. Run git push --dry-run origin HEAD:refs/heads/chore/oni-codex-watch-probe. Check that YANDEX_MUSIC_TOKEN is set without showing its value. Do not modify anything on GitHub or Yandex. If all four checks pass, reply with exactly ONI_CODEX_WATCH_OK.'
-    } else {
-        Set-Content -LiteralPath $attempt -Encoding ASCII -Value $reportId
     }
 
     Write-WatchLog "Starting Codex in $checkout (smoke: $Smoke)."
@@ -131,6 +149,7 @@ try {
     }
     if ($codexExit -ne 0) { throw "Codex exited with status $codexExit." }
     if ($Smoke -and !$smokePassed) { throw 'Codex did not confirm the connection test.' }
+    if (!$Smoke) { Set-Content -LiteralPath $lastReview -Encoding ASCII -Value $reportId }
     Write-WatchLog 'Codex finished.'
     if ($Smoke) { Write-Output 'ONI_CODEX_WATCH_OK' }
 } catch {
