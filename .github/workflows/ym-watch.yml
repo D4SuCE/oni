@@ -1,35 +1,25 @@
 # The daily watch on Yandex Music (scripts/ym-watch.mjs), with no PC of the user's: a new official
 # desktop app that changed what it asks of the API, or the API tests failing on the account, leaves
-# pending.md on the ym-watch branch (with the snapshot it keeps) and an issue (an e-mail to the user).
-# Codex reviews pending reports after the check, when configured. 09:00 UTC = 12:00 Moscow.
+# codex-pending.md on the ym-watch branch and an issue. The Windows Codex watcher picks up the
+# report via scripts/oni-codex-watch.ps1. 09:00 UTC = 12:00 Moscow.
 name: ym-watch
 
 on:
   schedule:
     - cron: '0 9 * * *'
   workflow_dispatch:
-    inputs:
-      codex_smoke:
-        description: 'Check the Codex connection without processing a report'
-        type: boolean
-        default: false
 
 concurrency:
   group: ym-watch
 
 permissions:
-  contents: read
+  contents: write
+  issues: write
 
 jobs:
   watch:
-    if: inputs.codex_smoke != true
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    permissions:
-      contents: write
-      issues: write
-    outputs:
-      pending: ${{ steps.state.outputs.pending }}
     env:
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
@@ -62,22 +52,23 @@ jobs:
           path: state/*/app
           retention-days: 7
           if-no-files-found: ignore
-      # The unpacked apps stay out of the branch: only the snapshot, the report and pending.md go there.
+      # The unpacked apps stay out of the state branch.
       - run: find state -mindepth 1 -maxdepth 1 -type d ! -name .git -exec rm -rf {} +
       - name: Keep the state
-        id: state
         run: |
           cd state
           code=${{ steps.watch.outputs.code }}
           if [ "$code" = 4 ] || [ "$code" = 5 ]; then
-            cp report.md pending.md
+            cp report.md codex-pending.md
             echo "$GITHUB_RUN_ID" > pending-run-id.txt
+          fi
+          if [ -f pending.md ]; then
+            if [ -f codex-pending.md ]; then rm pending.md; else mv pending.md codex-pending.md; fi
           fi
           git config user.name "oni-watch"
           git config user.email "oni-watch@users.noreply.github.com"
           git add -A
           git diff --cached --quiet || { git commit -q -m "Watch: $(date -u +%F) exit $code" && git push -q; }
-          if [ -f pending.md ]; then echo 'pending=true' >> "$GITHUB_OUTPUT"; fi
       - name: Tell the user
         if: steps.watch.outputs.code == '4' || steps.watch.outputs.code == '5'
         run: |
@@ -87,59 +78,3 @@ jobs:
           gh issue create --title "$title" --body-file state/report.md --label ym-watch
         env:
           GH_TOKEN: ${{ github.token }}
-
-  codex:
-    needs: watch
-    if: >-
-      ${{ !cancelled() && github.ref == 'refs/heads/main' &&
-      (inputs.codex_smoke == true ||
-      (needs.watch.result == 'success' && needs.watch.outputs.pending == 'true' && vars.ONI_WATCH_CODEX_ENABLED == 'true')) }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-      - name: Check Codex credentials
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ONI_WATCH_GITHUB_TOKEN: ${{ secrets.ONI_WATCH_GITHUB_TOKEN }}
-          YANDEX_MUSIC_TOKEN: ${{ secrets.YANDEX_MUSIC_TOKEN }}
-        run: |
-          for name in OPENAI_API_KEY ONI_WATCH_GITHUB_TOKEN YANDEX_MUSIC_TOKEN; do
-            if [ -z "${!name}" ]; then
-              echo "::error::Missing repository secret $name"
-              exit 1
-            fi
-          done
-      - name: Configure Git for the watcher
-        run: |
-          gh auth setup-git --hostname github.com --force
-          git config user.name 'oni-watch'
-          git config user.email 'oni-watch@users.noreply.github.com'
-        env:
-          GH_TOKEN: ${{ secrets.ONI_WATCH_GITHUB_TOKEN }}
-      # Codex needs git metadata writes and network access for live checks, PRs and releases.
-      # Run only on main, with the key behind the action's proxy and sudo removed.
-      - name: Review the report with Codex
-        uses: openai/codex-action@v1
-        with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          prompt-file: ${{ inputs.codex_smoke != true && 'watch/AGENT.md' || '' }}
-          prompt: ${{ inputs.codex_smoke == true && 'Это проверка подключения сторожа Oni. Командой gh api repos/D4SuCE/oni --jq .permissions.push проверь право записи, затем проверь наличие переменной YANDEX_MUSIC_TOKEN, не выводя её значение. Репозиторий, задачи и аккаунт не изменяй. В конце сообщи, какие проверки прошли.' || '' }}
-          sandbox: danger-full-access
-          safety-strategy: drop-sudo
-          codex-args: '["--ephemeral"]'
-        env:
-          GH_TOKEN: ${{ secrets.ONI_WATCH_GITHUB_TOKEN }}
-          YANDEX_MUSIC_TOKEN: ${{ secrets.YANDEX_MUSIC_TOKEN }}
-          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
