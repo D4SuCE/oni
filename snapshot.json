@@ -1,5 +1,5 @@
 {
-  "version": "5.127.0",
+  "version": "5.128.0",
   "endpoints": [
     "DELETE pin/album",
     "DELETE pin/artist",
