@@ -9,7 +9,8 @@ import type { KeyValueStore } from '../wave/history.ts';
 export interface SoundLogEntry {
   at: number;
   /** `play`, `halt` (detail: who), `others`, `interrupted`, `interruption-ended`, `hint`, `route`, `locked`, `unlocked`,
-   * and what was found wrong: `lock-screen-lost` (told again), `category`, `engine-stopped`, `media-reset`. */
+   * `remote-command` (name and handled by the player or sent to the page), `remote-play-failed`, and
+   * what was found wrong: `lock-screen-lost` (told again), `category`, `engine-stopped`, `media-reset`. */
   kind: string;
   detail?: string;
   /** isOtherAudioPlaying. */

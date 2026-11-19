@@ -150,6 +150,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     private static let standByFor: TimeInterval = 3
     /// When the headphones were last taken off (routeChanged).
     private var headphonesOutAt = Date.distantPast
+    private var remotePauseAt = Date.distantPast
+    private var headphonesRecovery: DispatchWorkItem?
     private var timer: Timer?
     private let lock = NSLock()
     /// Oni is in the background: the clock goes to the page once a second, not four times, and the
@@ -830,6 +832,9 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         sleepTimer = nil
         try AVAudioSession.sharedInstance().setActive(true)
         if !engine.isRunning { try engine.start() }
+        headphonesRecovery?.cancel()
+        headphonesRecovery = nil
+        remotePauseAt = .distantPast
         if tail == nil { node.volume = 1 }
         (othersPlaying, othersTaking) = othersNow
         note("play")
@@ -849,12 +854,19 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     func resume() -> Bool {
         guard file != nil, playing || pausedAt < duration - 0.05 else { return false }
         if playing { return true }
-        return (try? start()) != nil
+        do {
+            try start()
+            return true
+        } catch {
+            note("remote-play-failed", error.localizedDescription)
+            return false
+        }
     }
 
     /// The lock screen's pause (main thread).
     func pauseNow() -> Bool {
         resumeAfterCall = false
+        if playing { remotePauseAt = Date() }
         halt("lock-screen")
         return true
     }
@@ -1251,7 +1263,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
 
     /// One line of what happened to the sound and what iOS said then, for the page's log
     /// (player/soundLog.ts): what a real app does cannot be seen on the simulator.
-    private func note(_ kind: String, _ detail: String = "") {
+    func note(_ kind: String, _ detail: String = "") {
         let others = othersNow
         notifyListeners("sound", data: ["at": Date().timeIntervalSince1970 * 1000, "kind": kind, "detail": detail, "others": others.playing, "taking": others.taking, "playing": playing])
     }
@@ -1279,6 +1291,8 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         DispatchQueue.main.async {
             self.note(began ? "interrupted" : "interruption-ended", "options \(options) reason \(reason)")
             if began {
+                self.headphonesRecovery?.cancel()
+                self.headphonesRecovery = nil
                 // Only what played now (or a moment ago, the engine stopped before this notice) comes
                 // back. A call whose end iOS never told (it happens) left this set, and a later
                 // interruption's end — an alarm, Siri, hours on, the music paused — started it by itself.
@@ -1293,7 +1307,7 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
                 let gone = reason == 4 && (self.takenFromOni || Date().timeIntervalSince(self.headphonesOutAt) < 5)
                 if gone {
                     self.takenFromOni = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.standBy() }
+                    self.scheduleHeadphonesRecovery(after: 0.5)
                 }
             } else if AVAudioSession.InterruptionOptions(rawValue: options).contains(.shouldResume), self.resumeAfterCall {
                 self.takenFromOni = false
@@ -1376,10 +1390,26 @@ public class PlayerPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         DispatchQueue.main.async {
             self.note("route", "\(raw)")
             if AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable {
-                self.headphonesOutAt = Date()
+                let now = Date()
+                // AirPods may send pause before iOS reports that the output is gone.
+                let wasPlaying = self.playing || now.timeIntervalSince(self.remotePauseAt) < 2
+                self.headphonesOutAt = now
                 self.halt("headphones")
+                // The iPhone sometimes sends only the route change. Let the interruption take over
+                // if it arrives, otherwise restore media controls without resuming the track.
+                if wasPlaying { self.scheduleHeadphonesRecovery(after: 1.5) }
             }
         }
+    }
+
+    private func scheduleHeadphonesRecovery(after delay: TimeInterval) {
+        headphonesRecovery?.cancel()
+        let recovery = DispatchWorkItem { [weak self] in
+            self?.headphonesRecovery = nil
+            self?.standBy()
+        }
+        headphonesRecovery = recovery
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: recovery)
     }
 
     /// The output changed under the engine (a route, a sample rate): restart it where it was.
