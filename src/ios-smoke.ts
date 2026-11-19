@@ -426,6 +426,25 @@ async function othersSound() {
   await wave().audio.play();
   await sleep(1000);
   report('call-end-lost', !lost.playing && !later.playing && !wave().audio.paused, JSON.stringify({ lost: lost.playing, later: later.playing, page: !wave().audio.paused }));
+  // On 19.11.2026 the iPhone logged a route change and paused, but never reported an interruption.
+  await OniPlayer.testOthers({ headphonesOut: true });
+  await sleep(2500);
+  const routeOnly = await OniPlayer.state();
+  await sleep(3000);
+  const routeSettled = await OniPlayer.state();
+  const beforeRoutePlay = told.length;
+  const routePlay = await OniRemote.press({ name: 'play' });
+  const routeResumed = await OniPlayer.state();
+  const routeCommand = told.slice(beforeRoutePlay).includes('remote-command:play native');
+  report('headphones-route-only', !routeOnly.playing && routeOnly.engine === true && !routeSettled.playing && routeSettled.engine === false && routePlay.playing && routeResumed.time >= routeOnly.time, JSON.stringify({ routeOnly, routeSettled, routePlay, routeResumed }));
+  report('headphones-command-log', routeCommand, told.slice(beforeRoutePlay).join());
+  // The headphones themselves can pause playback a moment before changing the output.
+  await OniRemote.press({ name: 'pause' });
+  await OniPlayer.testOthers({ headphonesOut: true });
+  await sleep(2500);
+  const alreadyPaused = await OniPlayer.state();
+  const afterRemotePause = await OniRemote.press({ name: 'play' });
+  report('headphones-pause-before-route', !alreadyPaused.playing && alreadyPaused.engine === true && afterRemotePause.playing, JSON.stringify({ alreadyPaused, afterRemotePause }));
   // Headphones off: paused, and a moment on iOS takes the sound (reason 4) and never says it is over (the
   // user's phone, 6.11.2026). A friend's (11.11.2026): on again, their button did nothing, no player on the
   // lock screen. Oni plays silence again, paused, so the lock screen and the headphones are its own.
@@ -437,7 +456,7 @@ async function othersSound() {
   const off = await OniPlayer.state();
   await sleep(3000);
   const offLater = await OniPlayer.state();
-  await wave().audio.play();
+  await OniRemote.press({ name: 'play' });
   await sleep(1500);
   const onAgain = await OniPlayer.state();
   report('headphones-gives-back', !off.playing && off.engine === true && !offLater.playing && offLater.engine === false && onAgain.playing && onAgain.time >= off.time, JSON.stringify({ off, offLater, onAgain }));

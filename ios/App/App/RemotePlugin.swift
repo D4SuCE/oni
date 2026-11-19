@@ -147,6 +147,7 @@ public class RemotePlugin: CAPPlugin, CAPBridgedPlugin {
         case "toggle": done = (player?.isPlaying ?? false) ? player?.pauseNow() ?? false : player?.resume() ?? false
         default: done = false
         }
+        player?.note("remote-command", "\(name) \(done ? "native" : "page")")
         // Kept until the page listens: a command that opened the app comes before the page is up.
         guard done, let player = player else { return notifyListeners("command", data: ["name": name], retainUntilConsumed: true) }
         // The lock screen shows it at once, the page asleep or not.
